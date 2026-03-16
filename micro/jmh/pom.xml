@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.exeris.benchmarks</groupId>
+  <artifactId>exeris-benchmarks-jmh</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>Exeris :: Benchmarks :: JMH Microbenchmarks</name>
+  <description>
+    Standalone JMH benchmark module for Exeris runtime hot paths.
+    Depends on Exeris artifacts as external dependencies.
+    Run with: java -jar target/benchmarks.jar
+  </description>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.source>${java.version}</maven.compiler.source>
+    <maven.compiler.target>${java.version}</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <!-- JMH -->
+    <jmh.version>1.37</jmh.version>
+
+    <!-- Exeris artifact versions — override via -Dexeris.kernel.version=... -->
+    <exeris.kernel.version>0.5.0-SNAPSHOT</exeris.kernel.version>
+    <exeris.spring.runtime.version>0.1.0-SNAPSHOT</exeris.spring.runtime.version>
+
+    <!-- netty-tcnative — B4 comparative benchmark.
+         Classifier controls the native artifact; override per host OS:
+           linux-x86_64 | osx-x86_64 | osx-aarch_64 | windows-x86_64
+         Override on CLI: -Dnetty.tcnative.classifier=osx-aarch_64 -->
+    <netty.tcnative.version>2.0.65.Final</netty.tcnative.version>
+    <netty.tcnative.classifier>linux-x86_64</netty.tcnative.classifier>
+
+    <!-- Maven plugins -->
+    <maven.shade.plugin.version>3.5.2</maven.shade.plugin.version>
+    <maven.compiler.plugin.version>3.12.1</maven.compiler.plugin.version>
+  </properties>
+
+  <dependencies>
+    <!-- JMH core -->
+    <dependency>
+      <groupId>org.openjdk.jmh</groupId>
+      <artifactId>jmh-core</artifactId>
+      <version>${jmh.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openjdk.jmh</groupId>
+      <artifactId>jmh-generator-annprocess</artifactId>
+      <version>${jmh.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- netty-tcnative-boringssl-static — B4 implementation-variant comparative. -->
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-tcnative-boringssl-static</artifactId>
+      <version>${netty.tcnative.version}</version>
+      <classifier>${netty.tcnative.classifier}</classifier>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-handler</artifactId>
+      <version>4.1.110.Final</version>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-spi</artifactId>
+      <version>${exeris.kernel.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-core</artifactId>
+      <version>${exeris.kernel.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-web</artifactId>
+      <version>${exeris.spring.runtime.version}</version>
+    </dependency>
+
+    <!-- Exeris Kernel Enterprise API (optional tier)
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-enterprise-api</artifactId>
+      <version>${exeris.kernel.version}</version>
+      <optional>true</optional>
+    </dependency>
+    -->
+
+    <!-- Exeris Spring Runtime (optional)
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime</artifactId>
+      <version>${exeris.spring.runtime.version}</version>
+      <optional>true</optional>
+    </dependency>
+    -->
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${maven.compiler.plugin.version}</version>
+        <configuration>
+          <source>${java.version}</source>
+          <target>${java.version}</target>
+          <compilerVersion>${java.version}</compilerVersion>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.openjdk.jmh</groupId>
+              <artifactId>jmh-generator-annprocess</artifactId>
+              <version>${jmh.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+
+      <!-- Build an uber-jar so benchmarks can be run with `java -jar target/benchmarks.jar` -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>${maven.shade.plugin.version}</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <finalName>benchmarks</finalName>
+              <transformers>
+                <transformer
+                    implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>org.openjdk.jmh.Main</mainClass>
+                </transformer>
+                <transformer
+                    implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

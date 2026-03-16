@@ -1,0 +1,40 @@
+{
+  "schema_version": "1",
+  "target_name": "enterprise-http2-json-1kb",
+  "execution_mode": "external",
+  "startup": {
+    "command_contract": "Private runner starts enterprise target and returns when process is ready for healthcheck polling.",
+    "external_start_cmd_env": "EXTERNAL_START_CMD",
+    "external_stop_cmd_env": "EXTERNAL_STOP_CMD"
+  },
+  "healthcheck": {
+    "url": "https://localhost:8443/health",
+    "timeout_seconds": 90
+  },
+  "benchmark_endpoint": {
+    "protocol": "h2",
+    "host": "localhost",
+    "port": 8443,
+    "base_path": "/"
+  },
+  "sensitive_data_policy": {
+    "publish_raw_traces": false,
+    "publish_symbol_rich_profiles": false,
+    "allowed_public_artifacts": [
+      "normalized-result-json",
+      "summary-markdown",
+      "aggregate-latency-table"
+    ]
+  },
+  "result_contract": {
+    "result_schema": "schemas/benchmark-result.schema.json",
+    "env_schema": "schemas/benchmark-env.schema.json",
+    "required_metrics": [
+      "throughput_rps",
+      "latency_mean_us",
+      "latency_p99_us",
+      "latency_p999_us",
+      "error_rate_pct"
+    ]
+  }
+}

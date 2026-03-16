@@ -1,0 +1,76 @@
+name: Microbenchmarks (JMH)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'micro/jmh/**'
+      - 'scripts/run-jmh.sh'
+  pull_request:
+    paths:
+      - 'micro/jmh/**'
+      - 'scripts/run-jmh.sh'
+  workflow_dispatch:
+    inputs:
+      bench_pattern:
+        description: 'JMH benchmark regex pattern (empty = all)'
+        required: false
+        default: ''
+      forks:
+        description: 'Number of JVM forks (-f)'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+jobs:
+  jmh-smoke:
+    name: JMH smoke run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build JMH module
+        run: mvn -f micro/jmh/pom.xml clean package -DskipTests -q
+
+      - name: Run JMH benchmarks
+        run: |
+          BENCH_PATTERN="${{ github.event.inputs.bench_pattern }}"
+          FORKS="${{ github.event.inputs.forks || '1' }}"
+          mkdir -p results/raw
+          java \
+            -XX:+UseG1GC -XX:+AlwaysPreTouch -Xms256m -Xmx256m \
+            -jar micro/jmh/target/benchmarks.jar \
+            ${BENCH_PATTERN:+"$BENCH_PATTERN"} \
+            -wi 3 -i 5 -f "$FORKS" \
+            -rf json -rff results/raw/jmh-ci-${{ github.run_id }}.json
+
+      - name: Capture environment
+        run: |
+          ./scripts/capture-env.sh --profile ci-runner \
+            > results/raw/env-ci-${{ github.run_id }}.json || true
+
+      - name: Upload JMH results
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmh-results-${{ github.run_id }}
+          path: results/raw/
+          retention-days: 30
+
+      - name: Print summary
+        run: |
+          echo "### JMH Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '| Benchmark | Score | Error | Unit |' >> $GITHUB_STEP_SUMMARY
+          echo '|---|---|---|---|' >> $GITHUB_STEP_SUMMARY
+          jq -r '.[] | "| \(.benchmark | split(".") | last) | \(.primaryMetric.score | tostring) | ±\(.primaryMetric.scoreError | tostring) | \(.primaryMetric.scoreUnit) |"' \
+            results/raw/jmh-ci-${{ github.run_id }}.json >> $GITHUB_STEP_SUMMARY || true

@@ -1,0 +1,29 @@
+version: "3.9"
+
+# Docker Compose for Exeris Kernel Community benchmark target.
+# Used by runtime/drivers/start-target.sh community
+#
+# Prerequisites:
+#   - exeris-kernel-community Docker image built and tagged as exeris-kernel-community:latest
+#   - OR set EXERIS_COMMUNITY_IMAGE env var to a custom image reference
+#
+# Build image from exeris-kernel repo:
+#   cd path/to/exeris-kernel && docker build -t exeris-kernel-community:latest .
+
+services:
+  exeris-kernel-community:
+    image: "${EXERIS_COMMUNITY_IMAGE:-exeris-kernel-community:latest}"
+    container_name: exeris-bench-community
+    network_mode: host           # host mode: eliminates bridge overhead for benchmarking
+    environment:
+      EXERIS_PORT: "8080"
+      EXERIS_HTTP2_PORT: "8443"
+      EXERIS_MODE: pure
+      EXERIS_LOG_LEVEL: WARN     # minimize logging overhead during benchmark
+      EXERIS_METRICS: "false"    # disable metrics exporter during benchmark run
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s

@@ -15,3 +15,26 @@ buildNumber.properties
 .project
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
+
+# Exeris Benchmarks — additional ignores
+# IDE
+.idea/
+*.iml
+.vscode/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Raw large result files — keep normalized/ and history/ only
+# Uncomment if results/raw/ grows too large:
+# results/raw/*.txt
+# results/raw/k6-*.json
+
+# Environment files with real values — template is committed, actuals are not
+runtime/drivers/env/*.env
+!runtime/drivers/env/template.env
+
+# Temp
+*.tmp
+*.log

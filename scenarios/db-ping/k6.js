@@ -1,0 +1,28 @@
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+
+const baseUrl = __ENV.BASE_URL || 'http://127.0.0.1:18080';
+const expectedStatus = Number(__ENV.EXPECT_STATUS || 503);
+
+export const options = {
+  vus: Number(__ENV.VUS || 30),
+  duration: __ENV.DURATION || '20s',
+  thresholds: {
+    checks: ['rate>0.99'],
+    http_req_failed: ['rate<0.01'],
+  },
+};
+
+export default function () {
+  const response = http.get(`${baseUrl}/db/ping`, {
+    headers: {
+      Connection: 'close',
+    },
+  });
+
+  check(response, {
+    'status is expected': (r) => r.status === expectedStatus,
+  });
+
+  sleep(0.05);
+}

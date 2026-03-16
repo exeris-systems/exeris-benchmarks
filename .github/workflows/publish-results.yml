@@ -1,0 +1,94 @@
+name: Publish Results
+
+on:
+  workflow_dispatch:
+    inputs:
+      result_artifact:
+        description: 'Artifact name containing result JSON'
+        required: true
+      env_artifact:
+        description: 'Artifact name containing env JSON'
+        required: false
+      target_mode:
+        description: 'Target mode (pure / compat)'
+        required: true
+        default: 'pure'
+      target_tier:
+        description: 'Target tier (community / enterprise / spring-runtime)'
+        required: true
+        default: 'community'
+      is_baseline:
+        description: 'Also update baseline with this result? (true/false)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Archive result to history
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download result artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.inputs.result_artifact }}
+          path: results/downloaded/
+
+      - name: Download env artifact
+        if: ${{ github.event.inputs.env_artifact != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.inputs.env_artifact }}
+          path: results/downloaded/
+        continue-on-error: true
+
+      - name: Install jq + python3
+        run: sudo apt-get update -qq && sudo apt-get install -y jq python3
+
+      - name: Locate files
+        id: locate
+        run: |
+          RESULT="$(find results/downloaded/ -name '*.json' ! -name 'env-*' | sort | tail -1)"
+          ENV_FILE="$(find results/downloaded/ -name 'env-*.json' | sort | tail -1 || true)"
+          echo "result=$RESULT"   >> $GITHUB_OUTPUT
+          echo "env_file=$ENV_FILE" >> $GITHUB_OUTPUT
+
+      - name: Archive to history
+        run: |
+          TIER="${{ github.event.inputs.target_tier }}"
+          MODE="${{ github.event.inputs.target_mode }}"
+          ARCHIVE_DIR="results/history/${TIER}/${MODE}"
+          mkdir -p "$ARCHIVE_DIR"
+
+          ./scripts/publish-report.sh \
+            --result "${{ steps.locate.outputs.result }}" \
+            ${ENV_FILE:+--env "${{ steps.locate.outputs.env_file }}"} \
+            --output "results/summaries/" \
+            --archive "$ARCHIVE_DIR"
+
+      - name: Update baseline (if requested)
+        if: ${{ github.event.inputs.is_baseline == 'true' }}
+        run: |
+          TIER="${{ github.event.inputs.target_tier }}"
+          MODE="${{ github.event.inputs.target_mode }}"
+          BASELINE_DIR="baselines/${TIER}"
+          mkdir -p "$BASELINE_DIR"
+          PROFILE="$(jq -r '.hardware_profile // "unknown"' "${{ steps.locate.outputs.env_file }}" 2>/dev/null || echo 'unknown')"
+          cp "${{ steps.locate.outputs.result }}" "$BASELINE_DIR/${PROFILE}.json"
+          echo "Baseline updated: $BASELINE_DIR/${PROFILE}.json"
+
+      - name: Commit and push results
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add results/ baselines/ || true
+          git diff --staged --quiet || git commit -m "chore(results): archive run ${{ github.run_id }} [${{ github.event.inputs.target_tier }}/${{ github.event.inputs.target_mode }}]"
+          git push

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/enterprise-target-contract/v1",
+  "title": "EnterpriseTargetContract",
+  "description": "Public execution contract for private/proprietary enterprise benchmark targets.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "target_name",
+    "execution_mode",
+    "startup",
+    "healthcheck",
+    "benchmark_endpoint",
+    "result_contract"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "target_name": {
+      "type": "string",
+      "description": "Logical target identifier, e.g. enterprise-http2-json-1kb"
+    },
+    "execution_mode": {
+      "type": "string",
+      "enum": ["docker", "jar", "external"],
+      "description": "Preferred execution entrypoint from runtime/drivers/start-target.sh"
+    },
+    "startup": {
+      "type": "object",
+      "required": ["command_contract"],
+      "properties": {
+        "command_contract": {
+          "type": "string",
+          "description": "Declared startup contract; for private mode use external command abstraction"
+        },
+        "external_start_cmd_env": {
+          "type": "string",
+          "description": "Name of env variable containing private start command",
+          "default": "EXTERNAL_START_CMD"
+        },
+        "external_stop_cmd_env": {
+          "type": "string",
+          "description": "Name of env variable containing private stop command",
+          "default": "EXTERNAL_STOP_CMD"
+        }
+      }
+    },
+    "healthcheck": {
+      "type": "object",
+      "required": ["url", "timeout_seconds"],
+      "properties": {
+        "url": { "type": "string" },
+        "timeout_seconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "benchmark_endpoint": {
+      "type": "object",
+      "required": ["protocol", "host", "port"],
+      "properties": {
+        "protocol": { "type": "string", "enum": ["http", "https", "h2", "h3"] },
+        "host": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "base_path": { "type": "string", "default": "/" }
+      }
+    },
+    "sensitive_data_policy": {
+      "type": "object",
+      "properties": {
+        "publish_raw_traces": { "type": "boolean", "default": false },
+        "publish_symbol_rich_profiles": { "type": "boolean", "default": false },
+        "allowed_public_artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["normalized-result-json", "summary-markdown", "aggregate-latency-table"]
+          }
+        }
+      }
+    },
+    "result_contract": {
+      "type": "object",
+      "required": ["result_schema", "env_schema"],
+      "properties": {
+        "result_schema": {
+          "type": "string",
+          "const": "schemas/benchmark-result.schema.json"
+        },
+        "env_schema": {
+          "type": "string",
+          "const": "schemas/benchmark-env.schema.json"
+        },
+        "required_metrics": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "throughput_rps",
+              "latency_mean_us",
+              "latency_p99_us",
+              "latency_p999_us",
+              "jmh_alloc_rate_norm_bytes",
+              "error_rate_pct"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

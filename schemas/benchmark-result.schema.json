@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/benchmark-result/v1",
+  "title": "BenchmarkResult",
+  "description": "Normalized result artifact for a single benchmark run.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "timestamp",
+    "scenario",
+    "tool",
+    "env_ref",
+    "metrics"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Unique run identifier. Format: <scenario>-<YYYYMMDD-HHmmss>-<sha7>"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scenario": {
+      "type": "string",
+      "description": "Scenario name from docs/scenario-catalog.md"
+    },
+    "tool": {
+      "type": "string",
+      "enum": ["jmh", "wrk", "wrk2", "h2load", "k6"]
+    },
+    "env_ref": {
+      "type": "string",
+      "description": "Path to the associated BenchmarkEnvironment JSON file."
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "repo": { "type": "string" },
+        "commit_sha": { "type": "string" },
+        "version": { "type": "string" },
+        "mode": { "type": "string", "enum": ["pure", "compat", "native", "jdbc-bridge"] },
+        "tier": { "type": "string", "enum": ["community", "enterprise"] },
+        "protocol": { "type": "string", "enum": ["h1", "h2", "h3"] }
+      }
+    },
+    "comparison_axis": {
+      "type": "string",
+      "description": "Report axis classification for this result.",
+      "enum": ["within-tier", "cross-tier-same-protocol", "standalone"]
+    },
+    "run_config": {
+      "type": "object",
+      "description": "Tool-specific run configuration parameters.",
+      "properties": {
+        "duration_seconds": { "type": "integer" },
+        "warmup_seconds": { "type": "integer" },
+        "threads": { "type": "integer" },
+        "connections": { "type": "integer" },
+        "target_rps": { "type": "integer", "description": "wrk2 / k6 steady-rate target" },
+        "max_streams": { "type": "integer", "description": "h2load -m" },
+        "total_requests": { "type": "integer", "description": "h2load -n" },
+        "forks": { "type": "integer", "description": "JMH -f" },
+        "warmup_iterations": { "type": "integer", "description": "JMH -wi" },
+        "measurement_iterations": { "type": "integer", "description": "JMH -i" },
+        "payload_file": { "type": "string" },
+        "payload_size_bytes": { "type": "integer" }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Normalized metric values. All latency in microseconds, throughput in req/s.",
+      "properties": {
+        "throughput_rps": { "type": "number" },
+        "latency_mean_us": { "type": "number" },
+        "latency_stdev_us": { "type": "number" },
+        "latency_min_us": { "type": "number" },
+        "latency_max_us": { "type": "number" },
+        "latency_p50_us": { "type": "number" },
+        "latency_p75_us": { "type": "number" },
+        "latency_p90_us": { "type": "number" },
+        "latency_p99_us": { "type": "number" },
+        "latency_p999_us": { "type": "number" },
+        "error_rate_pct": { "type": "number" },
+        "total_requests": { "type": "integer" },
+        "total_errors": { "type": "integer" },
+        "jmh_score": { "type": "number", "description": "Raw JMH score value" },
+        "jmh_score_error": { "type": "number", "description": "JMH 99% CI half-width" },
+        "jmh_score_unit": { "type": "string" },
+        "jmh_alloc_rate_norm_bytes": {
+          "type": "number",
+          "description": "gc.alloc.rate.norm from -prof gc. 0 expected on zero-alloc paths."
+        }
+      }
+    },
+    "raw_output": {
+      "type": "string",
+      "description": "Full raw stdout from the benchmark tool (optional, for debugging)."
+    },
+    "notes": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Arbitrary labels, e.g. release-candidate, regression-investigation."
+    }
+  }
+}

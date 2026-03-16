@@ -1,0 +1,27 @@
+version: "3.9"
+
+# Docker Compose for Exeris Spring Runtime benchmark target.
+# Used by runtime/drivers/start-target.sh spring-runtime
+#
+# Build image from exeris-spring-runtime repo:
+#   cd path/to/exeris-spring-runtime && docker build -t exeris-spring-runtime:latest .
+
+services:
+  exeris-spring-runtime:
+    image: "${EXERIS_SPRING_RUNTIME_IMAGE:-exeris-spring-runtime:latest}"
+    container_name: exeris-bench-spring-runtime
+    network_mode: host
+    environment:
+      EXERIS_PORT: "8080"
+      EXERIS_MODE: "${EXERIS_SPRING_MODE:-pure}"   # pure | compat
+      EXERIS_LOG_LEVEL: WARN
+      EXERIS_METRICS: "false"
+      # Spring-specific
+      SPRING_MAIN_BANNER-MODE: "off"
+      LOGGING_LEVEL_ROOT: "WARN"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/actuator/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 15s

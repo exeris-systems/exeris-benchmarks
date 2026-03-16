@@ -1,0 +1,104 @@
+name: Runtime Benchmarks
+
+on:
+  schedule:
+    # Nightly at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target to benchmark (community / enterprise / spring-runtime)'
+        required: true
+        default: 'community'
+      scenario:
+        description: 'Scenario directory (e.g. scenarios/plaintext)'
+        required: false
+        default: 'scenarios/plaintext'
+      tool:
+        description: 'Benchmark tool (wrk / h2load / k6)'
+        required: true
+        default: 'wrk'
+      kernel_version:
+        description: 'exeris-kernel version/tag to benchmark'
+        required: false
+        default: 'latest'
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-bench:
+    name: Runtime benchmark (${{ github.event.inputs.target || 'community' }}, ${{ github.event.inputs.tool || 'wrk' }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout exeris-benchmarks
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Install wrk
+        if: ${{ github.event.inputs.tool == 'wrk' || github.event.inputs.tool == '' }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y wrk
+
+      - name: Install k6
+        if: ${{ github.event.inputs.tool == 'k6' }}
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -qq
+          sudo apt-get install -y k6
+
+      - name: Install nghttp2 (h2load)
+        if: ${{ github.event.inputs.tool == 'h2load' }}
+        run: sudo apt-get update -qq && sudo apt-get install -y nghttp2
+
+      - name: Start target application
+        run: |
+          TARGET="${{ github.event.inputs.target || 'community' }}"
+          ./runtime/drivers/start-target.sh "$TARGET" &
+          echo "TARGET_PID=$!" >> $GITHUB_ENV
+          sleep 15  # allow startup
+
+      - name: Capture environment
+        run: |
+          mkdir -p results/raw
+          ./scripts/capture-env.sh --profile ci-runner \
+            > results/raw/env-runtime-${{ github.run_id }}.json || true
+
+      - name: Run benchmark
+        run: |
+          TOOL="${{ github.event.inputs.tool || 'wrk' }}"
+          TARGET="${{ github.event.inputs.target || 'community' }}"
+          SCENARIO="${{ github.event.inputs.scenario || 'scenarios/plaintext' }}"
+          mkdir -p results/raw
+
+          case "$TOOL" in
+            wrk)
+              ./scripts/run-wrk.sh "targets/exeris-kernel/$TARGET" "$SCENARIO" ;;
+            h2load)
+              ./scripts/run-h2load.sh "targets/exeris-kernel/$TARGET" "$SCENARIO" ;;
+            k6)
+              ./scripts/run-k6.sh "$SCENARIO" ;;
+          esac
+
+      - name: Stop target application
+        if: always()
+        run: |
+          ./runtime/drivers/stop-target.sh || true
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-results-${{ github.run_id }}
+          path: results/raw/
+          retention-days: 30

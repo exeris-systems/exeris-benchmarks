@@ -1,0 +1,31 @@
+version: "3.9"
+
+# Docker Compose for Quarkus JVM runtime benchmark target.
+# Used by runtime/drivers/start-target.sh quarkus-runtime
+#
+# Build image from exeris-quarkus-runtime repo:
+#   cd path/to/exeris-quarkus-runtime && docker build -t exeris-quarkus-runtime:latest .
+
+services:
+  exeris-quarkus-runtime:
+    image: "${EXERIS_QUARKUS_RUNTIME_IMAGE:-exeris-quarkus-runtime:latest}"
+    build:
+      context: ../../..
+      dockerfile: targets/exeris-quarkus-runtime/Dockerfile
+    container_name: exeris-bench-quarkus-runtime
+    network_mode: host
+    environment:
+      QUARKUS_HTTP_PORT: "8080"
+      QUARKUS_LOG_LEVEL: WARN
+      QUARKUS_LOG_CONSOLE_LEVEL: WARN
+      QUARKUS_LOG_CONSOLE_JSON: "false"
+      QUARKUS_LOG_CONSOLE_COLOR: "false"
+      QUARKUS_BANNER_ENABLED: "false"
+      QUARKUS_METRICS_ENABLED: "false"
+      QUARKUS_MICROMETER_ENABLED: "false"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 15s

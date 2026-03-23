@@ -71,6 +71,10 @@ done
 require_cmd java
 require_cmd mvn
 
+TARGET_LOG_DIR="${TARGET_LOG_DIR:-/tmp/exeris-bench-logs}"
+mkdir -p "$TARGET_LOG_DIR"
+RUN_TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+
 CP_FILE="$ROOT_DIR/exeris-kernel-community/target/community-e2e.classpath"
 
 pushd "$ROOT_DIR" >/dev/null
@@ -89,7 +93,15 @@ JAVA_ARGS=(
   "-Dexeris.http.mode=SERVER"
   "-Dexeris.http.bindHost=$HOST"
   "-Dexeris.http.port=$PORT"
+  "-Xlog:gc*,safepoint:file=${TARGET_LOG_DIR}/gc-${RUN_TIMESTAMP}.log:time,uptime,level,tags"
+  "-Xlog:safepoint:file=${TARGET_LOG_DIR}/safepoint-${RUN_TIMESTAMP}.log:time,uptime,level,tags"
+  "-XX:StartFlightRecording=filename=${TARGET_LOG_DIR}/jfr-${RUN_TIMESTAMP}.jfr,settings=profile,duration=0,maxsize=256m,dumponexit=true"
 )
+
+# JFR ring-buffer NOTE: dumponexit=true retains only the last 256m of events.
+# Early-phase GC events may be evicted. For early-phase analysis, use maxchunksize=64m.
+# See docs/methodology.md: "JFR ring-buffer early-phase loss"
+# GC log path uses /tmp (local fs) to avoid I/O overhead on network-backed CI filesystems.
 
 case "$MODE" in
   http) ;;
@@ -113,5 +125,6 @@ esac
 
 echo "[launcher] mode=$MODE host=$HOST port=$PORT"
 [[ -n "$JDBC_URL" ]] && echo "[launcher] jdbcUrl=$JDBC_URL"
+echo "[launcher] GC logs: $TARGET_LOG_DIR/gc-${RUN_TIMESTAMP}.log"
 
 exec java "${JAVA_ARGS[@]}" -cp "$CLASSPATH" eu.exeris.kernel.launcher.CommunityStackLauncher

@@ -9,6 +9,9 @@ version: "3.9"
 services:
   exeris-spring-runtime:
     image: "${EXERIS_SPRING_RUNTIME_IMAGE:-exeris-spring-runtime:latest}"
+    build:
+      context: ../../..
+      dockerfile: targets/exeris-spring-runtime/Dockerfile
     container_name: exeris-bench-spring-runtime
     network_mode: host
     environment:
@@ -20,7 +23,7 @@ services:
       SPRING_MAIN_BANNER-MODE: "off"
       LOGGING_LEVEL_ROOT: "WARN"
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 2s
       timeout: 5s
       retries: 30

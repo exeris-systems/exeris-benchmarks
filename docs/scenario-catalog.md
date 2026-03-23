@@ -22,13 +22,13 @@ script in `runtime/<tool>/`.
 
 ### plaintext
 
-| Field | Value |
-|---|---|
-| Path | `GET /plaintext` |
-| Response | `200 OK`, body `plaintext` (15 bytes) |
-| Payload | none |
+| Field | Value                                              |
+|---|----------------------------------------------------|
+| Path | `GET /plaintext`                                   |
+| Response | `200 OK`, body `plaintext` (15 bytes)              |
+| Payload | none                                               |
 | Purpose | TechEmpower-equivalent baseline for RPS comparison |
-| Tools | wrk, h2load |
+| Tools | wrk, h2load, k6                                    |
 
 ---
 
@@ -194,6 +194,64 @@ Examples:
 | H1 | yes | yes | yes | yes | yes | yes | no | optional | no |
 | H2 | yes | yes | yes | yes | yes | yes | yes | optional | no |
 | H3 | yes | yes | yes | yes | yes | yes | yes | yes | yes |
+
+---
+
+---
+
+### entity-read-by-id
+
+| Field | Value |
+|---|---|
+| Scenario ID | `entity-read-by-id` |
+| Endpoint | `GET /api/v1/entities/{id}` |
+| Mode | `baseline-db` |
+| Tier | Community (first) |
+| Driver | wrk |
+| Transport | H1 (loopback) |
+
+> **LOOPBACK CAVEAT:** `transport_mode=loopback-h1`. Results are not equivalent to network-path measurements. All result artifacts must carry `transport_mode=loopback-h1`.
+
+#### Claim scope
+
+| Scope | Min duration | Required profile | Allowed claims | CO risk |
+|---|---|---|---|---|
+| `exploratory` | 30 s | dev-laptop, ci-runner | descriptive only | yes |
+| `comparison-eligible` | 60 s | **perf-box-amd64** | throughput, p50 (indicative) | yes |
+| `p99-stable` | 120 s | **perf-box-amd64**, wrk2 only | P99 | yes |
+
+wrk is **INELIGIBLE** for `p99-stable`. Use `run-wrk2.sh` for P99 claims.
+
+#### Seed
+
+Requires PostgreSQL (postgres:16.2) seeded with 1000 entities (IDs 1–1000, schema V1).
+Pre-run verification via `scenarios/entity-read-by-id/seed/verify-seed.sh` is mandatory.
+Results without a passing verification are invalid.
+
+#### Cross-tier status
+
+**Cross-tier remains deferred.** `scenario.json#cross_tier_equivalence_constraints` is still the control point for Community vs Enterprise separation. A within-tier, same-protocol Community/H1/loopback dual-target comparative path is declared for `entity-read-by-id` via `scenarios/entity-read-by-id/comparative-pair-manifest.json`. This is structural readiness only, not a completed or published comparative result.
+
+#### Maturity promotion workflow
+
+Use the fixed contract campaign path when promoting this scenario from exploratory to repeatable guard evidence:
+
+1. Run `scripts/run-entity-read-by-id-campaign.sh` to execute repeats under `--contract fixed_contract_v1`.
+2. Check `status.csv` in the campaign directory. Promotion candidates require all rows `final_reason=ok` and `claim_scope=comparison_eligible`.
+3. Run `scripts/summarize-entity-read-by-id-campaign.sh <campaign-dir>`.
+4. Review `repeatability-summary.json` and `repeatability-summary.md`; gate is pass only when throughput CV <= 0.15 and all repeats report `total_errors==0`.
+5. Keep `result.json`, `reproducibility-metadata.json`, and `steady-state-evidence.json` for each repeat as evidence artifacts.
+
+#### Comparative execution path
+
+For the currently declared dual-target path (`exeris-native-community` vs `spring-jvm-vt-tuned`, Community/H1/loopback):
+
+1. Run `scripts/run-comparative.sh` with `--scenario-id entity-read-by-id` and `--contract-id fixed_contract_v1`.
+2. Validate both result bundles with `scripts/validate-comparative-readiness.sh`.
+3. Generate or confirm the fairness artifact with `tools/compute-fairness-index.sh`.
+4. Aggregate only repeated comparative runs with `scripts/aggregate-comparative-results.sh`.
+
+First dual-target comparative execution for this path, and any publishable cross-runtime comparison derived from it, remain pending until complete, claim-eligible run artifacts are captured and reviewed.
 
 ---
 

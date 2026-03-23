@@ -24,6 +24,28 @@ claims.
 
 ---
 
+## dev-isolated
+
+A developer-controlled Linux machine prepared for low-noise benchmarking.
+Used for exploratory and pre-publication runs when a dedicated bare-metal perf box
+is not available.
+
+| Field | Example value |
+|---|---|
+| `profile_id` | `dev-isolated` |
+| CPU | Modern x86-64 desktop/workstation CPU |
+| Cores | Recorded exactly |
+| RAM | Recorded exactly |
+| Storage | Local NVMe SSD |
+| Network | loopback |
+| OS | Linux ≥ 5.15 |
+| GUI | Disabled during benchmark run |
+| CPU governor | `performance` preferred |
+| Background processes | Minimized; browser/IDE/desktop session closed |
+| Notes | Lower noise than `dev-laptop`, but still not equivalent to `perf-box-amd64`. Absolute publication claims require explicit caveat unless later confirmed on dedicated hardware. |
+
+---
+
 ## ci-runner
 
 GitHub Actions or similar hosted runner. Used only for smoke / regression-detection

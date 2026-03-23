@@ -14,6 +14,76 @@ Every matrix row and output status row must carry:
 
 Do not collapse conclusions across these labels without explicit caveats.
 
+## Primary Comparative Set (Publication / Decision-Making)
+
+For TCP TLS 1.3 record-path analysis, the primary engine-level comparator set is B3/B4/B5.
+Use B6/B7 as integration-level lenses. Keep these layers separated in reporting and
+carry explicit transport and wiring labels for every row.
+
+| Matrix ID | Benchmark | Transport Model | Buffer Model | Allocator Model | Primary Use |
+|---|---|---|---|---|---|
+| B3 | `SslEngineTlsBenchmark` | in-memory `ByteBuffer` (no socket, no syscall) | JVM heap `ByteBuffer` | JVM GC-managed heap | external baseline — pure crypto cost, no I/O |
+| B4 | `NettyTcNativeTlsBenchmark` | `EmbeddedChannel` in-memory pipeline (no socket, no syscall) | Netty pooled direct `ByteBuf` | `PooledByteBufAllocator` (Netty) | external baseline — pipeline + pooling cost |
+| B5 | `OffHeapTlsEngineMemoryBioBenchmark` | neutral in-process Memory-BIO engine-level lens, no socket, no syscall | off-heap `LoanedBuffer` (enterprise allocator, pre-reservation model) | enterprise `MemoryAllocator` (pre-reservation) | Exeris OffHeapTlsEngine engine-level lens (not equivalent to FD-owner path) |
+| B6 | `ExerisCommunityTlsBenchmark` | FD-owner real loopback socket, `write(2)` kernel crossing per record | off-heap `LoanedBuffer` (community allocator, on-demand) | community `MemoryAllocator` (on-demand) | Exeris Community natural transport + memory contract |
+| B7 | `ExerisEnterpriseTlsBenchmark` | Memory-BIO in-process inject/drain, no socket, no syscall | off-heap `LoanedBuffer` (enterprise allocator, pre-reservation model) | enterprise `MemoryAllocator` (pre-reservation) | Exeris Enterprise natural transport + memory contract |
+
+Cross-row conclusions in this set must preserve transport-model differences and
+must not flatten FD-owner socket and Memory-BIO paths into a single equivalence claim.
+
+### Memory and Allocator Model Differences
+
+Each benchmark in the B3/B4/B5/B6/B7 set operates under a distinct memory and
+allocator contract. These differences are structural, not incidental, and must
+be preserved in all cross-row comparisons.
+
+| Matrix ID | Buffer type | Allocator lifecycle |
+|---|---|---|
+| B3 | JVM heap `ByteBuffer` | GC-managed; allocation/reclaim is implicit |
+| B4 | Netty pooled direct `ByteBuf` | `PooledByteBufAllocator`; thread-local arenas, ref-counted reclaim |
+| B5 | off-heap `LoanedBuffer` | enterprise allocator; in-process Memory-BIO engine lens |
+| B6 | off-heap `LoanedBuffer` | community allocator; buffers allocated on-demand per trial |
+| B7 | off-heap `LoanedBuffer` | enterprise allocator; buffers provided under a pre-reservation model |
+
+**What these differences mean for interpretation:**
+
+- B3 includes GC pressure from heap `ByteBuffer` churn. A lower `gc.alloc.rate.norm` in B6 or B7 vs B3 reflects allocator strategy, not only crypto engine efficiency.
+- B4 pool overhead (arena management, ref-count paths) contributes to its CPU profile. Differences vs B3 are pipeline + pooling cost, not crypto cost alone.
+- B5 is an in-process Memory-BIO engine-level lens. It is useful for scoped engine analysis but is not directly equivalent to B6's FD-owner/socket integration path.
+- B6 vs B7 differs in both transport model (FD-owner socket vs Memory-BIO) AND allocator model (on-demand vs pre-reservation). **The delta between B6 and B7 cannot be attributed solely to the transport boundary cost.**
+
+**Valid claims from this set:**
+- Each benchmark row measures the TLS record-path cost under its full native implementation contract (transport + allocator combined).
+- Cross-row throughput differences represent combined transport and allocator model effects, not isolated crypto engine speed.
+- Within-row comparisons across payload sizes are valid as single-implementation scaling measurements.
+
+**Invalid claims without additional isolation evidence:**
+- "Enterprise is faster than Community due to transport model alone."
+- "B7 vs B6 isolates the Memory-BIO benefit."
+- "B3 vs B6 isolates the JDK SSLEngine vs community OpenSSL crypto performance."
+- "B5 is a drop-in equivalent replacement for B6 FD-owner integration measurements."
+
+> **B6 vs B7 direct comparison is dual-axis confounded.**
+> Transport model (FD-owner socket vs Memory-BIO) and allocator model
+> (community on-demand vs enterprise pre-reservation) vary simultaneously.
+> Any claim about B6-vs-B7 performance difference must explicitly acknowledge
+> both axes. Attribution to either axis alone is not supported by this benchmark design.
+
+## Comparative Reporting Metrics (Mandatory for B3/B4/B5/B6/B7)
+
+- JMH throughput (ops/s)
+- JMH sample-time latency (us/op with p50/p95/p99 where available)
+- heap allocation (`gc.alloc.rate.norm`)
+- JFR allocation evidence (`ObjectAllocationSample` stacks)
+- CPU hotspot profile (top methods / percent)
+- RSS and native footprint snapshot
+- native footprint pre-reservation delta: RSS at trial @Setup completion vs RSS at measurement end
+- allocator model label per row (GC-managed / pooled-direct / on-demand off-heap / pre-reservation off-heap)
+- explicit buffer model, transport model, and allocator model labels (all three required per row)
+
+Publication-grade conclusions require all dimensions above, or an explicit
+missing-data caveat for each absent dimension.
+
 ## MUST / SHOULD / STRETCH Matrix
 
 | Matrix ID | Priority | Tier | Protocol Mode | Benchmark Family | Comparison Axis | Intent | Artifact Type | Status | Publication Ready |
@@ -23,8 +93,11 @@ Do not collapse conclusions across these labels without explicit caveats.
 | B1 | MUST | community | tcp-tls-1.3 | B | within-tier | Core off-heap TLS engine micro benchmark | jmh_micro | implemented | publishable |
 | B2 | MUST | community | tcp-tls-1.3 | B | within-tier | Core TLS state-machine micro benchmark | jmh_micro | implemented | publishable |
 | B3 | SHOULD | community | tcp-tls-1.3 | B | implementation-variant | Comparative record-path benchmark vs JDK SSLEngine | jmh_comparative | implemented | publishable |
-| B4 | SHOULD | community | tcp-tls-1.3 | B | implementation-variant | Comparative record-path benchmark vs netty-tcnative | jmh_comparative | implemented | needs-validation |
-| B5 | SHOULD | community | tcp-tls-1.3 | B | within-tier | Community TLS wrapper guard micro benchmark | jmh_micro | implemented | partial |
+| B4 | SHOULD | community | tcp-tls-1.3 | B | implementation-variant | Comparative Netty TLS pipeline benchmark via netty-tcnative `SslHandler` + `EmbeddedChannel` | jmh_comparative | implemented | needs-validation |
+| B5g | SHOULD | community | tcp-tls-1.3 | B | within-tier | Community TLS wrapper guard micro benchmark | jmh_micro | implemented | partial |
+| B6 | SHOULD | community | tcp-tls-1.3 | B | implementation-variant | Comparative record-path benchmark via Exeris SPI-native `TlsEngine` using split Community FD-owner/socket harness (`SSL_set_fd`, real loopback socket; `wrapThroughput` only) | jmh_comparative | implemented | needs-validation |
+| B7 | SHOULD | enterprise | tcp-tls-1.3 | B | implementation-variant | Comparative record-path benchmark via Exeris SPI-native `TlsEngine` using split Enterprise Memory-BIO harness (in-process inject/drain; `wrapThroughput` + `wrapUnwrapRoundTrip`) | jmh_comparative | implemented | needs-validation |
+| B5 | SHOULD | enterprise | tcp-tls-1.3 | B | implementation-variant | OffHeapTlsEngine engine-level lens via neutral in-process Memory-BIO harness; not equivalent to FD-owner integration path | jmh_comparative | implemented | needs-validation |
 | C4 | MUST | enterprise | tcp-tls-1.3 | C | within-tier | Enterprise TLS engine benchmark | jmh_micro | implemented | publishable |
 | D1 | SHOULD | community | tcp-tls-1.3 | D | within-tier | Community loopback handshake/lifecycle probe | integration_probe | implemented | internal-only |
 | D5 | SHOULD | community | tcp-tls-1.3 | D | within-tier | Community TLS loopback integration probe | loopback_it | implemented | internal-only |
@@ -42,7 +115,10 @@ Do not collapse conclusions across these labels without explicit caveats.
 | B2 | `CoreTlsStateMachineBenchmark` | `exeris-kernel/exeris-kernel-core/src/test/java/eu/exeris/kernel/core/crypto/tls/CoreTlsStateMachineBenchmark.java` |
 | B3 | `SslEngineTlsBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/SslEngineTlsBenchmark.java` |
 | B4 | `NettyTcNativeTlsBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/NettyTcNativeTlsBenchmark.java` |
-| B5 | `CommunityTlsEngineGuardBenchmark` | `exeris-kernel/exeris-kernel-community/src/test/java/eu/exeris/kernel/community/crypto/CommunityTlsEngineGuardBenchmark.java` |
+| B5g | `CommunityTlsEngineGuardBenchmark` | `exeris-kernel/exeris-kernel-community/src/test/java/eu/exeris/kernel/community/crypto/CommunityTlsEngineGuardBenchmark.java` |
+| B6 | `ExerisCommunityTlsBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/ExerisCommunityTlsBenchmark.java` |
+| B7 | `ExerisEnterpriseTlsBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/ExerisEnterpriseTlsBenchmark.java` |
+| B5 | `OffHeapTlsEngineMemoryBioBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/OffHeapTlsEngineMemoryBioBenchmark.java` |
 | C4 | `EnterpriseTlsEngineBenchmark` | `exeris-kernel-enterprise/exeris-kernel-enterprise/src/test/java/eu/exeris/kernel/enterprise/crypto/EnterpriseTlsEngineBenchmark.java` |
 | D1 | `OffHeapTlsEngineLoopbackIT` | `exeris-kernel/exeris-kernel-core/src/test/java/eu/exeris/kernel/core/crypto/tls/OffHeapTlsEngineLoopbackIT.java` |
 | D5 | `CommunityTlsEngineLoopbackIntegrationTest` | `exeris-kernel/exeris-kernel-community/src/test/java/eu/exeris/kernel/community/crypto/CommunityTlsEngineLoopbackIntegrationTest.java` |
@@ -78,7 +154,13 @@ Every matrix entry is classified by the type of artifact it tests:
 - May be referenced internally; no absolute numbers in public docs
 
 ### Needs Validation Before Publication
-- ⚠️ `B4` (tcnative): Buffer policy fairness vs B3 not yet fully documented
+- ⚠️ `B4` (tcnative/Netty pipeline): publication needs explicit caveats for pooled `ByteBuf` policy and handler/channel wiring vs B3's direct `SSLEngine` harness
+- ⚠️ `B5`/`B6`/`B7`: publication requires all mandatory comparative evidence dimensions (see Comparative Reporting Metrics) plus explicit caveats:
+  - **Transport model difference:** B6 uses FD-owner real loopback socket with `write(2)` kernel crossing per TLS record. B5 and B7 use in-process Memory-BIO with no socket and no syscall.
+  - **B5 scope caveat:** B5 is an engine-level in-process Memory-BIO lens and is not equivalent to B6 FD-owner/socket integration path.
+  - **Allocator model difference:** B6 uses community on-demand allocator. B5/B7 use enterprise pre-reservation allocator model.
+  - **Direct comparison constraint:** A B6 vs B5/B7 delta cannot be attributed solely to transport boundary differences. Transport and allocator axes contribute. Any published comparison must carry explicit caveats.
+  - **Enterprise confidentiality:** B5/B7 results published using functional labels only. No internal class names, allocation strategy parameters, or native block configuration in public artifacts.
 - ⚠️ `B5` (partial): Methods `guardCost`, `wrapThroughput` are publishable; 
   `fullRoundTripWrapUnwrapCost` needs semantic validation
 
@@ -88,7 +170,7 @@ Every matrix entry is classified by the type of artifact it tests:
 
 ---
 
-## B5 (CommunityTlsEngineGuardBenchmark) — Method-Level Breakdown
+## B5g (CommunityTlsEngineGuardBenchmark) — Method-Level Breakdown
 
 This benchmark class contains multiple methods with different publication status:
 
@@ -100,12 +182,34 @@ This benchmark class contains multiple methods with different publication status
 | `wrapWithoutBindGuardCost` | Pattern A (guard gate) | implemented | ✓ internal-only |
 | `unwrapWithoutBindGuardCost` | Pattern A (guard gate) | implemented | ✓ internal-only |
 
-All methods in B5 measure **guard-path sentinels and error checks**, not steady-state throughput.
+All methods in B5g measure **guard-path sentinels and error checks**, not steady-state throughput.
 They are suitable only for merge-gate invariants and internal diagnostic reports, not for 
 comparative baseline claims against other libraries.
 
 For Community steady-state wrap/unwrap throughput comparable to B1/C4, use `B3` (JDK reference)
 or dedicated Community record-path benchmarks when implemented.
+
+## B6/B7 SPI Contract Notes
+
+- B6/B7 use SPI-native `TlsEngine` client/server pairs created via
+  `KernelCryptoProvider#createTlsEngine(CryptoProviderConfig)` and shared helper
+  support from `AbstractExerisTlsBenchmarkSupport`.
+- B6 (Community) uses `AbstractCommunityTlsBenchmark` FD-owner transport:
+  real loopback socket, fd bound before `notifyBound()`, handshake driven with
+  virtual threads, plus a persistent drain thread for `wrapThroughput`.
+- B7 (Enterprise) uses `AbstractEnterpriseTlsBenchmark` Memory-BIO transport:
+  `beginHandshake(out)` with `bioConnector().inject()` / `drain()` loops,
+  fully in-process.
+- Setup resolves provider classes with tier-first precedence
+  (`exeris.tls.<tier>.*`, then `exeris.tls.*`) and creates buffers through
+  `MemoryProvider` + `MemoryAllocator`.
+- Exposed methods differ by tier: B6 is `wrapThroughput`-only; B7 exposes
+  `wrapThroughput` and `wrapUnwrapRoundTrip`.
+- Cross-tier caveat (mandatory): B6 `wrapThroughput` includes kernel
+  `write(2)` crossing and B7 `wrapThroughput` does not. Report cross-tier TLS
+  numbers only with explicit transport-model labels (for example,
+  "including kernel I/O" vs "excluding kernel I/O").
+- If required provider classes or cert/key inputs are missing for a tier, matrix execution should emit `SKIPPED_MISSING_IMPLEMENTATION` for B6/B7.
 
 ---
 
@@ -133,6 +237,8 @@ TLS benchmarks measure two distinct cost centers:
 - **Metric**: Throughput (ops/s) or SampleTime (µs latency)
 - **Use case**: Steady-state request/response throughput, encryption latency tail
 
+For B4 specifically, the ACTIVE path is exercised through Netty `SslHandler` and `EmbeddedChannel` with pooled `ByteBuf`s rather than through raw `SSLEngine.wrap/unwrap` calls.
+
 ### SSLEngine Reuse and State Management
 
 **Rule: Do not mix lifecycle phases within a single benchmark method.**
@@ -151,14 +257,14 @@ Mixing patterns (e.g., reusing an engine that's still in HANDSHAKE_IN_PROGRESS) 
 When comparing implementations (B3 vs B4, or future B1 vs competing libraries):
 
 #### Heap vs Direct ByteBuffer
-- Document buffer allocation strategy: heap, direct, or mixed
-- Normalize comparisons: if B3 uses heap and B4 uses direct, report both separately
+- Document buffer allocation strategy: heap, direct, pooled direct, or mixed
+- Normalize comparisons: if B3 uses heap/direct `ByteBuffer` and B4 uses pooled direct `ByteBuf`, report the wiring difference explicitly rather than flattening the numbers into a single claim
 - JVM flag impact: `-XX:+UseZGC` vs G1GC affects buffer pooling; note in metadata
 
 #### Off-Heap vs On-Heap Allocation
 - Community/Enterprise engines: operate on MemorySegment (off-heap, zero heap allocation in steady state)
 - JDK SSLEngine: operates on ByteBuffer (may allocate on heap during wrap/unwrap)
-- Tcnative: operates on ByteBuffer passed through JNI (allocation depends on tcnative implementation)
+- Tcnative/Netty pipeline: operates on pooled direct `ByteBuf` and handler/channel glue backed by JNI/native OpenSSL state
 - **Claim rule**: If claiming "zero-allocation" on wrap/unwrap, must measure steady-state heap allocation 
   via `-prof gc` and confirm `gc.alloc.rate.norm ≈ 0 B/op`; JFR allocation stacks must show no 
   heap allocation in success path (guard path zero-alloc is separate via A1/A2)
@@ -210,6 +316,7 @@ When establishing performance comparisons:
 #### Caveats in Results
 Mark comparative results with:
 - Implementation names (JDK SSLEngine, tcnative BoringSSL, Exeris OffHeapTlsEngine)
+- Wiring model (direct engine harness vs Netty `SslHandler`/`EmbeddedChannel` pipeline)
 - Buffer types (heap ByteBuffer, direct ByteBuffer, MemorySegment)
 - TLS version, cipher suite
 - JVM version, target JDK flags

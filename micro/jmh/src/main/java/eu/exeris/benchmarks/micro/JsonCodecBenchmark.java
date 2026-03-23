@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 @Fork(value = 3, jvmArgsAppend = {
     "-XX:+UseG1GC",
     "-XX:+AlwaysPreTouch",
+    "-XX:+PreserveFramePointer",
     "-Xms256m", "-Xmx256m"
 })
 public class JsonCodecBenchmark {

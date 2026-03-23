@@ -68,21 +68,27 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 @BenchmarkMode({Mode.Throughput, Mode.SampleTime})
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
-@Warmup(iterations = 5, time = 2, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
-@Fork(value = 1, jvmArgsAppend = {
-        "-XX:+UseZGC",
-        "-XX:+UnlockExperimentalVMOptions",
-        "-Xms256m", "-Xmx256m"
-})
+@Warmup(iterations = 5, time = 3, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 10, time = 5, timeUnit = TimeUnit.SECONDS)
+// Publication-safe default; CLI/manifest may override for smoke/profile runs.
+@Fork(value = 3, jvmArgsAppend = {
+        // ZGC, heap, and module-open flags are injected by the manifest harness
+        // (common_jvm_args via run-jmh-case.sh) and propagated to forks via JMH
+        // runner-process inheritance. Duplicating them here causes the double-entry
+        // visible in '# VM options:' JMH output. Keep only the annotation-specific flag.
+        "-XX:+PreserveFramePointer"
+    })
 public class SslEngineTlsBenchmark {
 
     /** Payload sizes in bytes: 128 B, 1 KB, 4 KB, 16 KB (TLS record max). */
     @Param({"128", "1024", "4096", "16384"})
     public int payloadBytes;
 
-    @Param({"heap", "direct"})
+    @Param({"direct"})
     public String bufferKind;
+
+    @Param({"TLS_AES_256_GCM_SHA384"})
+    public String cipherSuite;
 
     private SSLEngine clientEngine;
     private SSLEngine serverEngine;
@@ -106,6 +112,8 @@ public class SslEngineTlsBenchmark {
         serverEngine.setNeedClientAuth(false);
         clientEngine.setEnabledProtocols(new String[]{"TLSv1.3"});
         serverEngine.setEnabledProtocols(new String[]{"TLSv1.3"});
+        clientEngine.setEnabledCipherSuites(new String[]{cipherSuite});
+        serverEngine.setEnabledCipherSuites(new String[]{cipherSuite});
 
         clientPlaintext  = allocateBuffer(NET_BUFFER_SIZE);
         clientCiphertext = allocateBuffer(NET_BUFFER_SIZE);
@@ -121,6 +129,15 @@ public class SslEngineTlsBenchmark {
     public void tearDown() {
         if (clientEngine != null) clientEngine.closeOutbound();
         if (serverEngine != null) serverEngine.closeOutbound();
+    }
+
+    @Setup(Level.Iteration)
+    public void markMeasurementStart() {
+        PhaseMarkerEvent event = new PhaseMarkerEvent();
+        event.phase = "measurement";
+        event.iteration = 0;
+        event.benchmarkClass = getClass().getSimpleName();
+        event.commit();
     }
 
     /**
@@ -149,6 +166,7 @@ public class SslEngineTlsBenchmark {
     @Benchmark
     @BenchmarkMode(Mode.SampleTime)
     @OutputTimeUnit(TimeUnit.MICROSECONDS)
+    @OperationsPerInvocation(2)
     public void wrapUnwrapRoundTrip(Blackhole bh) throws SSLException {
         clientPlaintext.clear().limit(payloadBytes);
         clientCiphertext.clear();
@@ -195,6 +213,7 @@ public class SslEngineTlsBenchmark {
     private static KeyStore loadEphemeralPkcs12KeyStore() throws Exception {
         char[] password = "changeit".toCharArray();
         Path temp = Files.createTempFile("exeris-b3-", ".p12");
+        Files.delete(temp); // JDK 26 keytool rejects writing to an existing (even empty) keystore file
         try {
             List<String> command = new ArrayList<>();
             command.add(detectKeytoolBinary());
@@ -302,6 +321,8 @@ public class SslEngineTlsBenchmark {
         if (!clientEngine.getSession().isValid() || !serverEngine.getSession().isValid()) {
             throw new IllegalStateException("Handshake completed with invalid session");
         }
+        assertCipherSuitePinned(clientEngine, "client");
+        assertCipherSuitePinned(serverEngine, "server");
 
         // Restore plaintext after handshake has consumed it.
         fillPayload(clientPlaintext, payloadBytes);
@@ -385,5 +406,13 @@ public class SslEngineTlsBenchmark {
             buf.put((byte) (i & 0xFF));
         }
         buf.flip();
+    }
+
+    private void assertCipherSuitePinned(SSLEngine engine, String side) {
+        String negotiated = engine.getSession().getCipherSuite();
+        if (!cipherSuite.equals(negotiated)) {
+            throw new IllegalStateException("Expected negotiated cipher suite " + cipherSuite
+                    + " on " + side + " engine but got " + negotiated);
+        }
     }
 }

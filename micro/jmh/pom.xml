@@ -25,6 +25,7 @@
 
     <!-- JMH -->
     <jmh.version>1.37</jmh.version>
+    <async.profiler.version>3.0</async.profiler.version>
 
     <!-- Exeris artifact versions — override via -Dexeris.kernel.version=... -->
     <exeris.kernel.version>0.5.0-SNAPSHOT</exeris.kernel.version>
@@ -54,6 +55,19 @@
       <artifactId>jmh-generator-annprocess</artifactId>
       <version>${jmh.version}</version>
       <scope>provided</scope>
+    </dependency>
+
+    <!-- async-profiler JMH integration — CPU flame graph profiling (safepoint-bias-free).
+         Requires libasyncProfiler.so on host (set via -Djava.library.path or ASYNC_PROFILER_DIR).
+         NOT bundled in fat JAR (provided+optional scope).
+         Enable: java -jar benchmarks.jar -prof async event=cpu;output=flamegraph;dir=/tmp;simple=true
+         Requires -XX:+PreserveFramePointer on the fork JVM for accurate stack walking. -->
+    <dependency>
+      <groupId>tools.profiler</groupId>
+      <artifactId>async-profiler</artifactId>
+      <version>${async.profiler.version}</version>
+      <scope>provided</scope>
+      <optional>true</optional>
     </dependency>
 
     <!-- netty-tcnative-boringssl-static — B4 implementation-variant comparative. -->

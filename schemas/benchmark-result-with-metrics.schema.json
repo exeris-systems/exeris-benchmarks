@@ -1,0 +1,252 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Benchmark Result with Resource Metrics",
+  "description": "JMH benchmark result merged with whole-JVM-process resource metrics and reproducibility metadata. NOT suitable for regression comparison or cross-target performance claims.",
+  "type": "object",
+  "required": [
+    "runner_version",
+    "benchmark_name",
+    "execution_class",
+    "jmh_results",
+    "resource_metrics",
+    "metadata"
+  ],
+  "properties": {
+    "runner_version": {
+      "type": "string",
+      "description": "Version of benchmark-runner-with-metrics.sh script",
+      "examples": [
+        "1.0"
+      ]
+    },
+    "benchmark_name": {
+      "type": "string",
+      "description": "Benchmark class or scenario name",
+      "examples": [
+        "SslEngineTlsBenchmark",
+        "NettyTcNativeTlsBenchmark"
+      ]
+    },
+    "execution_class": {
+      "type": "string",
+      "enum": [
+        "exploratory"
+      ],
+      "description": "Classification of benchmark execution. Currently locked to 'exploratory' — NOT for regression/guard runs."
+    },
+    "jmh_results": {
+      "type": "array",
+      "description": "Original JMH benchmark results array (verbatim from JMH JSON output)",
+      "items": {
+        "type": "object"
+      }
+    },
+    "resource_metrics": {
+      "$ref": "#/definitions/resourceMetrics"
+    },
+    "metadata": {
+      "$ref": "#/definitions/metadata"
+    }
+  },
+  "definitions": {
+    "cpuMetrics": {
+      "type": "object",
+      "description": "CPU time and elapsed time captured from /usr/bin/time -v",
+      "required": [
+        "user_seconds",
+        "system_seconds",
+        "elapsed_seconds",
+        "cpu_percent"
+      ],
+      "properties": {
+        "user_seconds": {
+          "type": "number",
+          "description": "Total user-space CPU seconds"
+        },
+        "system_seconds": {
+          "type": "number",
+          "description": "Total kernel-space CPU seconds"
+        },
+        "elapsed_seconds": {
+          "type": "number",
+          "description": "Wall-clock elapsed time in seconds"
+        },
+        "cpu_percent": {
+          "type": "integer",
+          "description": "Average CPU utilization percentage (0-100+)",
+          "minimum": 0
+        }
+      }
+    },
+    "memoryMetrics": {
+      "type": "object",
+      "description": "Memory usage captured from /usr/bin/time -v",
+      "required": [
+        "max_rss_mb",
+        "max_rss_bytes",
+        "major_page_faults",
+        "minor_page_faults"
+      ],
+      "properties": {
+        "max_rss_mb": {
+          "type": "integer",
+          "description": "Peak resident set size in megabytes"
+        },
+        "max_rss_bytes": {
+          "type": "integer",
+          "description": "Peak resident set size in bytes"
+        },
+        "major_page_faults": {
+          "type": "integer",
+          "description": "Number of major page faults (disk I/O required)"
+        },
+        "minor_page_faults": {
+          "type": "integer",
+          "description": "Number of minor page faults (in-memory reclaim)"
+        }
+      }
+    },
+    "resourceMetrics": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Successful resource metrics capture",
+          "required": [
+            "cpu",
+            "memory"
+          ],
+          "properties": {
+            "cpu": {
+              "$ref": "#/definitions/cpuMetrics"
+            },
+            "memory": {
+              "$ref": "#/definitions/memoryMetrics"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Graceful degradation: /usr/bin/time output unavailable or unparseable",
+          "required": [
+            "status",
+            "reason"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "unavailable"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "examples": [
+                "time output parsing failed",
+                "/usr/bin/time not available on this platform"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Benchmark execution environment and reproducibility metadata",
+      "required": [
+        "timestamp",
+        "hostname",
+        "commit_sha",
+        "target_commit_sha",
+        "hardware_profile",
+        "jdk_vendor",
+        "jdk_version",
+        "jvm_flags",
+        "measurements_scope",
+        "jmh_scope",
+        "caveat",
+        "command",
+        "benchmark_exit_code"
+      ],
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 UTC timestamp of benchmark execution"
+        },
+        "hostname": {
+          "type": "string",
+          "description": "Host machine name where benchmark ran"
+        },
+        "commit_sha": {
+          "type": "string",
+          "description": "Git commit SHA of exeris-benchmarks repository at execution time",
+          "pattern": "^[a-f0-9]{40}|unknown$"
+        },
+        "target_commit_sha": {
+          "type": "string",
+          "description": "Git commit SHA of benchmark target (exeris-kernel or exeris-enterprise) at execution time",
+          "pattern": "^[a-f0-9]{40}|unknown$"
+        },
+        "hardware_profile": {
+          "type": "string",
+          "description": "Hardware classification (dev-laptop, ci-runner, docker-container, or custom)",
+          "examples": [
+            "dev-laptop",
+            "ci-runner",
+            "docker-container"
+          ]
+        },
+        "jdk_vendor": {
+          "type": "string",
+          "description": "JDK vendor identification",
+          "examples": [
+            "openjdk",
+            "oracle",
+            "unknown"
+          ]
+        },
+        "jdk_version": {
+          "type": "string",
+          "description": "Full JDK version string from java -version",
+          "examples": [
+            "openjdk version \"26.0.1-ea\" 2025-09-16",
+            "unknown"
+          ]
+        },
+        "jvm_flags": {
+          "type": "string",
+          "description": "JVM command-line flags (from BENCHMARK_JVM_ARGS or detected)"
+        },
+        "measurements_scope": {
+          "type": "string",
+          "enum": [
+            "whole-jvm-process"
+          ],
+          "description": "Scope of resource measurement: whole-jvm-process includes JMH harness housekeeping, not steady-state only"
+        },
+        "jmh_scope": {
+          "type": "string",
+          "enum": [
+            "steady-state measurement window only"
+          ],
+          "description": "JMH results cover steady-state measurement window only (excludes warmup)"
+        },
+        "caveat": {
+          "type": "string",
+          "description": "Critical caveat: resource metrics are whole-JVM and not suitable for regression or cross-target comparison",
+          "examples": [
+            "Not suitable for regression comparison or cross-target claims. Dev-host exploratory only."
+          ]
+        },
+        "command": {
+          "type": "string",
+          "description": "Full command executed to run the benchmark"
+        },
+        "benchmark_exit_code": {
+          "type": "integer",
+          "description": "Exit code of benchmark command (0 = success)"
+        }
+      }
+    }
+  }
+}

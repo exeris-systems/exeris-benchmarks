@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/comparative-result/v1",
+  "title": "ComparativeResult",
+  "description": "Aggregated result artifact for a comparative benchmark run across exactly two targets.",
+  "type": "object",
+  "required": [
+    "comparative_id",
+    "timestamp_utc",
+    "scenario_id",
+    "contract_id",
+    "measurement_seconds",
+    "warmup_seconds",
+    "targets",
+    "fairness_index",
+    "gate_status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "comparative_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this comparative run (UUID v4)."
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the comparative run was initiated."
+    },
+    "scenario_id": {
+      "type": "string",
+      "description": "Scenario name, must match scenarios/<id>/scenario.json#scenario_id."
+    },
+    "contract_id": {
+      "type": "string",
+      "description": "Contract identifier from scenario fixed_contracts (e.g. fixed_contract_v1)."
+    },
+    "measurement_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "description": "Duration of the measurement window in seconds (warmup excluded)."
+    },
+    "warmup_seconds": {
+      "type": "integer",
+      "minimum": 10,
+      "description": "Duration of the warmup window in seconds (discarded from metrics)."
+    },
+    "targets": {
+      "type": "array",
+      "description": "Exactly two target result summaries included in this comparison.",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "target_id",
+          "maturity_level",
+          "tier",
+          "protocol_mode",
+          "transport_mode",
+          "metrics"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "target_id": {
+            "type": "string",
+            "description": "Target identifier, must match comparative-pair-manifest.json#compatible_targets[].target_id."
+          },
+          "maturity_level": {
+            "type": "string",
+            "description": "Target maturity classification (e.g. production, exploratory)."
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["community", "enterprise"],
+            "description": "Target tier. Cross-tier comparisons require explicit override_gates entry."
+          },
+          "protocol_mode": {
+            "type": "string",
+            "enum": ["h1", "h2", "h3"],
+            "description": "HTTP protocol mode used during this run."
+          },
+          "transport_mode": {
+            "type": "string",
+            "enum": [
+              "loopback-h1",
+              "loopback-h2",
+              "loopback-h3",
+              "network-h1",
+              "network-h2",
+              "network-h3"
+            ],
+            "description": "Transport layer and network path. loopback-h1 results are not equivalent to network-path measurements."
+          },
+          "metrics": {
+            "type": "object",
+            "required": [
+              "throughput_rps",
+              "latency_p50_us",
+              "latency_p95_us",
+              "latency_p99_us",
+              "error_rate_pct",
+              "total_requests",
+              "total_errors"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "throughput_rps": {
+                "type": "number",
+                "description": "Measured throughput in requests per second."
+              },
+              "latency_p50_us": {
+                "type": "number",
+                "description": "50th percentile latency in microseconds."
+              },
+              "latency_p75_us": {
+                "type": "number",
+                "description": "75th percentile latency in microseconds (optional but recommended)."
+              },
+              "latency_p90_us": {
+                "type": "number",
+                "description": "90th percentile latency in microseconds (optional but recommended)."
+              },
+              "latency_p95_us": {
+                "type": "number",
+                "description": "95th percentile latency in microseconds."
+              },
+              "latency_p99_us": {
+                "type": "number",
+                "description": "99th percentile latency in microseconds."
+              },
+              "error_rate_pct": {
+                "type": "number",
+                "description": "Percentage of requests that resulted in errors (0.0–100.0)."
+              },
+              "total_requests": {
+                "type": "integer",
+                "description": "Total number of requests issued during the measurement window."
+              },
+              "total_errors": {
+                "type": "integer",
+                "description": "Total number of error responses during the measurement window."
+              }
+            }
+          }
+        }
+      }
+    },
+    "fairness_index": {
+      "$ref": "https://exeris.io/schemas/fairness-index/v1",
+      "description": "Computed fairness index for this comparison pair."
+    },
+    "gate_status": {
+      "type": "object",
+      "description": "Results of all 8 comparative readiness gates.",
+      "required": [
+        "maturity",
+        "equivalence",
+        "endpoint",
+        "payload",
+        "fairness",
+        "error",
+        "measurement",
+        "metadata"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "maturity": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate A: claim_scope, runner_status, and reproducibility_status requirements."
+        },
+        "equivalence": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate B: scenario_id, contract_id, tool, and transport_mode must match across targets."
+        },
+        "endpoint": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate C: total_errors == 0 or error_rate_pct < 0.5 for both targets."
+        },
+        "payload": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate D: threads, connections, and duration_seconds must match across targets."
+        },
+        "fairness": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate E: fairness_index.composite_score must be >= 0.50."
+        },
+        "error": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate F: error_rate_pct < 1.0 for both targets; WARN if > 0.5."
+        },
+        "measurement": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G: warmup_seconds >= 30, duration_seconds >= 60, total_requests >= 100."
+        },
+        "metadata": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate H: run_id, timestamp, scenario, tool, and env_ref must be populated."
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-form human-readable notes about this comparative run."
+    },
+    "override_gates": {
+      "type": "array",
+      "description": "List of gate IDs that have been explicitly overridden with justification.",
+      "items": {
+        "type": "object",
+        "required": ["gate_id", "justification", "override_by"],
+        "additionalProperties": false,
+        "properties": {
+          "gate_id": {
+            "type": "string",
+            "enum": ["maturity", "equivalence", "endpoint", "payload", "fairness", "error", "measurement", "metadata"]
+          },
+          "justification": {
+            "type": "string"
+          },
+          "override_by": {
+            "type": "string",
+            "description": "Identifier of the person or system that approved this override."
+          }
+        }
+      }
+    },
+    "known_asymmetries": {
+      "type": "array",
+      "description": "Documented known asymmetries between targets that may affect result interpretation.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "gate_result": {
+      "type": "object",
+      "required": ["pass_fail", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "pass_fail": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "WARN"],
+          "description": "Gate outcome. FAIL blocks publication; WARN allows with caveats."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable explanation of the gate outcome."
+        }
+      }
+    }
+  }
+}

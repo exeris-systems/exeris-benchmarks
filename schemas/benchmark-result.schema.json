@@ -39,13 +39,29 @@
       "type": "string",
       "description": "Path to the associated BenchmarkEnvironment JSON file."
     },
+    "transport_mode": {
+      "type": "string",
+      "enum": ["loopback-h1", "loopback-h2", "loopback-h3", "network-h1", "network-h2", "network-h3"],
+      "description": "Transport layer and network path. loopback-h1 results are not equivalent to network-path measurements."
+    },
+    "seed_ref": {
+      "type": "object",
+      "required": ["manifest_version", "scenario_id", "verified"],
+      "properties": {
+        "manifest_version": { "type": "string" },
+        "scenario_id": { "type": "string" },
+        "schema_migration_version": { "type": "string" },
+        "entity_count": { "type": "integer", "minimum": 1 },
+        "verified": { "type": "boolean", "description": "true only if verify-seed.sh exited 0 before this run" }
+      }
+    },
     "target": {
       "type": "object",
       "properties": {
         "repo": { "type": "string" },
         "commit_sha": { "type": "string" },
         "version": { "type": "string" },
-        "mode": { "type": "string", "enum": ["pure", "compat", "native", "jdbc-bridge"] },
+        "mode": { "type": "string", "enum": ["pure", "compat", "native", "jdbc-bridge", "baseline-db"] },
         "tier": { "type": "string", "enum": ["community", "enterprise"] },
         "protocol": { "type": "string", "enum": ["h1", "h2", "h3"] }
       }
@@ -54,6 +70,41 @@
       "type": "string",
       "description": "Report axis classification for this result.",
       "enum": ["within-tier", "cross-tier-same-protocol", "standalone"]
+    },
+    "execution_class": {
+      "type": "string",
+      "description": "Execution intent classification for claim guardrails.",
+      "enum": ["guard", "regression", "exploratory"]
+    },
+    "claim_scope": {
+      "type": "string",
+      "description": "Claim eligibility classification derived from status and execution intent.",
+      "enum": ["exploratory", "comparison_eligible", "descriptive_partial", "descriptive_only", "none"]
+    },
+    "final_reason": {
+      "type": "string",
+      "description": "Canonical postprocess reason code for eligibility/status decisions.",
+      "enum": [
+        "ok",
+        "partial_json",
+        "empty_json",
+        "invalid_json",
+        "benchmark_exit_nonzero",
+        "postprocess_exit_nonzero",
+        "missing_jfr",
+        "missing_metrics",
+        "missing_metadata"
+      ]
+    },
+    "runner_status": {
+      "type": "string",
+      "description": "Canonical runtime runner status for this artifact.",
+      "enum": ["success", "partial", "failed"]
+    },
+    "reproducibility_status": {
+      "type": "string",
+      "description": "Canonical reproducibility completeness state.",
+      "enum": ["complete", "incomplete_artifacts", "incomplete_metadata", "not_assessable"]
     },
     "run_config": {
       "type": "object",

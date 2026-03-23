@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Benchmark Reproducibility Metadata",
+  "description": "Complete reproducibility metadata for benchmark execution. Required for regression analysis and reproduction.",
+  "type": "object",
+  "required": [
+    "timestamp",
+    "benchmark_id",
+    "tier",
+    "phase",
+    "implementation_variant",
+    "family",
+    "benchmark_commit_sha",
+    "target_commit_sha",
+    "jdk_vendor",
+    "jdk_version",
+    "jvm_flags",
+    "hardware_profile",
+    "manifest_version",
+    "scenario_id",
+    "scenario_classification"
+  ],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of benchmark execution",
+      "examples": ["2026-03-18T10:30:45Z"]
+    },
+    "benchmark_id": {
+      "type": "string",
+      "description": "Benchmark identifier from manifest (e.g., B3, B4, B6, B7)",
+      "pattern": "^B[0-9]+$",
+      "examples": ["B3", "B6"]
+    },
+    "tier": {
+      "type": "string",
+      "description": "Target tier: JDK, Community, Enterprise, or variant",
+      "enum": ["JDK", "Community", "Enterprise", "NettyTcNative"]
+    },
+    "phase": {
+      "type": "string",
+      "description": "Benchmark phase: baseline, profile, or gc",
+      "enum": ["baseline", "profile", "gc"]
+    },
+    "implementation_variant": {
+      "type": "string",
+      "description": "Implementation variant (e.g., pure, compat, zero-copy)",
+      "examples": ["pure", "compat", "zero-copy"]
+    },
+    "family": {
+      "type": "string",
+      "description": "Benchmark family classification",
+      "enum": ["micro", "runtime"]
+    },
+    "benchmark_commit_sha": {
+      "type": "string",
+      "description": "Git commit SHA of exeris-benchmarks repository at execution",
+      "pattern": "^[a-f0-9]{40}$|^unknown$",
+      "examples": ["a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b", "unknown"]
+    },
+    "target_commit_sha": {
+      "type": "string",
+      "description": "Git commit SHA of benchmark target (exeris-kernel or exeris-enterprise) at execution",
+      "pattern": "^[a-f0-9]{40}$|^unknown$",
+      "examples": ["a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b", "unknown"]
+    },
+    "jdk_vendor": {
+      "type": "string",
+      "description": "JDK vendor name",
+      "examples": ["openjdk", "oracle", "internal"]
+    },
+    "jdk_version": {
+      "type": "string",
+      "description": "JDK version string",
+      "examples": ["21.0.1", "22-internal"]
+    },
+    "jvm_flags": {
+      "type": "array",
+      "description": "JVM command-line flags used for benchmark",
+      "items": {
+        "type": "string"
+      },
+      "examples": [["-Xms256m", "-Xmx256m", "-XX:+UseZGC"]]
+    },
+    "hardware_profile": {
+      "type": "string",
+      "description": "Hardware environment classification (must be canonical)",
+      "enum": ["linux-generic", "aarch64-generic", "dev-laptop", "ci-runner", "docker-container"],
+      "examples": ["linux-generic"]
+    },
+    "manifest_version": {
+      "type": "string",
+      "description": "Benchmark manifest version used",
+      "examples": ["1.0.0"]
+    },
+    "scenario_id": {
+      "type": "string",
+      "description": "Scenario identifier from benchmark class",
+      "examples": ["plaintext", "json-1kb", "json-10kb"]
+    },
+    "scenario_classification": {
+      "type": "string",
+      "description": "Classification of scenario (throughput, latency, etc.)",
+      "examples": ["throughput", "latency", "batch"]
+    },
+    "wiring_model": {
+      "type": "string",
+      "description": "Optional wiring model classification for scenarios that differ by transport or in-process pipeline wiring",
+      "examples": ["embedded-channel-pipeline", "socket-loopback"]
+    }
+  },
+  "additionalProperties": false
+}

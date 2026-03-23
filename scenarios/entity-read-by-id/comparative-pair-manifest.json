@@ -1,0 +1,59 @@
+{
+  "scenario_id": "entity-read-by-id",
+  "scenario_version": "1",
+  "comparative_tier": 1,
+  "required_contract": "fixed_contract_v1",
+  "compatible_targets": [
+    {
+      "target_id": "exeris-native-community",
+      "maturity_level": "production",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "constraint": "Baseline implementation; reference point for Tier 1 comparisons"
+    },
+    {
+      "target_id": "spring-jvm-vt-tuned",
+      "maturity_level": "exploratory",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "constraint": "Use identical warmup and measurement windows; document VT scheduler variance separately"
+    },
+    {
+      "target_id": "quarkus-jvm-vt-tuned",
+      "maturity_level": "exploratory",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "constraint": "Descriptive-only in Slice C; no baseline ranking claims until claim gates are fully PASS without WARN"
+    }
+  ],
+  "forbidden_pairs": [
+    {
+      "reason": "Community vs Enterprise cross-tier — protocol fairness unverified",
+      "targets": ["exeris-native-community", "exeris-kernel-enterprise"]
+    },
+    {
+      "reason": "Slice C restriction: JVM vs native asymmetry remains unresolved for baseline claims",
+      "targets": ["quarkus-jvm-vt-tuned", "exeris-native-community"]
+    },
+    {
+      "reason": "Slice C restriction: JVM vs native asymmetry remains unresolved for baseline claims",
+      "targets": ["quarkus-jvm-vt-tuned", "exeris-runtime-community"]
+    }
+  ],
+  "measurement_windows": {
+    "warmup_seconds": 60,
+    "measurement_seconds": 60,
+    "min_samples": 600,
+    "ci_level": 0.95
+  },
+  "known_asymmetries": [
+    "CPU governor effects on repeat runs — document governor state in metadata",
+    "VT scheduler latency variance may inflate p99 for spring-jvm targets — report p50/p95 separately",
+    "JVM warmup transience: first 5s of measurement may show higher latency for interpreted targets",
+    "Quarkus JVM exploratory runs may show warmup and scheduler variance; treat Slice C output as descriptive-only"
+  ],
+  "cross_tier_equivalence_ref": "scenarios/entity-read-by-id/scenario.json#cross_tier_equivalence_constraints"
+}

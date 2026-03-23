@@ -92,6 +92,16 @@
         "version": { "type": "string" }
       }
     },
+    "toolchain": {
+      "type": "object",
+      "properties": {
+        "wrk":    { "type": "string" },
+        "wrk2":   { "type": "string" },
+        "h2load": { "type": "string" },
+        "k6":     { "type": "string" },
+        "jmh":    { "type": "string" }
+      }
+    },
     "target": {
       "type": "object",
       "description": "The application under test.",
@@ -99,7 +109,7 @@
         "repo": { "type": "string" },
         "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
         "version": { "type": "string" },
-        "mode": { "type": "string", "enum": ["pure", "compat", "native", "jdbc-bridge"] },
+        "mode": { "type": "string", "enum": ["pure", "compat", "native", "jdbc-bridge", "baseline-db"] },
         "tier": { "type": "string", "enum": ["community", "enterprise"] }
       }
     },

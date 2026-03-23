@@ -1,0 +1,90 @@
+{
+  "scenario_id": "entity-read-by-id",
+  "version": "1",
+  "endpoint": "GET /api/v1/entities/{id}",
+  "mode": "baseline-db",
+  "tier": "community",
+  "driver": "wrk",
+  "transport": "h1",
+  "loopback": true,
+  "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h1 is mandatory in all result artifacts.",
+  "concurrency": {
+    "connections": 32,
+    "threads": 4,
+    "note": "32 connections may undersaturate DB; connection_pool_size is a declared fixed variable."
+  },
+  "db": {
+    "type": "postgresql",
+    "image": "postgres:16.2",
+    "schema_migration_version": "V1",
+    "connection_pool_size": 10,
+    "connection_pool_size_status": "declared_fixed_variable"
+  },
+  "seed": {
+    "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+    "manifest_version": "1",
+    "idempotency": "INSERT ... ON CONFLICT (id) DO UPDATE",
+    "pre_run_verification": "row_count_and_hash",
+    "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh",
+    "idempotency_guarantee": "Re-running entities.sql produces identical row state. Results without passing pre-run verification are invalid."
+  },
+  "fixed_contracts": {
+    "fixed_contract_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "threads": 4,
+      "connections": 32,
+      "warmup_seconds": 60,
+      "duration_seconds": 60,
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    }
+  },
+  "measurement_windows": {
+    "warmup_min_seconds": 60,
+    "exploratory": {
+      "min_seconds": 30,
+      "allowed_profiles": ["dev-isolated", "dev-laptop", "ci-runner"],
+      "claim_scope": "exploratory",
+      "allowed_claims": ["descriptive_only"],
+      "co_risk": true,
+      "note": "No P99 claims. No comparison claims. wrk latency output is descriptive only."
+    },
+    "comparison_eligible": {
+      "min_seconds": 60,
+      "required_profile": "perf-box-amd64",
+      "claim_scope": "comparison_eligible",
+      "allowed_claims": ["throughput", "p50_indicative"],
+      "co_risk": true,
+      "note": "P99 still requires wrk2 on perf-box-amd64."
+    },
+    "p99_stable": {
+      "min_seconds": 120,
+      "required_profile": "perf-box-amd64",
+      "required_driver": "wrk2",
+      "claim_scope": "p99_stable",
+      "note": "wrk is INELIGIBLE for p99_stable. Use run-wrk2.sh."
+    }
+  },
+  "cross_tier_equivalence_constraints": {
+    "status": "deferred",
+    "note": "Cross-tier comparison is not active. Constraints captured now to prevent schema drift.",
+    "required_for_cross_tier_eligibility": [
+      { "field": "db_backend",             "required_value": "postgresql" },
+      { "field": "db_image",               "required_value": "postgres:16.2" },
+      { "field": "connection_pool_size",   "required_value": 10 },
+      { "field": "protocol",               "required_value": "h1" },
+      { "field": "seed_manifest_version",  "required_value": "1" },
+      { "field": "transport",              "required_value": "loopback" },
+      { "field": "concurrency_connections","required_value": 32 },
+      { "field": "concurrency_threads",    "required_value": 4 }
+    ]
+  },
+  "comparison_axis": "within-tier"
+}

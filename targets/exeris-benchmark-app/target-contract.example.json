@@ -1,0 +1,28 @@
+{
+  "schema_version": "1",
+  "target_name": "exeris-benchmark-app-scaffold",
+  "execution_mode": "jar",
+  "startup": {
+    "command_contract": "Phase 3 and phase 4 SPI+CORE path available. A launcher may start the benchmark target jar, wait for readiness at /health/ready, and capture explicit runtime descriptor labels tier, runtimeFamily, protocolModeSelected, implementationVariant, providerId, bootstrapContractVersion, scenarioCatalogVersion, telemetryProfile, publicationPolicy, bootstrapPath=spi-core-phase-4, readinessPath=/health/ready, targetHandlerBinding=true, inProcessDispatch=true, underlyingSpiHttpExported=unverified, logicalSeedFingerprint=true, and providerResolution=deferred in startup metadata. Handler binding is available through the benchmark target abstractions for /health, /health/live, /health/ready, and /db/ping. Physical seed materialization and provider-internal HTTP export remain deferred."
+  },
+  "healthcheck": {
+    "url": "http://127.0.0.1:8080/health/ready",
+    "timeout_seconds": 60
+  },
+  "benchmark_endpoint": {
+    "protocol": "http",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "base_path": "/benchmark"
+  },
+  "result_contract": {
+    "result_schema": "schemas/benchmark-result.schema.json",
+    "env_schema": "schemas/benchmark-env.schema.json",
+    "required_metrics": [
+      "throughput_rps",
+      "latency_mean_us",
+      "latency_p99_us",
+      "error_rate_pct"
+    ]
+  }
+}

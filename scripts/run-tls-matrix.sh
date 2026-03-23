@@ -91,7 +91,47 @@ SPRING_SHA="$(git -C "$SPRING_REPO" rev-parse HEAD 2>/dev/null || echo UNKNOWN)"
 JAVA_VERSION="$(java -version 2>&1 | head -n 1 || echo UNKNOWN)"
 MAVEN_VERSION="$(mvn -v 2>/dev/null | head -n 1 || echo UNKNOWN)"
 JVM_FLAGS="${JVM_FLAGS:-}"
+JMH_WARMUP_ITERATIONS="${JMH_WARMUP_ITERATIONS:-5}"
+JMH_MEASUREMENT_ITERATIONS="${JMH_MEASUREMENT_ITERATIONS:-10}"
+JMH_WARMUP_TIME="${JMH_WARMUP_TIME:-2s}"
+JMH_MEASUREMENT_TIME="${JMH_MEASUREMENT_TIME:-5s}"
 
+# Execution class: guard (default) enforces forks >= 2 (prefer 3); exploratory allows 1 with warning.
+EXECUTION_CLASS="${EXECUTION_CLASS:-guard}"
+if [[ "$EXECUTION_CLASS" != "guard" && "$EXECUTION_CLASS" != "exploratory" ]]; then
+  echo "ERROR: EXECUTION_CLASS must be 'guard' or 'exploratory' (got: $EXECUTION_CLASS)" >&2
+  exit 2
+fi
+if [[ "$EXECUTION_CLASS" == "guard" ]]; then
+  JMH_FORKS="${JMH_FORKS:-3}"
+  if [[ "${JMH_FORKS}" -lt 2 ]]; then
+    echo "ERROR: EXECUTION_CLASS=guard requires JMH_FORKS >= 2 (got JMH_FORKS=${JMH_FORKS})." >&2
+    echo "ERROR: Raise JMH_FORKS or set EXECUTION_CLASS=exploratory." >&2
+    exit 2
+  fi
+else
+  JMH_FORKS="${JMH_FORKS:-1}"
+  if [[ "${JMH_FORKS}" -lt 2 ]]; then
+    echo "WARN: EXECUTION_CLASS=exploratory with JMH_FORKS=${JMH_FORKS}. Results are NOT eligible for baselines or comparative claims." >&2
+  fi
+fi
+
+# MICRO_JMH_JVM_FLAGS is used by the legacy run_micro_step function (B3/B4 direct java
+# invocations in this script) and exported as BENCHMARK_JVM_ARGS for capture-env.sh
+# metadata. NOT consumed by run-jmh-case.sh or run-primary-tls-matrix.sh — that path
+# uses manifest common_jvm_args exclusively. Do not remove: run_micro_step depends on it.
+MICRO_JMH_JVM_FLAGS="-XX:+UseZGC -XX:+UnlockExperimentalVMOptions -Xms256m -Xmx256m"
+export BENCHMARK_JVM_ARGS="$MICRO_JMH_JVM_FLAGS"
+# Match env capture's effective JVM flag aggregation order for matrix metadata.
+JVM_FLAGS=""
+for flag_source in "${BENCHMARK_JVM_ARGS:-}" "${JAVA_TOOL_OPTIONS:-}" "${JDK_JAVA_OPTIONS:-}"; do
+  if [[ -n "$flag_source" ]]; then
+    if [[ -n "$JVM_FLAGS" ]]; then
+      JVM_FLAGS+=" "
+    fi
+    JVM_FLAGS+="$flag_source"
+  fi
+done
 "$ROOT/scripts/capture-env.sh" --profile "$PROFILE" > "$ENV_FILE"
 
 jq -n \
@@ -107,6 +147,12 @@ jq -n \
   --arg java_version "$JAVA_VERSION" \
   --arg maven_version "$MAVEN_VERSION" \
   --arg jvm_flags "$JVM_FLAGS" \
+  --arg execution_class "$EXECUTION_CLASS" \
+  --arg jmh_wi "$JMH_WARMUP_ITERATIONS" \
+  --arg jmh_i "$JMH_MEASUREMENT_ITERATIONS" \
+  --arg jmh_f "$JMH_FORKS" \
+  --arg jmh_w "$JMH_WARMUP_TIME" \
+  --arg jmh_r "$JMH_MEASUREMENT_TIME" \
   --arg env_file "env.json" \
   '{
     schema_version: $schema_version,
@@ -124,7 +170,16 @@ jq -n \
       java: $java_version,
       maven: $maven_version
     },
+    jmh: {
+      warmup_iterations: $jmh_wi,
+      measurement_iterations: $jmh_i,
+      forks: $jmh_f,
+      warmup_time: $jmh_w,
+      measurement_time: $jmh_r
+    },
     jvm_flags: $jvm_flags,
+    execution_class: $execution_class,
+    claim_scope: (if $execution_class == "guard" then "comparison_eligible" else "exploratory_only" end),
     labels: {
       required: ["tier", "protocol_mode", "benchmark_family", "comparison_axis"]
     },
@@ -143,6 +198,13 @@ csv_escape() {
   local value="$1"
   value="${value//\"/\"\"}"
   printf '"%s"' "$value"
+}
+
+redact_command_for_artifacts() {
+  local command="$1"
+  printf '%s' "$command" | sed -E \
+    -e 's/(-Dexeris\.tls\.enterprise\.[^=[:space:]]*=)[^[:space:]]+/\1[REDACTED]/g' \
+    -e 's/eu\.exeris\.kernel\.enterprise\.[A-Za-z0-9_$.]+/eu.exeris.kernel.enterprise.[REDACTED]/g'
 }
 
 append_status() {
@@ -186,20 +248,22 @@ run_step() {
   local command="$9"
 
   local log_file="$LOG_DIR/$matrix_id.log"
-  echo "[$matrix_id] $command" >> "$COMMANDS_LOG"
+  local redacted_command
+  redacted_command="$(redact_command_for_artifacts "$command")"
+  echo "[$matrix_id] $redacted_command" >> "$COMMANDS_LOG"
 
   if (cd "$cwd" && bash -lc "set -euo pipefail; $command") > "$log_file" 2>&1; then
-    append_status "$matrix_id" "$priority" "$tier" "$protocol_mode" "$benchmark_family" "$comparison_axis" "$target_classification" "COMPLETED" "ok" "$command" "logs/$matrix_id.log"
+    append_status "$matrix_id" "$priority" "$tier" "$protocol_mode" "$benchmark_family" "$comparison_axis" "$target_classification" "COMPLETED" "ok" "$redacted_command" "logs/$matrix_id.log"
     return 0
   fi
 
   if [[ "$priority" == "MUST" ]]; then
-    append_status "$matrix_id" "$priority" "$tier" "$protocol_mode" "$benchmark_family" "$comparison_axis" "$target_classification" "FAILED" "MUST step failed" "$command" "logs/$matrix_id.log"
+    append_status "$matrix_id" "$priority" "$tier" "$protocol_mode" "$benchmark_family" "$comparison_axis" "$target_classification" "FAILED" "MUST step failed" "$redacted_command" "logs/$matrix_id.log"
     echo "ERROR: MUST step failed: $matrix_id (see $log_file)" >&2
     exit 1
   fi
 
-  append_status "$matrix_id" "$priority" "$tier" "$protocol_mode" "$benchmark_family" "$comparison_axis" "$target_classification" "FAILED_NON_BLOCKING" "SHOULD/STRETCH step failed" "$command" "logs/$matrix_id.log"
+  append_status "$matrix_id" "$priority" "$tier" "$protocol_mode" "$benchmark_family" "$comparison_axis" "$target_classification" "FAILED_NON_BLOCKING" "SHOULD/STRETCH step failed" "$redacted_command" "logs/$matrix_id.log"
   echo "WARN: non-MUST step failed: $matrix_id (see $log_file)" >&2
 }
 
@@ -314,10 +378,10 @@ run_micro_step() {
   fi
 
   local result_json="$OUT_DIR/${matrix_id}-jmh-result.json"
-  local cmd="java -XX:+UseZGC -XX:+UnlockExperimentalVMOptions -Xms256m -Xmx256m \
+  local cmd="java $MICRO_JMH_JVM_FLAGS \
     -jar $MICRO_JMH_JAR \
     $bench_pattern \
-    -wi 5 -i 5 -f 1 \
+    -wi $JMH_WARMUP_ITERATIONS -i $JMH_MEASUREMENT_ITERATIONS -f $JMH_FORKS -w $JMH_WARMUP_TIME -r $JMH_MEASUREMENT_TIME \
     -rf json -rff $result_json \
     ${jfr_args:+$jfr_args} \
     ${extra_args[*]+\"${extra_args[@]}\"} \
@@ -326,6 +390,28 @@ run_micro_step() {
   run_step "$matrix_id" "$priority" "$tier" "$protocol_mode" \
     "$benchmark_family" "$comparison_axis" "$target_classification" \
     "$BENCH_REPO" "$cmd"
+}
+
+has_tls_spi_provider_config() {
+  local tier="$1"
+  local tier_upper
+  tier_upper="$(printf '%s' "$tier" | tr '[:lower:]' '[:upper:]')"
+
+  local tier_provider_class_var="EXERIS_TLS_${tier_upper}_PROVIDER_CLASS"
+  local tier_provider_var="EXERIS_TLS_${tier_upper}_PROVIDER"
+  local tier_factory_class_var="EXERIS_TLS_${tier_upper}_FACTORY_CLASS"
+
+  if [[ -n "${!tier_provider_class_var:-}" || -n "${!tier_provider_var:-}" || -n "${!tier_factory_class_var:-}" ]]; then
+    return 0
+  fi
+  if [[ -n "${EXERIS_TLS_PROVIDER_CLASS:-}" || -n "${EXERIS_TLS_PROVIDER:-}" || -n "${EXERIS_TLS_FACTORY_CLASS:-}" ]]; then
+    return 0
+  fi
+
+  local opts="${JAVA_TOOL_OPTIONS:-} ${JMH_TLS_JAVA_OPTS:-}"
+  [[ "$opts" =~ -Dexeris\.tls\.${tier}\.(providerClass|provider|factoryClass)= ]] && return 0
+  [[ "$opts" =~ -Dexeris\.tls\.(providerClass|provider|factoryClass)= ]] && return 0
+  return 1
 }
 
 # -----------------------------------------------------------------------
@@ -349,32 +435,56 @@ run_step "B2" "MUST" "community" "tcp-tls-1.3" "B" "within-tier" "kernel-core-be
 
 run_step "C4" "MUST" "enterprise" "tcp-tls-1.3" "C" "within-tier" "enterprise-benchmark" \
   "$ENTERPRISE_REPO" \
-  "mvn -pl exeris-kernel-enterprise -am -P benchmarks -DskipTests clean verify -Dbenchmark.includes=EnterpriseTlsEngineBenchmark -Dbenchmark.output=$OUT_DIR/C4-jmh-enterprise-tls-engine.json$(jfr_maven_args C4) && jq -e 'any(.[]; .benchmark == \"eu.exeris.kernel.enterprise.crypto.EnterpriseTlsEngineBenchmark.wrapThroughput\") and any(.[]; .benchmark == \"eu.exeris.kernel.enterprise.crypto.EnterpriseTlsEngineBenchmark.wrapUnwrapRoundTrip\")' $OUT_DIR/C4-jmh-enterprise-tls-engine.json >/dev/null"
+  "mvn -pl exeris-kernel-enterprise -am -P benchmarks -DskipTests clean verify -Dbenchmark.includes=EnterpriseTlsEngineBenchmark -Dbenchmark.output=$OUT_DIR/C4-jmh-enterprise-tls-engine.json$(jfr_maven_args C4) && jq -e 'any(.[]; (.benchmark | endswith(\".wrapThroughput\"))) and any(.[]; (.benchmark | endswith(\".wrapUnwrapRoundTrip\")))' $OUT_DIR/C4-jmh-enterprise-tls-engine.json >/dev/null"
 
 # -----------------------------------------------------------------------
-# SHOULD steps: B3 (JDK SSLEngine), B4 (netty-tcnative), B5 (Community TLS guard), D1 (loopback IT), D5 (community module loopback IT).
-# Build micro/jmh once before running B3 or B4.
+# SHOULD steps: B3 (JDK SSLEngine), B4 (netty-tcnative), B6 (Community SPI), B7 (Enterprise SPI), B5 (Community TLS guard), D1 (loopback IT), D5 (community module loopback IT).
+# Build micro/jmh once before running B3/B4/B6/B7.
 # -----------------------------------------------------------------------
 if [[ "$run_should" == true ]]; then
-  # Build micro/jmh uber-jar (needed by B3 and B4).
+  # Build micro/jmh uber-jar (needed by B3/B4/B6/B7).
   if ! build_micro_jmh; then
     append_status "micro-jmh-build" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
       "exeris-benchmarks-micro-jmh" "FAILED" "micro/jmh build failed" "mvn clean package" \
       "logs/micro-jmh-build.log"
-    echo "WARN: micro/jmh build failed — B3 and B4 will be skipped" >&2
-    # Mark B3 and B4 as SKIPPED due to build failure.
+    echo "WARN: micro/jmh build failed — B3/B4/B6/B7 will be skipped" >&2
+    # Mark B3/B4/B6/B7 as SKIPPED due to build failure.
     record_missing "B3" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
       "exeris-benchmarks-micro-jmh" \
       "micro/jmh build failed — cannot run SslEngineTlsBenchmark"
     record_missing "B4" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
       "exeris-benchmarks-micro-jmh" \
       "micro/jmh build failed — cannot run NettyTcNativeTlsBenchmark"
+    record_missing "B6" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
+      "exeris-benchmarks-micro-jmh" \
+      "micro/jmh build failed — cannot run ExerisCommunityTlsBenchmark"
+    record_missing "B7" "SHOULD" "enterprise" "tcp-tls-1.3" "B" "implementation-variant" \
+      "exeris-benchmarks-micro-jmh" \
+      "micro/jmh build failed — cannot run ExerisEnterpriseTlsBenchmark"
   else
     run_micro_step "B3" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
       "exeris-benchmarks-micro-jmh" "SslEngineTlsBenchmark"
 
     run_micro_step "B4" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
       "exeris-benchmarks-micro-jmh" "NettyTcNativeTlsBenchmark"
+
+    if has_tls_spi_provider_config "community"; then
+      run_micro_step "B6" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
+        "exeris-benchmarks-micro-jmh" "ExerisCommunityTlsBenchmark"
+    else
+      record_missing "B6" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
+        "exeris-benchmarks-micro-jmh" \
+        "Missing TLS SPI provider configuration for community (set exeris.tls.community.providerClass/provider or global equivalent)"
+    fi
+
+    if has_tls_spi_provider_config "enterprise"; then
+      run_micro_step "B7" "SHOULD" "enterprise" "tcp-tls-1.3" "B" "implementation-variant" \
+        "exeris-benchmarks-micro-jmh" "ExerisEnterpriseTlsBenchmark"
+    else
+      record_missing "B7" "SHOULD" "enterprise" "tcp-tls-1.3" "B" "implementation-variant" \
+        "exeris-benchmarks-micro-jmh" \
+        "Missing TLS SPI provider configuration for enterprise (set exeris.tls.enterprise.providerClass/provider or global equivalent)"
+    fi
   fi
 
   # B5: CommunityTlsEngineGuardBenchmark - kernel repo JMH benchmark.
@@ -410,6 +520,10 @@ else
   record_scope_skip "B3" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
     "exeris-benchmarks-micro-jmh" "scope=must does not execute SHOULD steps"
   record_scope_skip "B4" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
+    "exeris-benchmarks-micro-jmh" "scope=must does not execute SHOULD steps"
+  record_scope_skip "B6" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
+    "exeris-benchmarks-micro-jmh" "scope=must does not execute SHOULD steps"
+  record_scope_skip "B7" "SHOULD" "enterprise" "tcp-tls-1.3" "B" "implementation-variant" \
     "exeris-benchmarks-micro-jmh" "scope=must does not execute SHOULD steps"
   record_scope_skip "B5" "SHOULD" "community" "tcp-tls-1.3" "B" "within-tier" "kernel-community-benchmark" \
     "scope=must does not execute SHOULD steps"
@@ -448,6 +562,7 @@ record_missing "D4" "STRETCH" "community" "tcp-tls-1.3" "D" "cross-tier-same-pro
 echo ""
 echo "TLS matrix run finished"
 echo "  Scope      : $SCOPE"
+echo "  Exec class : $EXECUTION_CLASS"
 echo "  JFR        : ${JFR_PROF:-0} (set JFR_PROF=1 to enable)"
 echo "  Output dir : $OUT_DIR"
 echo "  Metadata   : $METADATA_FILE"

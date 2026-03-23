@@ -5,7 +5,7 @@
 #
 # Examples:
 #   ./scripts/run-h2load.sh targets/exeris-kernel/community scenarios/plaintext
-#   ./scripts/run-h2load.sh targets/exeris-kernel/enterprise scenarios/json-1kb -m 20
+#   ./scripts/run-h2load.sh enterprise/targets/exeris-kernel scenarios/json-1kb -m 20
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

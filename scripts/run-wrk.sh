@@ -58,6 +58,13 @@ echo "--- Warmup (60s) ---"
 wrk -t "$THREADS" -c "$CONNECTIONS" -d 60s ${LUA_SCRIPT:+--script "$LUA_SCRIPT"} "$URL" > /dev/null
 
 echo "--- Measurement ---"
+# ============================================================
+# CO WARNING: wrk uses a closed-loop executor. Latency results
+# (p50/p99/max printed below) are subject to Coordinated Omission
+# and UNDERESTIMATE tail latency under real arrival-rate pressure.
+# Use run-wrk2.sh for any p99/p99.9 latency claims.
+# This script is for throughput / saturation probes ONLY.
+# ============================================================
 wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --latency \
   ${LUA_SCRIPT:+--script "$LUA_SCRIPT"} \
   "$@" \
@@ -65,3 +72,4 @@ wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --latency \
 
 echo ""
 echo "Result written to: $RESULT_OUT"
+echo "NOTE: co_risk=true — latency from wrk is CO-contaminated. For p99 claims use run-wrk2.sh."

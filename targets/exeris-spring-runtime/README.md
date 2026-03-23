@@ -1,41 +1,38 @@
 # targets/exeris-spring-runtime
 
-This directory contains configuration for running benchmarks against the
-**Exeris Spring Runtime** target in both pure mode and compatibility mode.
+This module is now a runnable Spring Boot adapter for `exeris-benchmark-app`.
+It starts a Spring context in non-web mode and delegates process lifecycle to
+`eu.exeris.kernel.benchmark.target.app.BenchmarkTargetMain`.
 
-## Modes
+## What it does
 
-| Mode | Description | `EXERIS_SPRING_MODE` value |
-|---|---|---|
-| Pure mode | Phase 1 — Exeris handler, Spring context, no Servlet/Tomcat | `pure` |
-| Compatibility mode | Phase 2 — `@RestController` dispatch via compatibility bridge | `compat` |
+- Uses `spring-boot-starter` for a real Spring runtime process.
+- Disables web server startup (`WebApplicationType.NONE`) to avoid changing
+  target HTTP handling semantics owned by `exeris-benchmark-app`.
+- Keeps startup lightweight with banner off and lazy initialization enabled.
 
-## Benchmark focus
-
-- Phase 0 bootstrap timing (startup smoke)
-- Phase 1 pure mode ingress RPS and latency
-- Phase 2 compat mode overhead vs pure mode
-- Transaction bridge overhead (compat mode only)
-
-## Running
+## Build
 
 ```bash
-# Pure mode
-EXERIS_SPRING_MODE=pure ./scripts/run-wrk.sh targets/exeris-spring-runtime scenarios/plaintext
-
-# Compat mode
-EXERIS_SPRING_MODE=compat ./scripts/run-wrk.sh targets/exeris-spring-runtime scenarios/plaintext
-
-# Compare
-./scripts/compare-results.sh \
-  results/raw/wrk-pure-mode.json \
-  results/raw/wrk-compat-mode.json
+mvn -f targets/exeris-benchmark-app/pom.xml -DskipTests install
+mvn -f targets/exeris-spring-runtime/pom.xml -DskipTests package
 ```
 
-## Notes
+## Docker image
 
-- Results for pure mode vs compat mode must be stored separately:
-  `baselines/spring-runtime/pure/` and `baselines/spring-runtime/compat/`
-- Report overhead as: `(compat_mean - pure_mean) / pure_mean × 100%`
-- Never report compat mode numbers as "Exeris Spring Runtime" performance
-  without clearly labeling them as compat mode.
+```bash
+docker build \
+  -f targets/exeris-spring-runtime/Dockerfile \
+  -t exeris-spring-runtime:latest \
+  .
+```
+
+The Dockerfile performs a two-step Maven build:
+1. Installs `targets/exeris-benchmark-app` into local Maven repository.
+2. Packages `targets/exeris-spring-runtime` and runs the produced jar.
+
+## Runtime use in compose
+
+`runtime/drivers/docker-compose/spring-runtime.yml` now includes a `build`
+section with repository-root context and this module Dockerfile, while keeping
+the image tag configurable via `EXERIS_SPRING_RUNTIME_IMAGE`.

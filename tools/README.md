@@ -2,6 +2,14 @@
 
 Utility tools for result processing and reporting.
 
+## benchmark-runner-with-metrics.sh
+
+Helper/process-metrics utility that wraps an existing benchmark command with
+`/usr/bin/time -v` and writes `<output_json>.with-metrics.json`.
+
+It is not a primary benchmark runner and does not replace
+`tools/bench/run-jmh-case.sh` orchestration.
+
 ## result-parser/
 
 Parses raw benchmark tool output (wrk `.txt`, k6 `.json`, h2load stdout) into

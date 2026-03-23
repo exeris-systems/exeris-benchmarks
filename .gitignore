@@ -1,4 +1,5 @@
 target/
+!targets/exeris-benchmark-app/src/main/java/eu/exeris/kernel/benchmark/target/
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
@@ -35,6 +36,18 @@ Thumbs.db
 runtime/drivers/env/*.env
 !runtime/drivers/env/template.env
 
+# Exeris enterprise confidentiality — enterprise provider classes in git-ignored env files
+enterprise/env/enterprise-sysprops.env
+env/.local/
+
 # Temp
 *.tmp
 *.log
+
+# Comparative benchmark quarantine and audit logs
+quarantine/
+comparative-audit.log
+**/target-a-pidfile
+**/target-b-pidfile
+**/sync-log.txt
+

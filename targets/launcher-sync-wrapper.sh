@@ -154,7 +154,7 @@ wait_for_ready() {
 
     local http_status
     http_status="$(probe_http "$port" "$HEALTH_PATH")"
-    ((attempts++))
+    attempts=$((attempts + 1))
 
     if [[ "$http_status" == "200" ]]; then
       local ready_ts

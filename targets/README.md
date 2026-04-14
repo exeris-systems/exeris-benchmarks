@@ -1,48 +1,57 @@
 # Targets
 
-Benchmark targets under test. Each target platform (Community Runtime, Enterprise Runtime, Spring Runtime)
-has a directory with startup configurations and runtime profiles.
+Benchmark targets under test. Each target is a standalone runnable application launched externally
+before scenario drivers execute.
 
 ## Target Platforms
 
-| Directory | Platform | Tiers | Protocols |
+| Directory | Platform | Tier | Protocols |
 | --- | --- | --- | --- |
-| `exeris-kernel/` | Exeris Kernel | community | H1, H2, H3 |
-| `enterprise/targets/exeris-kernel/` | Exeris Kernel (Enterprise) | enterprise | H1, H2, H3 |
-| `exeris-spring-runtime/` | Exeris Spring Runtime | community, spring | H1, H2 |
-| `exeris-benchmark-app/` | Benchmark target app scaffold | scaffold only | contract boundary only |
+| `exeris-community-app/` | Exeris Community Runtime | community | H1, H2 |
+| `spring-benchmark-app/` | Spring Boot | comparison | H1 |
+| `quarkus-benchmark-app/` | Quarkus | comparison | H1 |
 
-## Target Contract
+## Launcher Utility
 
-Each target directory contains:
+`launcher-sync-wrapper.sh` coordinates readiness synchronization for two pre-launched targets.
+It does **not** start processes — targets must be launched externally. It issues health probes,
+records readiness timestamps, and marks the measurement window start.
 
 ```text
-targets/<target-name>/
-  README.md                      ← Target documentation
-  target-contract.example.json   ← Benchmark start/stop/warmup contract
-  community/ or enterprise/
-    runtime/
-      h1/
-        startup.sh
-        target-config.json
-      h2/
-      h3/
+targets/launcher-sync-wrapper.sh \
+  --target-a-id  <id>    \
+  --target-a-port <port>  \
+  --target-b-id  <id>    \
+  --target-b-port <port>  \
+  --output-dir   <path>   \
+  [--health-path /health] \
+  [--sync-timeout-seconds 30]
 ```
 
-### Target Contract Schema
+Output files written to `--output-dir`:
+- `measurement-start-timestamp.txt`
+- `target-a-ready-timestamp.txt`
+- `target-b-ready-timestamp.txt`
+- `sync-log.txt`
+
+## Common Launch Pattern
+
+All targets share the same environment variable contract:
+
+```bash
+EXERIS_DB_JDBC_URL=jdbc:postgresql://localhost:5432/benchmark \
+EXERIS_DB_USERNAME=benchmark \
+EXERIS_DB_PASSWORD=benchmark \
+EXERIS_PORT=8080 \
+EXERIS_DB_POOL_MIN_SIZE=4 \
+EXERIS_DB_POOL_MAX_SIZE=16 \
+java -jar target/<artifact>.jar
+```
+
+See each target's `README.md` for full environment variable reference,
+TLS/H2 options, and graph backend selection.
+
+## Target Contract Schema
 
 See [schemas/enterprise-target-contract.schema.json](../schemas/enterprise-target-contract.schema.json)
-for authoritative definition.
-
-Minimum fields:
-
-- `startCommand`: shell command to launch target
-- `stopCommand`: shell command to stop target
-- `warmupDuration`: minimum duration before measurement (seconds)
-- `healthCheckUrl`: endpoint to wait for readiness
-- `port`: listening port
-- `tls`: boolean (HTTPS support)
-
-`exeris-benchmark-app/` is different from runnable tier targets. It is a scaffold module and
-contract boundary for a future extraction-ready benchmark app, not a runnable Community,
-Enterprise, or Spring target implementation.
+for the contract definition used by external target specifications.

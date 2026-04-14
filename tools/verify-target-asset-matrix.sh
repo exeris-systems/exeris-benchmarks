@@ -8,6 +8,7 @@ MATRIX_PATH="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
 # Runnable targets listed here are intentionally not yet part of any scenario
 # comparative manifest but are retained for future baseline expansion.
 JUSTIFIED_UNUSED_RUNNABLE_TARGETS=(
+  "exeris-e2e-community-h2c"
   "exeris-runtime-community"
 )
 
@@ -75,7 +76,7 @@ if jq -e '
   (.targets | all(.[];
     (.target_id | type == "string" and length > 0) and
     (.tier | IN("community", "enterprise")) and
-    (.protocol_mode | IN("h1", "h2", "h3")) and
+    (.protocol_mode | IN("h1", "h2", "h2c", "h3")) and
     (.launcher_mode | IN("docker", "jar", "external")) and
     (.env_file | type == "string") and
     (.profile_id | type == "string" and length > 0) and

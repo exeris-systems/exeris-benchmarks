@@ -44,7 +44,7 @@ echo "Running B3 baseline (smoke test) with minimal iterations..."
 echo ""
 
 # Run trivial B3 baseline (wi=1, i=1)
-MODE=baseline HEADLESS=1 FAIL_FAST=0 "$REPO_ROOT/run-primary-tls-matrix.sh" 2>&1 | head -100
+MODE=baseline HEADLESS=1 FAIL_FAST=0 "$REPO_ROOT/scripts/run-primary-tls-matrix.sh" 2>&1 | head -100
 
 RESULT=$?
 

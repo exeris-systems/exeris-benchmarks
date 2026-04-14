@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Force C locale for stable numeric formatting (e.g. decimal dot for jq --argjson).
+export LC_ALL=C
+
 # compute-fairness-index.sh — Compute the fairness index between two benchmark result.json files.
 #
 # Usage:
@@ -147,14 +150,13 @@ LATENCY_SYMMETRY="$(awk \
   -v p90a="$P90_A" -v p90b="$P90_B" \
   -v p95a="$P95_A" -v p95b="$P95_B" \
   -v p99a="$P99_A" -v p99b="$P99_B" \
-'BEGIN {
-  # Compute normalised diff for a single pair; skip if both zero
-  function norm_diff(a, b,    mx, diff) {
-    mx = a > b ? a : b
-    if (mx == 0) return 0
-    diff = a - b; if (diff < 0) diff = -diff
-    return diff / mx
-  }
+ 'function norm_diff(a, b,    mx, diff) {
+  mx = a > b ? a : b
+  if (mx == 0) return 0
+  diff = a - b; if (diff < 0) diff = -diff
+  return diff / mx
+}
+BEGIN {
   max_nd = 0
   nd = norm_diff(p50a, p50b); if (nd > max_nd) max_nd = nd
   # Only include p75/p90 if non-zero (optional fields)

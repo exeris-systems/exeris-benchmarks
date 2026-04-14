@@ -2,13 +2,13 @@
 # run-primary-tls-matrix-64m.sh - run B4/B5/B6/B6b/B7 with 64m heap profile
 #
 # Usage:
-#   MODE=all HEADLESS=1 ./run-primary-tls-matrix-64m.sh
+#   MODE=all HEADLESS=1 ./scripts/run-primary-tls-matrix-64m.sh
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE_MANIFEST="$REPO_ROOT/tools/matrix/manifests/primary-tls-matrix.json"
-TARGET_RUNNER="$REPO_ROOT/run-primary-tls-matrix.sh"
+TARGET_RUNNER="$REPO_ROOT/scripts/run-primary-tls-matrix.sh"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required but was not found in PATH." >&2

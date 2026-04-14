@@ -17,6 +17,72 @@ if ! command -v jq &>/dev/null; then
   exit 1
 fi
 
+comparison_constrained_contract_id() {
+  local contract_id="${1:-}"
+  [[ -n "$contract_id" && ( "$contract_id" == fixed_contract_runtime_h1_constrained* || "$contract_id" == *_constrained_* ) ]]
+}
+
+comparison_constrained_execution_profile_id() {
+  local execution_profile_id="${1:-}"
+  [[ -n "$execution_profile_id" && "$execution_profile_id" == runtime-constrained-* ]]
+}
+
+comparison_constrained_track_id() {
+  local track_id="${1:-}"
+  [[ -n "$track_id" && "$track_id" == track-c* ]]
+}
+
+comparison_constrained_path() {
+  local path_value="${1:-}"
+  [[ -n "$path_value" && ( "$path_value" == */results/constrained/* || "$path_value" == results/constrained/* ) ]]
+}
+
+comparison_constrained_reason() {
+  local file="$1"
+  local execution_profile_id=""
+  local track_id=""
+  local run_contract_id=""
+  local top_contract_id=""
+  local top_track_id=""
+
+  if comparison_constrained_path "$file"; then
+    echo "result_path=${file}"
+    return 0
+  fi
+
+  execution_profile_id="$(jq -r '.run_config.execution_profile_id // empty' "$file" 2>/dev/null || true)"
+  if comparison_constrained_execution_profile_id "$execution_profile_id"; then
+    echo "run_config.execution_profile_id=${execution_profile_id}"
+    return 0
+  fi
+
+  track_id="$(jq -r '.run_config.track_id // empty' "$file" 2>/dev/null || true)"
+  if comparison_constrained_track_id "$track_id"; then
+    echo "run_config.track_id=${track_id}"
+    return 0
+  fi
+
+  top_track_id="$(jq -r '.track_id // empty' "$file" 2>/dev/null || true)"
+  if comparison_constrained_track_id "$top_track_id"; then
+    echo "track_id=${top_track_id}"
+    return 0
+  fi
+
+  run_contract_id="$(jq -r '.run_config.contract_id // empty' "$file" 2>/dev/null || true)"
+  if comparison_constrained_contract_id "$run_contract_id"; then
+    echo "run_config.contract_id=${run_contract_id}"
+    return 0
+  fi
+
+  top_contract_id="$(jq -r '.contract_id // empty' "$file" 2>/dev/null || true)"
+  if comparison_constrained_contract_id "$top_contract_id"; then
+    echo "contract_id=${top_contract_id}"
+    return 0
+  fi
+
+  return 1
+}
+
 # --- Comparison eligibility pre-check ---
 # Reads claim_scope and execution_class from each result JSON.
 # Fails fast unless claim_scope is exactly comparison_eligible.
@@ -24,6 +90,16 @@ check_eligible() {
   local file="$1"
   local label="$2"
   local scope exec_class final_reason
+  local constrained_reason
+
+  if constrained_reason="$(comparison_constrained_reason "$file")"; then
+    echo "EXCLUDED: comparative sections disabled for $label" >&2
+    echo "EXCLUSION_REASON: constrained_execution_profile_forbidden" >&2
+    echo "OBSERVED: ${constrained_reason}" >&2
+    echo "ACTION: constrained exploratory artifacts are not valid for baseline or comparative workflows; use descriptive-only review outside compare-results.sh." >&2
+    exit 1
+  fi
+
   scope="$(jq -er '.claim_scope' "$file" 2>/dev/null)" || {
     echo "ERROR: Contract drift in $label: missing required field .claim_scope for comparison eligibility" >&2
     echo "ACTION: populate canonical classification fields (claim_scope, execution_class, final_reason) before comparing." >&2

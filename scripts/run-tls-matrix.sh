@@ -118,7 +118,7 @@ fi
 
 # MICRO_JMH_JVM_FLAGS is used by the legacy run_micro_step function (B3/B4 direct java
 # invocations in this script) and exported as BENCHMARK_JVM_ARGS for capture-env.sh
-# metadata. NOT consumed by run-jmh-case.sh or run-primary-tls-matrix.sh — that path
+# metadata. NOT consumed by run-jmh-case.sh or scripts/run-primary-tls-matrix.sh — that path
 # uses manifest common_jvm_args exclusively. Do not remove: run_micro_step depends on it.
 MICRO_JMH_JVM_FLAGS="-XX:+UseZGC -XX:+UnlockExperimentalVMOptions -Xms256m -Xmx256m"
 export BENCHMARK_JVM_ARGS="$MICRO_JMH_JVM_FLAGS"

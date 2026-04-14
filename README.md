@@ -11,7 +11,7 @@ reports, reproducible environment capture, and regression baselines.
 - **Methodology before claims.** Every result ships with full environment metadata.
 - **No apples-to-oranges** comparisons without explicit labeling.
 - **Pure mode and compatibility mode reported separately.**
-- **Community and Enterprise reported separately.**
+- **Community and cross-runtime tracks reported separately.**
 - **Reproducible by design** — every run is tagged with repo SHA, JDK, OS, and hardware profile.
 
 ### Repository boundary rule
@@ -39,16 +39,10 @@ Examples that belong here:
 
 ---
 
-## Enterprise Model (No Proprietary Leak)
+## Scope for this repository
 
-This repository follows a **public harness + private executor** model:
-
-- Public (`exeris-benchmarks`): scenarios, methodology, schemas, comparison/reporting logic.
-- Private (enterprise repo/extension): enterprise startup adapters, proprietary wiring, private hooks.
-
-The public repository defines **execution contracts**, not proprietary implementation.
-Enterprise runs should publish only normalized outputs (schema-compliant metrics and summaries),
-not private source wiring or raw symbol-rich traces.
+Operational documentation in this repository covers Community and cross-runtime tracks.
+Enterprise and locality variants are excluded from the runnable/public docs path.
 
 ---
 
@@ -57,30 +51,27 @@ not private source wiring or raw symbol-rich traces.
 ```
 exeris-benchmarks/
 ├── docs/                        # methodology, philosophy, regression policy
-├── targets/                     # per-product launch profiles and sample apps
-│   ├── exeris-kernel/
-│   │   ├── community/
-│   │   └── enterprise/
-│   ├── exeris-spring-runtime/
-│   ├── exeris-sdk/              # future
-│   └── exeris-studio/           # future
+├── targets/                     # benchmark target apps and launch utilities
+│   ├── exeris-community-app/
+│   ├── spring-benchmark-app/
+│   ├── quarkus-benchmark-app/
+│   └── launcher-sync-wrapper.sh
 ├── micro/                       # JMH microbenchmarks
 │   └── jmh/                     # standalone Maven module
 ├── runtime/                     # server-level HTTP load benchmarks
-│   ├── wrk/
-│   ├── wrk2/
-│   ├── h2load/
-│   ├── k6/
-│   └── drivers/                 # docker-compose, start/stop scripts
+│   ├── compose/
+│   ├── db/
+│   ├── drivers/
+│   ├── env/
+│   └── profiles/
 ├── compat/                      # compatibility-cost reports
 │   ├── spring-runtime/
 │   └── persistence/
 ├── scenarios/                   # end-to-end scripted scenarios
-├── baselines/                   # reference results per version / hardware
-├── results/                     # run outputs (raw, normalized, summaries, history)
+├── baselines/                   # baseline placeholder and policy docs
+├── results/                     # run outputs (raw, reports, history, constrained)
 ├── scripts/                     # capture-env, run-*, compare-results, publish-report
 ├── schemas/                     # JSON schemas for result and env artifacts
-├── .github/workflows/           # CI: microbench, runtime-bench, compare-baseline
 └── tools/                       # result-parser, dashboard-export
 ```
 
@@ -99,37 +90,27 @@ exeris-benchmarks/
 
 ## Comparison Axes
 
-Benchmark reports are split across two explicit axes:
+Benchmark reports in this repository are split across these explicit axes:
 
-- **Within-tier protocol comparison**
+- **Within-target protocol comparison (Community/cross-runtime only)**
 	- Community: `H1 vs H2`
-	- Enterprise: `H1 vs H2 vs H3`
-- **Cross-tier same-protocol comparison**
-	- `Community H1 vs Enterprise H1`
-	- `Community H2 vs Enterprise H2`
-	- `H3` is Enterprise-only and never used as direct cross-tier comparator.
+- **Cross-runtime same-protocol comparison**
+	- `Community app vs Spring`
+	- `Community app vs Quarkus`
+	- `Spring vs Quarkus`
 
-This separation prevents mixing protocol effects with tier/transport implementation effects.
+This separation prevents mixing protocol effects with implementation effects.
 
 ---
 
 ## Target Matrix
 
-### Kernel / Community
+### Exeris Community App
 - HTTP/1.1 pure kernel path (`H1`)
 - HTTP/2 pure kernel path (`H2`)
 - Route dispatch
 - JSON serialization path
 - PAQS under load
-
-### Kernel / Enterprise
-- HTTP/1.1 fallback (`H1`)
-- HTTP/2 fallback (`H2`)
-- QUIC / HTTP/3 path (`H3`)
-- io_uring ingress
-- TLS wrap/unwrap
-- Slab allocation/release
-- Native persistence handoff
 
 ### Spring Runtime
 - Phase 0 bootstrap timing
@@ -137,6 +118,10 @@ This separation prevents mixing protocol effects with tier/transport implementat
 - Phase 2 compatibility mode
 - Pure vs compat request overhead
 - Transaction bridge overhead
+
+### Quarkus Runtime
+- HTTP endpoint throughput and latency on the same scenario contracts
+- Cross-runtime comparator track for Community H1/H2 contracts
 
 ---
 
@@ -151,7 +136,7 @@ java -jar target/benchmarks.jar -wi 3 -i 5 -f 1
 
 ### Runtime benchmarks (wrk)
 ```bash
-./scripts/run-wrk.sh targets/exeris-kernel/community scenarios/plaintext
+./scripts/run-wrk.sh targets/exeris-community-app scenarios/plaintext
 ```
 
 ### Capture environment
@@ -188,10 +173,8 @@ All environment captures conform to [`schemas/benchmark-env.schema.json`](schema
 | [docs/scenario-catalog.md](docs/scenario-catalog.md) | All scenarios with payloads and conditions |
 | [docs/protocol-comparison-matrix.md](docs/protocol-comparison-matrix.md) | Formal within-tier and cross-tier protocol matrix |
 | [docs/tls-zero-copy-benchmark-matrix.md](docs/tls-zero-copy-benchmark-matrix.md) | TLS A/B/C/D MUST-SHOULD-STRETCH matrix with labels, missing IDs, and `scripts/run-tls-matrix.sh` mapping |
-| [docs/community-runtime-integration.md](docs/community-runtime-integration.md) | Community runtime probes integrated in canonical paths |
 | [docs/result-interpretation.md](docs/result-interpretation.md) | How to read and compare benchmark output |
 | [docs/regression-policy.md](docs/regression-policy.md) | What triggers a regression alert and how to handle it |
-| [schemas/enterprise-target-contract.schema.json](schemas/enterprise-target-contract.schema.json) | Public contract for private/external target execution |
 
 ---
 

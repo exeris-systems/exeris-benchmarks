@@ -45,6 +45,28 @@ normalize_number_json() {
   fi
 }
 
+capture_tool_version() {
+  local tool_name="${1:-}"
+  shift || true
+
+  if [[ -z "$tool_name" ]] || ! command -v "$tool_name" >/dev/null 2>&1; then
+    printf 'not_installed\n'
+    return 0
+  fi
+
+  local raw_output=""
+  local first_non_empty_line=""
+
+  raw_output="$("$tool_name" "$@" 2>&1 || true)"
+  first_non_empty_line="$(printf '%s\n' "$raw_output" | awk 'NF { print; exit }')"
+
+  if [[ -n "$first_non_empty_line" ]]; then
+    printf '%s\n' "$first_non_empty_line"
+  else
+    printf 'not_installed\n'
+  fi
+}
+
 extract_java_major() {
   local java_output="${1:-}"
   local first_line version_value
@@ -128,10 +150,10 @@ fi
 JMH_VERSION="$(grep -m1 '<jmh.version>' "$(dirname "$0")/../micro/jmh/pom.xml" 2>/dev/null | grep -oP '(?<=>)[^<]+' || echo 'unknown')"
 
 # Tool versions
-WRK_VERSION="$(wrk --version 2>&1 | head -1 || echo 'not_installed')"
-WRK2_VERSION="$(wrk2 --version 2>&1 | head -1 || echo 'not_installed')"
-H2LOAD_VERSION="$(h2load --version 2>&1 | head -1 || echo 'not_installed')"
-K6_VERSION="$(k6 version 2>&1 | head -1 || echo 'not_installed')"
+WRK_VERSION="$(capture_tool_version wrk --version)"
+WRK2_VERSION="$(capture_tool_version wrk2 --version)"
+H2LOAD_VERSION="$(capture_tool_version h2load --version)"
+K6_VERSION="$(capture_tool_version k6 version)"
 
 # Resolve active tool version for benchmark_tool.version
 case "$BENCH_TOOL" in

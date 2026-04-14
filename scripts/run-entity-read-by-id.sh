@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s]
+# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s] [--backend-mode default-vt|locality-aware] [--target-runtime auto|community|locality|spring|quarkus] [--target-build jvm|native] [--cpu-affinity <cpuset>]
 #
 # Orchestrates the entity-read-by-id E2E benchmark run:
 #   1. Validate claim-scope
@@ -14,32 +14,78 @@ set -euo pipefail
 #   8. Write result artifact with transport_mode, seed_ref, claim_scope
 #   9. Schema-validate result artifact
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+READINESS_LIB="${REPO_ROOT}/tools/bench/lib/readiness.sh"
+if [[ ! -f "$READINESS_LIB" ]]; then
+  echo "ERROR: readiness library not found: $READINESS_LIB"
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$READINESS_LIB"
+
 CLAIM_SCOPE="${CLAIM_SCOPE:-exploratory}"
 PROFILE="${PROFILE:-dev-laptop}"
 OUTPUT_DIR="${OUTPUT_DIR:-results/raw/entity-read-by-id/$(date +%Y%m%d-%H%M%S)}"
 THREADS="${THREADS:-4}"
-CONNECTIONS="${CONNECTIONS:-32}"
+CONNECTIONS="${CONNECTIONS:-128}"
+EXERIS_DB_POOL_MIN_SIZE="${EXERIS_DB_POOL_MIN_SIZE:-16}"
+EXERIS_DB_POOL_MAX_SIZE="${EXERIS_DB_POOL_MAX_SIZE:-256}"
 WARMUP="${WARMUP:-60s}"
+BACKEND_MODE="${BACKEND_MODE:-default-vt}"
+TARGET_RUNTIME="${TARGET_RUNTIME:-auto}"
+TARGET_BUILD="${TARGET_BUILD:-jvm}"
+CPU_AFFINITY="${CPU_AFFINITY:-}"
+PERF_STAT_REQUIRED="${BENCHMARK_REQUIRE_PERF_STAT:-0}"
+BACKEND_EVIDENCE_REQUIRED="${BENCHMARK_REQUIRE_BACKEND_EVIDENCE:-0}"
+ALLOW_EXTERNAL_DB="${BENCHMARK_ALLOW_EXTERNAL_DB:-0}"
+LOCALITY_MODE_ENABLED="${BENCHMARK_ENABLE_LOCALITY_MODE:-0}"
+BENCHMARK_LOCALITY_STRICT="${BENCHMARK_LOCALITY_STRICT:-0}"
+SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-0}"
+ENTITY_READ_PREFLIGHT_TIMEOUT="${ENTITY_READ_PREFLIGHT_TIMEOUT:-60}"
 DURATION_OVERRIDE=""
 CONTRACT_NAME=""
 BASE_URL="http://localhost:8080"
 SCENARIO_DIR="scenarios/entity-read-by-id"
 DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
-TARGET_MAIN_CLASS="eu.exeris.kernel.benchmark.target.app.BenchmarkTargetMain"
-TARGET_CLASSES_DIR="targets/exeris-benchmark-app/target/classes"
+DB_INIT_SQL_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql"
+TARGET_MODULE_POM_COMMUNITY="targets/exeris-community-app/pom.xml"
+TARGET_JAR_GLOB_COMMUNITY="targets/exeris-community-app/target/exeris-community-app-*.jar"
+TARGET_NATIVE_BIN_GLOB_COMMUNITY="targets/exeris-community-app/target/exeris-community-app"
+TARGET_APP_NAME_COMMUNITY="exeris-community-app"
+TARGET_MODULE_POM_LOCALITY="targets/exeris-community-app-locality/pom.xml"
+TARGET_JAR_GLOB_LOCALITY="targets/exeris-community-app-locality/target/exeris-community-app-locality-*.jar"
+TARGET_NATIVE_BIN_GLOB_LOCALITY="targets/exeris-community-app-locality/target/exeris-community-app-locality"
+TARGET_APP_NAME_LOCALITY="exeris-community-app-locality"
+TARGET_MODULE_POM_SPRING="targets/spring-benchmark-app/pom.xml"
+TARGET_JAR_GLOB_SPRING="targets/spring-benchmark-app/target/spring-benchmark-app-*.jar"
+TARGET_NATIVE_BIN_GLOB_SPRING="targets/spring-benchmark-app/target/spring-benchmark-app"
+TARGET_APP_NAME_SPRING="spring-benchmark-app"
+TARGET_MODULE_POM_QUARKUS="targets/quarkus-benchmark-app/pom.xml"
+TARGET_JAR_GLOB_QUARKUS="targets/quarkus-benchmark-app/target/quarkus-benchmark-app-*-runner.jar"
+TARGET_NATIVE_BIN_GLOB_QUARKUS="targets/quarkus-benchmark-app/target/quarkus-benchmark-app-*-runner"
+TARGET_APP_NAME_QUARKUS="quarkus-benchmark-app"
+TARGET_MODULE_POM="$TARGET_MODULE_POM_COMMUNITY"
+TARGET_JAR_GLOB="$TARGET_JAR_GLOB_COMMUNITY"
+TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_COMMUNITY"
+TARGET_APP_NAME="$TARGET_APP_NAME_COMMUNITY"
+TARGET_RUNTIME_EFFECTIVE="community"
+CAPTURE_DB_DIAGNOSTICS_SCRIPT="$SCENARIO_DIR/capture-db-diagnostics.sh"
 DB_PORT="${DB_PORT:-5432}"
 TARGET_APP_LOG=""
 TARGET_APP_PID=""
 TARGET_APP_STARTED=0
+TARGET_PID_FILE="/tmp/${TARGET_APP_NAME}-benchmark.pid"
 COMPOSE_BIN=""
 DB_LAUNCH_MODE=""
 DB_CONTAINER_NAME="exeris-benchmark-db"
 DB_MANAGED=0
 
 CONTRACT_FIXED_THREADS=4
-CONTRACT_FIXED_CONNECTIONS=32
+CONTRACT_FIXED_CONNECTIONS=128
 CONTRACT_FIXED_WARMUP_SECONDS=60
-CONTRACT_FIXED_DURATION_SECONDS=60
+CONTRACT_FIXED_DURATION_SECONDS=120
 CONTRACT_FIXED_PROFILE="perf-box-amd64"
 CONTRACT_FIXED_CLAIM_SCOPE="comparison-eligible"
 
@@ -106,9 +152,96 @@ while [[ $# -gt 0 ]]; do
     --connections) CONNECTIONS="$2"; shift 2 ;;
     --duration) DURATION_OVERRIDE="$2"; shift 2 ;;
     --warmup) WARMUP="$2"; shift 2 ;;
+    --backend-mode) BACKEND_MODE="$2"; shift 2 ;;
+    --target-runtime) TARGET_RUNTIME="$2"; shift 2 ;;
+    --target-build) TARGET_BUILD="$2"; shift 2 ;;
+    --cpu-affinity) CPU_AFFINITY="$2"; shift 2 ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
+
+case "$BACKEND_MODE" in
+  default-vt|locality-aware)
+    ;;
+  *)
+    echo "ERROR: --backend-mode must be default-vt or locality-aware (got: $BACKEND_MODE)"
+    exit 1
+    ;;
+esac
+
+case "$TARGET_RUNTIME" in
+  auto|community|locality|spring|quarkus)
+    ;;
+  *)
+    echo "ERROR: --target-runtime must be auto, community, locality, spring, or quarkus (got: $TARGET_RUNTIME)"
+    exit 1
+    ;;
+esac
+
+case "$TARGET_BUILD" in
+  jvm|native)
+    ;;
+  *)
+    echo "ERROR: --target-build must be jvm or native (got: $TARGET_BUILD)"
+    exit 1
+    ;;
+esac
+
+if [[ "$BACKEND_MODE" == "locality-aware" ]] && [[ "$TARGET_RUNTIME" == "spring" || "$TARGET_RUNTIME" == "quarkus" ]]; then
+  echo "ERROR: --backend-mode locality-aware is Exeris-only and cannot be combined with --target-runtime $TARGET_RUNTIME"
+  exit 1
+fi
+
+if [[ "$BACKEND_MODE" == "locality-aware" ]]; then
+  if [[ "$BENCHMARK_LOCALITY_STRICT" == "1" ]] && [[ "$LOCALITY_MODE_ENABLED" != "1" ]]; then
+    echo "ERROR: --backend-mode locality-aware in strict mode requires BENCHMARK_ENABLE_LOCALITY_MODE=1 (VT scheduler API not verified available)."
+    echo "       Unset BENCHMARK_LOCALITY_STRICT or set BENCHMARK_ENABLE_LOCALITY_MODE=1."
+    exit 1
+  fi
+  if [[ "$BENCHMARK_LOCALITY_STRICT" == "0" ]]; then
+    echo "WARN: [locality] Running locality-aware in non-strict mode; VT scheduler override may fall back to default scheduler if API unavailable."
+  fi
+fi
+
+if [[ "${BENCHMARK_REQUIRE_CPU_PINNING:-0}" == "1" ]] && [[ -z "$CPU_AFFINITY" ]]; then
+  echo "ERROR: BENCHMARK_REQUIRE_CPU_PINNING=1 requires --cpu-affinity <cpuset>"
+  exit 1
+fi
+
+if [[ -n "$CPU_AFFINITY" ]] && ! command -v taskset >/dev/null 2>&1; then
+  echo "ERROR: --cpu-affinity requires taskset command"
+  exit 1
+fi
+
+if [[ "$PERF_STAT_REQUIRED" == "1" ]] && ! command -v perf >/dev/null 2>&1; then
+  echo "ERROR: BENCHMARK_REQUIRE_PERF_STAT=1 requires perf command"
+  exit 1
+fi
+
+if [[ "$BACKEND_EVIDENCE_REQUIRED" != "0" && "$BACKEND_EVIDENCE_REQUIRED" != "1" ]]; then
+  echo "ERROR: BENCHMARK_REQUIRE_BACKEND_EVIDENCE must be 0 or 1 (got: $BACKEND_EVIDENCE_REQUIRED)"
+  exit 1
+fi
+
+if [[ "$ALLOW_EXTERNAL_DB" != "0" && "$ALLOW_EXTERNAL_DB" != "1" ]]; then
+  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_DB must be 0 or 1 (got: $ALLOW_EXTERNAL_DB)"
+  exit 1
+fi
+
+if [[ "$LOCALITY_MODE_ENABLED" != "0" && "$LOCALITY_MODE_ENABLED" != "1" ]]; then
+  echo "ERROR: BENCHMARK_ENABLE_LOCALITY_MODE must be 0 or 1 (got: $LOCALITY_MODE_ENABLED)"
+  exit 1
+fi
+
+if [[ "$BENCHMARK_LOCALITY_STRICT" != "0" && "$BENCHMARK_LOCALITY_STRICT" != "1" ]]; then
+  echo "ERROR: BENCHMARK_LOCALITY_STRICT must be 0 or 1 (got: $BENCHMARK_LOCALITY_STRICT)"
+  exit 1
+fi
+
+if [[ "$SKIP_TARGET_BUILD" != "0" && "$SKIP_TARGET_BUILD" != "1" ]]; then
+  echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD must be 0 or 1 (got: $SKIP_TARGET_BUILD)"
+  exit 1
+fi
 
 require_positive_int "--threads" "$THREADS"
 require_positive_int "--connections" "$CONNECTIONS"
@@ -118,10 +251,14 @@ if [[ -n "$DURATION_OVERRIDE" ]]; then
 fi
 
 if [[ -n "$CONTRACT_NAME" ]]; then
-  if [[ "$CONTRACT_NAME" != "fixed_contract_v1" ]]; then
-    echo "ERROR: Unsupported contract '$CONTRACT_NAME'. Supported: fixed_contract_v1"
-    exit 1
-  fi
+  case "$CONTRACT_NAME" in
+    fixed_contract_v1|fixed_contract_backend_mode_h1_v1)
+      ;;
+    *)
+      echo "ERROR: Unsupported contract '$CONTRACT_NAME'. Supported: fixed_contract_v1, fixed_contract_backend_mode_h1_v1"
+      exit 1
+      ;;
+  esac
 
   if [[ -n "$DURATION_OVERRIDE" ]]; then
     echo "ERROR: --duration override is not allowed with --contract $CONTRACT_NAME"
@@ -133,6 +270,18 @@ if [[ -n "$CONTRACT_NAME" ]]; then
   assert_contract_match "--warmup" "$WARMUP" "${CONTRACT_FIXED_WARMUP_SECONDS}s"
   assert_contract_match "--claim-scope" "$CLAIM_SCOPE" "$CONTRACT_FIXED_CLAIM_SCOPE"
   assert_contract_match "--profile" "$PROFILE" "$CONTRACT_FIXED_PROFILE"
+
+  if [[ "$CONTRACT_NAME" == "fixed_contract_backend_mode_h1_v1" ]]; then
+    if [[ "$TARGET_RUNTIME" != "auto" && "$TARGET_RUNTIME" != "locality" ]]; then
+      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 only supports --target-runtime auto or locality (got: $TARGET_RUNTIME)"
+      exit 1
+    fi
+    if [[ -z "$CPU_AFFINITY" ]]; then
+      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 requires --cpu-affinity (requires_cpu_pinning=true)"
+      exit 1
+    fi
+    BACKEND_EVIDENCE_REQUIRED=0
+  fi
 fi
 
 # claim_scope enforcement
@@ -144,6 +293,10 @@ case "$CLAIM_SCOPE" in
     DURATION=60s
     if [[ "$PROFILE" != "perf-box-amd64" ]]; then
       echo "ERROR: comparison-eligible requires --profile perf-box-amd64 (got: $PROFILE)"
+      exit 1
+    fi
+    if [[ -z "$CPU_AFFINITY" ]] && [[ "${BENCHMARK_WAIVE_CPU_AFFINITY:-0}" != "1" ]]; then
+      echo "ERROR: comparison-eligible requires --cpu-affinity <cpuset> for reproducible pinning (set BENCHMARK_WAIVE_CPU_AFFINITY=1 to waive)"
       exit 1
     fi
     ;;
@@ -168,6 +321,59 @@ fi
 if [[ -n "$CONTRACT_NAME" ]]; then
   assert_contract_match "duration" "$DURATION" "${CONTRACT_FIXED_DURATION_SECONDS}s"
 fi
+
+if [[ "$TARGET_RUNTIME" == "auto" ]]; then
+  if [[ "$CONTRACT_NAME" == "fixed_contract_backend_mode_h1_v1" ]] || [[ "$BACKEND_MODE" == "locality-aware" ]]; then
+    TARGET_MODULE_POM="$TARGET_MODULE_POM_LOCALITY"
+    TARGET_JAR_GLOB="$TARGET_JAR_GLOB_LOCALITY"
+    TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_LOCALITY"
+    TARGET_APP_NAME="$TARGET_APP_NAME_LOCALITY"
+    TARGET_RUNTIME_EFFECTIVE="locality"
+  else
+    TARGET_MODULE_POM="$TARGET_MODULE_POM_COMMUNITY"
+    TARGET_JAR_GLOB="$TARGET_JAR_GLOB_COMMUNITY"
+    TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_COMMUNITY"
+    TARGET_APP_NAME="$TARGET_APP_NAME_COMMUNITY"
+    TARGET_RUNTIME_EFFECTIVE="community"
+  fi
+else
+  case "$TARGET_RUNTIME" in
+    community)
+      TARGET_MODULE_POM="$TARGET_MODULE_POM_COMMUNITY"
+      TARGET_JAR_GLOB="$TARGET_JAR_GLOB_COMMUNITY"
+      TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_COMMUNITY"
+      TARGET_APP_NAME="$TARGET_APP_NAME_COMMUNITY"
+      TARGET_RUNTIME_EFFECTIVE="community"
+      ;;
+    locality)
+      TARGET_MODULE_POM="$TARGET_MODULE_POM_LOCALITY"
+      TARGET_JAR_GLOB="$TARGET_JAR_GLOB_LOCALITY"
+      TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_LOCALITY"
+      TARGET_APP_NAME="$TARGET_APP_NAME_LOCALITY"
+      TARGET_RUNTIME_EFFECTIVE="locality"
+      ;;
+    spring)
+      TARGET_MODULE_POM="$TARGET_MODULE_POM_SPRING"
+      TARGET_JAR_GLOB="$TARGET_JAR_GLOB_SPRING"
+      TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_SPRING"
+      TARGET_APP_NAME="$TARGET_APP_NAME_SPRING"
+      TARGET_RUNTIME_EFFECTIVE="spring"
+      ;;
+    quarkus)
+      TARGET_MODULE_POM="$TARGET_MODULE_POM_QUARKUS"
+      TARGET_JAR_GLOB="$TARGET_JAR_GLOB_QUARKUS"
+      TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_QUARKUS"
+      TARGET_APP_NAME="$TARGET_APP_NAME_QUARKUS"
+      TARGET_RUNTIME_EFFECTIVE="quarkus"
+      ;;
+  esac
+fi
+
+if [[ "$TARGET_BUILD" == "native" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "locality" ]]; then
+  echo "ERROR: --target-build native is not supported for effective runtime locality (targets/exeris-community-app-locality)"
+  exit 1
+fi
+TARGET_PID_FILE="/tmp/${TARGET_APP_NAME}-benchmark.pid"
 
 DURATION_SECONDS="${DURATION%s}"
 WARMUP_SECONDS="${WARMUP%s}"
@@ -200,10 +406,21 @@ compose_db() {
 
 start_db() {
   if db_accepting_connections; then
-    echo "[step 2/9] Reusing already-running local benchmark DB on localhost:$DB_PORT"
-    DB_LAUNCH_MODE="external"
-    DB_MANAGED=0
-    return 0
+    if [[ "$ALLOW_EXTERNAL_DB" == "1" ]]; then
+      echo "[step 2/9] Reusing already-running local benchmark DB on localhost:$DB_PORT"
+      DB_LAUNCH_MODE="external"
+      DB_MANAGED=0
+      return 0
+    fi
+
+    echo "[step 2/9] WARN: External DB detected on localhost:$DB_PORT but reuse is disabled (BENCHMARK_ALLOW_EXTERNAL_DB=0); launching managed DB for reproducibility"
+  fi
+
+  if [[ "$DB_LAUNCH_MODE" == "compose" ]]; then
+    if [[ "$DB_PORT" == "5432" ]] && port_reachable 5432 && [[ "$ALLOW_EXTERNAL_DB" != "1" ]]; then
+      DB_LAUNCH_MODE="docker-run"
+      echo "[step 2/9] WARN: localhost:5432 is occupied and external DB reuse is disabled; switching from compose to docker-run fallback"
+    fi
   fi
 
   if [[ "$DB_LAUNCH_MODE" == "compose" ]]; then
@@ -214,19 +431,21 @@ start_db() {
       DB_PORT=55432
       echo "[step 2/9] WARN: localhost:5432 is occupied by a different service; using localhost:$DB_PORT"
     fi
-    echo "[step 2/9] WARN: Compose not available; using docker-run fallback for DB"
+    echo "[step 2/9] WARN: Using docker-run fallback for managed benchmark DB"
     docker rm -f "$DB_CONTAINER_NAME" >/dev/null 2>&1 || true
     docker run -d --name "$DB_CONTAINER_NAME" \
       -e POSTGRES_DB=benchmark_db \
       -e POSTGRES_USER=benchmark \
       -e POSTGRES_PASSWORD=benchmark \
       -p "$DB_PORT":5432 \
+      --mount "type=bind,source=$DB_INIT_SQL_FILE,target=/docker-entrypoint-initdb.d/01-pg-stat-statements-init.sql,readonly" \
       --health-cmd 'pg_isready -U benchmark -d benchmark_db' \
       --health-interval 5s \
       --health-timeout 5s \
       --health-retries 10 \
       --tmpfs /var/lib/postgresql/data \
-      postgres:16.2 >/dev/null
+      postgres:16.2 \
+      postgres -c max_connections=300 -c shared_buffers=256MB -c work_mem=8MB -c shared_preload_libraries=pg_stat_statements >/dev/null
     DB_MANAGED=1
   fi
 }
@@ -246,13 +465,19 @@ db_accepting_connections() {
 }
 
 apply_seed_sql() {
-  if command -v psql >/dev/null 2>&1; then
-    PGPASSWORD=benchmark psql -h localhost -p "$DB_PORT" -U benchmark -d benchmark_db -f "$SCENARIO_DIR/seed/entities.sql"
+  local seed_apply="$REPO_ROOT/runtime/db/seed/seed-apply.sh"
+
+  if [[ "$DB_LAUNCH_MODE" == "docker-run" ]] && docker ps --format '{{.Names}}' | grep -Fxq "$DB_CONTAINER_NAME"; then
+    DB_CONTAINER_NAME="$DB_CONTAINER_NAME" \
+    PGUSER=benchmark PGDATABASE=benchmark_db PGPASSWORD=benchmark \
+    bash "$seed_apply"
     return 0
   fi
 
-  if [[ "$DB_LAUNCH_MODE" == "docker-run" ]] && docker ps --format '{{.Names}}' | grep -Fxq "$DB_CONTAINER_NAME"; then
-    docker exec -i -e PGPASSWORD=benchmark "$DB_CONTAINER_NAME" psql -U benchmark -d benchmark_db < "$SCENARIO_DIR/seed/entities.sql"
+  if command -v psql >/dev/null 2>&1; then
+    PGHOST=localhost PGPORT="$DB_PORT" PGUSER=benchmark \
+    PGDATABASE=benchmark_db PGPASSWORD=benchmark \
+    bash "$seed_apply"
     return 0
   fi
 
@@ -260,24 +485,24 @@ apply_seed_sql() {
   return 1
 }
 
-query_seed_count() {
+query_seed_user_count() {
   if command -v psql >/dev/null 2>&1; then
-    PGPASSWORD=benchmark psql -h localhost -p "$DB_PORT" -U benchmark -d benchmark_db -t -A -c "SELECT COUNT(*) FROM entities"
+    PGPASSWORD=benchmark psql -h localhost -p "$DB_PORT" -U benchmark -d benchmark_db -t -A -c "SELECT COUNT(*) FROM users"
     return 0
   fi
 
   if [[ "$DB_LAUNCH_MODE" == "docker-run" ]] && docker ps --format '{{.Names}}' | grep -Fxq "$DB_CONTAINER_NAME"; then
-    docker exec -e PGPASSWORD=benchmark "$DB_CONTAINER_NAME" psql -U benchmark -d benchmark_db -t -A -c "SELECT COUNT(*) FROM entities"
+    docker exec -e PGPASSWORD=benchmark "$DB_CONTAINER_NAME" psql -U benchmark -d benchmark_db -t -A -c "SELECT COUNT(*) FROM users"
     return 0
   fi
 
-  echo "ERROR: psql is required to verify seed count when DB is external"
+  echo "ERROR: psql is required to verify seed user count when DB is external"
   return 1
 }
 
 verify_seed_fallback() {
   local manifest="$SCENARIO_DIR/seed/seed-manifest.json"
-  local seed_file="$SCENARIO_DIR/seed/entities.sql"
+  local seed_file="$REPO_ROOT/runtime/db/seed/v1_core.sql"
   local expected_count expected_sha256 actual_sha256 actual_count
 
   if ! command -v jq >/dev/null 2>&1; then
@@ -285,27 +510,30 @@ verify_seed_fallback() {
     return 1
   fi
 
-  expected_count=$(jq -r '.entity_count' "$manifest")
+  expected_count=$(jq -r '.user_count // .entity_count' "$manifest")
   expected_sha256=$(jq -r '.seed_file_sha256' "$manifest")
-  actual_sha256=$(sha256sum "$seed_file" | awk '{print $1}')
-
-  if [[ "$actual_sha256" != "$expected_sha256" ]]; then
-    echo "SEED FILE HASH MISMATCH: expected $expected_sha256 got $actual_sha256"
-    return 1
+  if [[ -n "$expected_sha256" && "$expected_sha256" != "skip" ]]; then
+    actual_sha256=$(sha256sum "$seed_file" | awk '{print $1}')
+    if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+      echo "SEED FILE HASH MISMATCH: expected $expected_sha256 got $actual_sha256"
+      return 1
+    fi
+  else
+    echo "SEED FILE HASH CHECK: skipped (manifest seed_file_sha256=$expected_sha256)"
   fi
 
-  actual_count=$(query_seed_count)
+  actual_count=$(query_seed_user_count)
   if ! [[ "$actual_count" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: Could not query entity count. Output: $actual_count"
+    echo "ERROR: Could not query user count. Output: $actual_count"
     return 1
   fi
 
   if [[ "$actual_count" != "$expected_count" ]]; then
-    echo "SEED ROW COUNT MISMATCH: expected $expected_count, got $actual_count"
+    echo "SEED USER COUNT MISMATCH: expected $expected_count, got $actual_count"
     return 1
   fi
 
-  echo "SEED VERIFIED: $actual_count rows, hash OK, migration V1 (fallback)"
+  echo "SEED VERIFIED: users=$actual_count, hash OK, migration V1 (fallback)"
   return 0
 }
 
@@ -313,7 +541,7 @@ is_db_healthy() {
   if [[ "$DB_LAUNCH_MODE" == "compose" ]]; then
     compose_db ps | grep -q "healthy"
   elif [[ "$DB_LAUNCH_MODE" == "external" ]]; then
-    db_accepting_connections
+    db_accepting_connections || port_reachable "$DB_PORT"
   else
     [[ "$(docker inspect -f '{{.State.Health.Status}}' "$DB_CONTAINER_NAME" 2>/dev/null || true)" == "healthy" ]]
   fi
@@ -363,6 +591,73 @@ wait_for_target() {
   return 1
 }
 
+resolve_target_artifact() {
+  TARGET_APP_JAR=""
+  TARGET_APP_BIN=""
+
+  if [[ "$TARGET_BUILD" == "jvm" ]]; then
+    TARGET_APP_JAR=$(ls -1 $TARGET_JAR_GLOB 2>/dev/null | grep -Ev '(\\.original$|-sources\\.jar$|-javadoc\\.jar$)' | sort | tail -n 1 || true)
+    [[ -n "$TARGET_APP_JAR" ]]
+    return $?
+  fi
+
+  TARGET_APP_BIN=$(ls -1 $TARGET_NATIVE_BIN_GLOB 2>/dev/null | grep -Ev '(\\.txt$|\\.jar$|\\.original$)' | while IFS= read -r candidate; do
+    if [[ -f "$candidate" && -x "$candidate" ]]; then
+      echo "$candidate"
+    fi
+  done | sort | tail -n 1 || true)
+  [[ -n "$TARGET_APP_BIN" ]]
+}
+
+stop_stale_local_target_if_any() {
+  if [[ ! -f "$TARGET_PID_FILE" ]]; then
+    return 0
+  fi
+
+  local stale_pid
+  stale_pid="$(cat "$TARGET_PID_FILE" 2>/dev/null || true)"
+  if [[ -z "$stale_pid" ]]; then
+    rm -f "$TARGET_PID_FILE"
+    return 0
+  fi
+
+  if kill -0 "$stale_pid" >/dev/null 2>&1; then
+    echo "[step 6/9] WARN: Stopping stale local benchmark target process (pid=$stale_pid)"
+    kill "$stale_pid" >/dev/null 2>&1 || true
+    wait "$stale_pid" 2>/dev/null || true
+  fi
+
+  rm -f "$TARGET_PID_FILE"
+}
+
+verify_backend_mode_evidence() {
+  local timeout=20
+  local descriptor_token="Backend mode evidence: descriptorBackendMode=$BACKEND_MODE"
+  local manifest_token="startupManifestBackendMode=$BACKEND_MODE"
+
+  if [[ ! -f "$TARGET_APP_LOG" ]]; then
+    echo "ERROR: Target log not found for backend mode evidence: $TARGET_APP_LOG"
+    return 1
+  fi
+
+  for _ in $(seq 1 "$timeout"); do
+    if grep -Fq "$descriptor_token" "$TARGET_APP_LOG" && grep -Fq "$manifest_token" "$TARGET_APP_LOG"; then
+      echo "[step 6/9] Backend mode evidence verified: $BACKEND_MODE"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "ERROR: backend mode evidence missing or mismatched after ${timeout}s (expected mode=$BACKEND_MODE)"
+  echo "ERROR: expected tokens: '$descriptor_token' and '$manifest_token'"
+  if [[ -f "$TARGET_APP_LOG" ]]; then
+    echo "---- backend-mode evidence lines ----"
+    grep -E "descriptorBackendMode=|startupManifestBackendMode=" "$TARGET_APP_LOG" || true
+    echo "---- end backend-mode evidence lines ----"
+  fi
+  return 1
+}
+
 cleanup() {
   local exit_code=$?
   if [[ "$TARGET_APP_STARTED" -eq 1 ]] && [[ -n "$TARGET_APP_PID" ]] && kill -0 "$TARGET_APP_PID" >/dev/null 2>&1; then
@@ -370,6 +665,7 @@ cleanup() {
     kill "$TARGET_APP_PID" >/dev/null 2>&1 || true
     wait "$TARGET_APP_PID" 2>/dev/null || true
   fi
+  rm -f "$TARGET_PID_FILE"
   echo "[cleanup] Stopping benchmark DB..."
   stop_db
   trap - EXIT
@@ -379,7 +675,7 @@ cleanup() {
 resolve_db_launcher
 trap cleanup EXIT
 
-echo "[entity-read-by-id] claim_scope=$CLAIM_SCOPE profile=$PROFILE duration=$DURATION warmup=$WARMUP threads=$THREADS connections=$CONNECTIONS output=$OUTPUT_DIR"
+echo "[entity-read-by-id] claim_scope=$CLAIM_SCOPE profile=$PROFILE duration=$DURATION warmup=$WARMUP threads=$THREADS connections=$CONNECTIONS target_runtime=$TARGET_RUNTIME target_build=$TARGET_BUILD effective_runtime=$TARGET_RUNTIME_EFFECTIVE target_app=$TARGET_APP_NAME skip_target_build=$SKIP_TARGET_BUILD output=$OUTPUT_DIR"
 
 # Step 2: Start DB
 echo "[step 2/9] Starting benchmark DB..."
@@ -409,55 +705,149 @@ else
   verify_seed_fallback
 fi
 
+BENCH_SCENARIO_DIAGNOSTICS_DIR="$OUTPUT_DIR/db-diagnostics"
+mkdir -p "$BENCH_SCENARIO_DIAGNOSTICS_DIR"
+echo "[diag] Capturing PostgreSQL diagnostics..."
+PGHOST="${PGHOST:-localhost}" \
+PGPORT="$DB_PORT" \
+PGDATABASE="${PGDATABASE:-benchmark_db}" \
+PGUSER="${PGUSER:-benchmark}" \
+PGPASSWORD="${PGPASSWORD:-benchmark}" \
+BENCH_SCENARIO_DIAGNOSTICS_DIR="$BENCH_SCENARIO_DIAGNOSTICS_DIR" \
+BENCH_CAPTURE_DB_EXPLAIN="${BENCH_CAPTURE_DB_EXPLAIN:-0}" \
+bash "$CAPTURE_DB_DIAGNOSTICS_SCRIPT"
+
 # Step 5: Capture env
 echo "[step 5/9] Capturing environment..."
 ./scripts/capture-env.sh --profile "$PROFILE" --tool wrk > "$OUTPUT_DIR/env.json"
 
 # Step 6: Warmup
 echo "[step 6/9] Ensuring benchmark target app is available..."
+if [[ "${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}" != "1" ]]; then
+  stop_stale_local_target_if_any
+fi
+
+if target_reachable; then
+  if [[ "${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}" != "1" ]]; then
+    echo "ERROR: benchmark target already reachable at $BASE_URL and BENCHMARK_ALLOW_EXTERNAL_TARGET is not 1"
+    echo "ERROR: external target is disallowed for backendMode integrity"
+    exit 1
+  fi
+  if [[ "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
+    echo "ERROR: external target reuse cannot satisfy mandatory backend mode evidence in this script path"
+    echo "ERROR: set BENCHMARK_REQUIRE_BACKEND_EVIDENCE=0 to allow external target with warning-only evidence semantics"
+    exit 1
+  fi
+  echo "[step 6/9] WARN: Reusing externally managed target (BENCHMARK_ALLOW_EXTERNAL_TARGET=1); backend mode evidence cannot be guaranteed"
+fi
+
 if ! target_reachable; then
-  if [[ "$OUTPUT_DIR" == /* ]]; then
-    TARGET_CP_FILE="$OUTPUT_DIR/target-app.classpath"
+  artifact_found=0
+  if resolve_target_artifact; then
+    artifact_found=1
+  fi
+
+  if [[ "$SKIP_TARGET_BUILD" == "1" ]]; then
+    if [[ "$artifact_found" -ne 1 ]]; then
+      echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD=1 requires prebuilt target artifacts (runtime=$TARGET_RUNTIME_EFFECTIVE build=$TARGET_BUILD)"
+      if [[ "$TARGET_BUILD" == "jvm" ]]; then
+        echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -DskipTests package"
+      else
+        case "$TARGET_RUNTIME_EFFECTIVE" in
+          community|spring)
+            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -DskipTests native:compile"
+            ;;
+          quarkus)
+            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -Dquarkus.native.enabled=true -DskipTests package"
+            ;;
+          *)
+            echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE"
+            ;;
+        esac
+      fi
+      exit 1
+    fi
+    if [[ "$TARGET_BUILD" == "jvm" ]]; then
+      echo "[step 6/9] Using prebuilt benchmark target jar (BENCHMARK_SKIP_TARGET_BUILD=1): $TARGET_APP_JAR"
+    else
+      echo "[step 6/9] Using prebuilt benchmark target binary (BENCHMARK_SKIP_TARGET_BUILD=1): $TARGET_APP_BIN"
+    fi
   else
-    TARGET_CP_FILE="$PWD/$OUTPUT_DIR/target-app.classpath"
-  fi
+    echo "[step 6/9] Building benchmark target app..."
+    if [[ "$TARGET_BUILD" == "jvm" ]]; then
+      mvn -f "$TARGET_MODULE_POM" -DskipTests package
+    else
+      case "$TARGET_RUNTIME_EFFECTIVE" in
+        community)
+          mvn -f "$TARGET_MODULE_POM" -Pnative -DskipTests native:compile
+          ;;
+        spring)
+          mvn -f "$TARGET_MODULE_POM" -Pnative -DskipTests native:compile
+          ;;
+        quarkus)
+          mvn -f "$TARGET_MODULE_POM" -Pnative -Dquarkus.native.enabled=true -DskipTests package
+          ;;
+        locality)
+          echo "ERROR: --target-build native is not supported for effective runtime locality"
+          exit 1
+          ;;
+        *)
+          echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE"
+          exit 1
+          ;;
+      esac
+    fi
 
-  echo "[step 6/9] Building benchmark target app..."
-  mvn -f targets/exeris-benchmark-app/pom.xml -DskipTests compile
-
-  echo "[step 6/9] Resolving benchmark target classpath..."
-  mvn -f targets/exeris-benchmark-app/pom.xml -DskipTests dependency:build-classpath \
-    -Dmdep.outputFile="$TARGET_CP_FILE"
-
-  if [[ ! -f "$TARGET_CP_FILE" ]]; then
-    echo "ERROR: Failed to build benchmark target classpath"
-    exit 1
-  fi
-
-  TARGET_APP_CLASSPATH=$(<"$TARGET_CP_FILE")
-  if [[ -z "$TARGET_APP_CLASSPATH" ]]; then
-    echo "ERROR: Benchmark target classpath is empty"
-    exit 1
-  fi
-
-  COMMUNITY_JAR=$(ls -1 "$HOME"/.m2/repository/eu/exeris/exeris-kernel-community/*/exeris-kernel-community-*.jar 2>/dev/null | sort | tail -n 1 || true)
-  if [[ -z "$COMMUNITY_JAR" ]]; then
-    echo "ERROR: exeris-kernel-community jar not found in ~/.m2. Build/install it before running this scenario."
-    exit 1
+    if ! resolve_target_artifact; then
+      if [[ "$TARGET_BUILD" == "jvm" ]]; then
+        echo "ERROR: benchmark target jar not found after build (glob: $TARGET_JAR_GLOB)"
+      else
+        echo "ERROR: benchmark target native binary not found/executable after build (glob: $TARGET_NATIVE_BIN_GLOB)"
+      fi
+      exit 1
+    fi
   fi
 
   echo "[step 6/9] Starting benchmark target app..."
-  java --enable-preview -cp "$TARGET_CLASSES_DIR:$TARGET_APP_CLASSPATH:$COMMUNITY_JAR" \
-    -Dexeris.http.port=8080 \
-    -Dexeris.launcher.subsystems=http,persistence \
-    -Dexeris.tls.community.cryptoProviderClass=eu.exeris.kernel.community.crypto.CommunityKernelCryptoProvider \
-    -Dexeris.tls.community.memoryProviderClass=eu.exeris.kernel.community.memory.CommunityMemoryProvider \
-    -Dbenchmark.target.basePath=/api/v1 \
-    -Dexeris.persistence.jdbcUrl=jdbc:postgresql://localhost:$DB_PORT/benchmark_db \
-    -Dexeris.persistence.username=benchmark \
-    -Dexeris.persistence.password=benchmark \
-    "$TARGET_MAIN_CLASS" > "$TARGET_APP_LOG" 2>&1 &
+  TARGET_CMD=(env \
+    EXERIS_PORT=8080 \
+    EXERIS_DB_JDBC_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db" \
+    EXERIS_DB_USERNAME=benchmark \
+    EXERIS_DB_PASSWORD=benchmark \
+    EXERIS_DB_POOL_MIN_SIZE="$EXERIS_DB_POOL_MIN_SIZE" \
+    EXERIS_DB_POOL_MAX_SIZE="$EXERIS_DB_POOL_MAX_SIZE" \
+    SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db" \
+    SPRING_DATASOURCE_USERNAME=benchmark \
+    SPRING_DATASOURCE_PASSWORD=benchmark \
+    SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE="$EXERIS_DB_POOL_MIN_SIZE" \
+    SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE="$EXERIS_DB_POOL_MAX_SIZE" \
+    QUARKUS_DATASOURCE_JDBC_MIN_SIZE="$EXERIS_DB_POOL_MIN_SIZE" \
+    QUARKUS_DATASOURCE_JDBC_MAX_SIZE="$EXERIS_DB_POOL_MAX_SIZE")
+
+  if [[ "$TARGET_BUILD" == "jvm" ]]; then
+    TARGET_CMD+=(java)
+    if [[ "$TARGET_RUNTIME_EFFECTIVE" == "community" || "$TARGET_RUNTIME_EFFECTIVE" == "locality" ]]; then
+      TARGET_CMD+=(--enable-preview)
+      TARGET_CMD+=(-Dexeris.backend.mode="$BACKEND_MODE")
+      TARGET_CMD+=(-Dexeris.backend.mode.strict="$BENCHMARK_LOCALITY_STRICT")
+    fi
+    TARGET_CMD+=(-jar "$TARGET_APP_JAR")
+  else
+    TARGET_CMD+=("$TARGET_APP_BIN")
+    if [[ "$TARGET_RUNTIME_EFFECTIVE" == "community" ]]; then
+      TARGET_CMD+=(-Dexeris.backend.mode="$BACKEND_MODE")
+      TARGET_CMD+=(-Dexeris.backend.mode.strict="$BENCHMARK_LOCALITY_STRICT")
+    fi
+  fi
+
+  if [[ -n "$CPU_AFFINITY" ]]; then
+    echo "[step 6/9] Applying CPU affinity via taskset: $CPU_AFFINITY"
+    TARGET_CMD=(taskset -c "$CPU_AFFINITY" "${TARGET_CMD[@]}")
+  fi
+
+  "${TARGET_CMD[@]}" > "$TARGET_APP_LOG" 2>&1 &
   TARGET_APP_PID=$!
+  echo "$TARGET_APP_PID" > "$TARGET_PID_FILE"
   TARGET_APP_STARTED=1
 fi
 
@@ -472,22 +862,83 @@ if ! wait_for_target; then
   exit 1
 fi
 
-PREFLIGHT_BODY_FILE="$OUTPUT_DIR/preflight-entity-read-by-id.json"
-PREFLIGHT_STATUS=$(curl -sS -o "$PREFLIGHT_BODY_FILE" -w "%{http_code}" "$BASE_URL/api/v1/entities/1" || true)
-echo "[step 6/9] Endpoint preflight status: $PREFLIGHT_STATUS"
-if [[ "$PREFLIGHT_STATUS" != "200" ]]; then
-  echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/entities/1 (status=$PREFLIGHT_STATUS)"
+PREFLIGHT_BODY_FILE="$OUTPUT_DIR/preflight-users-aggregate.json"
+if ! bench_run_endpoint_preflight "$BASE_URL/api/v1/users" "$PREFLIGHT_BODY_FILE" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
+  echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE"
+  echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/users (status=$BENCH_PREFLIGHT_HTTP_CODE)"
   echo "ERROR: preflight response body saved at $PREFLIGHT_BODY_FILE"
+  exit 1
+fi
+echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE"
+
+echo "[step 6/9] Payload preflight preview (/api/v1/users):"
+bench_print_preflight_payload_preview "$PREFLIGHT_BODY_FILE" 512
+
+if [[ "$TARGET_APP_STARTED" -eq 1 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
+  verify_backend_mode_evidence
+elif [[ "$TARGET_APP_STARTED" -eq 0 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
+  echo "ERROR: backend mode evidence is mandatory but no local target was started; no local log evidence is available"
   exit 1
 fi
 
 echo "[step 6/9] Warmup ($WARMUP)..."
-wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL/api/v1/entities/1" > /dev/null || true
+wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL/api/v1/users" > /dev/null || true
+
+# Step 6.5: Reset pg_stat_statements counters before measurement
+PG_STAT_STATEMENTS_WRAPPER_SCRIPT="$SCENARIO_DIR/pg_stat_statements-wrapper.sh"
+if [[ -f "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT" ]]; then
+  source "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT"
+  echo "[step 6.5/9] Resetting pg_stat_statements counters before measurement..."
+  pg_stat_statements_reset || true
+fi
 
 # Step 7: Measure
 echo "[step 7/9] Measuring ($DURATION)..."
-WRK_OUT=$(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/entities/1" 2>&1)
+PERF_STAT_FILE="$OUTPUT_DIR/perf-stat.csv"
+WRK_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
+
+if [[ "$PERF_STAT_REQUIRED" == "1" || "${BENCHMARK_CAPTURE_PERF_STAT:-0}" == "1" ]]; then
+  if ! command -v perf >/dev/null 2>&1; then
+    echo "ERROR: perf-stat capture requested but perf command is unavailable"
+    exit 1
+  fi
+  PERF_NO_SCALE="${BENCHMARK_PERF_NO_SCALE:-1}"
+  if [[ "$PERF_NO_SCALE" != "0" && "$PERF_NO_SCALE" != "1" ]]; then
+    echo "ERROR: BENCHMARK_PERF_NO_SCALE must be 0 or 1 (got '$PERF_NO_SCALE')"
+    exit 1
+  fi
+  PERF_ARGS=(-x, -o "$PERF_STAT_FILE")
+  if [[ "$PERF_NO_SCALE" == "1" ]]; then
+    if perf stat --help 2>&1 | grep -q -- '--no-scale'; then
+      PERF_ARGS=(--no-scale "${PERF_ARGS[@]}")
+    else
+      echo "WARN: perf --no-scale not supported by this perf version; running perf stat with scaling enabled"
+    fi
+  fi
+  echo "[step 7/9] Capturing perf stat to $PERF_STAT_FILE"
+  set +e
+  WRK_OUT=$(perf stat "${PERF_ARGS[@]}" -- "${WRK_CMD[@]}" 2>&1)
+  PERF_EXIT_CODE=$?
+  set -e
+  if [[ "$PERF_EXIT_CODE" -ne 0 ]]; then
+    PERF_ERROR_LOG="$OUTPUT_DIR/perf-error.log"
+    printf '%s\n' "$WRK_OUT" > "$PERF_ERROR_LOG"
+    echo "ERROR: perf stat execution failed (exit_code=$PERF_EXIT_CODE)"
+    echo "ERROR: perf diagnostics saved to $PERF_ERROR_LOG"
+    echo "$WRK_OUT"
+    exit "$PERF_EXIT_CODE"
+  fi
+else
+  WRK_OUT=$("${WRK_CMD[@]}" 2>&1)
+fi
 echo "$WRK_OUT"
+
+# Capture post-measurement pg_stat_statements snapshot
+if [[ -f "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT" ]]; then
+  PG_STAT_STATEMENTS_POST_FILE="$BENCH_SCENARIO_DIAGNOSTICS_DIR/pg_stat_statements-post-measurement.json"
+  echo "[step 7.5/9] Capturing pg_stat_statements post-measurement snapshot..."
+  pg_stat_statements_snapshot "$PG_STAT_STATEMENTS_POST_FILE" "measurement" || true
+fi
 
 THROUGHPUT_RPS=$(awk '/Requests\/sec:/ {print $2; exit}' <<<"$WRK_OUT")
 LATENCY_STATS_LINE=$(printf '%s\n' "$WRK_OUT" | awk '/Thread Stats/{in_stats=1;next} in_stats && /^[[:space:]]*Latency[[:space:]]/ {print; exit}')
@@ -593,12 +1044,18 @@ cat > "$RESULT_FILE" <<EOF
   "tool": "wrk",
   "env_ref": "$OUTPUT_DIR/env.json",
   "claim_scope": "$RESULT_CLAIM_SCOPE",
+  "execution_class": "$EXECUTION_CLASS",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
   "transport_mode": "loopback-h1",
-  "co_risk": true,
   "target": {
-    "name": "exeris-benchmark-app",
+    "repo": "exeris-benchmarks",
+    "version": "$TARGET_APP_NAME",
     "tier": "community",
     "mode": "baseline-db",
+    "protocol": "h1",
     "commit_sha": "$COMMIT_SHA"
   },
   "seed_ref": {
@@ -608,10 +1065,10 @@ cat > "$RESULT_FILE" <<EOF
     "entity_count": 1000,
     "verified": true
   },
-  "cross_tier_status": "deferred",
-  "cross_tier_guard_ref": "scenarios/entity-read-by-id/scenario.json#cross_tier_equivalence_constraints",
   "run_config": $RUN_CONFIG_JSON,
   "metrics": $METRICS_JSON,
+  "notes": "backendMode=$BACKEND_MODE targetRuntimeEffective=$TARGET_RUNTIME_EFFECTIVE targetBuild=$TARGET_BUILD cpuAffinity=${CPU_AFFINITY:-none}",
+  "tags": ["backend-mode:$BACKEND_MODE", "target-runtime-effective:$TARGET_RUNTIME_EFFECTIVE", "target-build:$TARGET_BUILD"],
   "raw_output": $(echo "$WRK_OUT" | jq -Rs .)
 }
 EOF
@@ -654,6 +1111,7 @@ jq -n \
   --arg comparison_axis "within-tier" \
   --arg claim_scope "$RESULT_CLAIM_SCOPE" \
   --arg mode "baseline-db" \
+  --arg wiring_model "backend-mode:$BACKEND_MODE target-runtime-effective:$TARGET_RUNTIME_EFFECTIVE target-build:$TARGET_BUILD" \
   --arg seed_manifest_ref "$SCENARIO_DIR/seed/seed-manifest.json" \
   --arg seed_manifest_version "1" \
   --argjson jvm_flags "$JVM_FLAGS_JSON" \
@@ -688,6 +1146,7 @@ jq -n \
       claim_scope: $claim_scope
     },
     mode: $mode,
+    wiring_model: $wiring_model,
     run_config: {
       threads: $threads,
       connections: $connections,
@@ -724,17 +1183,72 @@ jq -n \
   }' > "$STEADY_STATE_FILE"
 
 echo "[step 9/9] Validating result artifact against schema..."
-if command -v check-jsonschema &>/dev/null; then
-  check-jsonschema --schemafile schemas/benchmark-result.schema.json "$RESULT_FILE" \
+SCHEMA_FILE="schemas/benchmark-result.schema.json"
+if command -v check-jsonschema >/dev/null 2>&1; then
+  check-jsonschema --schemafile "$SCHEMA_FILE" "$RESULT_FILE" \
     && echo "[step 9/9] Schema validation PASSED" \
     || { echo "ERROR: result artifact failed schema validation — see above"; exit 1; }
-elif command -v ajv &>/dev/null; then
-  ajv validate -s schemas/benchmark-result.schema.json -d "$RESULT_FILE" \
+elif command -v ajv >/dev/null 2>&1; then
+  ajv validate -s "$SCHEMA_FILE" -d "$RESULT_FILE" \
     && echo "[step 9/9] Schema validation PASSED" \
     || { echo "ERROR: result artifact failed schema validation"; exit 1; }
+elif command -v python3 >/dev/null 2>&1; then
+  set +e
+  python3 - "$SCHEMA_FILE" "$RESULT_FILE" <<'PY'
+import json
+import sys
+
+schema_path = sys.argv[1]
+data_path = sys.argv[2]
+
+try:
+    import jsonschema
+except Exception:
+    print("ERROR: python3 fallback requires the 'jsonschema' module (install via: python3 -m pip install jsonschema)", file=sys.stderr)
+    sys.exit(2)
+
+with open(schema_path, "r", encoding="utf-8") as f:
+    schema = json.load(f)
+
+with open(data_path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+try:
+    jsonschema.validate(instance=data, schema=schema)
+except jsonschema.exceptions.ValidationError as e:
+    instance_path = ".".join(str(p) for p in e.path) if e.path else "$"
+    schema_path_str = ".".join(str(p) for p in e.schema_path) if e.schema_path else "$"
+    print(f"ERROR: Schema validation failed: {e.message}", file=sys.stderr)
+    print(f"  instance path: {instance_path}", file=sys.stderr)
+    print(f"  schema path: {schema_path_str}", file=sys.stderr)
+    sys.exit(1)
+
+print("Schema validation PASSED (python3+jsonschema)")
+sys.exit(0)
+PY
+  PYTHON_SCHEMA_RC=$?
+  set -e
+
+  case "$PYTHON_SCHEMA_RC" in
+    0)
+      echo "[step 9/9] Schema validation PASSED"
+      ;;
+    1)
+      echo "ERROR: result artifact failed schema validation"
+      exit 1
+      ;;
+    2)
+      echo "ERROR: python3 fallback unavailable because the 'jsonschema' module is not installed"
+      exit 1
+      ;;
+    *)
+      echo "ERROR: python3 schema validation failed with unexpected exit code: $PYTHON_SCHEMA_RC"
+      exit 1
+      ;;
+  esac
 else
-  echo "WARN: No schema validator found (check-jsonschema or ajv). Install one for schema validation."
-  echo "WARN: Skipping schema validation — result artifact may not conform to schema."
+  echo "ERROR: No schema validator available. Tried in order: check-jsonschema, ajv, python3+jsonschema"
+  exit 1
 fi
 
 echo "Done. claim_scope=$CLAIM_SCOPE -> $RESULT_CLAIM_SCOPE | results in $OUTPUT_DIR"

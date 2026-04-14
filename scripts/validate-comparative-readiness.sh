@@ -1,33 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# validate-comparative-readiness.sh — Run all comparative readiness gates against two result files.
+# validate-comparative-readiness.sh
 #
-# Usage:
-#   scripts/validate-comparative-readiness.sh \
-#     --result-a    <path>              \
-#     --result-b    <path>              \
-#     [--target-a-id <target_id_or_legacy>] \
-#     [--target-b-id <target_id_or_legacy>] \
-#     --scenario-id entity-read-by-id  \
-#     --contract-id fixed_contract_v1  \
-#     [--output     <gate-report.csv>]
+# Strict, fail-closed comparative gate validator.
+# Exit code:
+#   0 -> all gates PASS
+#   1 -> any gate FAIL/BLOCK
 #
-# Output CSV columns: target_id,gate_id,gate_name,pass_fail,reason,caveat
-# Exit code: 0 if all gates PASS or WARN, 1 if any gate FAILS/BLOCKS.
+# CSV columns:
+#   scope,gate_id,gate_name,pass_fail,rejection_code,reason,caveat
+#
+# Summary JSON contains machine-readable rejection_codes and gate rows.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-TARGET_CONTRACT_REGISTRY="${REPO_ROOT}/runtime/drivers/target-contract-registry.sh"
-
-# shellcheck source=/dev/null
-source "$TARGET_CONTRACT_REGISTRY"
-
-# Color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+SCHEMA_BENCHMARK_RESULT="${REPO_ROOT}/schemas/benchmark-result.schema.json"
 
 RESULT_A=""
 RESULT_B=""
@@ -36,31 +24,34 @@ TARGET_B_ID_ARG=""
 SCENARIO_ID=""
 CONTRACT_ID=""
 OUTPUT_CSV=""
+SUMMARY_JSON=""
+TRACK_ID_EXPECTED=""
+REPORT_FILE=""
 
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --result-a)    RESULT_A="$2";    shift 2 ;;
-    --result-b)    RESULT_B="$2";    shift 2 ;;
-    --target-a-id) TARGET_A_ID_ARG="$2"; shift 2 ;;
-    --target-b-id) TARGET_B_ID_ARG="$2"; shift 2 ;;
-    --scenario-id) SCENARIO_ID="$2"; shift 2 ;;
-    --contract-id) CONTRACT_ID="$2"; shift 2 ;;
-    --output)      OUTPUT_CSV="$2";  shift 2 ;;
-    *) echo "ERROR: Unknown argument: $1" >&2; exit 1 ;;
+    --result-a)      RESULT_A="$2"; shift 2 ;;
+    --result-b)      RESULT_B="$2"; shift 2 ;;
+    --target-a-id)   TARGET_A_ID_ARG="$2"; shift 2 ;;
+    --target-b-id)   TARGET_B_ID_ARG="$2"; shift 2 ;;
+    --scenario-id)   SCENARIO_ID="$2"; shift 2 ;;
+    --contract-id)   CONTRACT_ID="$2"; shift 2 ;;
+    --output)        OUTPUT_CSV="$2"; shift 2 ;;
+    --summary-json)  SUMMARY_JSON="$2"; shift 2 ;;
+    --track-id)      TRACK_ID_EXPECTED="$2"; shift 2 ;;
+    --report-file)   REPORT_FILE="$2"; shift 2 ;;
+    *)
+      echo "ERROR: Unknown argument: $1" >&2
+      exit 1
+      ;;
   esac
 done
 
 if [[ -z "$RESULT_A" || -z "$RESULT_B" || -z "$SCENARIO_ID" || -z "$CONTRACT_ID" ]]; then
-  echo "ERROR: --result-a, --result-b, --scenario-id, and --contract-id are all required." >&2
+  echo "ERROR: --result-a, --result-b, --scenario-id, and --contract-id are required." >&2
   exit 1
 fi
 
-# ---------------------------------------------------------------------------
-# Dependency check
-# ---------------------------------------------------------------------------
 for cmd in jq awk; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "ERROR: Required command '$cmd' not found in PATH." >&2
@@ -68,487 +59,551 @@ for cmd in jq awk; do
   fi
 done
 
-# ---------------------------------------------------------------------------
-# Input file validation
-# ---------------------------------------------------------------------------
 for f in "$RESULT_A" "$RESULT_B"; do
   if [[ ! -f "$f" ]]; then
     echo "ERROR: Result file not found: $f" >&2
     exit 1
   fi
-  if ! jq empty "$f" 2>/dev/null; then
+  if ! jq empty "$f" >/dev/null 2>&1; then
     echo "ERROR: Result file is not valid JSON: $f" >&2
     exit 1
   fi
 done
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 TARGET_A_ID="${TARGET_A_ID_ARG:-$(jq -r '.target.repo // .run_id // "target-a"' "$RESULT_A")}"
 TARGET_B_ID="${TARGET_B_ID_ARG:-$(jq -r '.target.repo // .run_id // "target-b"' "$RESULT_B")}"
 
 GATE_PASS=0
-GATE_WARN=0
 GATE_FAIL=0
 
-# CSV rows accumulated in an array
 declare -a CSV_ROWS=()
-CSV_ROWS+=("target_id,gate_id,gate_name,pass_fail,reason,caveat")
+CSV_ROWS+=("scope,gate_id,gate_name,pass_fail,rejection_code,reason,caveat")
 
-# Record a gate result for one target
-record_gate() {
-  local target_id="$1"
-  local gate_id="$2"
-  local gate_name="$3"
-  local pass_fail="$4"
-  local reason="$5"
-  local caveat="${6:-}"
+declare -A REJECTION_CODES=()
 
-  # Escape any commas in free-text fields
-  local safe_reason="${reason//,/;}"
-  local safe_caveat="${caveat//,/;}"
-
-  CSV_ROWS+=("${target_id},${gate_id},${gate_name},${pass_fail},${safe_reason},${safe_caveat}")
-
-  case "$pass_fail" in
-    PASS) ((GATE_PASS += 1)) ;;
-    WARN) ((GATE_WARN += 1)) ;;
-    FAIL|BLOCK) ((GATE_FAIL += 1)) ;;
-  esac
-}
-
-# jq field extractor (returns empty string when absent)
 jq_field() {
   local file="$1"
   local path="$2"
   jq -r "${path} // empty" "$file" 2>/dev/null || true
 }
 
-# ---------------------------------------------------------------------------
-# GATE A — Maturity
-# Both results must have claim_scope == "comparison_eligible"
-#   AND runner_status == "success"
-#   AND reproducibility_status == "complete"
-# ---------------------------------------------------------------------------
-echo "--- Gate A: Maturity ---"
-for pair in "A:$TARGET_A_ID:$RESULT_A" "B:$TARGET_B_ID:$RESULT_B"; do
-  IFS=: read -r _label tid rfile <<< "$pair"
-
-  cs="$(jq_field  "$rfile" '.claim_scope')"
-  rs="$(jq_field  "$rfile" '.runner_status')"
-  repro="$(jq_field "$rfile" '.reproducibility_status')"
-
-  reasons=()
-  [[ "$cs"    != "comparison_eligible" ]] && reasons+=("claim_scope=${cs:-missing} (want comparison_eligible)")
-  [[ "$rs"    != "success"             ]] && reasons+=("runner_status=${rs:-missing} (want success)")
-  [[ "$repro" != "complete"            ]] && reasons+=("reproducibility_status=${repro:-missing} (want complete)")
-
-  if [[ ${#reasons[@]} -eq 0 ]]; then
-    record_gate "$tid" "A" "maturity" "PASS" "claim_scope=comparison_eligible; runner_status=success; reproducibility_status=complete"
-  else
-    record_gate "$tid" "A" "maturity" "FAIL" "$(IFS='; '; echo "${reasons[*]}")"
-  fi
-done
-
-# ---------------------------------------------------------------------------
-# GATE B — Equivalence
-# Both must share: scenario_id, contract_id (run_config), tool, transport_mode
-# ---------------------------------------------------------------------------
-echo "--- Gate B: Equivalence ---"
-scen_a="$(jq_field "$RESULT_A" '.scenario')"
-scen_b="$(jq_field "$RESULT_B" '.scenario')"
-tool_a="$(jq_field "$RESULT_A" '.tool')"
-tool_b="$(jq_field "$RESULT_B" '.tool')"
-trans_a="$(jq_field "$RESULT_A" '.transport_mode')"
-trans_b="$(jq_field "$RESULT_B" '.transport_mode')"
-# contract_id is not a native field in benchmark-result; derive from run_config or embedded tag
-contract_a="$(jq_field "$RESULT_A" '.run_config.contract_id // .contract_id')"
-contract_b="$(jq_field "$RESULT_B" '.run_config.contract_id // .contract_id')"
-
-for pair in "A:$TARGET_A_ID:$RESULT_A" "B:$TARGET_B_ID:$RESULT_B"; do
-  IFS=: read -r _label tid rfile <<< "$pair"
-
-  reasons=()
-  [[ "$scen_a"     != "$scen_b"     ]] && reasons+=("scenario mismatch: ${scen_a} vs ${scen_b}")
-  [[ "$tool_a"     != "$tool_b"     ]] && reasons+=("tool mismatch: ${tool_a} vs ${tool_b}")
-  [[ "$trans_a"    != "$trans_b"    ]] && reasons+=("transport_mode mismatch: ${trans_a} vs ${trans_b}")
-  # scenario_id must match requested
-  scen_val="$(jq_field "$rfile" '.scenario')"
-  [[ "$scen_val" != "$SCENARIO_ID" ]] && reasons+=("scenario=${scen_val:-missing} (want ${SCENARIO_ID})")
-  # contract_id check (lenient: skip if both empty)
-  if [[ -n "$contract_a" || -n "$contract_b" ]]; then
-    [[ "$contract_a" != "$contract_b" ]] && reasons+=("contract_id mismatch: ${contract_a:-missing} vs ${contract_b:-missing}")
-  fi
-
-  if [[ ${#reasons[@]} -eq 0 ]]; then
-    record_gate "$tid" "B" "equivalence" "PASS" "scenario; tool; transport_mode; contract_id all match"
-  else
-    record_gate "$tid" "B" "equivalence" "FAIL" "$(IFS='; '; echo "${reasons[*]}")"
-  fi
-done
-
-# ---------------------------------------------------------------------------
-# GATE C — Endpoint Health
-# total_errors == 0 OR error_rate_pct < 0.5. Block if error_rate >= 1.0.
-# ---------------------------------------------------------------------------
-echo "--- Gate C: Endpoint ---"
-for pair in "A:$TARGET_A_ID:$RESULT_A" "B:$TARGET_B_ID:$RESULT_B"; do
-  IFS=: read -r _label tid rfile <<< "$pair"
-
-  total_errors="$(jq_field "$rfile" '.metrics.total_errors')"
-  error_rate="$(jq_field "$rfile" '.metrics.error_rate_pct')"
-  total_errors="${total_errors:-0}"
-  error_rate="${error_rate:-0}"
-
-  pf="$(awk -v er="$error_rate" -v te="$total_errors" 'BEGIN {
-    if (er + 0 >= 1.0) { print "FAIL"; exit }
-    if (te + 0 == 0 || er + 0 < 0.5) { print "PASS"; exit }
-    print "WARN"
-  }')"
-
-  reason_text="total_errors=${total_errors}; error_rate_pct=${error_rate}"
-  caveat=""
-  [[ "$pf" == "WARN" ]] && caveat="error_rate between 0.5% and 1.0% — caveat required in reporting"
-
-  record_gate "$tid" "C" "endpoint" "$pf" "$reason_text" "$caveat"
-done
-
-# ---------------------------------------------------------------------------
-# GATE D — Payload Equivalence
-# threads, connections, duration_seconds must match
-# ---------------------------------------------------------------------------
-echo "--- Gate D: Payload ---"
-thr_a="$(jq_field "$RESULT_A" '.run_config.threads')"
-thr_b="$(jq_field "$RESULT_B" '.run_config.threads')"
-conn_a="$(jq_field "$RESULT_A" '.run_config.connections')"
-conn_b="$(jq_field "$RESULT_B" '.run_config.connections')"
-dur_a="$(jq_field "$RESULT_A" '.run_config.duration_seconds')"
-dur_b="$(jq_field "$RESULT_B" '.run_config.duration_seconds')"
-
-for pair in "A:$TARGET_A_ID" "B:$TARGET_B_ID"; do
-  IFS=: read -r _label tid <<< "$pair"
-
-  reasons=()
-  [[ "$thr_a"  != "$thr_b"  ]] && reasons+=("threads mismatch: ${thr_a:-missing} vs ${thr_b:-missing}")
-  [[ "$conn_a" != "$conn_b" ]] && reasons+=("connections mismatch: ${conn_a:-missing} vs ${conn_b:-missing}")
-  [[ "$dur_a"  != "$dur_b"  ]] && reasons+=("duration_seconds mismatch: ${dur_a:-missing} vs ${dur_b:-missing}")
-
-  if [[ ${#reasons[@]} -eq 0 ]]; then
-    record_gate "$tid" "D" "payload" "PASS" "threads=${thr_a}; connections=${conn_a}; duration_seconds=${dur_a}"
-  else
-    record_gate "$tid" "D" "payload" "FAIL" "$(IFS='; '; echo "${reasons[*]}")"
-  fi
-done
-
-# ---------------------------------------------------------------------------
-# GATE E — Fairness Index
-# Invoke compute-fairness-index.sh; block if composite < 0.50; warn if < 0.70
-# ---------------------------------------------------------------------------
-echo "--- Gate E: Fairness ---"
-FAIRNESS_TOOL="${REPO_ROOT}/tools/compute-fairness-index.sh"
-FAIRNESS_TMPFILE="$(mktemp /tmp/fairness-index-XXXXXX.json)"
-
-# Trap to clean up temp file
-cleanup_tmp() { rm -f "$FAIRNESS_TMPFILE"; }
-trap cleanup_tmp EXIT
-
-FAIRNESS_COMPOSITE="0"
-FAIRNESS_INTERPRETATION="unsuitable"
-FAIRNESS_GATE_PF="FAIL"
-FAIRNESS_REASON="compute-fairness-index.sh not available"
-
-if [[ -x "$FAIRNESS_TOOL" ]]; then
-  if "$FAIRNESS_TOOL" \
-      --result-a "$RESULT_A" \
-      --result-b "$RESULT_B" \
-      --output   "$FAIRNESS_TMPFILE" >/dev/null 2>&1; then
-    FAIRNESS_COMPOSITE="$(jq -r '.composite_score' "$FAIRNESS_TMPFILE")"
-    FAIRNESS_INTERPRETATION="$(jq -r '.interpretation' "$FAIRNESS_TMPFILE")"
-    FAIRNESS_GATE_PF="$(awk -v c="$FAIRNESS_COMPOSITE" 'BEGIN {
-      if (c + 0 >= 0.70) { print "PASS"; exit }
-      if (c + 0 >= 0.50) { print "WARN"; exit }
-      print "FAIL"
-    }')"
-    FAIRNESS_REASON="composite_score=${FAIRNESS_COMPOSITE} (${FAIRNESS_INTERPRETATION})"
-  else
-    FAIRNESS_REASON="compute-fairness-index.sh failed — check metric fields"
-  fi
-else
-  FAIRNESS_REASON="compute-fairness-index.sh not found or not executable at: $FAIRNESS_TOOL"
-fi
-
-fairness_caveat=""
-[[ "$FAIRNESS_GATE_PF" == "WARN" ]] && fairness_caveat="composite_score < 0.70 — moderate asymmetry; require caveats in report"
-
-for tid in "$TARGET_A_ID" "$TARGET_B_ID"; do
-  record_gate "$tid" "E" "fairness" "$FAIRNESS_GATE_PF" "$FAIRNESS_REASON" "$fairness_caveat"
-done
-
-# ---------------------------------------------------------------------------
-# GATE F — Error Rate
-# Both error_rate_pct < 1.0; WARN if either > 0.5
-# ---------------------------------------------------------------------------
-echo "--- Gate F: Error Rate ---"
-for pair in "A:$TARGET_A_ID:$RESULT_A" "B:$TARGET_B_ID:$RESULT_B"; do
-  IFS=: read -r _label tid rfile <<< "$pair"
-
-  error_rate="$(jq_field "$rfile" '.metrics.error_rate_pct')"
-  error_rate="${error_rate:-0}"
-
-  pf="$(awk -v er="$error_rate" 'BEGIN {
-    if (er + 0 >= 1.0)  { print "FAIL"; exit }
-    if (er + 0 >= 0.5)  { print "WARN"; exit }
-    print "PASS"
-  }')"
-
-  caveat_f=""
-  [[ "$pf" == "WARN" ]] && caveat_f="error_rate_pct=${error_rate} (> 0.5%) — publish with error caveat"
-
-  record_gate "$tid" "F" "error" "$pf" "error_rate_pct=${error_rate}" "$caveat_f"
-done
-
-# ---------------------------------------------------------------------------
-# GATE G — Measurement Window
-# warmup_seconds >= 30, duration_seconds >= 60, total_requests >= 100
-# ---------------------------------------------------------------------------
-echo "--- Gate G: Measurement ---"
-for pair in "A:$TARGET_A_ID:$RESULT_A" "B:$TARGET_B_ID:$RESULT_B"; do
-  IFS=: read -r _label tid rfile <<< "$pair"
-
-  warmup="$(jq_field "$rfile" '.run_config.warmup_seconds')"
-  duration="$(jq_field "$rfile" '.run_config.duration_seconds')"
-  total_req="$(jq_field "$rfile" '.metrics.total_requests')"
-  warmup="${warmup:-0}"
-  duration="${duration:-0}"
-  total_req="${total_req:-0}"
-
-  reasons=()
-  awk -v w="$warmup"    'BEGIN { if (w+0 < 30) exit 0; exit 1 }' && reasons+=("warmup_seconds=${warmup} (want >= 30)")
-  awk -v d="$duration"  'BEGIN { if (d+0 < 60) exit 0; exit 1 }' && reasons+=("duration_seconds=${duration} (want >= 60)")
-  awk -v r="$total_req" 'BEGIN { if (r+0 < 100) exit 0; exit 1 }' && reasons+=("total_requests=${total_req} (want >= 100)")
-
-  if [[ ${#reasons[@]} -eq 0 ]]; then
-    record_gate "$tid" "G" "measurement" "PASS" "warmup=${warmup}s; duration=${duration}s; total_requests=${total_req}"
-  else
-    record_gate "$tid" "G" "measurement" "FAIL" "$(IFS='; '; echo "${reasons[*]}")"
-  fi
-done
-
-# ---------------------------------------------------------------------------
-# GATE H — Metadata Completeness
-# run_id, timestamp, scenario, tool, env_ref must be populated (non-empty, non-null)
-# ---------------------------------------------------------------------------
-echo "--- Gate H: Metadata ---"
-for pair in "A:$TARGET_A_ID:$RESULT_A" "B:$TARGET_B_ID:$RESULT_B"; do
-  IFS=: read -r _label tid rfile <<< "$pair"
-
-  reasons=()
-  for field in run_id timestamp scenario tool env_ref; do
-    val="$(jq_field "$rfile" ".${field}")"
-    [[ -z "$val" || "$val" == "null" ]] && reasons+=("${field} is absent or null")
-  done
-
-  if [[ ${#reasons[@]} -eq 0 ]]; then
-    record_gate "$tid" "H" "metadata" "PASS" "run_id; timestamp; scenario; tool; env_ref all present"
-  else
-    record_gate "$tid" "H" "metadata" "FAIL" "$(IFS='; '; echo "${reasons[*]}")"
-  fi
-done
-
-# ---------------------------------------------------------------------------
-# GATE I — Target Contract
-# Strict baseline path: if target IDs are provided, both must be matrix-resolved,
-# runnable via registry, deterministic, same-tier, same-protocol, and transport
-# mode (if present) must agree with contract protocol.
-# ---------------------------------------------------------------------------
-echo "--- Gate I: Target Contract ---"
-
-if [[ -z "$TARGET_A_ID_ARG" || -z "$TARGET_B_ID_ARG" ]]; then
-  record_gate "$TARGET_A_ID" "I" "target_contract" "WARN" "target_contract strict baseline checks skipped: target IDs omitted (non-baseline context)"
-  record_gate "$TARGET_B_ID" "I" "target_contract" "WARN" "target_contract strict baseline checks skipped: target IDs omitted (non-baseline context)"
-else
-
-transport_to_protocol() {
-  local transport_mode="${1:-}"
-  case "$transport_mode" in
-    loopback-h1|network-h1) echo "h1" ;;
-    loopback-h2|network-h2) echo "h2" ;;
-    loopback-h3|network-h3) echo "h3" ;;
-    *) echo "" ;;
-  esac
+normalize_text() {
+  local value="${1:-}"
+  value="${value//$'\n'/ }"
+  value="${value//$'\r'/ }"
+  value="${value//,/;}"
+  echo "$value"
 }
 
-declare -a gate_i_a_reasons=()
-declare -a gate_i_b_reasons=()
+constrained_contract_id() {
+  local contract_id="${1:-}"
+  [[ -n "$contract_id" && ( "$contract_id" == fixed_contract_runtime_h1_constrained* || "$contract_id" == *_constrained_* ) ]]
+}
 
-target_a_matrix_json=""
-target_b_matrix_json=""
-target_a_contract_json=""
-target_b_contract_json=""
+constrained_execution_profile_id() {
+  local execution_profile_id="${1:-}"
+  [[ -n "$execution_profile_id" && "$execution_profile_id" == runtime-constrained-* ]]
+}
 
-target_a_matrix_err_file="$(mktemp)"
-target_b_matrix_err_file="$(mktemp)"
+constrained_track_id() {
+  local track_id="${1:-}"
+  [[ -n "$track_id" && "$track_id" == track-c* ]]
+}
 
-if target_a_matrix_json="$(target_registry_matrix_row_json "$TARGET_A_ID" 2>"${target_a_matrix_err_file}")"; then
-  :
-else
-  gate_i_a_reasons+=("matrix row missing or invalid for target_id=${TARGET_A_ID}: $(tr '\n' ' ' < "${target_a_matrix_err_file}" | sed 's/[[:space:]]\+/ /g')")
-fi
+constrained_result_path() {
+  local path_value="${1:-}"
+  [[ -n "$path_value" && ( "$path_value" == */results/constrained/* || "$path_value" == results/constrained/* ) ]]
+}
 
-if target_b_matrix_json="$(target_registry_matrix_row_json "$TARGET_B_ID" 2>"${target_b_matrix_err_file}")"; then
-  :
-else
-  gate_i_b_reasons+=("matrix row missing or invalid for target_id=${TARGET_B_ID}: $(tr '\n' ' ' < "${target_b_matrix_err_file}" | sed 's/[[:space:]]\+/ /g')")
-fi
+result_constrained_reason() {
+  local file="$1"
+  local execution_profile_id=""
+  local track_id=""
+  local run_contract_id=""
+  local top_contract_id=""
 
-rm -f "${target_a_matrix_err_file}" "${target_b_matrix_err_file}"
+  if constrained_result_path "$file"; then
+    echo "result_path=${file}"
+    return 0
+  fi
 
-target_a_resolve_err_file="$(mktemp)"
-target_b_resolve_err_file="$(mktemp)"
+  execution_profile_id="$(jq_field "$file" '.run_config.execution_profile_id')"
+  if constrained_execution_profile_id "$execution_profile_id"; then
+    echo "run_config.execution_profile_id=${execution_profile_id}"
+    return 0
+  fi
 
-if resolve_target_contract "$TARGET_A_ID" 2>"${target_a_resolve_err_file}" && assert_target_contract_complete 2>>"${target_a_resolve_err_file}"; then
-  target_a_contract_json="$(target_contract_to_json)"
-  if resolve_target_contract "$TARGET_A_ID" 2>>"${target_a_resolve_err_file}" && assert_target_contract_complete 2>>"${target_a_resolve_err_file}"; then
-    target_a_contract_json_repeat="$(target_contract_to_json)"
-    if [[ "$target_a_contract_json" != "$target_a_contract_json_repeat" ]]; then
-      gate_i_a_reasons+=("non-deterministic resolution for target_id=${TARGET_A_ID}")
-    fi
+  track_id="$(jq_field "$file" '.run_config.track_id')"
+  if constrained_track_id "$track_id"; then
+    echo "run_config.track_id=${track_id}"
+    return 0
+  fi
+
+  run_contract_id="$(jq_field "$file" '.run_config.contract_id')"
+  if constrained_contract_id "$run_contract_id"; then
+    echo "run_config.contract_id=${run_contract_id}"
+    return 0
+  fi
+
+  top_contract_id="$(jq_field "$file" '.contract_id')"
+  if constrained_contract_id "$top_contract_id"; then
+    echo "contract_id=${top_contract_id}"
+    return 0
+  fi
+
+  return 1
+}
+
+record_gate() {
+  local scope="$1"
+  local gate_id="$2"
+  local gate_name="$3"
+  local pass_fail="$4"
+  local rejection_code="$5"
+  local reason="$6"
+  local caveat="${7:-}"
+
+  local safe_reason safe_caveat
+  safe_reason="$(normalize_text "$reason")"
+  safe_caveat="$(normalize_text "$caveat")"
+
+  CSV_ROWS+=("${scope},${gate_id},${gate_name},${pass_fail},${rejection_code},${safe_reason},${safe_caveat}")
+
+  if [[ "$pass_fail" == "PASS" ]]; then
+    ((GATE_PASS += 1))
   else
-    gate_i_a_reasons+=("second resolution failed for target_id=${TARGET_A_ID}")
-  fi
-else
-  gate_i_a_reasons+=("target mapping unresolved or non_runnable for target_id=${TARGET_A_ID}: $(tr '\n' ' ' < "${target_a_resolve_err_file}" | sed 's/[[:space:]]\+/ /g')")
-fi
-
-if resolve_target_contract "$TARGET_B_ID" 2>"${target_b_resolve_err_file}" && assert_target_contract_complete 2>>"${target_b_resolve_err_file}"; then
-  target_b_contract_json="$(target_contract_to_json)"
-  if resolve_target_contract "$TARGET_B_ID" 2>>"${target_b_resolve_err_file}" && assert_target_contract_complete 2>>"${target_b_resolve_err_file}"; then
-    target_b_contract_json_repeat="$(target_contract_to_json)"
-    if [[ "$target_b_contract_json" != "$target_b_contract_json_repeat" ]]; then
-      gate_i_b_reasons+=("non-deterministic resolution for target_id=${TARGET_B_ID}")
-    fi
-  else
-    gate_i_b_reasons+=("second resolution failed for target_id=${TARGET_B_ID}")
-  fi
-else
-  gate_i_b_reasons+=("target mapping unresolved or non_runnable for target_id=${TARGET_B_ID}: $(tr '\n' ' ' < "${target_b_resolve_err_file}" | sed 's/[[:space:]]\+/ /g')")
-fi
-
-rm -f "${target_a_resolve_err_file}" "${target_b_resolve_err_file}"
-
-if [[ -n "$target_a_matrix_json" && -n "$target_b_matrix_json" ]]; then
-  gate_i_a_tier_matrix="$(jq -r '.tier' <<<"$target_a_matrix_json")"
-  gate_i_b_tier_matrix="$(jq -r '.tier' <<<"$target_b_matrix_json")"
-  gate_i_a_protocol_matrix="$(jq -r '.protocol_mode' <<<"$target_a_matrix_json")"
-  gate_i_b_protocol_matrix="$(jq -r '.protocol_mode' <<<"$target_b_matrix_json")"
-
-  if [[ "$gate_i_a_tier_matrix" != "$gate_i_b_tier_matrix" ]]; then
-    gate_i_a_reasons+=("tier mismatch across matrix rows: ${TARGET_A_ID}=${gate_i_a_tier_matrix}; ${TARGET_B_ID}=${gate_i_b_tier_matrix}")
-    gate_i_b_reasons+=("tier mismatch across matrix rows: ${TARGET_A_ID}=${gate_i_a_tier_matrix}; ${TARGET_B_ID}=${gate_i_b_tier_matrix}")
-  fi
-
-  if [[ "$gate_i_a_protocol_matrix" != "$gate_i_b_protocol_matrix" ]]; then
-    gate_i_a_reasons+=("protocol_mode mismatch across matrix rows: ${TARGET_A_ID}=${gate_i_a_protocol_matrix}; ${TARGET_B_ID}=${gate_i_b_protocol_matrix}")
-    gate_i_b_reasons+=("protocol_mode mismatch across matrix rows: ${TARGET_A_ID}=${gate_i_a_protocol_matrix}; ${TARGET_B_ID}=${gate_i_b_protocol_matrix}")
-  fi
-fi
-
-if [[ -n "$target_a_contract_json" && -n "$target_b_contract_json" ]]; then
-  gate_i_a_protocol="$(jq -r '.protocol_mode' <<<"$target_a_contract_json")"
-  gate_i_b_protocol="$(jq -r '.protocol_mode' <<<"$target_b_contract_json")"
-
-  if [[ "$gate_i_a_protocol" != "$gate_i_b_protocol" ]]; then
-    gate_i_a_reasons+=("protocol_mode mismatch across targets: ${TARGET_A_ID}=${gate_i_a_protocol}; ${TARGET_B_ID}=${gate_i_b_protocol}")
-    gate_i_b_reasons+=("protocol_mode mismatch across targets: ${TARGET_A_ID}=${gate_i_a_protocol}; ${TARGET_B_ID}=${gate_i_b_protocol}")
-  fi
-
-  trans_a_val="$(jq_field "$RESULT_A" '.transport_mode')"
-  if [[ -n "$trans_a_val" ]]; then
-    trans_a_protocol="$(transport_to_protocol "$trans_a_val")"
-    if [[ -z "$trans_a_protocol" ]]; then
-      gate_i_a_reasons+=("transport_mode=${trans_a_val} is not protocol-decodable")
-    elif [[ "$trans_a_protocol" != "$gate_i_a_protocol" ]]; then
-      gate_i_a_reasons+=("transport_mode=${trans_a_val} implies ${trans_a_protocol}; contract protocol_mode=${gate_i_a_protocol}")
+    ((GATE_FAIL += 1))
+    if [[ -n "$rejection_code" && "$rejection_code" != "none" ]]; then
+      REJECTION_CODES["$rejection_code"]=1
     fi
   fi
+}
 
-  trans_b_val="$(jq_field "$RESULT_B" '.transport_mode')"
-  if [[ -n "$trans_b_val" ]]; then
-    trans_b_protocol="$(transport_to_protocol "$trans_b_val")"
-    if [[ -z "$trans_b_protocol" ]]; then
-      gate_i_b_reasons+=("transport_mode=${trans_b_val} is not protocol-decodable")
-    elif [[ "$trans_b_protocol" != "$gate_i_b_protocol" ]]; then
-      gate_i_b_reasons+=("transport_mode=${trans_b_val} implies ${trans_b_protocol}; contract protocol_mode=${gate_i_b_protocol}")
-    fi
+num_leq() {
+  local left="$1"
+  local right="$2"
+  awk -v l="$left" -v r="$right" 'BEGIN { exit !(l + 0 <= r + 0) }'
+}
+
+validate_against_schema() {
+  local file="$1"
+  local schema="$2"
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    return 50
   fi
-fi
 
-if [[ ${#gate_i_a_reasons[@]} -eq 0 ]]; then
-  record_gate "$TARGET_A_ID" "I" "target_contract" "PASS" "target mapping resolved; deterministic; protocol consistent"
-else
-  record_gate "$TARGET_A_ID" "I" "target_contract" "FAIL" "$(IFS='; '; echo "${gate_i_a_reasons[*]}")"
-fi
+  python3 - "$file" "$schema" <<'PY'
+import json
+import sys
 
-if [[ ${#gate_i_b_reasons[@]} -eq 0 ]]; then
-  record_gate "$TARGET_B_ID" "I" "target_contract" "PASS" "target mapping resolved; deterministic; protocol consistent"
-else
-  record_gate "$TARGET_B_ID" "I" "target_contract" "FAIL" "$(IFS='; '; echo "${gate_i_b_reasons[*]}")"
-fi
+file_path = sys.argv[1]
+schema_path = sys.argv[2]
 
-fi
+try:
+    import jsonschema
+except Exception:
+    sys.exit(50)
 
-# ---------------------------------------------------------------------------
-# Write CSV output
-# ---------------------------------------------------------------------------
-if [[ -n "$OUTPUT_CSV" ]]; then
-  mkdir -p "$(dirname "$OUTPUT_CSV")"
-  printf '%s\n' "${CSV_ROWS[@]}" > "$OUTPUT_CSV"
-  echo -e "\n${GREEN}Gate report written to:${NC} $OUTPUT_CSV"
-fi
+with open(file_path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+with open(schema_path, "r", encoding="utf-8") as f:
+    schema = json.load(f)
 
-# ---------------------------------------------------------------------------
-# Human-readable summary
-# ---------------------------------------------------------------------------
-TOTAL_GATES=${#CSV_ROWS[@]}   # includes header row
-DATA_ROWS=$(( TOTAL_GATES - 1 ))
+validator = jsonschema.Draft202012Validator(schema)
+errors = sorted(validator.iter_errors(data), key=lambda e: e.path)
+if errors:
+    print(errors[0].message)
+    sys.exit(1)
 
-echo ""
-echo "============================================================"
-echo "  COMPARATIVE READINESS GATE SUMMARY"
-echo "  Scenario : ${SCENARIO_ID}"
-echo "  Contract : ${CONTRACT_ID}"
-echo "  Target A : ${TARGET_A_ID}"
-echo "  Target B : ${TARGET_B_ID}"
-echo "============================================================"
+sys.exit(0)
+PY
+}
 
-# Print each gate row with color
-for row in "${CSV_ROWS[@]:1}"; do   # skip header
-  IFS=, read -r rtid rgid rgname rpf rreason rcaveat <<< "$row"
-  case "$rpf" in
-    PASS) color="${GREEN}" ;;
-    WARN) color="${YELLOW}" ;;
-    *)    color="${RED}" ;;
-  esac
-  printf "  [%s%s${NC}]  Gate %-2s %-12s  %s  %s\n" \
-    "$color" "$rpf" "$rgid" "(${rgname})" "$rtid" "$rreason"
-  if [[ -n "$rcaveat" ]]; then
-    printf "            ${YELLOW}CAVEAT${NC}: %s\n" "$rcaveat"
+# Gate 8 first: schema gate, fail closed if validator unavailable.
+schema_reason=""
+schema_ok=true
+for pair in "A:$TARGET_A_ID:$RESULT_A" "B:$TARGET_B_ID:$RESULT_B"; do
+  IFS=: read -r label tid rfile <<< "$pair"
+  set +e
+  schema_msg="$(validate_against_schema "$rfile" "$SCHEMA_BENCHMARK_RESULT" 2>&1)"
+  rc=$?
+  set -e
+  if [[ $rc -eq 50 ]]; then
+    schema_ok=false
+    schema_reason="jsonschema validator unavailable (python3/jsonschema missing)"
+    break
+  elif [[ $rc -ne 0 ]]; then
+    schema_ok=false
+    schema_reason="${label}: schema invalid: ${schema_msg}"
+    break
   fi
 done
 
-echo "------------------------------------------------------------"
-TOTAL_DATA="${DATA_ROWS}"
-echo -e "  ${GREEN}PASS${NC}: ${GATE_PASS} / ${TOTAL_DATA}   ${YELLOW}WARN${NC}: ${GATE_WARN} / ${TOTAL_DATA}   ${RED}FAIL${NC}: ${GATE_FAIL} / ${TOTAL_DATA}"
-echo "============================================================"
+if [[ "$schema_ok" == true ]]; then
+  record_gate "pair" "G8" "schema_validation" "PASS" "none" "both artifacts validate against benchmark-result.schema.json"
+else
+  code="SCHEMA_VALIDATION_FAILED"
+  if [[ "$schema_reason" == *"validator unavailable"* ]]; then
+    code="SCHEMA_VALIDATOR_UNAVAILABLE"
+  fi
+  record_gate "pair" "G8" "schema_validation" "FAIL" "$code" "$schema_reason"
+fi
 
-# ---------------------------------------------------------------------------
-# Exit code
-# ---------------------------------------------------------------------------
+# Gate 1: track isolation.
+track_a="$(jq_field "$RESULT_A" '.run_config.track_id')"
+track_b="$(jq_field "$RESULT_B" '.run_config.track_id')"
+
+constrained_reasons=()
+if constrained_reason="$(result_constrained_reason "$RESULT_A")"; then
+  constrained_reasons+=("A:${constrained_reason}")
+fi
+if constrained_reason="$(result_constrained_reason "$RESULT_B")"; then
+  constrained_reasons+=("B:${constrained_reason}")
+fi
+
+if [[ ${#constrained_reasons[@]} -gt 0 ]]; then
+  record_gate "pair" "G1" "track_isolation" "FAIL" "CONSTRAINED_PROFILE_FORBIDDEN" "$(IFS='; '; echo "${constrained_reasons[*]}")"
+elif [[ -z "$track_a" || -z "$track_b" ]]; then
+  record_gate "pair" "G1" "track_isolation" "FAIL" "TRACK_METADATA_MISSING" "run_config.track_id required on both artifacts"
+elif [[ -n "$TRACK_ID_EXPECTED" && "$track_a" != "$TRACK_ID_EXPECTED" ]]; then
+  record_gate "pair" "G1" "track_isolation" "FAIL" "TRACK_EXPECTED_MISMATCH" "track_id A=${track_a} does not match expected=${TRACK_ID_EXPECTED}"
+elif [[ -n "$TRACK_ID_EXPECTED" && "$track_b" != "$TRACK_ID_EXPECTED" ]]; then
+  record_gate "pair" "G1" "track_isolation" "FAIL" "TRACK_EXPECTED_MISMATCH" "track_id B=${track_b} does not match expected=${TRACK_ID_EXPECTED}"
+elif [[ "$track_a" != "$track_b" ]]; then
+  record_gate "pair" "G1" "track_isolation" "FAIL" "TRACK_MIXED" "track_id mismatch: A=${track_a}, B=${track_b}"
+else
+  record_gate "pair" "G1" "track_isolation" "PASS" "none" "track_id=${track_a}"
+fi
+
+# Gate 2: eligibility gate.
+eligibility_reasons=()
+for pair in "A:$RESULT_A" "B:$RESULT_B"; do
+  IFS=: read -r label rfile <<< "$pair"
+  claim_scope="$(jq_field "$rfile" '.claim_scope')"
+  runner_status="$(jq_field "$rfile" '.runner_status')"
+  reproducibility_status="$(jq_field "$rfile" '.reproducibility_status')"
+  final_reason="$(jq_field "$rfile" '.final_reason')"
+
+  [[ "$claim_scope" != "comparison_eligible" ]] && eligibility_reasons+=("${label}.claim_scope=${claim_scope:-missing}")
+  [[ "$runner_status" != "success" ]] && eligibility_reasons+=("${label}.runner_status=${runner_status:-missing}")
+  [[ "$reproducibility_status" != "complete" ]] && eligibility_reasons+=("${label}.reproducibility_status=${reproducibility_status:-missing}")
+  [[ "$final_reason" != "ok" ]] && eligibility_reasons+=("${label}.final_reason=${final_reason:-missing}")
+done
+
+if [[ ${#eligibility_reasons[@]} -eq 0 ]]; then
+  record_gate "pair" "G2" "eligibility_only" "PASS" "none" "both artifacts are comparison_eligible/success/complete/ok"
+else
+  record_gate "pair" "G2" "eligibility_only" "FAIL" "NOT_COMPARISON_ELIGIBLE" "$(IFS='; '; echo "${eligibility_reasons[*]}")"
+fi
+
+# Gate 3: strict equivalence gate.
+scenario_a="$(jq_field "$RESULT_A" '.scenario')"
+scenario_b="$(jq_field "$RESULT_B" '.scenario')"
+contract_a="$(jq_field "$RESULT_A" '.run_config.contract_id // .contract_id')"
+contract_b="$(jq_field "$RESULT_B" '.run_config.contract_id // .contract_id')"
+tier_a="$(jq_field "$RESULT_A" '.target.tier')"
+tier_b="$(jq_field "$RESULT_B" '.target.tier')"
+protocol_a="$(jq_field "$RESULT_A" '.target.protocol // .run_config.protocol_mode')"
+protocol_b="$(jq_field "$RESULT_B" '.target.protocol // .run_config.protocol_mode')"
+mode_a="$(jq_field "$RESULT_A" '.target.mode // .run_config.mode')"
+mode_b="$(jq_field "$RESULT_B" '.target.mode // .run_config.mode')"
+payload_a="$(jq_field "$RESULT_A" '.run_config.payload_size_bytes // .run_config.payload_file')"
+payload_b="$(jq_field "$RESULT_B" '.run_config.payload_size_bytes // .run_config.payload_file')"
+threads_a="$(jq_field "$RESULT_A" '.run_config.threads')"
+threads_b="$(jq_field "$RESULT_B" '.run_config.threads')"
+conn_a="$(jq_field "$RESULT_A" '.run_config.connections')"
+conn_b="$(jq_field "$RESULT_B" '.run_config.connections')"
+warmup_a="$(jq_field "$RESULT_A" '.run_config.warmup_seconds')"
+warmup_b="$(jq_field "$RESULT_B" '.run_config.warmup_seconds')"
+meas_a="$(jq_field "$RESULT_A" '.run_config.duration_seconds')"
+meas_b="$(jq_field "$RESULT_B" '.run_config.duration_seconds')"
+jvm_class_a="$(jq_field "$RESULT_A" '.run_config.jvm_class')"
+jvm_class_b="$(jq_field "$RESULT_B" '.run_config.jvm_class')"
+
+eq_reasons=()
+[[ "$scenario_a" != "$SCENARIO_ID" ]] && eq_reasons+=("scenario A=${scenario_a:-missing} expected=${SCENARIO_ID}")
+[[ "$scenario_b" != "$SCENARIO_ID" ]] && eq_reasons+=("scenario B=${scenario_b:-missing} expected=${SCENARIO_ID}")
+[[ "$scenario_a" != "$scenario_b" ]] && eq_reasons+=("scenario mismatch A=${scenario_a:-missing} B=${scenario_b:-missing}")
+[[ "$contract_a" != "$CONTRACT_ID" ]] && eq_reasons+=("contract A=${contract_a:-missing} expected=${CONTRACT_ID}")
+[[ "$contract_b" != "$CONTRACT_ID" ]] && eq_reasons+=("contract B=${contract_b:-missing} expected=${CONTRACT_ID}")
+[[ "$contract_a" != "$contract_b" ]] && eq_reasons+=("contract mismatch A=${contract_a:-missing} B=${contract_b:-missing}")
+[[ -z "$tier_a" || -z "$tier_b" ]] && eq_reasons+=("tier missing")
+[[ "$tier_a" != "$tier_b" ]] && eq_reasons+=("tier mismatch A=${tier_a:-missing} B=${tier_b:-missing}")
+[[ -z "$protocol_a" || -z "$protocol_b" ]] && eq_reasons+=("protocol missing")
+[[ "$protocol_a" != "$protocol_b" ]] && eq_reasons+=("protocol mismatch A=${protocol_a:-missing} B=${protocol_b:-missing}")
+[[ -z "$mode_a" || -z "$mode_b" ]] && eq_reasons+=("mode missing")
+[[ "$mode_a" != "$mode_b" ]] && eq_reasons+=("mode mismatch A=${mode_a:-missing} B=${mode_b:-missing}")
+[[ -z "$payload_a" || -z "$payload_b" ]] && eq_reasons+=("payload metadata missing")
+[[ "$payload_a" != "$payload_b" ]] && eq_reasons+=("payload mismatch A=${payload_a:-missing} B=${payload_b:-missing}")
+[[ -z "$threads_a" || -z "$threads_b" ]] && eq_reasons+=("threads missing")
+[[ "$threads_a" != "$threads_b" ]] && eq_reasons+=("threads mismatch A=${threads_a:-missing} B=${threads_b:-missing}")
+[[ -z "$conn_a" || -z "$conn_b" ]] && eq_reasons+=("connections missing")
+[[ "$conn_a" != "$conn_b" ]] && eq_reasons+=("connections mismatch A=${conn_a:-missing} B=${conn_b:-missing}")
+[[ -z "$warmup_a" || -z "$warmup_b" ]] && eq_reasons+=("warmup missing")
+[[ "$warmup_a" != "$warmup_b" ]] && eq_reasons+=("warmup mismatch A=${warmup_a:-missing} B=${warmup_b:-missing}")
+[[ -z "$meas_a" || -z "$meas_b" ]] && eq_reasons+=("measurement missing")
+[[ "$meas_a" != "$meas_b" ]] && eq_reasons+=("measurement mismatch A=${meas_a:-missing} B=${meas_b:-missing}")
+[[ -z "$jvm_class_a" || -z "$jvm_class_b" ]] && eq_reasons+=("jvm_class missing")
+[[ "$jvm_class_a" != "$jvm_class_b" ]] && eq_reasons+=("jvm_class mismatch A=${jvm_class_a:-missing} B=${jvm_class_b:-missing}")
+
+if [[ ${#eq_reasons[@]} -eq 0 ]]; then
+  record_gate "pair" "G3" "equivalence_strict" "PASS" "none" "scenario/contract/tier/protocol/mode/payload/concurrency/windows/jvm_class equivalent"
+else
+  record_gate "pair" "G3" "equivalence_strict" "FAIL" "EQUIVALENCE_MISMATCH" "$(IFS='; '; echo "${eq_reasons[*]}")"
+fi
+
+# Gate 4: AB/BA execution gate.
+pair_id_a="$(jq_field "$RESULT_A" '.run_config.pair_id')"
+pair_id_b="$(jq_field "$RESULT_B" '.run_config.pair_id')"
+pair_order_a="$(jq_field "$RESULT_A" '.run_config.pair_order')"
+pair_order_b="$(jq_field "$RESULT_B" '.run_config.pair_order')"
+evidence_order_a="$(jq_field "$RESULT_A" '.run_config.pair_completion_evidence.invocation_order')"
+evidence_order_b="$(jq_field "$RESULT_B" '.run_config.pair_completion_evidence.invocation_order')"
+evidence_marker_a="$(jq_field "$RESULT_A" '.run_config.pair_completion_evidence.completion_marker_utc')"
+evidence_marker_b="$(jq_field "$RESULT_B" '.run_config.pair_completion_evidence.completion_marker_utc')"
+
+abba_reasons=()
+[[ -z "$pair_id_a" || -z "$pair_id_b" ]] && abba_reasons+=("pair_id missing")
+[[ "$pair_id_a" != "$pair_id_b" ]] && abba_reasons+=("pair_id mismatch A=${pair_id_a:-missing} B=${pair_id_b:-missing}")
+[[ "$pair_order_a" != "ab" && "$pair_order_a" != "ba" ]] && abba_reasons+=("pair_order A invalid=${pair_order_a:-missing}")
+[[ "$pair_order_b" != "ab" && "$pair_order_b" != "ba" ]] && abba_reasons+=("pair_order B invalid=${pair_order_b:-missing}")
+[[ "$pair_order_a" != "$pair_order_b" ]] && abba_reasons+=("pair_order mismatch A=${pair_order_a:-missing} B=${pair_order_b:-missing}")
+[[ "$evidence_order_a" != "$pair_order_a" ]] && abba_reasons+=("A.evidence.invocation_order does not match pair_order")
+[[ "$evidence_order_b" != "$pair_order_b" ]] && abba_reasons+=("B.evidence.invocation_order does not match pair_order")
+[[ -z "$evidence_marker_a" ]] && abba_reasons+=("A.evidence.completion_marker_utc missing")
+[[ -z "$evidence_marker_b" ]] && abba_reasons+=("B.evidence.completion_marker_utc missing")
+
+if ! jq -e --arg o "$pair_order_a" '.run_config.ab_ba_orders_completed | type == "array" and (index($o) != null)' "$RESULT_A" >/dev/null 2>&1; then
+  abba_reasons+=("A.ab_ba_orders_completed missing invocation order ${pair_order_a:-unknown}")
+fi
+if ! jq -e --arg o "$pair_order_b" '.run_config.ab_ba_orders_completed | type == "array" and (index($o) != null)' "$RESULT_B" >/dev/null 2>&1; then
+  abba_reasons+=("B.ab_ba_orders_completed missing invocation order ${pair_order_b:-unknown}")
+fi
+
+if [[ ${#abba_reasons[@]} -eq 0 ]]; then
+  record_gate "pair" "G4" "ab_ba_required" "PASS" "none" "pair_id=${pair_id_a}; directional completion evidence present for order=${pair_order_a}"
+else
+  record_gate "pair" "G4" "ab_ba_required" "FAIL" "AB_BA_INCOMPLETE" "$(IFS='; '; echo "${abba_reasons[*]}")"
+fi
+
+# Gate 5: drift gate placeholder (strict metadata + thresholds).
+drift_reasons=()
+for pair in "A:$RESULT_A" "B:$RESULT_B"; do
+  IFS=: read -r label rfile <<< "$pair"
+  if ! jq -e '.run_config.drift_snapshot | type == "object"' "$rfile" >/dev/null 2>&1; then
+    drift_reasons+=("${label}.drift_snapshot missing")
+    continue
+  fi
+
+  required_present="$(jq_field "$rfile" '.run_config.drift_snapshot.required_metadata_present')"
+  max_lat="$(jq_field "$rfile" '.run_config.drift_snapshot.max_latency_drift_pct')"
+  obs_lat="$(jq_field "$rfile" '.run_config.drift_snapshot.observed_latency_drift_pct')"
+  max_thr="$(jq_field "$rfile" '.run_config.drift_snapshot.max_throughput_drift_pct')"
+  obs_thr="$(jq_field "$rfile" '.run_config.drift_snapshot.observed_throughput_drift_pct')"
+
+  [[ "$required_present" != "true" ]] && drift_reasons+=("${label}.required_metadata_present!=true")
+  [[ -z "$max_lat" || -z "$obs_lat" || -z "$max_thr" || -z "$obs_thr" ]] && drift_reasons+=("${label}.drift thresholds/observed missing")
+
+  if [[ -n "$max_lat" && -n "$obs_lat" ]] && ! num_leq "$obs_lat" "$max_lat"; then
+    drift_reasons+=("${label}.latency drift ${obs_lat} > ${max_lat}")
+  fi
+  if [[ -n "$max_thr" && -n "$obs_thr" ]] && ! num_leq "$obs_thr" "$max_thr"; then
+    drift_reasons+=("${label}.throughput drift ${obs_thr} > ${max_thr}")
+  fi
+done
+
+if [[ ${#drift_reasons[@]} -eq 0 ]]; then
+  record_gate "pair" "G5" "drift_placeholder" "PASS" "none" "drift snapshot metadata present and within thresholds"
+else
+  code="DRIFT_METADATA_MISSING"
+  if printf '%s\n' "${drift_reasons[@]}" | grep -q ' > '; then
+    code="DRIFT_THRESHOLD_EXCEEDED"
+  fi
+  record_gate "pair" "G5" "drift_placeholder" "FAIL" "$code" "$(IFS='; '; echo "${drift_reasons[*]}")"
+fi
+
+# Gate 6: reproducibility metadata completeness.
+meta_reasons=()
+for pair in "A:$RESULT_A" "B:$RESULT_B"; do
+  IFS=: read -r label rfile <<< "$pair"
+
+  commit_sha="$(jq_field "$rfile" '.target.commit_sha')"
+  jdk_vendor="$(jq_field "$rfile" '.run_config.metadata.jdk_vendor')"
+  jdk_version="$(jq_field "$rfile" '.run_config.metadata.jdk_version')"
+  tool_version="$(jq_field "$rfile" '.run_config.metadata.benchmark_tool_version')"
+  hardware_profile="$(jq_field "$rfile" '.run_config.metadata.hardware_profile')"
+  scenario_meta="$(jq_field "$rfile" '.run_config.metadata.scenario_id')"
+  target_classification="$(jq_field "$rfile" '.run_config.metadata.target_classification')"
+
+  if ! jq -e '.run_config.metadata.jvm_flags | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)' "$rfile" >/dev/null 2>&1; then
+    meta_reasons+=("${label}.metadata.jvm_flags missing/empty")
+  fi
+
+  [[ -z "$commit_sha" || "$commit_sha" == "unknown" ]] && meta_reasons+=("${label}.target.commit_sha missing")
+  [[ -z "$jdk_vendor" || "$jdk_vendor" == "unknown" ]] && meta_reasons+=("${label}.metadata.jdk_vendor missing")
+  [[ -z "$jdk_version" || "$jdk_version" == "unknown" ]] && meta_reasons+=("${label}.metadata.jdk_version missing")
+  [[ -z "$tool_version" || "$tool_version" == "unknown" ]] && meta_reasons+=("${label}.metadata.benchmark_tool_version missing")
+  [[ -z "$hardware_profile" || "$hardware_profile" == "unknown" ]] && meta_reasons+=("${label}.metadata.hardware_profile missing")
+  [[ -z "$scenario_meta" || "$scenario_meta" == "unknown" ]] && meta_reasons+=("${label}.metadata.scenario_id missing")
+  [[ -z "$target_classification" || "$target_classification" == "unknown" ]] && meta_reasons+=("${label}.metadata.target_classification missing")
+done
+
+if [[ ${#meta_reasons[@]} -eq 0 ]]; then
+  record_gate "pair" "G6" "metadata_completeness" "PASS" "none" "required reproducibility metadata complete"
+else
+  record_gate "pair" "G6" "metadata_completeness" "FAIL" "METADATA_INCOMPLETE" "$(IFS='; '; echo "${meta_reasons[*]}")"
+fi
+
+# Gate 7: pin verification gate.
+pin_reasons=()
+for pair in "A:$RESULT_A" "B:$RESULT_B"; do
+  IFS=: read -r label rfile <<< "$pair"
+
+  if ! jq -e '.run_config.pinned_versions | type == "object"' "$rfile" >/dev/null 2>&1; then
+    pin_reasons+=("${label}.pinned_versions missing")
+    continue
+  fi
+  if ! jq -e '.run_config.actual_versions | type == "object"' "$rfile" >/dev/null 2>&1; then
+    pin_reasons+=("${label}.actual_versions missing")
+    continue
+  fi
+
+  for key in jdk_version benchmark_tool_version target_commit_sha; do
+    pinned="$(jq_field "$rfile" ".run_config.pinned_versions.${key}")"
+    actual="$(jq_field "$rfile" ".run_config.actual_versions.${key}")"
+    if [[ -z "$pinned" || -z "$actual" ]]; then
+      pin_reasons+=("${label}.${key} pin/actual missing")
+    elif [[ "$pinned" != "$actual" ]]; then
+      pin_reasons+=("${label}.${key} mismatch pinned=${pinned} actual=${actual}")
+    fi
+  done
+done
+
+if [[ ${#pin_reasons[@]} -eq 0 ]]; then
+  record_gate "pair" "G7" "pin_verification" "PASS" "none" "all required pinned versions match actual versions"
+else
+  pin_code="PIN_METADATA_MISSING"
+  if printf '%s\n' "${pin_reasons[@]}" | grep -q ' mismatch '; then
+    pin_code="PIN_MISMATCH"
+  fi
+  record_gate "pair" "G7" "pin_verification" "FAIL" "$pin_code" "$(IFS='; '; echo "${pin_reasons[*]}")"
+fi
+
+# Gate 9: quarantine transparency gate.
+if [[ -n "$OUTPUT_CSV" || -n "$SUMMARY_JSON" ]]; then
+  record_gate "pair" "G9" "quarantine_transparency" "PASS" "none" "machine-readable rejection output enabled"
+else
+  record_gate "pair" "G9" "quarantine_transparency" "FAIL" "QUARANTINE_REASON_OUTPUT_MISSING" "provide --output and/or --summary-json for machine-readable rejection codes"
+fi
+
+# Gate 10: reporting guard gate.
+# If report file is provided, enforce axis labels and block cross-track wording.
+if [[ -n "$REPORT_FILE" ]]; then
+  if [[ ! -f "$REPORT_FILE" ]]; then
+    record_gate "pair" "G10" "reporting_guard" "FAIL" "REPORT_FILE_MISSING" "report file does not exist: ${REPORT_FILE}"
+  else
+    report_reasons=()
+    grep -q 'tier=' "$REPORT_FILE" || report_reasons+=("missing tier label")
+    grep -q 'protocol_mode=' "$REPORT_FILE" || report_reasons+=("missing protocol_mode label")
+    grep -q 'benchmark_family=' "$REPORT_FILE" || report_reasons+=("missing benchmark_family label")
+    grep -q 'track_id=' "$REPORT_FILE" || report_reasons+=("missing track_id label")
+
+    if grep -Eiq 'cross-track|track[[:space:]]*r[[:space:]]*vs[[:space:]]*track[[:space:]]*n|track[[:space:]]*n[[:space:]]*vs[[:space:]]*track[[:space:]]*r' "$REPORT_FILE"; then
+      report_reasons+=("cross-track claim text detected")
+    fi
+
+    if [[ ${#report_reasons[@]} -eq 0 ]]; then
+      record_gate "pair" "G10" "reporting_guard" "PASS" "none" "report carries required axis labels and no cross-track claims"
+    else
+      code="REPORT_AXIS_LABELS_MISSING"
+      if printf '%s\n' "${report_reasons[@]}" | grep -qi 'cross-track'; then
+        code="CROSS_TRACK_CLAIM_TEXT_DETECTED"
+      fi
+      record_gate "pair" "G10" "reporting_guard" "FAIL" "$code" "$(IFS='; '; echo "${report_reasons[*]}")"
+    fi
+  fi
+else
+  record_gate "pair" "G10" "reporting_guard" "PASS" "none" "reporting guard deferred (no --report-file provided)"
+fi
+
+TMP_CSV="$(mktemp /tmp/comparative-gates-XXXXXX.csv)"
+printf '%s\n' "${CSV_ROWS[@]}" > "$TMP_CSV"
+
+if [[ -n "$OUTPUT_CSV" ]]; then
+  mkdir -p "$(dirname "$OUTPUT_CSV")"
+  cp "$TMP_CSV" "$OUTPUT_CSV"
+fi
+
+REJECTION_CODES_JSON="[]"
+if [[ ${#REJECTION_CODES[@]} -gt 0 ]]; then
+  REJECTION_CODES_JSON="$(printf '%s\n' "${!REJECTION_CODES[@]}" | sort | jq -Rsc 'split("\n") | map(select(length > 0))')"
+fi
+
+GATES_JSON="$(jq -Rsc '
+  split("\n") |
+  map(select(length > 0)) |
+  .[1:] |
+  map(split(",")) |
+  map({
+    scope: .[0],
+    gate_id: .[1],
+    gate_name: .[2],
+    pass_fail: .[3],
+    rejection_code: .[4],
+    reason: .[5],
+    caveat: (.[6] // "")
+  })
+' "$TMP_CSV")"
+
+if [[ -n "$SUMMARY_JSON" ]]; then
+  mkdir -p "$(dirname "$SUMMARY_JSON")"
+  jq -n \
+    --arg scenario_id "$SCENARIO_ID" \
+    --arg contract_id "$CONTRACT_ID" \
+    --arg target_a_id "$TARGET_A_ID" \
+    --arg target_b_id "$TARGET_B_ID" \
+    --arg track_id_a "$track_a" \
+    --arg track_id_b "$track_b" \
+    --argjson pass_count "$GATE_PASS" \
+    --argjson fail_count "$GATE_FAIL" \
+    --argjson all_passed "$( [[ "$GATE_FAIL" -eq 0 ]] && echo true || echo false )" \
+    --argjson rejection_codes "$REJECTION_CODES_JSON" \
+    --argjson gates "$GATES_JSON" \
+    '{
+      scenario_id: $scenario_id,
+      contract_id: $contract_id,
+      target_a_id: $target_a_id,
+      target_b_id: $target_b_id,
+      track_id: {
+        target_a: ($track_id_a // ""),
+        target_b: ($track_id_b // "")
+      },
+      pass_count: $pass_count,
+      fail_count: $fail_count,
+      all_passed: $all_passed,
+      rejection_codes: $rejection_codes,
+      gates: $gates
+    }' > "$SUMMARY_JSON"
+fi
+
+rm -f "$TMP_CSV"
+
+printf 'COMPARATIVE_GATES_PASS=%s\n' "$GATE_PASS"
+printf 'COMPARATIVE_GATES_FAIL=%s\n' "$GATE_FAIL"
+printf 'TARGET_A_ID=%s\n' "$TARGET_A_ID"
+printf 'TARGET_B_ID=%s\n' "$TARGET_B_ID"
+if [[ -n "$OUTPUT_CSV" ]]; then
+  printf 'GATE_CSV=%s\n' "$OUTPUT_CSV"
+fi
+if [[ -n "$SUMMARY_JSON" ]]; then
+  printf 'GATE_SUMMARY_JSON=%s\n' "$SUMMARY_JSON"
+fi
+
 if [[ "$GATE_FAIL" -gt 0 ]]; then
-  echo -e "${RED}GATE VALIDATION FAILED — ${GATE_FAIL} gate(s) blocked.${NC}" >&2
+  echo "GATE VALIDATION FAILED" >&2
   exit 1
 fi
 
-echo -e "${GREEN}Gate validation complete — all gates PASS or WARN.${NC}"
+echo "GATE VALIDATION PASSED"
 exit 0

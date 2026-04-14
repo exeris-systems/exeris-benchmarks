@@ -10,6 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$SCRIPT_DIR/.."
+source "$ROOT/tools/bench/lib/k6.sh"
 
 SCENARIO_DIR="${1:?Usage: run-k6.sh <scenario-dir> [k6 args]}"
 shift
@@ -32,21 +33,7 @@ echo "  Script : $K6_SCRIPT"
 echo "  Output : $RESULT_JSON"
 echo ""
 
-# CO Guard: k6 closed-loop executors (shared-iterations, ramping-vus) produce
-# Coordinated Omission-contaminated p99 latency. Hard-fail unless arrival-rate
-# executor is declared. Bypass with CO_GUARD_BYPASS=true (no latency claims allowed).
-if ! grep -qE '"(constant|ramping)-arrival-rate"' "$K6_SCRIPT" 2>/dev/null \
-   && ! grep -qE "executor:[[:space:]]*'(constant|ramping)-arrival-rate'" "$K6_SCRIPT" 2>/dev/null; then
-  echo "ERROR: k6 scenario does not declare a constant-arrival-rate or ramping-arrival-rate executor." >&2
-  echo "  Closed-loop executors (shared-iterations, ramping-vus) produce CO-contaminated p99 latency." >&2
-  echo "  Update $K6_SCRIPT to use: executor: 'constant-arrival-rate'" >&2
-  echo "  See docs/methodology.md for guidance." >&2
-  echo "  To run throughput-only probes (no latency claims), set CO_GUARD_BYPASS=true" >&2
-  if [[ "${CO_GUARD_BYPASS:-false}" != "true" ]]; then
-    exit 1
-  fi
-  echo "WARN: CO_GUARD_BYPASS=true — latency results will be CO-contaminated. Do not publish p99." >&2
-fi
+bench_k6_assert_arrival_rate_executor "$K6_SCRIPT" || exit 1
 
 k6 run \
   --out json="$RESULT_JSON" \

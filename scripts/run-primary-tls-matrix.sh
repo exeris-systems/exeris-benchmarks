@@ -3,7 +3,7 @@
 # Orchestrates execution of all benchmarks across selected phases
 #
 # Usage:
-#   MODE=baseline HEADLESS=0 FAIL_FAST=0 ./run-primary-tls-matrix.sh
+#   MODE=baseline HEADLESS=0 FAIL_FAST=0 ./scripts/run-primary-tls-matrix.sh
 #
 # ENV variables:
 #   MODE: baseline | profile | gc | all (default: all)
@@ -15,7 +15,7 @@
 
 set -u -o pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOLS_DIR="$REPO_ROOT/tools/bench"
 
 # Load helpers

@@ -59,12 +59,71 @@ for cmd in jq awk; do
   fi
 done
 
+aggregate_constrained_contract_id() {
+  local contract_id="${1:-}"
+  [[ -n "$contract_id" && ( "$contract_id" == fixed_contract_runtime_h1_constrained* || "$contract_id" == *_constrained_* ) ]]
+}
+
+aggregate_constrained_execution_profile_id() {
+  local execution_profile_id="${1:-}"
+  [[ -n "$execution_profile_id" && "$execution_profile_id" == runtime-constrained-* ]]
+}
+
+aggregate_constrained_track_id() {
+  local track_id="${1:-}"
+  [[ -n "$track_id" && "$track_id" == track-c* ]]
+}
+
+aggregate_constrained_path() {
+  local path_value="${1:-}"
+  [[ -n "$path_value" && ( "$path_value" == */results/constrained/* || "$path_value" == results/constrained/* ) ]]
+}
+
+aggregate_result_constrained_reason() {
+  local file="$1"
+  local contract_id=""
+  local track_id=""
+  local execution_profile_id=""
+  local top_level_track_id=""
+
+  contract_id="$(jq -r '.contract_id // empty' "$file" 2>/dev/null || true)"
+  if aggregate_constrained_contract_id "$contract_id"; then
+    echo "contract_id=${contract_id} file=${file}"
+    return 0
+  fi
+
+  track_id="$(jq -r '.run_config.track_id // empty' "$file" 2>/dev/null || true)"
+  if aggregate_constrained_track_id "$track_id"; then
+    echo "run_config.track_id=${track_id} file=${file}"
+    return 0
+  fi
+
+  top_level_track_id="$(jq -r '.track_id // empty' "$file" 2>/dev/null || true)"
+  if aggregate_constrained_track_id "$top_level_track_id"; then
+    echo "track_id=${top_level_track_id} file=${file}"
+    return 0
+  fi
+
+  execution_profile_id="$(jq -r '.run_config.execution_profile_id // empty' "$file" 2>/dev/null || true)"
+  if aggregate_constrained_execution_profile_id "$execution_profile_id"; then
+    echo "run_config.execution_profile_id=${execution_profile_id} file=${file}"
+    return 0
+  fi
+
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # Discover comparative-result.json files
 # ---------------------------------------------------------------------------
 # Expand glob relative to REPO_ROOT if not absolute
 if [[ "$INPUT_PATTERN" != /* ]]; then
   INPUT_PATTERN="${REPO_ROOT}/${INPUT_PATTERN}"
+fi
+
+if aggregate_constrained_path "$INPUT_PATTERN"; then
+  echo "ERROR: constrained execution profiles are exploratory only and must not flow through aggregate-comparative-results.sh (input_pattern=${INPUT_PATTERN})" >&2
+  exit 1
 fi
 
 declare -a RESULT_FILES=()
@@ -82,6 +141,13 @@ if [[ ${#RESULT_FILES[@]} -eq 0 ]]; then
 fi
 
 TOTAL_RUNS="${#RESULT_FILES[@]}"
+
+for f in "${RESULT_FILES[@]}"; do
+  if aggregate_constrained_path "$f"; then
+    echo "ERROR: constrained execution profiles are exploratory only and must not flow through aggregate-comparative-results.sh (result_path=${f})" >&2
+    exit 1
+  fi
+done
 
 if [[ "$TOTAL_RUNS" -lt 2 ]]; then
   echo "ERROR: Minimum 2 comparative-result.json files required; found ${TOTAL_RUNS} matching '${INPUT_PATTERN}'." >&2
@@ -104,6 +170,10 @@ for f in "${RESULT_FILES[@]}"; do
     echo -e "${YELLOW}WARN${NC}: Skipping invalid JSON: $f" >&2
     continue
   fi
+  if constrained_reason="$(aggregate_result_constrained_reason "$f")"; then
+    echo "ERROR: constrained execution profiles are exploratory only and must not flow through aggregate-comparative-results.sh (${constrained_reason})" >&2
+    exit 1
+  fi
   # Emit one compact JSON object per line
   jq -c '{
     run_file:         input_filename,
@@ -111,6 +181,8 @@ for f in "${RESULT_FILES[@]}"; do
     timestamp_utc:    .timestamp_utc,
     scenario_id:      .scenario_id,
     contract_id:      .contract_id,
+    workload_profile_key: (.workload_profile_key // .pair_fingerprint.workload_profile_key // ""),
+    pair_fingerprint: (.pair_fingerprint // {}),
     measurement_seconds: .measurement_seconds,
     warmup_seconds:   .warmup_seconds,
     target_a: (.targets[0] | {
@@ -136,7 +208,7 @@ for f in "${RESULT_FILES[@]}"; do
     fairness_composite: .fairness_index.composite_score,
     fairness_interp:    .fairness_index.interpretation,
     gate_status:        .gate_status
-  }' --rawfile /dev/null "$f" "$f" 2>/dev/null >> "$SCRATCH" || true
+  }' "$f" >> "$SCRATCH"
 done
 
 VALID_RUNS="$(wc -l < "$SCRATCH" | tr -d ' ')"
@@ -147,6 +219,51 @@ if [[ "$VALID_RUNS" -lt 2 ]]; then
 fi
 
 echo "  Valid runs processed: ${VALID_RUNS}"
+
+# Fail-closed: all comparative inputs in one aggregation must share a single
+# canonical pair fingerprint for scenario/contract/targets/tier/protocol/transport/workload.
+FINGERPRINTS_JSON="$(jq -s '
+  map({
+    scenario_id: .scenario_id,
+    contract_id: .contract_id,
+    canonical_unordered_targets: [(.target_a.target_id // ""), (.target_b.target_id // "")] | sort,
+    tier: (
+      [(.target_a.tier // ""), (.target_b.tier // "")] | unique |
+      if length == 1 then .[0] else "__mixed__" end
+    ),
+    protocol_mode: (
+      [(.target_a.protocol_mode // ""), (.target_b.protocol_mode // "")] | unique |
+      if length == 1 then .[0] else "__mixed__" end
+    ),
+    transport_mode: (
+      [(.target_a.transport_mode // ""), (.target_b.transport_mode // "")] | unique |
+      if length == 1 then .[0] else "__mixed__" end
+    ),
+    workload_profile_key: (.workload_profile_key // "")
+  })
+' "$SCRATCH")"
+
+if ! jq -e '
+  all(.[];
+    (.scenario_id | type == "string" and length > 0) and
+    (.contract_id | type == "string" and length > 0) and
+    (.canonical_unordered_targets | type == "array" and length == 2 and all(.[]; type == "string" and length > 0)) and
+    (.tier | type == "string" and length > 0 and . != "__mixed__") and
+    (.protocol_mode | type == "string" and length > 0 and . != "__mixed__") and
+    (.transport_mode | type == "string" and length > 0 and . != "__mixed__") and
+    (.workload_profile_key | type == "string" and length > 0)
+  )
+' <<<"$FINGERPRINTS_JSON" >/dev/null 2>&1; then
+  echo "ERROR: Pair fingerprint validation failed: required fingerprint fields are missing/empty or mixed in inputs." >&2
+  exit 1
+fi
+
+UNIQUE_FINGERPRINT_COUNT="$(jq -c 'unique | length' <<<"$FINGERPRINTS_JSON")"
+if [[ "$UNIQUE_FINGERPRINT_COUNT" != "1" ]]; then
+  echo "ERROR: Mixed pair fingerprints detected in aggregation input (unique_fingerprints=${UNIQUE_FINGERPRINT_COUNT})." >&2
+  jq -c 'unique' <<<"$FINGERPRINTS_JSON" >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Compute statistics using jq + awk
@@ -218,14 +335,16 @@ compute_gate_pass_rate() {
   ' "$SCRATCH"
 }
 
-gate_pass_rate_maturity="$(compute_gate_pass_rate "maturity")"
+gate_pass_rate_track_isolation="$(compute_gate_pass_rate "track_isolation")"
+gate_pass_rate_eligibility="$(compute_gate_pass_rate "eligibility")"
 gate_pass_rate_equivalence="$(compute_gate_pass_rate "equivalence")"
-gate_pass_rate_endpoint="$(compute_gate_pass_rate "endpoint")"
-gate_pass_rate_payload="$(compute_gate_pass_rate "payload")"
-gate_pass_rate_fairness="$(compute_gate_pass_rate "fairness")"
-gate_pass_rate_error="$(compute_gate_pass_rate "error")"
-gate_pass_rate_measurement="$(compute_gate_pass_rate "measurement")"
+gate_pass_rate_ab_ba="$(compute_gate_pass_rate "ab_ba")"
+gate_pass_rate_drift="$(compute_gate_pass_rate "drift")"
 gate_pass_rate_metadata="$(compute_gate_pass_rate "metadata")"
+gate_pass_rate_pin_verification="$(compute_gate_pass_rate "pin_verification")"
+gate_pass_rate_schema="$(compute_gate_pass_rate "schema")"
+gate_pass_rate_quarantine="$(compute_gate_pass_rate "quarantine")"
+gate_pass_rate_reporting_guard="$(compute_gate_pass_rate "reporting_guard")"
 
 # Derive target IDs from first run
 TARGET_A_ID="$(jq -r '.target_a.target_id' "$SCRATCH" | head -1)"
@@ -252,14 +371,16 @@ jq -n \
   --argjson stats_p99_b      "$stats_p99_b" \
   --argjson stats_err_b      "$stats_err_b" \
   --argjson stats_fairness   "$stats_fairness" \
-  --argjson gpr_maturity     "$gate_pass_rate_maturity" \
+  --argjson gpr_track_isolation "$gate_pass_rate_track_isolation" \
+  --argjson gpr_eligibility  "$gate_pass_rate_eligibility" \
   --argjson gpr_equivalence  "$gate_pass_rate_equivalence" \
-  --argjson gpr_endpoint     "$gate_pass_rate_endpoint" \
-  --argjson gpr_payload      "$gate_pass_rate_payload" \
-  --argjson gpr_fairness     "$gate_pass_rate_fairness" \
-  --argjson gpr_error        "$gate_pass_rate_error" \
-  --argjson gpr_measurement  "$gate_pass_rate_measurement" \
+  --argjson gpr_ab_ba        "$gate_pass_rate_ab_ba" \
+  --argjson gpr_drift        "$gate_pass_rate_drift" \
   --argjson gpr_metadata     "$gate_pass_rate_metadata" \
+  --argjson gpr_pin_verification "$gate_pass_rate_pin_verification" \
+  --argjson gpr_schema       "$gate_pass_rate_schema" \
+  --argjson gpr_quarantine   "$gate_pass_rate_quarantine" \
+  --argjson gpr_reporting_guard "$gate_pass_rate_reporting_guard" \
 '{
   scenario_id:          $scenario_id,
   campaign_timestamp:   $campaign_timestamp,
@@ -291,14 +412,16 @@ jq -n \
     campaign_fairness_mean:   $stats_fairness.mean
   },
   gate_pass_rates: {
-    maturity:    $gpr_maturity,
-    equivalence: $gpr_equivalence,
-    endpoint:    $gpr_endpoint,
-    payload:     $gpr_payload,
-    fairness:    $gpr_fairness,
-    error:       $gpr_error,
-    measurement: $gpr_measurement,
-    metadata:    $gpr_metadata
+    track_isolation: $gpr_track_isolation,
+    eligibility:     $gpr_eligibility,
+    equivalence:     $gpr_equivalence,
+    ab_ba:           $gpr_ab_ba,
+    drift:           $gpr_drift,
+    metadata:        $gpr_metadata,
+    pin_verification:$gpr_pin_verification,
+    schema:          $gpr_schema,
+    quarantine:      $gpr_quarantine,
+    reporting_guard: $gpr_reporting_guard
   }
 }' > "$SUMMARY_OUT"
 

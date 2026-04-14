@@ -9,11 +9,17 @@
     "timestamp_utc",
     "scenario_id",
     "contract_id",
+    "track_id",
+    "pair_id",
+    "pair_order",
+    "claim_status",
     "measurement_seconds",
     "warmup_seconds",
     "targets",
     "fairness_index",
-    "gate_status"
+    "gate_status",
+    "eligibility_gates",
+    "rejection_codes"
   ],
   "additionalProperties": false,
   "properties": {
@@ -34,6 +40,24 @@
     "contract_id": {
       "type": "string",
       "description": "Contract identifier from scenario fixed_contracts (e.g. fixed_contract_v1)."
+    },
+    "track_id": {
+      "type": "string",
+      "description": "Execution track identifier (e.g. track-r, track-n). Comparative math is invalid across mixed track_id values."
+    },
+    "pair_id": {
+      "type": "string",
+      "description": "Comparison unit identifier for AB/BA paired execution tracking."
+    },
+    "pair_order": {
+      "type": "string",
+      "enum": ["ab", "ba"],
+      "description": "Order label for this artifact's pair execution direction."
+    },
+    "claim_status": {
+      "type": "string",
+      "enum": ["comparison_eligible", "non_eligible", "descriptive_only"],
+      "description": "Final claim status after strict gates and reporting guard."
     },
     "measurement_seconds": {
       "type": "integer",
@@ -152,51 +176,74 @@
     },
     "gate_status": {
       "type": "object",
-      "description": "Results of all 8 comparative readiness gates.",
+      "description": "Results of strict comparative gates.",
       "required": [
-        "maturity",
+        "track_isolation",
+        "eligibility",
         "equivalence",
-        "endpoint",
-        "payload",
-        "fairness",
-        "error",
-        "measurement",
-        "metadata"
+        "ab_ba",
+        "drift",
+        "metadata",
+        "pin_verification",
+        "schema",
+        "quarantine",
+        "reporting_guard"
       ],
       "additionalProperties": false,
       "properties": {
-        "maturity": {
+        "track_isolation": {
           "$ref": "#/$defs/gate_result",
-          "description": "Gate A: claim_scope, runner_status, and reproducibility_status requirements."
+          "description": "Gate G1: Track R/Track N isolation; mixed tracks are rejected."
+        },
+        "eligibility": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G2: only comparison_eligible/success/complete/ok rows enter comparative math."
         },
         "equivalence": {
           "$ref": "#/$defs/gate_result",
-          "description": "Gate B: scenario_id, contract_id, tool, and transport_mode must match across targets."
+          "description": "Gate G3: strict scenario/contract/tier/protocol/mode/payload/concurrency/warmup/measurement/jvm class equivalence."
         },
-        "endpoint": {
+        "ab_ba": {
           "$ref": "#/$defs/gate_result",
-          "description": "Gate C: total_errors == 0 or error_rate_pct < 0.5 for both targets."
+          "description": "Gate G4: AB and BA execution orders are both required for the comparison unit."
         },
-        "payload": {
+        "drift": {
           "$ref": "#/$defs/gate_result",
-          "description": "Gate D: threads, connections, and duration_seconds must match across targets."
-        },
-        "fairness": {
-          "$ref": "#/$defs/gate_result",
-          "description": "Gate E: fairness_index.composite_score must be >= 0.50."
-        },
-        "error": {
-          "$ref": "#/$defs/gate_result",
-          "description": "Gate F: error_rate_pct < 1.0 for both targets; WARN if > 0.5."
-        },
-        "measurement": {
-          "$ref": "#/$defs/gate_result",
-          "description": "Gate G: warmup_seconds >= 30, duration_seconds >= 60, total_requests >= 100."
+          "description": "Gate G5: drift snapshot placeholder; missing metadata or threshold breach fails."
         },
         "metadata": {
           "$ref": "#/$defs/gate_result",
-          "description": "Gate H: run_id, timestamp, scenario, tool, and env_ref must be populated."
+          "description": "Gate G6: commit SHA, JDK/tool versions, JVM flags, hardware profile, scenario and target classification required."
+        },
+        "pin_verification": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G7: exact pinned versions must exist and match actual versions."
+        },
+        "schema": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G8: schema validation fail-closed, including validator availability checks."
+        },
+        "quarantine": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G9: machine-readable rejection codes required for transparency."
+        },
+        "reporting_guard": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G10: report must include explicit axis labels/track label and no cross-track claims."
         }
+      }
+    },
+    "eligibility_gates": {
+      "type": "object",
+      "description": "Copy of strict gate outcomes used for claim-eligibility evaluation.",
+      "$ref": "#/$defs/strict_gate_status"
+    },
+    "rejection_codes": {
+      "type": "array",
+      "description": "Machine-readable rejection reason codes for non-eligible runs.",
+      "items": {
+        "type": "string",
+        "minLength": 1
       }
     },
     "notes": {
@@ -236,18 +283,50 @@
   "$defs": {
     "gate_result": {
       "type": "object",
-      "required": ["pass_fail", "reason"],
+      "required": ["pass_fail", "reason", "rejection_code"],
       "additionalProperties": false,
       "properties": {
         "pass_fail": {
           "type": "string",
-          "enum": ["PASS", "FAIL", "WARN"],
-          "description": "Gate outcome. FAIL blocks publication; WARN allows with caveats."
+          "enum": ["PASS", "FAIL"],
+          "description": "Gate outcome. FAIL blocks comparative claim eligibility."
         },
         "reason": {
           "type": "string",
           "description": "Human-readable explanation of the gate outcome."
+        },
+        "rejection_code": {
+          "type": "string",
+          "description": "Machine-readable rejection code. Use 'none' for PASS rows."
         }
+      }
+    },
+    "strict_gate_status": {
+      "type": "object",
+      "required": [
+        "track_isolation",
+        "eligibility",
+        "equivalence",
+        "ab_ba",
+        "drift",
+        "metadata",
+        "pin_verification",
+        "schema",
+        "quarantine",
+        "reporting_guard"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "track_isolation": { "$ref": "#/$defs/gate_result" },
+        "eligibility": { "$ref": "#/$defs/gate_result" },
+        "equivalence": { "$ref": "#/$defs/gate_result" },
+        "ab_ba": { "$ref": "#/$defs/gate_result" },
+        "drift": { "$ref": "#/$defs/gate_result" },
+        "metadata": { "$ref": "#/$defs/gate_result" },
+        "pin_verification": { "$ref": "#/$defs/gate_result" },
+        "schema": { "$ref": "#/$defs/gate_result" },
+        "quarantine": { "$ref": "#/$defs/gate_result" },
+        "reporting_guard": { "$ref": "#/$defs/gate_result" }
       }
     }
   }

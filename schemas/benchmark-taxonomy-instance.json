@@ -1,0 +1,102 @@
+{
+  "schema_version": "1",
+  "taxonomy_version": "1.0",
+
+  "constrained_families": {
+    "constrained-survivability": {
+      "description": "Can the system operate at all under resource budget? Measures operational correctness, not performance.",
+      "primary_question": "Does the system remain alive, non-crashing, and minimally correct under the declared budget?",
+      "reporting_axis": "correctness_under_constraint",
+      "metrics": ["success_ratio", "error_rate_pct", "timeout_rate_pct", "degradation_class", "runner_status"],
+      "claim_scope_max": "descriptive_only",
+      "comparison_policy": "cross-target comparison only allowed after cgroup accounting verified and artifact_provenance fields populated. JVM vs native-image comparisons require separate cgroup limit per artifact_kind."
+    },
+    "efficiency-density": {
+      "description": "What useful work per unit of constrained resource? Requires validated effective_cpu and heap accounting.",
+      "primary_question": "How much successful work does the system deliver per unit of CPU and memory budget?",
+      "reporting_axis": "cost_efficiency",
+      "metrics": ["success_rps_per_effective_cpu", "success_rps_per_64m_heap", "p90_under_budget_us", "timeout_rate_pct", "cpu_throttle_ratio"],
+      "claim_scope_max": "exploratory",
+      "comparison_policy": "Cross-target comparison forbidden until cpu_throttle_ratio is captured and effective_vcpu = declared_vcpu * (1 - cpu_throttle_ratio) is validated. JVM overlay flags must not be applied to native-image targets.",
+      "denominator_note": "effective_vcpu = declared_vcpu * (1 - cpu_throttle_ratio). Current constrained-smoke data shows ~94% throttle rate (585/623 periods for JVM Quarkus track-c). Efficiency claims require at least guard-class runs with stable throttle ratio across multiple runs."
+    },
+    "performance-ceiling": {
+      "description": "Maximum throughput with headroom. Entirely separate from constrained families. Requires separate scenarios and unconstrained execution profiles.",
+      "primary_question": "What is the maximum sustainable throughput with full resource access?",
+      "reporting_axis": "none_separate_scenario",
+      "metrics": ["throughput_rps", "latency_p50_us", "latency_p90_us", "latency_p99_us"],
+      "claim_scope_max": "comparison_eligible",
+      "comparison_policy": "Must not be compared to constrained-survivability or efficiency-density results. Separate scenario, separate contract, separate result namespace."
+    }
+  },
+
+  "soak_duration_ladder": {
+    "smoke": {
+      "nominal_duration": "30s",
+      "min_execution_class": "exploratory",
+      "claim_scope_max": "descriptive_only",
+      "note": "Confirms system starts and responds. Not suitable for stability or efficiency claims. All current constrained results are at this level."
+    },
+    "guard": {
+      "nominal_duration": "10m",
+      "min_execution_class": "guard",
+      "claim_scope_max": "exploratory",
+      "note": "Minimum for resource trend detection. Required before efficiency-density metrics are considered non-trivial."
+    },
+    "regression": {
+      "nominal_duration": "30m",
+      "min_execution_class": "regression",
+      "claim_scope_max": "comparison_eligible",
+      "note": "Required for regression tracking and stability assertions."
+    },
+    "contract": {
+      "nominal_duration": "2h",
+      "min_execution_class": "regression",
+      "claim_scope_max": "comparison_eligible",
+      "note": "Required for 1.0 efficiency_contract validation. Includes restart-under-constraint evidence."
+    }
+  },
+
+  "reporting_axes": {
+    "correctness_under_constraint": {
+      "description": "Axis 1. Is the system correct under budget? Covers error rate, timeout rate, crash/OOM detection.",
+      "applicable_families": ["constrained-survivability"],
+      "metrics": ["total_errors", "app_errors", "timeout_count", "success_ratio", "degradation_class"],
+      "min_soak_class": "smoke",
+      "note": "Smoke-level sufficient for boolean survivability. Guard required for trend interpretation."
+    },
+    "cost_efficiency": {
+      "description": "Axis 2. Successful work per unit resource. Requires throttle ratio and heap accounting.",
+      "applicable_families": ["efficiency-density"],
+      "metrics": ["success_rps_per_effective_cpu", "success_rps_per_64m_heap", "p90_under_budget_us", "timeout_rate_pct", "cpu_throttle_ratio"],
+      "min_soak_class": "guard",
+      "note": "Smoke-level data is insufficient for efficiency claims. Throttle ratio must be stable across at least 2 runs before computing efficiency-density metrics."
+    },
+    "degradation_behavior": {
+      "description": "Axis 3. How does the system degrade as load increases beyond budget? Requires load-ramp scenario, not single-point.",
+      "applicable_families": ["constrained-survivability", "efficiency-density"],
+      "metrics": ["timeout_rate_pct", "latency_p99_us", "degradation_class", "throughput_rps_over_time"],
+      "min_soak_class": "guard",
+      "note": "Requires sweep scenario (load ramp under fixed budget), not a fixed-rate single-point run. Current entity-read-by-id smoke runs are insufficient for degradation behavior claims."
+    },
+    "stability": {
+      "description": "Axis 4. Does the system remain stable over extended constrained operation? Detects leaks, GC pressure, thread accumulation.",
+      "applicable_families": ["constrained-survivability", "efficiency-density"],
+      "metrics": ["throughput_rps_over_time", "latency_p99_us_over_time", "memory_peak_bytes_over_time", "cpu_throttle_ratio_over_time"],
+      "min_soak_class": "regression",
+      "note": "30s smoke has no stability signal. 10m guard provides trend. 30m regression is minimum for stability assertion. 2h contract required for 1.0 efficiency contract claim."
+    }
+  },
+
+  "efficiency_contract_v1": {
+    "version": "1.0",
+    "description": "Efficiency contract for Exeris 1.0 under constrained budget. Defines survivability and efficiency floors, not performance ceilings.",
+    "constraints": {
+      "no_crash_under_budget": "System must not OOM-kill, crash, or fail to restart within the declared cgroup memory and CPU budget across the full contract soak duration.",
+      "error_rate_ceiling_pct": 1.0,
+      "throughput_floor_rps": "scenario-specific-tbd",
+      "degradation_monotonicity": "Under increasing load within budget, degradation must be monotonic: latency increases before error rate increases, error rate increases before crash. Non-monotonic degradation (sudden crash without prior latency/error signal) is a contract violation.",
+      "degradation_observability": "The transition from healthy to degraded must be observable via metrics no later than 2 measurement intervals before service becomes unavailable. Silent failure is a contract violation."
+    }
+  }
+}

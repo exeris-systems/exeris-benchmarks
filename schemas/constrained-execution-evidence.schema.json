@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/constrained-execution-evidence/v1",
+  "title": "ConstrainedExecutionEvidence",
+  "description": "Constrained-run execution evidence: cgroup limits, resource accounting, and outcome for a single budget-constrained benchmark run.",
+  "type": "object",
+  "required": [
+    "execution_profile_id",
+    "contract_id",
+    "target_runtime",
+    "target_build",
+    "cgroup_effective",
+    "launch_command",
+    "benchmark_exit_code",
+    "outcome"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "execution_profile_id": {
+      "type": "string",
+      "description": "Execution profile identifier (e.g. runtime-constrained-128m-0p5vcpu-v1)."
+    },
+    "contract_id": {
+      "type": "string",
+      "description": "Fixed contract key from scenario.json fixed_contracts."
+    },
+    "target_runtime": {
+      "type": "string",
+      "description": "Runtime identifier for the target. Prefer runtime_family when available.",
+      "enum": ["community", "quarkus", "spring-boot", "micronaut", "helidon", "vert-x", "jdk-baseline", "custom"]
+    },
+    "target_build": {
+      "type": "string",
+      "description": "Build mode identifier. Prefer artifact_provenance.build_mode when available.",
+      "enum": ["jvm", "native", "aot-jvm"]
+    },
+    "artifact_provenance": {
+      "type": "object",
+      "description": "Structured artifact identity replacing the target_runtime + target_build string pair.",
+      "properties": {
+        "runtime_family": {
+          "type": "string",
+          "enum": ["exeris", "quarkus", "spring-boot", "micronaut", "helidon", "vert-x", "jdk-baseline", "custom"]
+        },
+        "artifact_kind": {
+          "type": "string",
+          "enum": ["jvm-jar", "native-image", "uber-jar", "fat-jar", "aot-jvm"]
+        },
+        "execution_vm": {
+          "type": "string",
+          "enum": ["jvm", "none"]
+        },
+        "build_mode": {
+          "type": "string",
+          "enum": ["jit", "native", "aot-jvm"]
+        }
+      }
+    },
+    "benchmark_skip_target_build": {
+      "type": "integer",
+      "description": "1 if target build was skipped (pre-built binary used); 0 otherwise.",
+      "enum": [0, 1]
+    },
+    "required_track_id": {
+      "type": "string",
+      "description": "Expected track identifier for this run profile."
+    },
+    "track_id": {
+      "type": "string",
+      "description": "Actual track identifier used."
+    },
+    "result_namespace": {
+      "type": "string",
+      "description": "Relative path namespace for result artifact directory."
+    },
+    "soak_duration_class": {
+      "type": "string",
+      "description": "Soak duration class. smoke=≤30s exploratory; guard=~10m; regression=~30m; contract=~2h.",
+      "enum": ["smoke", "guard", "regression", "contract"]
+    },
+    "cgroup_effective": {
+      "type": "object",
+      "description": "Effective cgroup v2 resource limits and observed accounting as read from the cgroup hierarchy after process launch.",
+      "required": ["memory_max_bytes", "cpu_quota_us", "cpu_period_us"],
+      "properties": {
+        "memory_max_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective memory.max bytes as read from the cgroup. For native-image targets this reflects process RSS limit, not JVM heap."
+        },
+        "memory_peak_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Observed memory.peak bytes as read from the cgroup after run completion."
+        },
+        "cpu_quota_us": {
+          "type": "integer",
+          "minimum": -1,
+          "description": "cpu.max quota_us. -1 = unlimited."
+        },
+        "cpu_period_us": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "cpu.max period_us."
+        },
+        "cpu_stat": {
+          "type": "object",
+          "description": "cpu.stat snapshot after run completion.",
+          "properties": {
+            "nr_periods":    { "type": "integer", "minimum": 0 },
+            "nr_throttled":  { "type": "integer", "minimum": 0 },
+            "throttled_usec": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "cpu_throttle_ratio": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Derived: nr_throttled / nr_periods. null when nr_periods = 0. Denominator of effective_cpu calculation: effective_vcpu = declared_vcpu * (1 - cpu_throttle_ratio)."
+    },
+    "cgroup_memory_limit_verified": {
+      "type": "boolean",
+      "description": "true if the launch script confirmed that cgroup memory.max was successfully written to the correct cgroup hierarchy node before process start."
+    },
+    "jvm_overlay_flags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "JVM flags applied as JAVA_TOOL_OPTIONS overlay. Must be empty array [] for native-image targets."
+    },
+    "launch_command": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Exact launch command array used to start the target process."
+    },
+    "benchmark_exit_code": {
+      "type": "integer",
+      "description": "Exit code of the benchmark driver process."
+    },
+    "outcome": {
+      "type": "string",
+      "description": "Canonical outcome classification.",
+      "enum": ["ok", "startup_failed", "oom_killed", "timeout_killed", "benchmark_failed", "cgroup_setup_failed", "unknown"]
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp when this evidence file was generated."
+    }
+  }
+}

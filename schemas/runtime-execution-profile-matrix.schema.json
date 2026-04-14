@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/runtime-execution-profile-matrix/v1",
+  "title": "RuntimeExecutionProfileMatrix",
+  "description": "Manifest of constrained runtime execution profiles for exploratory-only runtime benchmarks.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "profiles"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "execution_profile_id",
+          "benchmark_family",
+          "profile_class",
+          "status",
+          "claim_scope",
+          "comparison_policy",
+          "result_namespace",
+          "required_track_id",
+          "cpu_limit",
+          "memory_limit",
+          "jvm",
+          "required_evidence",
+          "allowed_outcomes",
+          "note"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "execution_profile_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9.-]+$"
+          },
+          "benchmark_family": {
+            "type": "string",
+            "const": "runtime-wrk"
+          },
+          "profile_class": {
+            "type": "string",
+            "const": "constrained-runtime"
+          },
+          "status": {
+            "type": "string",
+            "const": "exploratory"
+          },
+          "claim_scope": {
+            "type": "string",
+            "const": "descriptive_only"
+          },
+          "comparison_policy": {
+            "type": "string",
+            "const": "forbidden"
+          },
+          "result_namespace": {
+            "type": "string",
+            "const": "results/constrained"
+          },
+          "required_track_id": {
+            "type": "string",
+            "const": "track-c"
+          },
+          "cpu_limit": {
+            "type": "object",
+            "required": [
+              "vcpu",
+              "quota_us",
+              "period_us",
+              "enforcement"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "vcpu": {
+                "type": "number",
+                "const": 0.5
+              },
+              "quota_us": {
+                "type": "integer",
+                "const": 50000
+              },
+              "period_us": {
+                "type": "integer",
+                "const": 100000
+              },
+              "enforcement": {
+                "type": "string",
+                "const": "cgroup-required"
+              }
+            }
+          },
+          "memory_limit": {
+            "type": "object",
+            "required": [
+              "limit_mb",
+              "enforcement"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "limit_mb": {
+                "type": "integer",
+                "const": 128
+              },
+              "enforcement": {
+                "type": "string",
+                "const": "cgroup-required"
+              }
+            }
+          },
+          "jvm": {
+            "type": "object",
+            "required": [
+              "gc",
+              "active_processor_count",
+              "max_ram_mb"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "gc": {
+                "type": "string",
+                "const": "serial"
+              },
+              "active_processor_count": {
+                "type": "integer",
+                "const": 1
+              },
+              "max_ram_mb": {
+                "type": "integer",
+                "const": 128
+              }
+            }
+          },
+          "required_evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "allowed_outcomes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

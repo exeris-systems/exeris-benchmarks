@@ -110,7 +110,27 @@
         "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
         "version": { "type": "string" },
         "mode": { "type": "string", "enum": ["pure", "compat", "native", "jdbc-bridge", "baseline-db"] },
-        "tier": { "type": "string", "enum": ["community", "enterprise"] }
+        "tier": { "type": "string", "enum": ["community", "enterprise"] },
+        "runtime_family": {
+          "type": "string",
+          "description": "Runtime framework/platform identity of the application under test.",
+          "enum": ["exeris", "quarkus", "spring-boot", "micronaut", "helidon", "vert-x", "jdk-baseline", "custom"]
+        },
+        "artifact_kind": {
+          "type": "string",
+          "description": "Packaging and distribution form of the target artifact.",
+          "enum": ["jvm-jar", "native-image", "uber-jar", "fat-jar", "aot-jvm"]
+        },
+        "execution_vm": {
+          "type": "string",
+          "description": "VM executing the artifact at runtime. 'none' for native-image targets with no JVM.",
+          "enum": ["jvm", "none"]
+        },
+        "build_mode": {
+          "type": "string",
+          "description": "Compilation and execution strategy of the target artifact.",
+          "enum": ["jit", "native", "aot-jvm"]
+        }
       }
     },
     "container": {

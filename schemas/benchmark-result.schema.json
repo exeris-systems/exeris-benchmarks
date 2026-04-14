@@ -62,8 +62,33 @@
         "commit_sha": { "type": "string" },
         "version": { "type": "string" },
         "mode": { "type": "string", "enum": ["pure", "compat", "native", "jdbc-bridge", "baseline-db"] },
-        "tier": { "type": "string", "enum": ["community", "enterprise"] },
-        "protocol": { "type": "string", "enum": ["h1", "h2", "h3"] }
+        "tier": { "type": "string", "enum": ["community", "enterprise"], "description": "Exeris product tier. Applies to runtime and product-scoped benchmarks only. For TLS micro benchmarks use 'harness_model' instead." },
+        "harness_model": {
+          "type": "string",
+          "enum": ["external-baseline", "core-engine", "fd-owner", "memory-bio", "runtime-harness"],
+          "description": "TLS micro-benchmark harness contract. Describes the observable transport and allocator model used by the benchmark, not product architecture. Use instead of 'tier' for TLS matrix rows (B/C/D families). Values: 'external-baseline' = third-party reference (JDK SSLEngine, Netty tcnative); 'core-engine' = engine-level benchmark with no full transport wiring (guard paths, state-machine, core JMH); 'fd-owner' = real loopback socket with kernel I/O crossing; 'memory-bio' = in-process inject/drain, no socket, no syscall; 'runtime-harness' = full runtime harness integration probe."
+        },
+        "protocol": { "type": "string", "enum": ["h1", "h2", "h3"] },
+        "runtime_family": {
+          "type": "string",
+          "description": "Runtime framework/platform identity of the application under test.",
+          "enum": ["exeris", "quarkus", "spring-boot", "micronaut", "helidon", "vert-x", "jdk-baseline", "custom"]
+        },
+        "artifact_kind": {
+          "type": "string",
+          "description": "Packaging and distribution form of the target artifact.",
+          "enum": ["jvm-jar", "native-image", "uber-jar", "fat-jar", "aot-jvm"]
+        },
+        "execution_vm": {
+          "type": "string",
+          "description": "VM executing the artifact at runtime. 'none' for native-image targets with no JVM.",
+          "enum": ["jvm", "none"]
+        },
+        "build_mode": {
+          "type": "string",
+          "description": "Compilation and execution strategy of the target artifact.",
+          "enum": ["jit", "native", "aot-jvm"]
+        }
       }
     },
     "comparison_axis": {
@@ -121,7 +146,16 @@
         "warmup_iterations": { "type": "integer", "description": "JMH -wi" },
         "measurement_iterations": { "type": "integer", "description": "JMH -i" },
         "payload_file": { "type": "string" },
-        "payload_size_bytes": { "type": "integer" }
+        "payload_size_bytes": { "type": "integer" },
+        "execution_profile_id": { "type": "string", "description": "Execution profile identifier (e.g. runtime-constrained-128m-0p5vcpu-v1)." },
+        "contract_id": { "type": "string", "description": "Fixed contract identifier from scenario.json fixed_contracts." },
+        "track_id": { "type": "string", "description": "Track identifier (e.g. track-c)." },
+        "result_namespace": { "type": "string", "description": "Relative path namespace for result artifact directory." },
+        "soak_duration_class": {
+          "type": "string",
+          "description": "Soak duration class. smoke=≤30s exploratory; guard=~10m; regression=~30m; contract=~2h.",
+          "enum": ["smoke", "guard", "regression", "contract"]
+        }
       }
     },
     "metrics": {
@@ -147,6 +181,61 @@
         "jmh_alloc_rate_norm_bytes": {
           "type": "number",
           "description": "gc.alloc.rate.norm from -prof gc. 0 expected on zero-alloc paths."
+        }
+      }
+    },
+    "run_track": {
+      "type": "string",
+      "description": "Run track classification for constrained vs unconstrained families.",
+      "enum": ["constrained", "unconstrained"]
+    },
+    "constrained_family": {
+      "type": "string",
+      "description": "Constrained benchmark family. Required when run_track=constrained.",
+      "enum": ["constrained-survivability", "efficiency-density", "performance-ceiling"]
+    },
+    "soak_duration_class": {
+      "type": "string",
+      "description": "Soak duration class for this result. smoke=≤30s exploratory; guard=~10m; regression=~30m; contract=~2h.",
+      "enum": ["smoke", "guard", "regression", "contract"]
+    },
+    "degradation_class": {
+      "type": "string",
+      "description": "Observed failure/degradation mode under constraint. Populate when runner_status != success or timeout_rate is elevated.",
+      "enum": ["graceful-shed", "timeout-flood", "crash", "oom", "unobservable"]
+    },
+    "correctness_under_constraint": {
+      "type": "object",
+      "description": "Axis 1: Correctness under constraint. Populated for constrained-survivability family runs.",
+      "properties": {
+        "total_errors": { "type": "integer", "minimum": 0, "description": "Total error responses (HTTP non-2xx + connection errors)." },
+        "app_errors": { "type": "integer", "minimum": 0, "description": "HTTP 5xx application-level error responses." },
+        "timeout_count": { "type": "integer", "minimum": 0, "description": "Request timeout count (connection or read timeout)." },
+        "success_ratio": { "type": "number", "minimum": 0, "maximum": 1, "description": "successful_requests / total_requests." }
+      }
+    },
+    "efficiency_metrics": {
+      "type": "object",
+      "description": "Axis 2: Cost efficiency metrics. Requires valid constrained run evidence with cpu_throttle_ratio.",
+      "properties": {
+        "success_rps_per_effective_cpu": {
+          "type": ["number", "null"],
+          "description": "successful_rps / (declared_vcpu * (1 - cpu_throttle_ratio)). null when cpu_throttle_ratio unavailable."
+        },
+        "success_rps_per_64m_heap": {
+          "type": ["number", "null"],
+          "description": "successful_rps per 64 MiB of declared heap budget (MaxRAM / 64)."
+        },
+        "p90_under_budget_us": {
+          "type": ["number", "null"],
+          "description": "latency_p90_us measured while under declared budget constraint. Copied from metrics.latency_p90_us for constrained runs."
+        },
+        "timeout_rate_pct": { "type": "number", "minimum": 0, "maximum": 100, "description": "timeout_count / total_requests * 100." },
+        "cpu_throttle_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "nr_throttled / nr_periods from cgroup cpu.stat. Sourced from constrained-execution-evidence.json."
         }
       }
     },

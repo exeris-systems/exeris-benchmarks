@@ -5,8 +5,11 @@ const baseUrl = __ENV.BASE_URL || 'http://127.0.0.1:18080';
 const expectedStatus = Number(__ENV.EXPECT_STATUS || 200);
 
 export const options = {
-  vus: Number(__ENV.VUS || 50),
-  duration: __ENV.DURATION || '20s',
+  stages: [
+    { duration: '30s', target: 10 },  // ramp-up / warmup (not measured)
+    { duration: '60s', target: 50 },  // measurement window
+    { duration: '10s', target: 0  },  // ramp-down
+  ],
   thresholds: {
     checks: ['rate>0.99'],
     http_req_failed: ['rate<0.01'],

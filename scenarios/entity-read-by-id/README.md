@@ -7,6 +7,9 @@
 **Driver:** wrk  
 **Transport:** H1
 
+Compatibility note: target apps also expose the frozen cross-runtime contract `GET /api/v1/users`.
+This scenario intentionally remains on `GET /api/v1/entities/{id}` for backwards-compatible script semantics.
+
 ---
 
 > **IMPORTANT — LOOPBACK CAVEAT**

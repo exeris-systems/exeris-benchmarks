@@ -1,17 +1,26 @@
 {
   "scenario_id": "entity-read-by-id",
   "version": "1",
-  "endpoint": "GET /api/v1/entities/{id}",
+  "endpoint": "GET /api/v1/users",
   "mode": "baseline-db",
+  "backend_modes": {
+    "comparison_type": "intra-target-backend-mode",
+    "baseline": "default-vt",
+    "candidate": "locality-aware",
+    "semantics": "Compare backend execution mode within the same community H1 target under an identical fixed contract.",
+    "locality_strict_default": false
+  },
   "tier": "community",
-  "driver": "wrk",
-  "transport": "h1",
+  "benchmark_family": "runtime",
+  "driver": ["wrk", "h2load", "wrk2"],
+  "transport": ["h1", "h2c"],
   "loopback": true,
   "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h1 is mandatory in all result artifacts.",
+  "claim_scope": "comparison_eligible",
   "concurrency": {
-    "connections": 32,
+    "connections": 128,
     "threads": 4,
-    "note": "32 connections may undersaturate DB; connection_pool_size is a declared fixed variable."
+    "note": "128 connections may undersaturate DB; connection_pool_size is a declared fixed variable."
   },
   "db": {
     "type": "postgresql",
@@ -26,7 +35,7 @@
     "idempotency": "INSERT ... ON CONFLICT (id) DO UPDATE",
     "pre_run_verification": "row_count_and_hash",
     "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh",
-    "idempotency_guarantee": "Re-running entities.sql produces identical row state. Results without passing pre-run verification are invalid."
+    "idempotency_guarantee": "Re-running entities.sql produces identical state across users, interests, friendships, user_interests, and compatibility entities tables. Results without passing pre-run verification are invalid."
   },
   "fixed_contracts": {
     "fixed_contract_v1": {
@@ -36,9 +45,299 @@
       "transport_mode": "loopback-h1",
       "mode": "baseline-db",
       "threads": 4,
-      "connections": 32,
+      "connections": 128,
       "warmup_seconds": 60,
-      "duration_seconds": 60,
+      "duration_seconds": 120,
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_backend_mode_h1_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "target_app": "exeris-community-app-locality",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "backend_mode_values": ["default-vt", "locality-aware"],
+      "required_profile": "perf-box-amd64",
+      "requires_backend_mode_evidence": false,
+      "requires_cpu_pinning": true,
+      "note": "Migration: this fixed contract now launches targets/exeris-community-app-locality to use the corrected backend-mode evidence path.",
+      "locality_strict_mode": false,
+      "locality_strict_mode_note": "Non-strict by default (BENCHMARK_LOCALITY_STRICT=0). VT scheduler override falls back silently if API unavailable. Set BENCHMARK_LOCALITY_STRICT=1 to enforce strict mode.",
+      "h1_comparison_gates": {
+        "min_total_requests_per_mode": 600,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 10,
+        "min_rps_floor": 500,
+        "max_comparison_ratio_range": [0.25, 4.0],
+        "comparison_ratio_definition": "locality_aware_mean_rps / default_vt_mean_rps"
+      },
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_cross_runtime_h1_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_runtime_h1_constrained_smoke_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 2,
+      "connections": 16,
+      "warmup_seconds": 15,
+      "duration_seconds": 30,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "execution_profile_id": "runtime-constrained-128m-0p5vcpu-v1",
+      "claim_scope": "descriptive_only",
+      "execution_class": "exploratory",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "note": "Constrained smoke/exploratory only. Not a replacement for fixed_contract_cross_runtime_h1_v1 and must be excluded from comparative, baseline, and regression workflows.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 2,
+      "connections": 16,
+      "warmup_seconds": 15,
+      "duration_seconds": 30,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "execution_profile_id": "runtime-constrained-256m-1vcpu-v1",
+      "claim_scope": "descriptive_only",
+      "execution_class": "exploratory",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "note": "Constrained smoke/exploratory only at 256MB and 1vCPU. Not a replacement for fixed_contract_cross_runtime_h1_v1 and must be excluded from comparative, baseline, and regression workflows.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_runtime_h1_constrained_guard_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 2,
+      "connections": 16,
+      "warmup_seconds": 60,
+      "duration_seconds": 600,
+      "soak_duration_class": "guard",
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "execution_profile_id": "runtime-constrained-128m-0p5vcpu-v1",
+      "claim_scope": "exploratory",
+      "execution_class": "guard",
+      "comparison_policy": "forbidden",
+      "constrained_family": "constrained-survivability",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "note": "10-minute constrained guard run. Minimum soak for resource trend detection and non-trivial efficiency-density metrics. Not a regression baseline.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_runtime_h1_constrained_regression_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 2,
+      "connections": 16,
+      "warmup_seconds": 60,
+      "duration_seconds": 1800,
+      "soak_duration_class": "regression",
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "execution_profile_id": "runtime-constrained-128m-0p5vcpu-v1",
+      "claim_scope": "exploratory",
+      "execution_class": "regression",
+      "comparison_policy": "forbidden",
+      "constrained_family": "constrained-survivability",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "note": "30-minute constrained regression soak. Required for stability assertions and regression tracking under budget.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_runtime_h1_constrained_contract_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 2,
+      "connections": 16,
+      "warmup_seconds": 120,
+      "duration_seconds": 7200,
+      "soak_duration_class": "contract",
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "execution_profile_id": "runtime-constrained-128m-0p5vcpu-v1",
+      "claim_scope": "exploratory",
+      "execution_class": "regression",
+      "comparison_policy": "forbidden",
+      "constrained_family": "constrained-survivability",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "note": "2-hour constrained contract soak. Required for efficiency_contract_v1 validation. Includes restart-under-constraint evidence expectation.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_cross_runtime_h1_iso_budget_sweep_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "note": "For iso-budget exploratory sweeps with variable connections only; must not be treated as a guard replacement for fixed_contract_cross_runtime_h1_v1 (128 connections).",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_cross_runtime_h1_iso_budget_sweep_t8_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 8,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "note": "Exploratory variant of fixed_contract_cross_runtime_h1_iso_budget_sweep_v1 with threads=8 for iso-budget sweeps; not a guard replacement and must not replace fixed_contract_cross_runtime_h1_v1.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_cross_runtime_h1_franz_like_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "connections": 10000,
+      "warmup_seconds": 10,
+      "duration_seconds": 20,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "dev-laptop",
+      "note": "Exploratory Franz-like profile (max-load style), not replacement for guard contract.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_p99_stable_h1_wrk2_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk2",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "driver": "wrk2",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "rate_rps": "calibrated",
+      "rate_rps_note": "Must be set to 60-80% of saturated throughput observed via wrk fixed_contract_cross_runtime_h1_v1 on the same hardware before first valid p99_stable run.",
+      "claim_scope": "p99_stable",
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "note": "p99_stable contract for wrk2 rate-controlled runs. wrk is ineligible for this scope.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_h2c_h2load_exploratory_v1": {
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-h2load",
+      "transport_mode": "loopback-h2c",
+      "mode": "baseline-db",
+      "driver": "h2load",
+      "endpoint": "GET /api/v1/users",
+      "connections": 128,
+      "threads": 4,
+      "max_concurrent_streams": 10,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "claim_scope": "exploratory",
+      "execution_class": "exploratory",
+      "comparison_policy": "forbidden_cross_protocol",
+      "comparison_policy_note": "H2c and H1 results are not comparable. Do not compare this contract's results to any H1 wrk or wrk2 contract results.",
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "note": "Exploratory H2c baseline via h2load prior-knowledge. max_concurrent_streams=10 is a starting point; document actual value in result artifact.",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -61,6 +360,10 @@
       "required_profile": "perf-box-amd64",
       "claim_scope": "comparison_eligible",
       "allowed_claims": ["throughput", "p50_indicative"],
+      "min_samples": 600,
+      "ci_level": 0.95,
+      "relative_error_pct_max": 10,
+      "perf_no_multiplex_required": true,
       "co_risk": true,
       "note": "P99 still requires wrk2 on perf-box-amd64."
     },
@@ -70,6 +373,30 @@
       "required_driver": "wrk2",
       "claim_scope": "p99_stable",
       "note": "wrk is INELIGIBLE for p99_stable. Use run-wrk2.sh."
+    },
+    "constrained_guard": {
+      "min_seconds": 600,
+      "soak_duration_class": "guard",
+      "min_execution_class": "guard",
+      "claim_scope": "exploratory",
+      "allowed_claims": ["descriptive_only", "resource_trend"],
+      "note": "10-minute constrained guard soak. Minimum for resource trend detection."
+    },
+    "constrained_regression": {
+      "min_seconds": 1800,
+      "soak_duration_class": "regression",
+      "min_execution_class": "regression",
+      "claim_scope": "exploratory",
+      "allowed_claims": ["descriptive_only", "stability_assertion"],
+      "note": "30-minute constrained regression soak. Required for stability assertions."
+    },
+    "constrained_contract": {
+      "min_seconds": 7200,
+      "soak_duration_class": "contract",
+      "min_execution_class": "regression",
+      "claim_scope": "exploratory",
+      "allowed_claims": ["descriptive_only", "efficiency_contract_v1"],
+      "note": "2-hour constrained contract soak. Required for efficiency_contract_v1 validation."
     }
   },
   "cross_tier_equivalence_constraints": {
@@ -82,7 +409,7 @@
       { "field": "protocol",               "required_value": "h1" },
       { "field": "seed_manifest_version",  "required_value": "1" },
       { "field": "transport",              "required_value": "loopback" },
-      { "field": "concurrency_connections","required_value": 32 },
+      { "field": "concurrency_connections","required_value": 128 },
       { "field": "concurrency_threads",    "required_value": 4 }
     ]
   },

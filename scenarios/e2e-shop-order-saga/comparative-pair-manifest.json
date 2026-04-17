@@ -1,0 +1,308 @@
+{
+  "comparative_manifest_id": "e2e-shop-order-saga-cross-runtime-v1",
+  "schema_version": "2",
+  "scenario_id": "e2e-shop-order-saga",
+  "scenario_version": "1",
+  "comparative_tier": 1,
+  "comparison_axis": {
+    "type": "runtime_pairwise",
+    "scope": "within-tier-within-protocol",
+    "tier": "community",
+    "protocol_mode": "h2c",
+    "transport_mode": "loopback-h2c",
+    "benchmark_family": "runtime-k6-e2e"
+  },
+  "workload_profile_key": "e2e-shop-order-saga-community-h2c-loopback-runtime-k6",
+  "required_contract": "exeris_community_h2c_v1",
+  "required_contracts": [
+    "exeris_community_h2c_v1",
+    "quarkus_axon_neo4j_v1",
+    "spring_boot_axon_neo4j_v1"
+  ],
+  "comparison_tracks": [
+    {
+      "track_id": "track_a_neo4j",
+      "backend_family": "neo4j",
+      "required_contracts": [
+        "exeris_community_h2c_v1",
+        "quarkus_axon_neo4j_v1",
+        "spring_boot_axon_neo4j_v1"
+      ],
+      "status": "comparison_eligible"
+    },
+    {
+      "track_id": "track_b_pgq",
+      "backend_family": "postgres-graph",
+      "required_contracts": [
+        "exeris_community_h2c_pgq_v2",
+        "quarkus_axon_pgq_v2",
+        "spring_boot_axon_pgq_v2"
+      ],
+      "status": "planned"
+    },
+    {
+      "track_id": "track_b1_pgq_pure",
+      "backend_family": "postgres-graph",
+      "required_contracts": [
+        "exeris_community_h2c_pgq_v2",
+        "quarkus_axon_pgq_v2",
+        "spring_boot_axon_pgq_v2"
+      ],
+      "status": "planned"
+    },
+    {
+      "track_id": "track_b2_age_compat",
+      "backend_family": "postgres-graph",
+      "required_contracts": [
+        "exeris_community_h2c_age_compat_v1",
+        "quarkus_axon_age_compat_v1",
+        "spring_boot_axon_age_compat_v1"
+      ],
+      "status": "compatibility_only"
+    }
+  ],
+  "segmentation_required_keys": [
+    "graph_backend_family",
+    "graph_backend_engine",
+    "graph_semantics_profile",
+    "graph_query_model",
+    "graph_driver_protocol",
+    "graph_dataset_fingerprint",
+    "backend_equivalence_class",
+    "claim_scope"
+  ],
+  "aggregation_guard": {
+    "forbid_mixed_backend_buckets": true,
+    "mixed_bucket_rejection_code": "GRAPH_BACKEND_MIXED_BUCKET",
+    "forbid_mixed_backend_equivalence_class": true,
+    "mixed_equivalence_rejection_code": "BACKEND_EQUIVALENCE_CLASS_MISMATCH"
+  },
+  "compatible_targets": [
+    {
+      "target_id": "exeris-community-app",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "transport_mode": "loopback-h2c",
+      "maturity": "comparison-eligible",
+      "claim_scope": "comparison_eligible",
+      "saga_orchestration": "flow-native",
+      "graph_backend": "graph-l2-native",
+      "event_backend": "events-l3-outbox",
+      "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=exeris_community_h2c_v1. No cross-tier inference."
+    },
+    {
+      "target_id": "quarkus-app-axon",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "transport_mode": "loopback-h2c",
+      "maturity": "comparison-eligible",
+      "claim_scope": "comparison_eligible",
+      "saga_framework": "axon-framework",
+      "graph_backend": "neo4j-bolt",
+      "event_backend": "axon-event-sourcing-outbox",
+      "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=quarkus_axon_neo4j_v1. Axon Framework overhead ~3-5% (documented, expected)."
+    },
+    {
+      "target_id": "spring-app-axon",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "transport_mode": "loopback-h2c",
+      "maturity": "comparison-eligible",
+      "claim_scope": "comparison_eligible",
+      "saga_framework": "axon-framework",
+      "graph_backend": "neo4j-bolt",
+      "event_backend": "axon-event-sourcing-outbox",
+      "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=spring_boot_axon_neo4j_v1. Axon Framework + Spring Boot overhead ~4-7% (documented, expected)."
+    }
+  ],
+  "allowed_pairs": [
+    {
+      "pair_id": "exeris-community-app__quarkus-app-axon",
+      "baseline": "exeris-community-app",
+      "candidate": "quarkus-app-axon",
+      "targets": ["exeris-community-app", "quarkus-app-axon"],
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "transport_mode": "loopback-h2c",
+      "workload_profile_key": "e2e-shop-order-saga-community-h2c-loopback-runtime-k6",
+      "axis": "cross-framework-saga-orchestration",
+      "framework_difference": {
+        "baseline_saga": "Exeris Flow (L4 kernel-built)",
+        "candidate_saga": "Quarkus Axon Framework",
+        "baseline_graph": "Exeris Graph L2 native",
+        "candidate_graph": "Neo4j Bolt (Community driver)",
+        "baseline_event": "Exeris Events L3 with transactional outbox",
+        "candidate_event": "Axon Event Sourcing + Outbox Pattern"
+      }
+    },
+    {
+      "pair_id": "exeris-community-app__spring-app-axon",
+      "baseline": "exeris-community-app",
+      "candidate": "spring-app-axon",
+      "targets": ["exeris-community-app", "spring-app-axon"],
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "transport_mode": "loopback-h2c",
+      "workload_profile_key": "e2e-shop-order-saga-community-h2c-loopback-runtime-k6",
+      "axis": "cross-framework-saga-orchestration",
+      "framework_difference": {
+        "baseline_saga": "Exeris Flow (L4 kernel-built)",
+        "candidate_saga": "Spring Boot Axon Framework",
+        "baseline_graph": "Exeris Graph L2 native",
+        "candidate_graph": "Neo4j Bolt (Community driver)",
+        "baseline_event": "Exeris Events L3 with transactional outbox",
+        "candidate_event": "Axon Event Sourcing + Outbox Pattern"
+      }
+    },
+    {
+      "pair_id": "quarkus-app-axon__spring-app-axon",
+      "baseline": "quarkus-app-axon",
+      "candidate": "spring-app-axon",
+      "targets": ["quarkus-app-axon", "spring-app-axon"],
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "transport_mode": "loopback-h2c",
+      "workload_profile_key": "e2e-shop-order-saga-community-h2c-loopback-runtime-k6",
+      "axis": "cross-framework-same-saga-library",
+      "framework_difference": {
+        "baseline_framework": "Quarkus 3.x",
+        "candidate_framework": "Spring Boot 3.x",
+        "shared_saga": "Both use Axon Framework (same version)",
+        "shared_graph": "Both use Neo4j Bolt (same driver)",
+        "shared_event": "Both use Axon Event Sourcing + Outbox"
+      }
+    }
+  ],
+  "forbidden_pairs": [
+    {
+      "reason": "Community vs Enterprise cross-tier — protocol fairness requires separate contracts",
+      "targets": ["exeris-community-app", "exeris-kernel-enterprise"]
+    },
+    {
+      "reason": "Cross-protocol comparisons are out of scope (H1 vs H2C vs H3 must be segregated)",
+      "protocol_modes": ["h1", "h2c", "h3"]
+    },
+    {
+      "reason": "Network-path vs loopback transport modes cannot be compared directly",
+      "transport_modes": ["loopback-h2c", "network-h2c"]
+    },
+    {
+      "reason": "Cross-backend comparisons are invalid (neo4j vs postgres-graph/pgq)",
+      "backend_families": ["neo4j", "postgres-graph"]
+    },
+    {
+      "reason": "AGE compatibility runs are not performance-equivalent to PGQ pure runs",
+      "backend_equivalence_classes": ["postgres_graph_age_compat", "postgres_graph_pgq_pure"]
+    }
+  ],
+  "claim_scope_rules": {
+    "postgres_graph_age_compat": {
+      "allowed": [
+        "within-age-compat-comparison",
+        "compatibility-stability-reporting"
+      ],
+      "forbidden": [
+        "age-vs-pgq-performance-superiority",
+        "mixed-age-pgq-aggregate-ranking"
+      ]
+    },
+    "postgres_graph_pgq_pure": {
+      "allowed": [
+        "within-pgq-pure-comparison"
+      ],
+      "forbidden": [
+        "pgq-inference-from-age-results"
+      ]
+    }
+  },
+  "measurement_windows": {
+    "ramp_up_seconds": 60,
+    "warmup_seconds": 60,
+    "measurement_seconds": 180,
+    "ramp_down_seconds": 30,
+    "compensation_polling_seconds": 60,
+    "hard_gates": {
+      "min_completed_orders": 900,
+      "min_samples": 900,
+      "ci_level": 0.95,
+      "relative_error_pct_max": 15,
+      "error_rate_max": 0.02,
+      "saga_success_rate_min": 0.98,
+      "compensation_invocation_rate_max": 0.05,
+      "perf_no_multiplex_required": true
+    }
+  },
+  "cross_tier_equivalence_constraints": {
+    "virtual_users": "EXACTLY 100 (same across all targets)",
+    "concurrency_model": "EXACTLY 100 HTTP/2 H2C connections (identical VU thread pool)",
+    "think_time": "EXACTLY 800-2500ms random sleep (identical jitter distribution)",
+    "payload": "EXACTLY identical order JSON schema (order placement endpoint)",
+    "protocol": "EXACTLY HTTP/2 Cleartext (no TLS cost differential)",
+    "database": "EXACTLY identical within each comparison track (Track A: PostgreSQL + Neo4j, Track B: PostgreSQL + PGQ)"
+  },
+  "per_track_equivalence_constraints": {
+    "track_a_neo4j": {
+      "database": "PostgreSQL + Neo4j (identical versions/settings)",
+      "graph_query_model": "cypher",
+      "graph_driver_protocol": "bolt"
+    },
+    "track_b_pgq": {
+      "database": "PostgreSQL + PGQ (identical versions/settings)",
+      "graph_query_model": "pgq",
+      "graph_driver_protocol": "postgres-wire"
+    }
+  },
+  "acceptable_framework_differences": [
+    {
+      "component": "saga_orchestration",
+      "framework_overhead": "Exeris Flow (kernel-built) vs Quarkus/Spring Axon Framework",
+      "expected_overhead_pct": "3-7%",
+      "attribution": "User-space saga framework overhead (expected, documented)"
+    },
+    {
+      "component": "graph_backend",
+      "framework_overhead": "Exeris Graph L2 (native) vs Neo4j Bolt driver (Community)",
+      "expected_overhead_pct": "2-5%",
+      "attribution": "Graph driver heap allocation and serialization (expected, documented)"
+    },
+    {
+      "component": "event_backend",
+      "framework_overhead": "Exeris Events L3 (kernel) vs Axon Event Sourcing + Outbox",
+      "expected_overhead_pct": "1-3%",
+      "attribution": "Event subscription and outbox polling mechanics (expected, documented)"
+    }
+  ],
+  "overclaiming_risk": "HIGH",
+  "overclaiming_prevention": [
+    "ALL comparisons MUST include framework overhead caveats",
+    "DO NOT claim 'Exeris is X% faster' without acknowledging Axon Framework is a separate system",
+    "CORRECT CLAIM: 'E2E order sagas complete X% faster on Exeris native Flow vs Quarkus/Spring + Axon Framework (framework overhead component: ~Y%)'",
+    "Include attribution table: saga orchestration overhead (kernel vs framework) + graph driver overhead + event backend overhead",
+    "Distinguish between throughput and saga completion latency (different metrics, different claims)",
+    "Use 95% CI ranges for all claims; absolute differences require MIN 15% relative separation"
+  ],
+  "reporting_requirements": {
+    "must_include": [
+      "transport_mode=loopback-h2c (MANDATORY in all result artifacts)",
+      "Protocol equivalence table (identical H2C, no TLS)",
+      "Payload equivalence attestation (identical order JSON schema)",
+      "Concurrency equivalence table (100 VUs, identical thread pool)",
+      "Database equivalence attestation (identical PostgreSQL + Neo4j versions)",
+      "Framework overhead attribution table",
+      "Saga completion rate by state (COMPLETED, COMPENSATED, FAILED)",
+      "Compensation polling statistics (avg polls, max polls, timeout rate)",
+      "backend-family caveat paragraph",
+      "claim scope sentence",
+      "known asymmetries for query language/planner differences"
+    ],
+    "must_not_include": [
+      "Absolute claims like 'X% faster' without framework overhead attribution",
+      "Cross-protocol comparisons (H1 vs H2C vs H3)",
+      "Cross-tier comparisons (Community vs Enterprise)",
+      "Cross-transport comparisons (loopback vs network)",
+      "Saga success rate without compensation state breakdown",
+      "backend superiority claims from cross-family runs",
+      "unqualified percentage speed claims across mixed graph_backend_family"
+    ]
+  }
+}

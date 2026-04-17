@@ -21,7 +21,7 @@ public class OffHeapTlsEngineMemoryBioBenchmark extends AbstractMemoryBioTlsEngi
 
     @Override
     protected String providerTier() {
-        return "enterprise";
+        return "bio-offheap-engine";
     }
 
     @Setup(Level.Iteration)

@@ -26,9 +26,4 @@ docker-compose --profile baseline up -d
 # Includes: exeris-runtime, postgres
 ```
 
-## Profile: enterprise
-
-```bash
-docker-compose --profile enterprise up -d
-# Includes: exeris-runtime (enterprise build), postgres
-```
+Enterprise and locality compose profiles are excluded from the active/public documentation path.

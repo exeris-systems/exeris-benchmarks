@@ -27,7 +27,10 @@ normalize_target_alias() {
   case "${raw_id}" in
     community) echo "exeris-native-community" ;;
     enterprise) echo "exeris-kernel-enterprise" ;;
-    spring-runtime) echo "spring-jvm-vt-tuned" ;;
+    spring-benchmark-app|spring-runtime|spring-app-axon) echo "spring-jvm-vt-tuned" ;;
+    quarkus-benchmark-app|quarkus-runtime|quarkus-app-axon) echo "quarkus-jvm-vt-tuned" ;;
+    exeris-community-app|exeris-e2e-community-h2c) echo "exeris-e2e-community-h2" ;;
+    exeris-benchmark-app|exeris-runtime-h1) echo "exeris-benchmark-app-community-h1" ;;
     *) echo "${raw_id}" ;;
   esac
 }
@@ -41,6 +44,12 @@ target_registry_matrix_path() {
   local root
   root="$(target_registry_root)"
   echo "${root}/runtime/drivers/target-asset-matrix.json"
+}
+
+target_registry_execution_profile_matrix_path() {
+  local root
+  root="$(target_registry_root)"
+  echo "${root}/runtime/profiles/runtime-execution-profiles.json"
 }
 
 target_registry_require_jq() {
@@ -78,6 +87,42 @@ target_registry_get_matrix_row_json() {
   fi
 
   jq -c --arg id "${canonical_id}" '.targets[] | select(.target_id == $id)' "${matrix_path}"
+}
+
+target_registry_get_execution_profile_json() {
+  local execution_profile_id="${1:-}"
+  local matrix_path
+  local match_count
+
+  if [[ -z "${execution_profile_id}" ]]; then
+    target_registry_config_error "execution_profile_id is required"
+    return 64
+  fi
+
+  target_registry_require_jq || return $?
+
+  matrix_path="$(target_registry_execution_profile_matrix_path)"
+  if [[ ! -f "${matrix_path}" ]]; then
+    target_registry_config_error "runtime execution profile matrix not found: ${matrix_path}"
+    return 64
+  fi
+
+  match_count="$(jq -r --arg id "${execution_profile_id}" '[.profiles[] | select(.execution_profile_id == $id)] | length' "${matrix_path}" 2>/dev/null || echo "")"
+  if [[ -z "${match_count}" ]]; then
+    target_registry_config_error "runtime execution profile matrix is not valid JSON: ${matrix_path}"
+    return 64
+  fi
+
+  if [[ "${match_count}" == "0" ]]; then
+    return 1
+  fi
+
+  if [[ "${match_count}" != "1" ]]; then
+    target_registry_config_error "runtime execution profile matrix has duplicate rows for execution_profile_id='${execution_profile_id}'"
+    return 64
+  fi
+
+  jq -c --arg id "${execution_profile_id}" '.profiles[] | select(.execution_profile_id == $id)' "${matrix_path}"
 }
 
 target_registry_make_abs_path() {
@@ -254,7 +299,7 @@ assert_target_contract_complete() {
   esac
 
   case "${TARGET_CONTRACT_PROTOCOL_MODE}" in
-    h1|h2|h3) ;;
+    h1|h2|h2c|h3) ;;
     *) missing+=("TARGET_CONTRACT_PROTOCOL_MODE=invalid(${TARGET_CONTRACT_PROTOCOL_MODE:-missing})") ;;
   esac
 

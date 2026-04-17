@@ -13,15 +13,19 @@ PORT="18080"
 JDBC_URL=""
 JDBC_USER=""
 JDBC_PASSWORD=""
+BACKEND_MODE="default-vt"
+CPU_AFFINITY=""
 
 usage() {
   cat <<'EOF'
 Usage:
   community-stack-launcher.sh [--mode http|h2|postgres] [--host 127.0.0.1] [--port 18080]
               [--jdbc-url <url>] [--jdbc-user <user>] [--jdbc-password <password>]
+              [--backend-mode default-vt|locality-aware] [--cpu-affinity <cpuset>]
 
 Environment:
   EXERIS_KERNEL_ROOT   Path to the exeris-kernel mono-repo root (default: 3 levels up)
+  BENCHMARK_REQUIRE_CPU_PINNING=1  Require --cpu-affinity (fail if not provided)
 
 Modes:
   http     -> HTTP only (/health=200, /db/ping=503)
@@ -61,12 +65,21 @@ while [[ $# -gt 0 ]]; do
     --jdbc-url)    JDBC_URL="${2:-}"; shift 2 ;;
     --jdbc-user)   JDBC_USER="${2:-}"; shift 2 ;;
     --jdbc-password) JDBC_PASSWORD="${2:-}"; shift 2 ;;
+    --backend-mode) BACKEND_MODE="${2:-}"; shift 2 ;;
+    --cpu-affinity) CPU_AFFINITY="${2:-}"; shift 2 ;;
     -h|--help)     usage; exit 0 ;;
     *)             fail "Unknown argument: $1" ;;
   esac
 done
 
 [[ "$MODE" =~ ^(http|h2|postgres)$ ]] || fail "Unsupported mode: $MODE"
+[[ "$BACKEND_MODE" =~ ^(default-vt|locality-aware)$ ]] || fail "Unsupported backend mode: $BACKEND_MODE (expected default-vt or locality-aware)"
+if [[ "${BENCHMARK_REQUIRE_CPU_PINNING:-0}" == "1" && -z "$CPU_AFFINITY" ]]; then
+  fail "BENCHMARK_REQUIRE_CPU_PINNING=1 requires --cpu-affinity <cpuset>"
+fi
+if [[ -n "$CPU_AFFINITY" ]]; then
+  require_cmd taskset
+fi
 
 require_cmd java
 require_cmd mvn
@@ -93,6 +106,7 @@ JAVA_ARGS=(
   "-Dexeris.http.mode=SERVER"
   "-Dexeris.http.bindHost=$HOST"
   "-Dexeris.http.port=$PORT"
+  "-Dbenchmark.target.backendMode=$BACKEND_MODE"
   "-Xlog:gc*,safepoint:file=${TARGET_LOG_DIR}/gc-${RUN_TIMESTAMP}.log:time,uptime,level,tags"
   "-Xlog:safepoint:file=${TARGET_LOG_DIR}/safepoint-${RUN_TIMESTAMP}.log:time,uptime,level,tags"
   "-XX:StartFlightRecording=filename=${TARGET_LOG_DIR}/jfr-${RUN_TIMESTAMP}.jfr,settings=profile,duration=0,maxsize=256m,dumponexit=true"
@@ -124,7 +138,12 @@ case "$MODE" in
 esac
 
 echo "[launcher] mode=$MODE host=$HOST port=$PORT"
+echo "[launcher] backend_mode=$BACKEND_MODE cpu_affinity=${CPU_AFFINITY:-none}"
 [[ -n "$JDBC_URL" ]] && echo "[launcher] jdbcUrl=$JDBC_URL"
 echo "[launcher] GC logs: $TARGET_LOG_DIR/gc-${RUN_TIMESTAMP}.log"
+
+if [[ -n "$CPU_AFFINITY" ]]; then
+  exec taskset -c "$CPU_AFFINITY" java "${JAVA_ARGS[@]}" -cp "$CLASSPATH" eu.exeris.kernel.launcher.CommunityStackLauncher
+fi
 
 exec java "${JAVA_ARGS[@]}" -cp "$CLASSPATH" eu.exeris.kernel.launcher.CommunityStackLauncher

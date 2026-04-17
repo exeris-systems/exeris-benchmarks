@@ -29,8 +29,14 @@ if [[ -n "$TARGET_INPUT" ]]; then
   TARGET="$TARGET_CONTRACT_TARGET_ID"
 
   if [[ -n "$TARGET_CONTRACT_ENV_FILE" && -f "$TARGET_CONTRACT_ENV_FILE" ]]; then
+    allexport_was_set=0
+    [[ $- == *a* ]] && allexport_was_set=1
+    set -a
     # shellcheck source=/dev/null
     source "$TARGET_CONTRACT_ENV_FILE"
+    if [[ "$allexport_was_set" -eq 0 ]]; then
+      set +a
+    fi
   fi
 
   if [[ -n "${START_MODE:-}" && "$START_MODE" != "$TARGET_CONTRACT_LAUNCHER_MODE" ]]; then
@@ -54,14 +60,14 @@ case "${START_MODE}" in
         exit 64
       fi
       if [[ -f "$COMPOSE" ]]; then
-        compose_cmd -f "$COMPOSE" down --remove-orphans
+        compose_cmd --file "$COMPOSE" down --remove-orphans
       else
         echo "WARN: Resolved compose file does not exist: $COMPOSE"
       fi
     else
       # Stop all known compose stacks
       for f in "$SCRIPT_DIR"/docker-compose/*.yml; do
-        compose_cmd -f "$f" down --remove-orphans 2>/dev/null || true
+        compose_cmd --file "$f" down --remove-orphans 2>/dev/null || true
       done
     fi
     ;;

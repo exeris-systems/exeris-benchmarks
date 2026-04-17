@@ -14,6 +14,9 @@ source "$LIB/perf.sh"
 source "$LIB/k6.sh"
 source "$LIB/run-summary.sh"
 
+# Saga-order runs opt into Axon explicitly; generic runtime startup stays default-off.
+export EXERIS_AXON_ENABLED="${EXERIS_AXON_ENABLED:-true}"
+
 usage() {
   cat <<'EOF'
 Usage: run-e2e-shop-order-saga-baseline.sh [options]

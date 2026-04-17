@@ -8,8 +8,8 @@ SCENARIO_JSON="${REPO_ROOT}/scenarios/entity-read-by-id/scenario.json"
 PROFILES_JSON="${REPO_ROOT}/runtime/profiles/runtime-execution-profiles.json"
 BASE_RUNNER="${REPO_ROOT}/scripts/run-entity-read-by-id.sh"
 
-EXECUTION_PROFILE_ID="runtime-constrained-128m-0p5vcpu-v1"
-CONTRACT_ID="fixed_contract_runtime_h1_constrained_smoke_v1"
+EXECUTION_PROFILE_ID="runtime-constrained-256m-1vcpu-v1"
+CONTRACT_ID="fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1"
 TARGET_RUNTIME="community"
 TARGET_BUILD="jvm"
 BENCHMARK_SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
@@ -22,8 +22,8 @@ usage() {
 Usage: scripts/run-entity-read-by-id-constrained.sh [--execution-profile-id ID] [--contract-id ID] [--target-runtime <community|locality|spring|quarkus>] [--target-build <jvm|native>] [--output-dir PATH]
 
 Defaults:
-  --execution-profile-id runtime-constrained-128m-0p5vcpu-v1
-  --contract-id fixed_contract_runtime_h1_constrained_smoke_v1
+  --execution-profile-id runtime-constrained-256m-1vcpu-v1
+  --contract-id fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1
   --target-runtime <community|locality|spring|quarkus> (default: community)
   --target-build <jvm|native> (default: jvm)
   --output-dir <repo>/results/constrained/entity-read-by-id/<utc-timestamp>-constrained-smoke
@@ -124,6 +124,37 @@ config_error() {
   exit 64
 }
 
+ensure_constrained_scope() {
+  local reason="$1"
+
+  if [[ "${BENCHMARK_CONSTRAINED_SCOPE_ACTIVE:-0}" == "1" ]]; then
+    config_error "$reason"
+  fi
+  if ! command -v systemd-run >/dev/null 2>&1; then
+    config_error "${reason}; systemd-run unavailable for auto-enforcement"
+  fi
+
+  local cpu_quota_pct
+  cpu_quota_pct="$(awk -v v="$VCPU" 'BEGIN { printf "%.0f", v * 100 }')"
+
+  echo "[info] ${reason}"
+  echo "[info] Relaunching constrained run in user scope with MemoryMax=${LIMIT_MB}M CPUQuota=${cpu_quota_pct}%"
+
+  exec systemd-run --user --scope \
+    -p "MemoryMax=${LIMIT_MB}M" \
+    -p "MemorySwapMax=0" \
+    -p "CPUQuota=${cpu_quota_pct}%" \
+    env \
+      BENCHMARK_CONSTRAINED_SCOPE_ACTIVE=1 \
+      BENCHMARK_SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD}" \
+      "$0" \
+      --execution-profile-id "$EXECUTION_PROFILE_ID" \
+      --contract-id "$CONTRACT_ID" \
+      --target-runtime "$TARGET_RUNTIME" \
+      --target-build "$TARGET_BUILD" \
+      --output-dir "$OUTPUT_DIR"
+}
+
 CONTRACT_JSON="$(jq -ce --arg id "$CONTRACT_ID" '.fixed_contracts[$id] // empty' "$SCENARIO_JSON")" \
   || { echo "ERROR: Contract '$CONTRACT_ID' not found in scenario file" >&2; exit 1; }
 
@@ -141,6 +172,19 @@ THREADS="$(jq -r '.threads' <<<"$CONTRACT_JSON")"
 CONNECTIONS="$(jq -r '.connections' <<<"$CONTRACT_JSON")"
 WARMUP_SECONDS="$(jq -r '.warmup_seconds' <<<"$CONTRACT_JSON")"
 DURATION_SECONDS="$(jq -r '.duration_seconds' <<<"$CONTRACT_JSON")"
+CONSTRAINED_DB_POOL_MIN_SIZE="${EXERIS_DB_POOL_MIN_SIZE:-2}"
+CONSTRAINED_DB_POOL_MAX_SIZE="${EXERIS_DB_POOL_MAX_SIZE:-8}"
+
+if ! [[ "$CONSTRAINED_DB_POOL_MIN_SIZE" =~ ^[0-9]+$ && "$CONSTRAINED_DB_POOL_MAX_SIZE" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: constrained DB pool sizes must be numeric" >&2
+  exit 1
+fi
+if (( CONSTRAINED_DB_POOL_MIN_SIZE < 1 )); then
+  CONSTRAINED_DB_POOL_MIN_SIZE=1
+fi
+if (( CONSTRAINED_DB_POOL_MAX_SIZE < CONSTRAINED_DB_POOL_MIN_SIZE )); then
+  CONSTRAINED_DB_POOL_MAX_SIZE="$CONSTRAINED_DB_POOL_MIN_SIZE"
+fi
 
 PROFILE_JSON="$(jq -ce --arg id "$EXECUTION_PROFILE_ID" '.profiles[] | select(.execution_profile_id == $id)' "$PROFILES_JSON")" \
   || { echo "ERROR: Execution profile '$EXECUTION_PROFILE_ID' not found" >&2; exit 1; }
@@ -169,12 +213,12 @@ else
 fi
 
 if [[ ! -f "${CGROUP_DIR}/memory.max" || ! -f "${CGROUP_DIR}/cpu.max" ]]; then
-  config_error "cgroup v2 required files memory.max and cpu.max are missing"
+  ensure_constrained_scope "cgroup v2 required files memory.max and cpu.max are missing"
 fi
 
 CG_MEMORY_MAX_RAW="$(<"${CGROUP_DIR}/memory.max")"
 if [[ "$CG_MEMORY_MAX_RAW" == "max" ]]; then
-  config_error "memory.max is unlimited; expected finite cap <= ${LIMIT_MB}MB"
+  ensure_constrained_scope "memory.max is unlimited; expected finite cap <= ${LIMIT_MB}MB"
 fi
 if ! [[ "$CG_MEMORY_MAX_RAW" =~ ^[0-9]+$ ]]; then
   config_error "memory.max has non-numeric value '$CG_MEMORY_MAX_RAW'"
@@ -182,7 +226,7 @@ fi
 CG_MEMORY_MAX_BYTES="$CG_MEMORY_MAX_RAW"
 REQUIRED_MEMORY_MAX_BYTES="$((LIMIT_MB * 1024 * 1024))"
 if (( CG_MEMORY_MAX_BYTES > REQUIRED_MEMORY_MAX_BYTES )); then
-  config_error "memory.max=${CG_MEMORY_MAX_BYTES} exceeds profile limit ${REQUIRED_MEMORY_MAX_BYTES}"
+  ensure_constrained_scope "memory.max=${CG_MEMORY_MAX_BYTES} exceeds profile limit ${REQUIRED_MEMORY_MAX_BYTES}"
 fi
 
 CG_CPU_MAX_RAW="$(<"${CGROUP_DIR}/cpu.max")"
@@ -191,19 +235,19 @@ if [[ -z "${CG_CPU_QUOTA_US:-}" || -z "${CG_CPU_PERIOD_US:-}" ]]; then
   config_error "cpu.max has unexpected format '$CG_CPU_MAX_RAW'"
 fi
 if [[ "$CG_CPU_QUOTA_US" == "max" ]]; then
-  config_error "cpu.max is unlimited; expected finite quota/period <= ${VCPU}"
+  ensure_constrained_scope "cpu.max is unlimited; expected finite quota/period <= ${VCPU}"
 fi
 if ! [[ "$CG_CPU_QUOTA_US" =~ ^[0-9]+$ && "$CG_CPU_PERIOD_US" =~ ^[0-9]+$ ]]; then
   config_error "cpu.max values must be numeric, got '$CG_CPU_MAX_RAW'"
 fi
 
-CG_EFFECTIVE_VCPU="$(awk -v q="$CG_CPU_QUOTA_US" -v p="$CG_CPU_PERIOD_US" 'BEGIN { if (p == 0) { print "nan" } else { printf "%.6f", q/p } }')"
+CG_EFFECTIVE_VCPU="$(LC_ALL=C awk -v q="$CG_CPU_QUOTA_US" -v p="$CG_CPU_PERIOD_US" 'BEGIN { if (p == 0) { print "nan" } else { printf "%.6f", q/p } }')"
 if [[ "$CG_EFFECTIVE_VCPU" == "nan" ]]; then
   config_error "cpu.max period is zero"
 fi
-CPU_OVER_LIMIT="$(awk -v effective="$CG_EFFECTIVE_VCPU" -v expected="$VCPU" 'BEGIN { print (effective > expected) ? 1 : 0 }')"
+CPU_OVER_LIMIT="$(LC_ALL=C awk -v q="$CG_CPU_QUOTA_US" -v p="$CG_CPU_PERIOD_US" -v expected="$VCPU" 'BEGIN { if (p == 0) { print 1 } else { print ((q / p) > (expected + 1e-9)) ? 1 : 0 } }')"
 if [[ "$CPU_OVER_LIMIT" == "1" ]]; then
-  config_error "cpu quota/period=${CG_EFFECTIVE_VCPU} exceeds profile vcpu=${VCPU}"
+  ensure_constrained_scope "cpu quota/period=${CG_EFFECTIVE_VCPU} exceeds profile vcpu=${VCPU}"
 fi
 
 JVM_OVERLAY_FLAGS=()
@@ -216,10 +260,29 @@ case "$JVM_GC" in
     exit 1
     ;;
 esac
+
+JVM_XMS_MB="$(awk -v max_ram="$JVM_MAX_RAM_MB" 'BEGIN {
+  x = int(max_ram / 4)
+  if (x < 64) x = 64
+  if (x > max_ram - 32) x = max_ram - 32
+  if (x < 32) x = 32
+  print x
+}')"
+JVM_XMX_MB="$(awk -v max_ram="$JVM_MAX_RAM_MB" 'BEGIN {
+  x = int((max_ram * 3) / 4)
+  if (x < 96) x = 96
+  if (x >= max_ram) x = max_ram - 16
+  if (x < 64) x = 64
+  print x
+}')"
+if (( JVM_XMS_MB > JVM_XMX_MB )); then
+  JVM_XMS_MB="$JVM_XMX_MB"
+fi
+
 JVM_OVERLAY_FLAGS+=("-XX:ActiveProcessorCount=${JVM_ACTIVE_PROCESSOR_COUNT}")
 JVM_OVERLAY_FLAGS+=("-XX:MaxRAM=${JVM_MAX_RAM_MB}m")
-JVM_OVERLAY_FLAGS+=("-Xms64m")
-JVM_OVERLAY_FLAGS+=("-Xmx96m")
+JVM_OVERLAY_FLAGS+=("-Xms${JVM_XMS_MB}m")
+JVM_OVERLAY_FLAGS+=("-Xmx${JVM_XMX_MB}m")
 
 OVERLAY_JOINED="${JVM_OVERLAY_FLAGS[*]}"
 if [[ -n "${JAVA_TOOL_OPTIONS:-}" ]]; then
@@ -231,10 +294,14 @@ fi
 export BENCHMARK_EXECUTION_PROFILE_ID="$EXECUTION_PROFILE_ID"
 export BENCHMARK_TRACK_ID="track-c"
 export BENCHMARK_SKIP_TARGET_BUILD
+export EXERIS_DB_POOL_MIN_SIZE="$CONSTRAINED_DB_POOL_MIN_SIZE"
+export EXERIS_DB_POOL_MAX_SIZE="$CONSTRAINED_DB_POOL_MAX_SIZE"
 
 if [[ "$BENCHMARK_SKIP_TARGET_BUILD" == "1" ]]; then
   echo "[info] BENCHMARK_SKIP_TARGET_BUILD=1 active: constrained mode will use prebuilt target artifacts only"
 fi
+
+echo "[info] Constrained DB pool sizing: min=${EXERIS_DB_POOL_MIN_SIZE} max=${EXERIS_DB_POOL_MAX_SIZE}"
 
 LAUNCH_COMMAND=(
   "./scripts/run-entity-read-by-id.sh"
@@ -348,6 +415,8 @@ jq -n \
   printf 'export JAVA_TOOL_OPTIONS=%q\n' "$JAVA_TOOL_OPTIONS"
   printf 'export BENCHMARK_EXECUTION_PROFILE_ID=%q\n' "$BENCHMARK_EXECUTION_PROFILE_ID"
   printf 'export BENCHMARK_TRACK_ID=%q\n' "$BENCHMARK_TRACK_ID"
+  printf 'export EXERIS_DB_POOL_MIN_SIZE=%q\n' "$EXERIS_DB_POOL_MIN_SIZE"
+  printf 'export EXERIS_DB_POOL_MAX_SIZE=%q\n' "$EXERIS_DB_POOL_MAX_SIZE"
 } > "$LAUNCH_OVERLAY_FILE"
 
 RESULT_FILE="${OUTPUT_DIR}/result.json"

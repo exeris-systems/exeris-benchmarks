@@ -440,7 +440,7 @@ fi
 
 # Step 5: Capture env
 echo "[step 5] Capturing environment..."
-./scripts/capture-env.sh --profile "$PROFILE" --tool h2load > "$OUTPUT_DIR/env.json" || true
+../scripts/capture-env.sh --profile "$PROFILE" --tool h2load > "$OUTPUT_DIR/env.json" || true
 
 # Step 6: Start target
 echo "[step 6] Ensuring benchmark target app..."

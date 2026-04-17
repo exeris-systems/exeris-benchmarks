@@ -71,13 +71,13 @@ For safepoint-bias-free CPU profiling, prefer `-prof async` (async-profiler via 
 -XX:-TieredCompilation     # optional for profiling only, not for baseline results
 ```
 
-### ZGC configuration (Enterprise tier, Java 21)
+### ZGC configuration (TLS, Java 21)
 
-For Enterprise TLS benchmarks using ZGC:
+For TLS benchmarks using ZGC:
 - Set `-Xms` and `-Xmx` to the same value (heap parity) to prevent resize pauses.
 - Set `-XX:SoftMaxHeapSize` to ~90% of `-Xmx` for ZGC allocation stall headroom.
   Example: `-Xms256m -Xmx256m -XX:SoftMaxHeapSize=230m`
-- `-XX:+ZGenerational` required for Java 21 (present in AbstractEnterpriseTlsBenchmark).
+- `-XX:+ZGenerational` required for Java 21 when using generational ZGC mode.
 - Monitor gc.log for `ZAllocationStall` events — any stall invalidates the affected window.
 
 ### Baseline configuration boundaries
@@ -98,14 +98,14 @@ JFR with `dumponexit=true` and `maxsize=256m` uses a ring buffer retaining only 
 - **BoringSSL / OpenSSL via netty-tcnative**: TLS record buffers and handshake state are allocated outside JVM visibility.
 - JNI-native allocations appear in process RSS (`/proc/PID/status` VmRSS) but not in NMT output.
 
-**For all TLS benchmark rows (B4/B5/B6/B7), treat NMT output as JVM-heap-only.** Use RSS from `/usr/bin/time -v` or cgroup `memory.current` as the authoritative total memory figure. NMT result JSON from TLS benchmarks must carry `nmt_incomplete: true`.
+**For all TLS benchmark rows (B4/B5/B6), treat NMT output as JVM-heap-only.** Use RSS from `/usr/bin/time -v` or cgroup `memory.current` as the authoritative total memory figure. NMT result JSON from TLS benchmarks must carry `nmt_incomplete: true`.
 
 ### TLS engine lifecycle and reuse policy
 
 There are two distinct TLS benchmark patterns. Use the appropriate lifecycle
 based on what you're measuring:
 
-> **Framing note:** The B3/B4/B5/B6/B7 comparative set is a _natural implementation
+> **Framing note:** The B3/B4/B5/B6 comparative set is a _natural implementation
 > benchmark_, not a pure crypto-engine comparison. Each row measures TLS record-path
 > cost under the transport model and memory allocator that the implementation
 > deploys in production. Observed differences represent the combined cost of the
@@ -116,8 +116,8 @@ based on what you're measuring:
 
 - `B3`/`B4`/`B5` isolate the TLS engine boundary via their harness models
   (JDK `SSLEngine`, Netty in-memory pipeline, neutral in-process Memory-BIO engine lens).
-- `B6`/`B7` include transport wiring and therefore capture integration-level costs.
-- Claims must preserve this distinction. Do not present `B3`/`B4`/`B5` and `B6`/`B7`
+- `B6` includes transport wiring and therefore captures integration-level costs.
+- Claims must preserve this distinction. Do not present `B3`/`B4`/`B5` and `B6`
   results as a single equivalence class without explicit caveats.
 
 #### Pattern A: Handshake / Lifecycle Benchmarks
@@ -138,8 +138,8 @@ For benchmarks measuring post-handshake encryption/decryption throughput:
 - Handshake is performed once during trial setup; engines remain in ACTIVE state
 - Each measurement captures only the wrap/unwrap hot path, NOT session setup
 - This is the correct and required model for production performance claims
-- Examples: `wrapThroughput`, `unwrapThroughput`, `wrapUnwrapRoundTrip` 
-  in Community/Enterprise engines, B1–C4 in TLS matrix
+- Examples: `wrapThroughput`, `unwrapThroughput`, `wrapUnwrapRoundTrip`
+  in Community/Memory-BIO benchmark harnesses, B1–B6 rows in this repository TLS matrix
 
 **Key correctness rule:** Do not reuse engines that are still in `HANDSHAKE_IN_PROGRESS` 
 state across method invocations if you're measuring handshake progress. Once engines 
@@ -258,9 +258,34 @@ Before storing a result as a baseline:
 | cgroup / cpu limits | required | best-effort |
 | claim_scope | comparison_eligible | exploratory_only |
 | baseline storage | permitted when all axes match | disallowed |
+
+---
+
+## Comparative Hard Gates (Phase 1)
+
+Comparative runtime runs are now fail-closed. Comparative math and claim artifacts are blocked unless all strict gates pass.
+
+Required gates:
+
+1. `G1 track_isolation`: `run_config.track_id` must be present on both sides and identical. Track R and Track N cannot mix.
+2. `G2 eligibility`: only rows with `claim_scope=comparison_eligible`, `runner_status=success`, `reproducibility_status=complete`, `final_reason=ok` are eligible.
+3. `G3 equivalence_strict`: hard-equal checks on scenario, contract, tier, protocol, mode, payload descriptor, concurrency, warmup/measurement windows, and JVM class.
+4. `G4 ab_ba_required`: directional completion evidence is mandatory (`run_config.pair_completion_evidence.*` must match `pair_order` and include completion marker), and `run_config.ab_ba_orders_completed` must include the invocation order for the same `pair_id`.
+5. `G5 drift_placeholder`: drift snapshot metadata is mandatory and fails if observed drift exceeds configured thresholds.
+6. `G6 metadata_completeness`: commit SHA, JDK/tool versions, JVM flags, hardware profile, scenario id, and target classification are mandatory.
+7. `G7 pin_verification`: pinned versions in run config must be present and match actual versions exactly.
+8. `G8 schema_validation`: artifact schema validation is required and fail-closed if validator support is unavailable.
+9. `G9 quarantine_transparency`: rejected runs must emit machine-readable rejection codes.
+10. `G10 reporting_guard`: report must include explicit axis labels and `track_id`, and must not contain cross-track claim text.
+
+Operational behavior:
+
+- If strict gates fail, run is marked `claim_status=non_eligible` and comparative claim artifact generation is blocked.
+- Rejection reason codes are emitted for machine processing in gate summary / rejection-code artifacts.
+- No comparisons are interpreted across track boundaries.
 | comparative claims | permitted when axes and equivalence match | disallowed |
 
-## Report Intake: Hypothesis-to-Scenario Mapping (Java 25+)
+## Report Intake: Hypothesis-to-Scenario Mapping (Java 26+)
 
 Use this mapping to translate external performance hypotheses into Exeris benchmark work without overclaiming: select the matching family and scenarios, capture the listed metadata, and keep conclusions bounded to the declared comparison axis.
 
@@ -273,13 +298,13 @@ Use this mapping to translate external performance hypotheses into Exeris benchm
 | cgroup/CFS throttling risks | RUNTIME | long-run runtime scenarios (for example `scenarios/keepalive-steady`) | throughput variance, latency spikes | cgroups version, CPU limits, `ActiveProcessorCount` | Diagnostic only, not product claim |
 | startup/footprint vs peak throughput trade-off | RUNTIME | `scenarios/cold-connect-single` plus steady scenarios | startup time, RSS, throughput | launch mode, warmup window, measurement duration | Trade-off statement only |
 | protocol differences H1/H2/H3 | COMPAT/RUNTIME | `scenarios/multiplex-32`, `scenarios/health-probe`, protocol matrix scripts (`scripts/run-h2load.sh`, `scripts/run-tls-matrix.sh`, `scripts/report-protocol-matrix.sh`) | req/s, tail latency | explicit protocol label, ALPN/TLS mode | Mode-comparison only |
-| cross-tier claims Community vs Enterprise | RESULTS/DOCS | results and baselines reporting path (`results/**`, `baselines/**`) | normalized deltas, confidence bounds | tier label, target classification | Cross-tier same protocol only with caveats |
 
 ### Intake rules
 
 - Every mapped run must preserve one primary comparison axis.
 - Match payload/concurrency/protocol before comparative claims.
 - Capture commit SHA, JDK/tool versions, JVM flags, hardware profile.
-- Label tier/protocol/family in every artifact.
+- Label protocol/family (and target classification when applicable) in every artifact.
 - If equivalence missing, publish as exploratory only.
 - Avoid enterprise-sensitive raw traces in public artifacts.
+- Community-vs-enterprise comparative claims are out of scope for this repository publication track.

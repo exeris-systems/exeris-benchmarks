@@ -5,7 +5,7 @@ mixing protocol effects with tier effects.
 
 ---
 
-## Axis A — Within-tier protocol comparison
+## Axis A — Within-target protocol comparison
 
 ### Community (open-core)
 
@@ -15,37 +15,27 @@ Question answered:
 
 - What is the protocol/transport impact *within Community*?
 
-### Enterprise
-
-- `enterprise-h1-*` vs `enterprise-h2-*` vs `enterprise-h3-*`
-
-Question answered:
-
-- What is the protocol/transport impact *within Enterprise*?
-- Does `H3` provide value over `H2` fallback?
-
 ---
 
-## Axis B — Cross-tier same-protocol comparison
+## Axis B — Cross-runtime same-protocol comparison
 
-- `community-h1-*` vs `enterprise-h1-*`
-- `community-h2-*` vs `enterprise-h2-*`
+- `exeris-community-h1-*` vs `spring-h1-*`
+- `exeris-community-h1-*` vs `quarkus-h1-*`
+- `spring-h1-*` vs `quarkus-h1-*`
+- `exeris-community-h2-*` vs `spring-h2-*`
+- `exeris-community-h2-*` vs `quarkus-h2-*`
+- `spring-h2-*` vs `quarkus-h2-*`
 
 Question answered:
 
-- What is the edition/tier implementation impact at the same protocol level?
-
-Important:
-
-- `H3` is Enterprise-only and must not be treated as direct cross-tier comparator.
+ - What is the implementation/runtime impact at the same protocol level?
 
 ---
 
 ## Required report sets
 
 1. **Community-only protocol report** (`H1 vs H2`)
-2. **Enterprise-only protocol report** (`H1 vs H2 vs H3`)
-3. **Cross-tier same-protocol report** (`H1`, `H2`)
+2. **Cross-runtime same-protocol report** (`H1`, `H2`)
 
 ---
 
@@ -60,11 +50,13 @@ Important:
 - `concurrent-256`
 - `keepalive-steady`
 - `cold-connect-single`
+- `entity-read-by-id` (transaction-oriented DB read path)
+- `e2e-shop-order-saga` (stateful E2E order+saga path; claim-scope caveats apply)
 
 Additional:
 
-- H2/H3: `multiplex-32`, `multiplex-mixed`
-- H3: `handshake-cold`, `lossy-network`
+- H2: `multiplex-32`, `multiplex-mixed`
+- Compatibility mode (when exposed by target): `tx-commit`, `tx-rollback`
 
 ---
 
@@ -72,17 +64,17 @@ Additional:
 
 Each result JSON should contain:
 
-- `target.tier`: `community` | `enterprise`
-- `target.protocol`: `h1` | `h2` | `h3`
-- `comparison_axis`: `within-tier` | `cross-tier-same-protocol` | `standalone`
+- `target.tier`: `community`
+- `target.protocol`: `h1` | `h2`
+- `comparison_axis`: `within-target` | `cross-runtime-same-protocol` | `standalone`
 
 ---
 
 ## Top comparative reports
 
 1. `community h1 vs h2` baseline
-2. `enterprise h1 vs h2 vs h3` transport report
-3. `community h1 vs enterprise h1`
-4. `community h2 vs enterprise h2`
-5. `enterprise h2 vs h3`
-6. `json-1kb` and `plaintext-hello` cross-matrix summaries
+2. `community h1 cross-runtime` (Exeris/Spring/Quarkus)
+3. `community h2 cross-runtime` (Exeris/Spring/Quarkus)
+4. `json-1kb` and `plaintext-hello` cross-matrix summaries
+5. `e2e-shop-order-saga` protocol/cross-runtime summary with explicit claim-scope labels
+6. Transaction compatibility summary (`tx-commit`/`tx-rollback`) when compatibility endpoints are enabled

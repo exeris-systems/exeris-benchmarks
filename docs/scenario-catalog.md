@@ -170,11 +170,8 @@ Examples:
 
 - `community-h1-plaintext-hello`
 - `community-h2-json-1kb`
-- `enterprise-h1-plaintext-hello`
-- `enterprise-h2-json-1kb`
-- `enterprise-h3-json-1kb`
-- `enterprise-h3-multiplex-32`
-- `enterprise-h3-handshake-cold`
+- `spring-h1-plaintext-hello`
+- `quarkus-h1-plaintext-hello`
 
 ---
 
@@ -186,16 +183,6 @@ Examples:
 |---|---|---|---|---|---|---|---|
 | H1 | yes | yes | yes | yes | yes | yes | no |
 | H2 | yes | yes | yes | yes | yes | yes | yes |
-
-### Enterprise matrix
-
-| Protocol | Plaintext | JSON 1KB | JSON 10KB | 404 | Exception | Concurrency | Multiplex | Handshake | Loss/RTT |
-|---|---|---|---|---|---|---|---|---|---|
-| H1 | yes | yes | yes | yes | yes | yes | no | optional | no |
-| H2 | yes | yes | yes | yes | yes | yes | yes | optional | no |
-| H3 | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-
----
 
 ---
 
@@ -228,9 +215,9 @@ Requires PostgreSQL (postgres:16.2) seeded with 1000 entities (IDs 1–1000, sch
 Pre-run verification via `scenarios/entity-read-by-id/seed/verify-seed.sh` is mandatory.
 Results without a passing verification are invalid.
 
-#### Cross-tier status
+#### Cross-runtime status
 
-**Cross-tier remains deferred.** `scenario.json#cross_tier_equivalence_constraints` is still the control point for Community vs Enterprise separation. A within-tier, same-protocol Community/H1/loopback dual-target comparative path is declared for `entity-read-by-id` via `scenarios/entity-read-by-id/comparative-pair-manifest.json`. This is structural readiness only, not a completed or published comparative result.
+Comparative execution remains constrained to Community/H1/loopback cross-runtime pairs declared in `scenarios/entity-read-by-id/comparative-pair-manifest.json`. This is structural readiness only, not a completed or published comparative result.
 
 #### Maturity promotion workflow
 
@@ -244,12 +231,18 @@ Use the fixed contract campaign path when promoting this scenario from explorato
 
 #### Comparative execution path
 
-For the currently declared dual-target path (`exeris-native-community` vs `spring-jvm-vt-tuned`, Community/H1/loopback):
+For cross-runtime pairwise comparisons (Community/H1/loopback only), use `fixed_contract_cross_runtime_h1_v1` and only allowed pairs from `scenarios/entity-read-by-id/comparative-pair-manifest.json`:
 
-1. Run `scripts/run-comparative.sh` with `--scenario-id entity-read-by-id` and `--contract-id fixed_contract_v1`.
+- `exeris-benchmark-app-community-h1` vs `spring-jvm-vt-tuned`
+- `exeris-benchmark-app-community-h1` vs `quarkus-jvm-vt-tuned`
+- `spring-jvm-vt-tuned` vs `quarkus-jvm-vt-tuned`
+
+1. Run `scripts/run-comparative.sh` with `--scenario-id entity-read-by-id` and `--contract-id fixed_contract_cross_runtime_h1_v1`.
 2. Validate both result bundles with `scripts/validate-comparative-readiness.sh`.
 3. Generate or confirm the fairness artifact with `tools/compute-fairness-index.sh`.
 4. Aggregate only repeated comparative runs with `scripts/aggregate-comparative-results.sh`.
+
+Backend-mode intra-target runs tied to locality variants are outside the active/public scenario catalog scope.
 
 First dual-target comparative execution for this path, and any publishable cross-runtime comparison derived from it, remain pending until complete, claim-eligible run artifacts are captured and reviewed.
 

@@ -133,8 +133,8 @@ reproducibility_metadata_file
 | `timestamp` | ISO8601 | UTC run start time |
 | `phase` | string | warmup / measurement / postprocess |
 | `benchmark_id` | string | Tool-internal benchmark name (e.g., `wrapUnwrapRoundTrip(16384)`) |
-| `tier` | enum | community / enterprise |
-| `implementation_variant` | string | e.g., "Community TLS NIO", "Enterprise Kernel" |
+| `tier` | enum | community (enterprise labels may exist in internal-only artifacts) |
+| `implementation_variant` | string | e.g., "Community TLS NIO", "Spring H1", "Quarkus H2" |
 | `benchmark_family` | enum | micro-jmh / runtime-wrk / runtime-h2load / runtime-k6 |
 | `protocol_mode` | enum | h1 / h2 / h3 / n-a (for JMH) |
 | `execution_class` | enum | exploratory / guard / regression |
@@ -165,7 +165,7 @@ reproducibility_metadata_file
 
 **✅ Fully valid:**
 ```
-2026-03-18T09:15:00Z,measurement,wrapUnwrapRoundTrip(16384),enterprise,Enterprise Kernel Turbo,micro-jmh,n-a,guard,success,complete,ok,comparison_eligible,0,0,30,30,0,0,true,true,true,true,true,./run-20260318/wrap_16k.log,./run-20260318/wrap_16k.json,./run-20260318/wrap_16k.jfr,./run-20260318/wrap_16k-metrics.json,./run-20260318/wrap_16k.cmd,./run-20260318/wrap_16k-jvm.txt,./run-20260318/wrap_16k-repro.json
+2026-03-18T09:15:00Z,measurement,wrapUnwrapRoundTrip(16384),community,Community Kernel TLS,micro-jmh,n-a,guard,success,complete,ok,comparison_eligible,0,0,30,30,0,0,true,true,true,true,true,./run-20260318/wrap_16k.log,./run-20260318/wrap_16k.json,./run-20260318/wrap_16k.jfr,./run-20260318/wrap_16k-metrics.json,./run-20260318/wrap_16k.cmd,./run-20260318/wrap_16k-jvm.txt,./run-20260318/wrap_16k-repro.json
 ```
 
 **⚠️ Partial (5 of 10 cases succeeded):**
@@ -175,7 +175,7 @@ reproducibility_metadata_file
 
 **❌ Empty:**
 ```
-2026-03-18T09:45:00Z,measurement,routing-404,enterprise,Enterprise Kernel,runtime-k6,h1,regression,failed,not_assessable,empty_json,none,0,0,100000,0,0,0,false,false,false,false,true,./run-20260318/route404.log,,,,./run-20260318/route404.cmd,./run-20260318/route404-jvm.txt,./run-20260318/route404-repro.json
+2026-03-18T09:45:00Z,measurement,routing-404,community,Community Kernel,runtime-k6,h1,regression,failed,not_assessable,empty_json,none,0,0,100000,0,0,0,false,false,false,false,true,./run-20260318/route404.log,,,,./run-20260318/route404.cmd,./run-20260318/route404-jvm.txt,./run-20260318/route404-repro.json
 ```
 
 ---
@@ -194,7 +194,7 @@ reproducibility_metadata_file
 - **AND** the compared runs must have:
   - Same `protocol_mode` (do not compare h1 to h2)
   - Same `benchmark_family` (do not compare micro-jmh to runtime-wrk)
-  - Explicitly stated `tier` in report (e.g., "Community vs Community" or "Enterprise H1 vs Enterprise H2", never unlabeled)
+  - Explicitly stated `tier` in report (e.g., "Community vs Community", never unlabeled)
 
 Operational exclusion behavior (compare tooling):
 - The compare gate evaluates baseline first, then current.
@@ -237,7 +237,7 @@ RESULT: NOT ALLOWED. Must exclude partial run or recompute as "average of
 
 **Violation example:**
 ```
-Dashboard shows: [No Data] for Enterprise H3, runner_status=failed
+Dashboard shows: [No Data] for Community H2, runner_status=failed
 Attempt: Include in "fastest tier" ranking
 RESULT: NOT ALLOWED. That run produced zero evidence.
 ```
@@ -361,42 +361,11 @@ validate_classification() {
 
 ---
 
-## Implementation Roadmap
+## Implementation Note
 
-### Phase 1: Classification Logic (tools/bench/lib/status.sh)
-
-Update `classify_bench_status()` to:
-1. Read runner_status (3 values), reproducibility_status (4 values)
-2. Compute final_reason (9 codes, priority order)
-3. Compute claim_scope (derived from above)
-4. Output both JSON and CSV-ready format
-
-### Phase 2: CSV Schema & Generation
-
-1. Update `init_status_csv()` and `write_status_csv()` to include all required fields
-2. Ensure all benchmark runners (JMH, wrk, h2load, k6) populate the CSV identically
-3. Commit updated CSV schema to this document
-
-### Phase 3: Evidence Lab Gating
-
-1. In any tool that reads status.csv for comparisons/aggregations:
-   - Reject runs where `claim_scope ≠ "comparison_eligible"`
-   - Log rejection reason with `final_reason` code
-   - Prevent any arithmetic or statistical operation on non-comparison_eligible runs
-
-### Phase 4: Dashboard / Report Enforcement
-
-1. Comparison sections display only `claim_scope = "comparison_eligible"`
-2. Descriptive sections display `claim_scope in ["descriptive_partial", "descriptive_only"]` with `[INCOMPLETE]` label
-3. Failed runs display only failure reason: `claim_scope = "none"`
-4. No averaging or rollup across different claim_scope values
-
-### Phase 5: Documentation & Testing
-
-1. Add this file to docs/
-2. Update result-interpretation.md with reference to this file
-3. Test all 10 matrix cases; add test outputs to CI
-4. Update README with pointer to claim eligibility rules
+This document is normative (policy/spec), not a delivery roadmap.
+Implementation details, rollout sequencing, and CI task tracking should live in
+tooling tickets/PRs and not in this policy file.
 
 ---
 
@@ -410,22 +379,5 @@ Update `classify_bench_status()` to:
 
 ---
 
-## Sign-Off Criteria
-
-✅ **Methodology is locked for sign-off when:**
-
-- [ ] Exact semantics defined: runner_status (3 values), reproducibility_status (4 values), final_reason (9 codes), claim_scope (4 values)
-- [ ] CSV schema committed with all required fields + field definitions
-- [ ] Claim eligibility rules documented + enforceable (gating code path specified)
-- [ ] Test matrix: all 10 cases classify correctly + produce correct claim_scope
-- [ ] Automated validation script (verify_classification.sh) runs on every status.csv write
-- [ ] Implementation roadmap phases 1–5 scheduled or complete
-- [ ] No status.csv row can exist where claim_scope="comparison_eligible" but final_reason ≠ "ok"
-- [ ] No evidence lab code path can read/aggregate runs with claim_scope ≠ "comparison_eligible" for comparison purposes
-
----
-
-**Last Updated:** 2026-03-18  
-**Status:** PENDING SIGN-OFF  
-**Approval Required:** Benchmark Architecture Review  
+**Last Updated:** 2026-04-12
 

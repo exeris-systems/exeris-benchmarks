@@ -20,20 +20,20 @@ RouteRegistryBenchmark.lookup   avgt   30   123.456 ±  4.567  ns/op
 A large `Error` relative to `Score` means the benchmark is noisy. Investigate
 before storing as baseline.
 
-## B3/B4/B5/B6/B7 publication legend
+## B3/B4/B5/B6 publication legend
 
 Use these labels in reports so profile metrics are interpreted against the correct transport model.
+The `harness_model` column is the primary separation axis for this benchmark set.
 
-| Label | Meaning |
-|---|---|
-| `B3` | JDK `SSLEngine` baseline |
-| `B4` | Netty tcNative baseline |
-| `B5` | Exeris OffHeapTlsEngine engine-level benchmark via neutral in-process Memory-BIO harness |
-| `B6` | Exeris Community FD-owner/socket path (includes kernel crossing) |
-| `B7` | Exeris Enterprise Memory-BIO path (in-process) |
+| Label | Harness Model | Meaning |
+|---|---|---|
+| `B3` | `external-baseline` | JDK `SSLEngine` reference baseline — pure crypto cost, no I/O |
+| `B4` | `external-baseline` | Netty tcNative reference baseline — pipeline + pooling cost |
+| `B5` | `memory-bio` | Exeris OffHeapTlsEngine engine-level lens via neutral in-process Memory-BIO harness |
+| `B6` | `fd-owner` | Exeris FD-owner/socket integration lens — real loopback socket, includes kernel crossing |
 
-Use `B3`/`B4`/`B5` for engine-level claims and `B6`/`B7` for integration-level claims.
-GC and heap comparisons are valid only when each result is explicitly labeled with its model (`B3`/`B4`/`B5`/`B6`/`B7`) and tier/protocol context. Do not interpret cross-model GC/heap deltas as equivalent engine overhead without those labels.
+Use `B3`/`B4`/`B5` for engine-level claims and `B6` for integration-level claims.
+GC and heap comparisons are valid only when each result is explicitly labeled with its model (`B3`/`B4`/`B5`/`B6`) and `harness_model` context. Do not interpret cross-model GC/heap deltas as equivalent engine overhead without those labels.
 
 ---
 
@@ -165,12 +165,39 @@ Before publishing or citing a benchmark result, verify all of the following:
 - **Exploratory runs** must be explicitly labeled as exploratory in every publication
   artifact. Non-regression language ("no degradation observed") is acceptable;
   headline throughput comparisons are not.
-- **Cross-tier claims** (Community vs Enterprise) require: same protocol mode, same
-  payload and concurrency level, same hardware profile, and an explicit tier label on
-  both sides. A missing tier label on either side blocks the cross-tier claim.
+- **Cross-tier claims** (Community vs Enterprise) are out of scope for this repository
+  publication track.
 - **Protocol and family constraints**: claims comparing H1 vs H2, micro vs runtime,
   or pure vs compatibility require explicit labels on both sides and must not be
   collapsed into a single headline without caveats.
+- **E2E saga interpretation constraint**: for `e2e-shop-order-saga`, use explicit
+  claim-scope labels from scenario contracts. Treat `coverage_limited_*` rows as
+  descriptive only; do not publish headline cross-runtime superiority claims from
+  those rows.
+- **Transaction compatibility interpretation constraint**: `tx-commit`/`tx-rollback`
+  results are compatibility-mode summaries. Interpret as mode/behavior diagnostics,
+  not as standalone runtime superiority claims.
 - **Guard runs** (EXECUTION_CLASS=guard, forks >= 2) are the minimum bar for
   `comparison_eligible` status. Single-fork or exploratory runs cannot carry that
   designation regardless of other metadata completeness.
+
+---
+
+## Comparative Phase-1 Interpretation Guard
+
+For comparative runtime artifacts produced by `scripts/run-comparative.sh`:
+
+- Read `claim_status` first. Comparative claims are allowed only when `claim_status=comparison_eligible`.
+- Treat `track_id` as a hard boundary. Do not interpret or summarize Track R and Track N in one comparative statement.
+- Use `eligibility_gates` / `gate_status` and `rejection_codes` to explain exclusions. If any strict gate failed, interpret as non-eligible evidence only.
+- AB/BA is mandatory evidence. If the AB/BA gate is not PASS, do not compute or narrate comparative deltas.
+- Missing or mismatched pinned versions invalidate comparative interpretation even when raw metrics look complete.
+
+Required report axis labels:
+
+- `tier=...`
+- `protocol_mode=...`
+- `benchmark_family=...`
+- `track_id=...`
+
+Cross-track claim text is prohibited in report outputs.

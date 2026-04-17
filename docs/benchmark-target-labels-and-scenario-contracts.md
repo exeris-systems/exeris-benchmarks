@@ -48,6 +48,7 @@ Substrate must not be inferred from tuning labels; native-image targets must use
 
 - `exeris-native-community`
 - `exeris-runtime-community`
+- `exeris-benchmark-app-community-h1`
 - `spring-jvm-vt-tuned`
 - `spring-native-default`
 - `quarkus-jvm-vt-tuned`
@@ -57,6 +58,7 @@ Suggested `target_descriptor` values:
 
 - `Exeris native image (Community)`
 - `Exeris runtime JVM (Community)`
+- `Exeris standalone benchmark app (Community, H1)`
 - `Spring Boot JVM + virtual threads (tuned)`
 - `Spring Boot native image`
 - `Quarkus JVM + virtual threads (tuned)`
@@ -82,7 +84,6 @@ Fail-fast behavior:
 
 - Unknown `target_id` values fail with `CONFIG_ERROR` and a non-zero exit.
 - Unsupported but recognized `target_id` values (for example, native/quarkus profiles without launcher assets) fail with `CONFIG_ERROR` and an explicit unsupported reason.
-- Legacy aliases (`community`, `enterprise`, `spring-runtime`) are normalized to canonical `target_id` values before launch.
 
 ## Comparative Claim Contract vs Operational Runnable Contract
 
@@ -108,7 +109,7 @@ Required fields:
 - `contract_revision`: Monotonic revision label.
 - `benchmark_family`: Runtime or Micro.
 - `protocol_mode`: H1, H2, or H3.
-- `tier_scope`: Community, Enterprise, or explicit dual-tier note.
+- `tier_scope`: Community (or explicit scope note for non-community tracks outside this repo's active docs path).
 - `mode`: Pure or Compatibility.
 - `workload_class`: Guard/Regression or Exploratory.
 - `endpoint.name`: Logical endpoint/workflow name.
@@ -129,6 +130,8 @@ For any declared dual-target comparative execution path, a scenario contract is 
 For the current `entity-read-by-id` path, use:
 
 - `scenarios/entity-read-by-id/comparative-pair-manifest.json` as the source of allowed target pairs, declared asymmetries, and fixed measurement expectations.
+- `fixed_contract_cross_runtime_h1_v1` for pairwise cross-runtime Community/H1/loopback runs.
+- `fixed_contract_backend_mode_h1_v1` only for intra-target backend-mode comparisons (default-vt vs locality-aware).
 - `scripts/run-comparative.sh` to orchestrate the paired run.
 - `scripts/validate-comparative-readiness.sh` to enforce readiness gates across both result bundles.
 - `tools/compute-fairness-index.sh` to generate the fairness artifact used by comparative outputs.

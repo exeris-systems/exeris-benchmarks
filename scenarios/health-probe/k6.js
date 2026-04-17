@@ -3,6 +3,7 @@ import { check, sleep } from 'k6';
 
 const baseUrl = __ENV.BASE_URL || 'http://127.0.0.1:18080';
 const expectedStatus = Number(__ENV.EXPECT_STATUS || 200);
+const closeConnection = (__ENV.CONNECTION_CLOSE || 'true').toLowerCase() !== 'false';
 
 export const options = {
   stages: [
@@ -17,11 +18,15 @@ export const options = {
 };
 
 export default function () {
-  const response = http.get(`${baseUrl}/health`, {
-    headers: {
-      Connection: 'close',
-    },
-  });
+  const params = closeConnection
+    ? {
+        headers: {
+          Connection: 'close',
+        },
+      }
+    : {};
+
+  const response = http.get(`${baseUrl}/health`, params);
 
   check(response, {
     'status is expected': (r) => r.status === expectedStatus,

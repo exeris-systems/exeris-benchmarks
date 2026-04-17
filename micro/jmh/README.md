@@ -125,6 +125,7 @@ java \
    -Dexeris.tls.community.certPem=/tmp/community-cert.pem \
    -Dexeris.tls.community.keyPem=/tmp/community-key.pem \
    -jar target/benchmarks.jar ExerisCommunityTlsBenchmark
+```
 
 ## Comparative caveat: B3/B4 vs B6/B5
 

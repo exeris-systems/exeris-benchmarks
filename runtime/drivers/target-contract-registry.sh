@@ -27,9 +27,11 @@ normalize_target_alias() {
   case "${raw_id}" in
     community) echo "exeris-native-community" ;;
     enterprise) echo "exeris-kernel-enterprise" ;;
-    spring-benchmark-app|spring-runtime|spring-app-axon) echo "spring-jvm-vt-tuned" ;;
-    quarkus-benchmark-app|quarkus-runtime|quarkus-app-axon) echo "quarkus-jvm-vt-tuned" ;;
-    exeris-community-app|exeris-e2e-community-h2c) echo "exeris-e2e-community-h2" ;;
+    spring-benchmark-app|spring-runtime) echo "spring-jvm-vt-tuned" ;;
+    spring-app-axon) echo "spring-app-axon" ;;
+    quarkus-benchmark-app|quarkus-runtime) echo "quarkus-jvm-vt-tuned" ;;
+    quarkus-app-axon) echo "quarkus-app-axon" ;;
+    exeris-community-app|exeris-e2e-community-h2c) echo "exeris-community-app" ;;
     exeris-benchmark-app|exeris-runtime-h1) echo "exeris-benchmark-app-community-h1" ;;
     *) echo "${raw_id}" ;;
   esac

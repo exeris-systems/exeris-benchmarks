@@ -7,7 +7,7 @@ Docker Compose configurations for containerized benchmark targets and support se
 | Service | Image | Purpose |
 |---|---|---|
 | exeris-runtime | local/exeris-community-runtime:latest | Exeris Community Runtime container |
-| postgres | postgres:15-alpine | Database for integration scenarios |
+| postgres | postgres:16.2 | Database for integration scenarios |
 | redis | redis:7-alpine | Cache fixture (optional) |
 
 ## Running Compose Stack

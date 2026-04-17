@@ -84,7 +84,7 @@ if jq -e '
     (.jar_path | type == "string") and
     (.health_url | type == "string" and length > 0) and
     (.asset_state | IN("runnable", "non_runnable")) and
-    (.eligibility_class | IN("baseline-candidate", "non-runnable")) and
+    (.eligibility_class | IN("baseline-candidate", "locality-research", "non-runnable")) and
     (.missing_assets | type == "array") and
     (.non_runnable_reason | type == "string")
   ))
@@ -131,8 +131,11 @@ done
 
 mapfile -t runnable_targets < <(jq -r '.targets[] | select(.asset_state == "runnable") | .target_id' "${MATRIX_PATH}" | sort)
 for target_id in "${runnable_targets[@]}"; do
+  eligibility_class="$(jq -r --arg id "${target_id}" '.targets[] | select(.target_id == $id) | .eligibility_class' "${MATRIX_PATH}")"
   if grep -Fxq "${target_id}" "${scenario_targets_tmp}"; then
     pass "runnable target appears in compatible_targets: ${target_id}"
+  elif [[ "${eligibility_class}" == "locality-research" ]]; then
+    pass "runnable target explicitly scoped to locality research: ${target_id}"
   elif contains_justified_unused "${target_id}"; then
     pass "runnable target justified as temporarily unused: ${target_id}"
   else

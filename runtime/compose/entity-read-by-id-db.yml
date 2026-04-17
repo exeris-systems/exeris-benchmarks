@@ -22,7 +22,7 @@ services:
       - ./entity-read-by-id-init.sql:/docker-entrypoint-initdb.d/01-pg-stat-statements-init.sql
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U benchmark -d benchmark_db && psql -U benchmark -d benchmark_db -c \"SELECT pg_stat_statements_reset();\" > /dev/null 2>&1"]
+      test: ["CMD-SHELL", "pg_isready -U benchmark -d benchmark_db && psql -U benchmark -d benchmark_db -c \"SELECT pg_stat_statements_reset(0::oid, 0::oid, 0::bigint);\" > /dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       retries: 10

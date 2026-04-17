@@ -47,6 +47,14 @@ if [[ -n "$TARGET_ENV" && -f "$TARGET_ENV" ]]; then
   fi
 fi
 
+ENV_HEALTH_URL="${HEALTH_URL:-}"
+HEALTH_URL="$TARGET_CONTRACT_HEALTH_URL"
+export HEALTH_URL
+
+if [[ -n "$ENV_HEALTH_URL" && "$ENV_HEALTH_URL" != "$TARGET_CONTRACT_HEALTH_URL" ]]; then
+  echo "  NOTE: ignoring env HEALTH_URL='${ENV_HEALTH_URL}' and using resolved contract '${TARGET_CONTRACT_HEALTH_URL}'"
+fi
+
 # Auto-provision smoke TLS cert/key for HTTPS targets when cert path is not configured.
 # Mirrors the cert setup used in scripts/run-primary-tls-matrix.sh and run-e2e-shop-order-saga-baseline.sh.
 if [[ "${HEALTH_URL:-}" == https://* && -z "${EXERIS_TRANSPORT_CERT_PATH:-}" ]]; then
@@ -144,7 +152,6 @@ case "${START_MODE}" in
 esac
 
 # Wait for readiness
-HEALTH_URL="${HEALTH_URL:-$TARGET_CONTRACT_HEALTH_URL}"
 TIMEOUT="${HEALTH_TIMEOUT_SECONDS:-60}"
 echo "  Waiting for readiness: $HEALTH_URL (timeout: ${TIMEOUT}s)"
 

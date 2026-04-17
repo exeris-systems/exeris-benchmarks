@@ -1,14 +1,14 @@
 # entity-read-by-id
 
 **Scenario ID:** `entity-read-by-id`  
-**Endpoint:** `GET /api/v1/entities/{id}`  
+**Endpoint:** `GET /api/v1/users`  
 **Mode:** `baseline-db`  
 **Tier:** Community (first)  
-**Driver:** wrk  
-**Transport:** H1
+**Driver:** wrk / h2load  
+**Transport:** H1 contract (with H2 coverage where explicitly declared)
 
-Compatibility note: target apps also expose the frozen cross-runtime contract `GET /api/v1/users`.
-This scenario intentionally remains on `GET /api/v1/entities/{id}` for backwards-compatible script semantics.
+Contract note: the exercised wrk, wrk2, and h2load paths use the frozen cross-runtime endpoint `GET /api/v1/users`.
+Older entity-style wording is historical only and is not the active driver path for this scenario.
 
 ---
 

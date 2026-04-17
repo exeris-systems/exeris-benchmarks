@@ -66,13 +66,20 @@ jobs:
           TIER="${{ github.event.inputs.target_tier }}"
           MODE="${{ github.event.inputs.target_mode }}"
           ARCHIVE_DIR="results/history/${TIER}/${MODE}"
+          ENV_FILE="${{ steps.locate.outputs.env_file }}"
           mkdir -p "$ARCHIVE_DIR"
 
-          ./scripts/publish-report.sh \
-            --result "${{ steps.locate.outputs.result }}" \
-            ${ENV_FILE:+--env "${{ steps.locate.outputs.env_file }}"} \
-            --output "results/summaries/" \
+          publish_args=(
+            --result "${{ steps.locate.outputs.result }}"
+            --output "results/summaries/"
             --archive "$ARCHIVE_DIR"
+          )
+
+          if [[ -n "$ENV_FILE" ]]; then
+            publish_args+=(--env "$ENV_FILE")
+          fi
+
+          ./scripts/publish-report.sh "${publish_args[@]}"
 
       - name: Update baseline (if requested)
         if: ${{ github.event.inputs.is_baseline == 'true' }}

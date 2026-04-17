@@ -3,7 +3,7 @@ set -euo pipefail
 
 ACTION="${1:-up}"
 CONTAINER_NAME="${CONTAINER_NAME:-exeris-community-postgres}"
-IMAGE="${IMAGE:-postgres:17-alpine}"
+IMAGE="${IMAGE:-postgres:16.2}"
 HOST_PORT="${HOST_PORT:-5432}"
 DB_NAME="${DB_NAME:-exeris}"
 DB_USER="${DB_USER:-exeris}"

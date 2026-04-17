@@ -827,6 +827,7 @@ if ! target_reachable; then
   if [[ "$TARGET_BUILD" == "jvm" ]]; then
     TARGET_CMD+=(java)
     if [[ "$TARGET_RUNTIME_EFFECTIVE" == "community" || "$TARGET_RUNTIME_EFFECTIVE" == "locality" ]]; then
+      TARGET_CMD+=(--add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED)
       TARGET_CMD+=(--enable-preview)
       TARGET_CMD+=(-Dexeris.backend.mode="$BACKEND_MODE")
       TARGET_CMD+=(-Dexeris.backend.mode.strict="$BENCHMARK_LOCALITY_STRICT")

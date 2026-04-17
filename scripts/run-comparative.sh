@@ -215,6 +215,30 @@ extract_health_port() {
   return 1
 }
 
+comparative_base_url_from_health_url() {
+  local health_url="${1:-}"
+  local base_url=""
+
+  if ! base_url="$(bench_normalize_health_base_url "$health_url")"; then
+    echo "CONFIG_ERROR: unable to derive base URL from health_url '${health_url}'" >&2
+    return 64
+  fi
+
+  printf '%s\n' "$base_url"
+}
+
+comparative_endpoint_url_from_health_url() {
+  local health_url="${1:-}"
+  local path="${2:-}"
+  local base_url=""
+
+  if ! base_url="$(comparative_base_url_from_health_url "$health_url")"; then
+    return 64
+  fi
+
+  printf '%s%s\n' "$base_url" "$path"
+}
+
 extract_endpoint_path_from_method_endpoint() {
   local method_endpoint="${1:-}"
   # Input format: "GET /api/v1/users" -> extract "/api/v1/users"
@@ -1240,11 +1264,20 @@ capture_jfr_metadata() {
 
 diagnose_endpoint() {
   local target_id="$1"
-  local port="$2"
+  local health_url="$2"
   local path="$3"
   local output_file="${4:-/tmp/endpoint-diag.txt}"
-  local url="http://localhost:${port}${path}"
+  local url=""
   local response_file http_code
+  local -a curl_args=()
+
+  if ! url="$(comparative_endpoint_url_from_health_url "$health_url" "$path")"; then
+    return 64
+  fi
+
+  if [[ "$url" == https://* ]]; then
+    curl_args=(-k)
+  fi
 
   response_file=$(mktemp)
   
@@ -1256,10 +1289,9 @@ diagnose_endpoint() {
   
   # Perform endpoint preflight and capture response payload with headers.
   echo "Attempting curl request..." | tee -a "$output_file"
-  if bench_run_endpoint_preflight_with_headers "$url" "$response_file" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
-    http_code="$BENCH_PREFLIGHT_HTTP_CODE"
-  else
-    http_code="${BENCH_PREFLIGHT_HTTP_CODE:-000}"
+  http_code="$(curl -sS "${curl_args[@]}" -i -o "$response_file" -w "%{http_code}" --max-time "$ENTITY_READ_PREFLIGHT_TIMEOUT" "$url" 2>/dev/null || true)"
+  if [[ -z "$http_code" ]]; then
+    http_code="000"
   fi
   
   echo "" | tee -a "$output_file"
@@ -1282,17 +1314,22 @@ diagnose_endpoint() {
 
 wait_for_target_ready() {
   local target_id="$1"
-  local port="$2"
+  local health_url="$2"
   local timeout_seconds="${3:-60}"
   local ready_file="${4:-}"
   local sync_log="${OUTPUT_DIR}/logs/sync-log.txt"
   local deadline attempts now http_status ts
+  local -a curl_args=()
+
+  if [[ "$health_url" == https://* ]]; then
+    curl_args=(-k)
+  fi
 
   mkdir -p "${OUTPUT_DIR}/logs"
   touch "$sync_log"
 
   ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
-  echo "[${ts}] waiting for ${target_id} on http://localhost:${port}/health (timeout=${timeout_seconds}s)" | tee -a "$sync_log"
+  echo "[${ts}] waiting for ${target_id} on ${health_url} (timeout=${timeout_seconds}s)" | tee -a "$sync_log"
 
   deadline=$(( $(date +%s) + timeout_seconds ))
   attempts=0
@@ -1301,12 +1338,12 @@ wait_for_target_ready() {
     now="$(date +%s)"
     if [[ "$now" -ge "$deadline" ]]; then
       ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
-      echo "[${ts}] TIMEOUT waiting for ${target_id} on http://localhost:${port}/health" | tee -a "$sync_log"
-      echo "ERROR: ${target_id} not ready within ${timeout_seconds}s on localhost:${port}/health" >&2
+      echo "[${ts}] TIMEOUT waiting for ${target_id} on ${health_url}" | tee -a "$sync_log"
+      echo "ERROR: ${target_id} not ready within ${timeout_seconds}s on ${health_url}" >&2
       exit 1
     fi
 
-    http_status="$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://localhost:${port}/health" 2>/dev/null || echo "000")"
+    http_status="$(curl -s "${curl_args[@]}" -o /dev/null -w "%{http_code}" --max-time 2 "$health_url" 2>/dev/null || echo "000")"
     attempts=$((attempts + 1))
     if [[ "$http_status" == "200" ]]; then
       ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
@@ -1323,17 +1360,25 @@ wait_for_target_ready() {
 
 wait_for_target_endpoint_ready() {
   local target_id="$1"
-  local port="$2"
+  local health_url="$2"
   local path="$3"
   local timeout_seconds="${4:-60}"
   local label="$5"
   local sync_log="${OUTPUT_DIR}/logs/sync-log.txt"
   local endpoint deadline attempts now http_status ts elapsed
+  local -a curl_args=()
 
   mkdir -p "${OUTPUT_DIR}/logs"
   touch "$sync_log"
 
-  endpoint="http://localhost:${port}${path}"
+  if ! endpoint="$(comparative_endpoint_url_from_health_url "$health_url" "$path")"; then
+    exit 64
+  fi
+
+  if [[ "$endpoint" == https://* ]]; then
+    curl_args=(-k)
+  fi
+
   ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
   echo "[${ts}] waiting for ${target_id} endpoint ${endpoint} label=${label} (timeout=${timeout_seconds}s)" | tee -a "$sync_log"
 
@@ -1349,11 +1394,11 @@ wait_for_target_endpoint_ready() {
       echo "[${ts}] TIMEOUT waiting for ${target_id} endpoint ${endpoint} label=${label}" | tee -a "$sync_log"
       echo "ERROR: endpoint readiness timeout target_id=${target_id} endpoint=${endpoint} label=${label} timeout_seconds=${timeout_seconds}" >&2
       echo "Running verbose diagnostic on endpoint after timeout..." | tee -a "$sync_log"
-      diagnose_endpoint "$target_id" "$port" "$path" "${OUTPUT_DIR}/logs/endpoint-diag-timeout-${target_id}.txt"
+      diagnose_endpoint "$target_id" "$health_url" "$path" "${OUTPUT_DIR}/logs/endpoint-diag-timeout-${target_id}.txt"
       exit 1
     fi
 
-    http_status="$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "$endpoint" 2>/dev/null || echo "000")"
+    http_status="$(curl -s "${curl_args[@]}" -o /dev/null -w "%{http_code}" --max-time 2 "$endpoint" 2>/dev/null || echo "000")"
     attempts=$((attempts + 1))
     ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
     if [[ "$http_status" == "200" ]]; then
@@ -1691,23 +1736,33 @@ validate_external_target_prereqs() {
 
 validate_external_target_readiness() {
   local target_id="$1"
-  local target_port="$2"
-  local target_contract_json="$3"
-  local launcher_mode http_status
+  local target_contract_json="$2"
+  local launcher_mode health_url http_status
+  local -a curl_args=()
 
   launcher_mode="$(jq -r '.launcher_mode' <<<"$target_contract_json")"
   if [[ "$launcher_mode" != "external" ]]; then
     return 0
   fi
 
-  http_status="$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://localhost:${target_port}/health" 2>/dev/null || echo "000")"
+  health_url="$(jq -r '.health_url // empty' <<<"$target_contract_json")"
+  if [[ -z "$health_url" ]]; then
+    echo "CONFIG_ERROR: target '${target_id}' (launcher_mode=external) is missing contract health_url" >&2
+    exit 64
+  fi
+
+  if [[ "$health_url" == https://* ]]; then
+    curl_args=(-k)
+  fi
+
+  http_status="$(curl -s "${curl_args[@]}" -o /dev/null -w "%{http_code}" --max-time 2 "$health_url" 2>/dev/null || echo "000")"
   if [[ "$http_status" != "200" ]]; then
-    echo "ERROR: target '${target_id}' (launcher_mode=external) is not ready before Stage 4: http://localhost:${target_port}/health returned HTTP ${http_status}" >&2
+    echo "ERROR: target '${target_id}' (launcher_mode=external) is not ready before Stage 4: ${health_url} returned HTTP ${http_status}" >&2
     echo "ACTION: start target first, then re-run: runtime/drivers/start-target.sh ${target_id}" >&2
     exit 1
   fi
 
-  echo -e "  ${GREEN}✓${NC} External target '${target_id}' is ready on http://localhost:${target_port}/health."
+  echo -e "  ${GREEN}✓${NC} External target '${target_id}' is ready on ${health_url}."
 }
 
 run_endpoint_contract_test_gate() {
@@ -2378,8 +2433,8 @@ validate_external_target_prereqs "$TARGET_B" "$TARGET_B_PORT" "$TARGET_B_CONTRAC
     echo "  WARNING: No scenario infra-setup script found for ${SCENARIO_ID}; skipping DB/seed preparation."
   fi
 
-validate_external_target_readiness "$TARGET_A" "$TARGET_A_PORT" "$TARGET_A_CONTRACT_JSON"
-validate_external_target_readiness "$TARGET_B" "$TARGET_B_PORT" "$TARGET_B_CONTRACT_JSON"
+validate_external_target_readiness "$TARGET_A" "$TARGET_A_CONTRACT_JSON"
+validate_external_target_readiness "$TARGET_B" "$TARGET_B_CONTRACT_JSON"
 
 touch "${OUTPUT_DIR}/stage3-complete.marker"
 echo -e "  ${GREEN}✓${NC} stage3-complete.marker written."
@@ -2429,6 +2484,7 @@ date -u +%Y-%m-%dT%H:%M:%S.%3NZ > "${OUTPUT_DIR}/logs/measurement-start-timestam
 
 FIRST_TARGET_ID="$TARGET_A"
 FIRST_TARGET_PORT="$TARGET_A_PORT"
+FIRST_TARGET_HEALTH_URL="$TARGET_A_HEALTH_URL"
 FIRST_TARGET_OUTDIR="${OUTPUT_DIR}/target-a"
 FIRST_TARGET_ENDPOINT="$SCENARIO_ENDPOINT_PATH"
 FIRST_TARGET_CONTRACT_JSON="$TARGET_A_CONTRACT_JSON"
@@ -2437,6 +2493,7 @@ FIRST_TARGET_SLOT="target-a"
 
 SECOND_TARGET_ID="$TARGET_B"
 SECOND_TARGET_PORT="$TARGET_B_PORT"
+SECOND_TARGET_HEALTH_URL="$TARGET_B_HEALTH_URL"
 SECOND_TARGET_OUTDIR="${OUTPUT_DIR}/target-b"
 SECOND_TARGET_ENDPOINT="$SCENARIO_ENDPOINT_PATH"
 SECOND_TARGET_CONTRACT_JSON="$TARGET_B_CONTRACT_JSON"
@@ -2446,6 +2503,7 @@ SECOND_TARGET_SLOT="target-b"
 if [[ "$PAIR_ORDER" == "ba" ]]; then
   FIRST_TARGET_ID="$TARGET_B"
   FIRST_TARGET_PORT="$TARGET_B_PORT"
+  FIRST_TARGET_HEALTH_URL="$TARGET_B_HEALTH_URL"
   FIRST_TARGET_OUTDIR="${OUTPUT_DIR}/target-b"
   FIRST_TARGET_ENDPOINT="$SCENARIO_ENDPOINT_PATH"
   FIRST_TARGET_CONTRACT_JSON="$TARGET_B_CONTRACT_JSON"
@@ -2454,6 +2512,7 @@ if [[ "$PAIR_ORDER" == "ba" ]]; then
 
   SECOND_TARGET_ID="$TARGET_A"
   SECOND_TARGET_PORT="$TARGET_A_PORT"
+  SECOND_TARGET_HEALTH_URL="$TARGET_A_HEALTH_URL"
   SECOND_TARGET_OUTDIR="${OUTPUT_DIR}/target-a"
   SECOND_TARGET_ENDPOINT="$SCENARIO_ENDPOINT_PATH"
   SECOND_TARGET_CONTRACT_JSON="$TARGET_A_CONTRACT_JSON"
@@ -2461,8 +2520,8 @@ if [[ "$PAIR_ORDER" == "ba" ]]; then
   SECOND_TARGET_SLOT="target-a"
 fi
 
-wait_for_target_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_PORT" "${HEALTH_TIMEOUT_SECONDS:-60}" "${OUTPUT_DIR}/logs/${FIRST_TARGET_SLOT}-ready-timestamp.txt"
-wait_for_target_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_PORT" "${HEALTH_TIMEOUT_SECONDS:-60}" "${OUTPUT_DIR}/logs/${SECOND_TARGET_SLOT}-ready-timestamp.txt"
+wait_for_target_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_HEALTH_URL" "${HEALTH_TIMEOUT_SECONDS:-60}" "${OUTPUT_DIR}/logs/${FIRST_TARGET_SLOT}-ready-timestamp.txt"
+wait_for_target_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_HEALTH_URL" "${HEALTH_TIMEOUT_SECONDS:-60}" "${OUTPUT_DIR}/logs/${SECOND_TARGET_SLOT}-ready-timestamp.txt"
 
 # Define sync_log for this stage (it's used by multiple functions below)
 sync_log="${OUTPUT_DIR}/logs/sync-log.txt"
@@ -2990,7 +3049,7 @@ run_wrk_target "$FIRST_TARGET_ID" "$FIRST_TARGET_PORT" "${FIRST_TARGET_OUTDIR}" 
 parse_wrk_to_result "${FIRST_TARGET_OUTDIR}/wrk-raw.txt" "${FIRST_TARGET_OUTDIR}/result.json" "$FIRST_TARGET_ID" "$RUN_TS" "$FIRST_TARGET_CONTRACT_JSON" "$FIRST_TARGET_CLAIM_SCOPE" "$PAIR_ORDER" "$FIRST_TARGET_SLOT" "$FIRST_TARGET_JVM_FLAGS_JSON"
 echo -e "  ${GREEN}✓${NC} target-a measurement complete."
 
-wait_for_target_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_PORT" "${HEALTH_TIMEOUT_SECONDS:-60}" "${OUTPUT_DIR}/logs/${SECOND_TARGET_SLOT}-ready-timestamp.txt"
+wait_for_target_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_HEALTH_URL" "${HEALTH_TIMEOUT_SECONDS:-60}" "${OUTPUT_DIR}/logs/${SECOND_TARGET_SLOT}-ready-timestamp.txt"
 
 run_wrk_target "$SECOND_TARGET_ID" "$SECOND_TARGET_PORT" "${SECOND_TARGET_OUTDIR}" "$SECOND_TARGET_ENDPOINT" "$SECOND_TARGET_CONTRACT_JSON"
 parse_wrk_to_result "${SECOND_TARGET_OUTDIR}/wrk-raw.txt" "${SECOND_TARGET_OUTDIR}/result.json" "$SECOND_TARGET_ID" "$RUN_TS" "$SECOND_TARGET_CONTRACT_JSON" "$SECOND_TARGET_CLAIM_SCOPE" "$PAIR_ORDER" "$SECOND_TARGET_SLOT" "$SECOND_TARGET_JVM_FLAGS_JSON"

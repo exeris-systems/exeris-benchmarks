@@ -75,7 +75,7 @@
           },
           "eligibility_class": {
             "type": "string",
-            "enum": ["baseline-candidate", "non-runnable"]
+            "enum": ["baseline-candidate", "locality-research", "non-runnable"]
           },
           "missing_assets": {
             "type": "array",
@@ -99,7 +99,7 @@
             "then": {
               "properties": {
                 "eligibility_class": {
-                  "const": "baseline-candidate"
+                  "enum": ["baseline-candidate", "locality-research"]
                 },
                 "missing_assets": {
                   "maxItems": 0

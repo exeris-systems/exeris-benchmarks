@@ -1,0 +1,334 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/guided-run-profile/v1",
+  "title": "GuidedRunProfile",
+  "description": "Guided runtime launcher profile capturing fairness and reproducibility metadata before execution.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "benchmark_family",
+    "benchmark_commit_sha",
+    "jdk_version",
+    "tool_versions",
+    "jvm_flags",
+    "hardware_profile",
+    "scenario_id",
+    "target_classification",
+    "protocol_mode",
+    "tier",
+    "topology_mode",
+    "run_type",
+    "target_mode",
+    "claim_scope",
+    "targets"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "benchmark_family": {
+      "type": "string",
+      "const": "runtime"
+    },
+    "benchmark_commit_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$|^unknown$"
+    },
+    "jdk_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tool_versions": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "jvm_flags": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "string"
+      }
+    },
+    "hardware_profile": {
+      "type": "string",
+      "enum": [
+        "linux-generic",
+        "aarch64-generic",
+        "dev-laptop",
+        "ci-runner",
+        "docker-container"
+      ]
+    },
+    "scenario_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_classification": {
+      "type": "string",
+      "enum": [
+        "pure",
+        "compat"
+      ]
+    },
+    "protocol_mode": {
+      "type": "string",
+      "enum": [
+        "h1",
+        "h2",
+        "h3"
+      ]
+    },
+    "tier": {
+      "type": "string",
+      "enum": [
+        "community",
+        "enterprise"
+      ]
+    },
+    "topology_mode": {
+      "type": "string",
+      "enum": [
+        "localhost",
+        "network"
+      ]
+    },
+    "run_type": {
+      "type": "string",
+      "enum": [
+        "guard",
+        "regression",
+        "exploratory"
+      ]
+    },
+    "target_mode": {
+      "type": "string",
+      "enum": [
+        "single",
+        "multi"
+      ]
+    },
+    "claim_scope": {
+      "type": "string",
+      "enum": [
+        "comparison_eligible",
+        "descriptive_partial",
+        "descriptive_only",
+        "none"
+      ]
+    },
+    "fairness_attestations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "payload_equivalent",
+        "concurrency_equivalent",
+        "protocol_mode_equivalent",
+        "target_scope_equivalent"
+      ],
+      "properties": {
+        "payload_equivalent": {
+          "type": "boolean"
+        },
+        "concurrency_equivalent": {
+          "type": "boolean"
+        },
+        "protocol_mode_equivalent": {
+          "type": "boolean"
+        },
+        "target_scope_equivalent": {
+          "type": "boolean"
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "contract_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "output_dir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "warmup_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "measurement_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "connections": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "app_endpoint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "db_endpoint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "launch_mode": {
+      "type": "string",
+      "enum": [
+        "prebuild",
+        "build",
+        "docker"
+      ]
+    },
+    "runtime_mode": {
+      "type": "string",
+      "enum": [
+        "native",
+        "jvm"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "topology_mode": {
+            "const": "network"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "app_endpoint",
+          "db_endpoint"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "topology_mode": {
+            "const": "localhost"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "launch_mode",
+          "runtime_mode"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "target_mode": {
+            "const": "single"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "targets": {
+            "minItems": 1,
+            "maxItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "target_mode": {
+            "const": "multi"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "targets": {
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "run_type": {
+            "const": "exploratory"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "claim_scope": {
+            "enum": [
+              "descriptive_partial",
+              "descriptive_only",
+              "none"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "claim_scope": {
+            "const": "comparison_eligible"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "fairness_attestations"
+        ],
+        "properties": {
+          "fairness_attestations": {
+            "type": "object",
+            "required": [
+              "payload_equivalent",
+              "concurrency_equivalent",
+              "protocol_mode_equivalent",
+              "target_scope_equivalent"
+            ],
+            "properties": {
+              "payload_equivalent": {
+                "const": true
+              },
+              "concurrency_equivalent": {
+                "const": true
+              },
+              "protocol_mode_equivalent": {
+                "const": true
+              },
+              "target_scope_equivalent": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

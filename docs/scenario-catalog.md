@@ -25,7 +25,7 @@ script in `runtime/<tool>/`.
 | Field | Value                                              |
 |---|----------------------------------------------------|
 | Path | `GET /plaintext`                                   |
-| Response | `200 OK`, body `plaintext` (15 bytes)              |
+| Response | `200 OK`, body `plaintext` (9 bytes)               |
 | Payload | none                                               |
 | Purpose | TechEmpower-equivalent baseline for RPS comparison |
 | Tools | wrk, h2load, k6                                    |
@@ -168,10 +168,10 @@ Canonical run-id naming should encode:
 
 Examples:
 
-- `community-h1-plaintext-hello`
+- `community-h1-plaintext`
 - `community-h2-json-1kb`
-- `spring-h1-plaintext-hello`
-- `quarkus-h1-plaintext-hello`
+- `spring-h1-plaintext`
+- `quarkus-h1-plaintext`
 
 ---
 

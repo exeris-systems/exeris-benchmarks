@@ -69,8 +69,25 @@ query_scalar() {
   printf '%s' "$output"
 }
 
+compute_sha256() {
+  local file_path="$1"
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file_path" | awk '{print $1}'
+    return 0
+  fi
+
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file_path" | awk '{print $1}'
+    return 0
+  fi
+
+  echo "ERROR: sha256sum or shasum is required to verify seed file hash." >&2
+  exit 1
+}
+
 if [[ -n "$EXPECTED_SHA256" && "$EXPECTED_SHA256" != "skip" ]]; then
-  ACTUAL_SHA256=$(sha256sum "$SEED_FILE" | awk '{print $1}')
+  ACTUAL_SHA256=$(compute_sha256 "$SEED_FILE")
   if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
     echo "SEED FILE HASH MISMATCH: expected $EXPECTED_SHA256 got $ACTUAL_SHA256" >&2
     exit 1

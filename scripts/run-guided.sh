@@ -218,7 +218,7 @@ if [[ "$target_mode" == "single" ]]; then
   [[ -n "$target_single" ]] || fail "target_id cannot be empty"
   targets+=("$target_single")
 else
-  target_a="$(prompt_text "target_a" "exeris-native-community")"
+  target_a="$(prompt_text "target_a" "exeris-benchmark-app-community-h1")"
   target_b="$(prompt_text "target_b" "spring-jvm-vt-tuned")"
   [[ -n "$target_a" && -n "$target_b" ]] || fail "target ids cannot be empty"
   targets+=("$target_a" "$target_b")

@@ -1,0 +1,37 @@
+{
+  "scenario_id": "json-10kb",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-json-baseline",
+  "description": "JSON parse + serialize cost at ~10 KB payload. Tests buffer strategy sensitivity and medium-payload processing. POST /echo returns echo of the same JSON body.",
+  "endpoint": "POST /echo",
+  "mode": "json-echo",
+  "tier": "community",
+  "driver": ["wrk", "k6"],
+  "transport": ["h1"],
+  "loopback": true,
+  "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h1 is mandatory in all result artifacts.",
+  "payload": {
+    "size_bytes_approx": 10240,
+    "content_type": "application/json",
+    "payload_file": "scenarios/json-10kb/payload.json"
+  },
+  "concurrency": {
+    "connections": 100,
+    "threads": 4
+  },
+  "fixed_contracts": {
+    "community_h1_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "threads": 4,
+      "connections": 100,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64"
+    }
+  },
+  "claim_scope": "exploratory"
+}

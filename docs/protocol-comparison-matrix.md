@@ -28,7 +28,7 @@ Question answered:
 
 Question answered:
 
- - What is the implementation/runtime impact at the same protocol level?
+- What is the implementation/runtime impact at the same protocol level?
 
 ---
 
@@ -41,7 +41,7 @@ Question answered:
 
 ## Core scenarios (all protocol-capable targets)
 
-- `plaintext-hello`
+- `plaintext`
 - `json-1kb`
 - `json-10kb`
 - `routing-404`
@@ -75,6 +75,6 @@ Each result JSON should contain:
 1. `community h1 vs h2` baseline
 2. `community h1 cross-runtime` (Exeris/Spring/Quarkus)
 3. `community h2 cross-runtime` (Exeris/Spring/Quarkus)
-4. `json-1kb` and `plaintext-hello` cross-matrix summaries
+4. `json-1kb` and `plaintext` cross-matrix summaries
 5. `e2e-shop-order-saga` protocol/cross-runtime summary with explicit claim-scope labels
 6. Transaction compatibility summary (`tx-commit`/`tx-rollback`) when compatibility endpoints are enabled

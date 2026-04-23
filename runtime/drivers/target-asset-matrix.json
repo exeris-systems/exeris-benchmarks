@@ -11,10 +11,12 @@
       "compose_file": "runtime/drivers/docker-compose/community.yml",
       "jar_path": "",
       "health_url": "http://localhost:8080/health",
-      "asset_state": "runnable",
-      "eligibility_class": "baseline-candidate",
-      "missing_assets": [],
-      "non_runnable_reason": ""
+      "asset_state": "non_runnable",
+      "eligibility_class": "non-runnable",
+      "missing_assets": [
+        "runtime/drivers/env/community.env"
+      ],
+      "non_runnable_reason": "runtime/drivers/env/community.env is not provisioned, and this legacy community docker launcher contract is stale for the native-labeled target."
     },
     {
       "target_id": "exeris-runtime-community",
@@ -26,10 +28,12 @@
       "compose_file": "runtime/drivers/docker-compose/community.yml",
       "jar_path": "",
       "health_url": "http://localhost:8080/health",
-      "asset_state": "runnable",
-      "eligibility_class": "baseline-candidate",
-      "missing_assets": [],
-      "non_runnable_reason": ""
+      "asset_state": "non_runnable",
+      "eligibility_class": "non-runnable",
+      "missing_assets": [
+        "runtime/drivers/env/community.env"
+      ],
+      "non_runnable_reason": "runtime/drivers/env/community.env is not provisioned, and this legacy community docker launcher contract is stale for the runtime-labeled target."
     },
     {
       "target_id": "exeris-benchmark-app-community-h1",
@@ -171,21 +175,6 @@
         "runtime/drivers/docker-compose/quarkus-native.yml"
       ],
       "non_runnable_reason": "No Quarkus native launcher assets are provisioned in runtime/drivers for this profile."
-    },
-    {
-      "target_id": "exeris-community-app-locality",
-      "tier": "community",
-      "protocol_mode": "h1",
-      "launcher_mode": "external",
-      "env_file": "runtime/drivers/env/exeris-community-app-locality.env",
-      "profile_id": "exeris-community-app-locality",
-      "compose_file": "",
-      "jar_path": "targets/exeris-community-app-locality/target/exeris-community-app-locality-0.6.0-RESEARCH-LOCALITY.jar",
-      "health_url": "http://localhost:8080/health",
-      "asset_state": "runnable",
-      "eligibility_class": "locality-research",
-      "missing_assets": [],
-      "non_runnable_reason": ""
     }
   ]
 }

@@ -31,7 +31,7 @@ jobs:
       - name: Download benchmark results
         uses: actions/download-artifact@v4
         with:
-          name: ${{ github.event.inputs.result_artifact || format('jmh-results-{0}', github.event.workflow_run.id) }}
+          name: ${{ github.event.inputs.result_artifact || (github.event.workflow_run.name == 'Runtime Benchmarks' && format('runtime-results-{0}', github.event.workflow_run.id)) || format('jmh-results-{0}', github.event.workflow_run.id) }}
           path: results/downloaded/
 
       - name: Install jq + python3

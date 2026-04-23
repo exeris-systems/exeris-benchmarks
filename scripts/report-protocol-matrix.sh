@@ -30,20 +30,23 @@ echo "|---|---|---|---:|---:|---|"
 TMP="$(mktemp)"
 trap 'rm -f "${TMP:-}"' EXIT
 
-find "$RESULT_DIR" -type f -name '*.json' -print0 \
-  | xargs -0 -r jq -r '
-      select(.target.tier != null and .target.protocol != null) |
-      [
-        .target.tier,
-        .target.protocol,
-        .scenario,
-        (.metrics.throughput_rps // "N/A"),
-        (.metrics.latency_p99_us // "N/A"),
-        input_filename
-      ] | @tsv
-    ' \
+readarray -d '' result_files < <(find "$RESULT_DIR" -type f -name '*.json' -print0)
+
+if [[ ${#result_files[@]} -gt 0 ]]; then
+  jq -r '
+    select(.target.tier != null and .target.protocol != null) |
+    [
+      .target.tier,
+      .target.protocol,
+      .scenario,
+      (.metrics.throughput_rps // "N/A"),
+      (.metrics.latency_p99_us // "N/A"),
+      input_filename
+    ] | @tsv
+  ' "${result_files[@]}" \
   | sort \
   | awk -F'\t' '{ printf("| %s | %s | %s | %s | %s | %s |\n", $1, $2, $3, $4, $5, $6) }'
+fi
 
 echo ""
 echo "## Cross-tier same-protocol pairs"
@@ -51,16 +54,19 @@ echo ""
 echo "| Protocol | Scenario | Community rps | Enterprise rps | Delta (Enterprise vs Community) |"
 echo "|---|---|---:|---:|---:|"
 
-find "$RESULT_DIR" -type f -name '*.json' -print0 \
-  | xargs -0 -r jq -r '
-      select((.target.protocol == "h1" or .target.protocol == "h2") and .target.tier != null) |
-      [
-        .target.protocol,
-        .scenario,
-        .target.tier,
-        (.metrics.throughput_rps // "")
-      ] | @tsv
-    ' > "$TMP"
+if [[ ${#result_files[@]} -gt 0 ]]; then
+  jq -r '
+    select((.target.protocol == "h1" or .target.protocol == "h2") and .target.tier != null) |
+    [
+      .target.protocol,
+      .scenario,
+      .target.tier,
+      (.metrics.throughput_rps // "")
+    ] | @tsv
+  ' "${result_files[@]}" > "$TMP"
+else
+  : > "$TMP"
+fi
 
 for protocol in h1 h2; do
   awk -F'\t' -v p="$protocol" '$1==p {print}' "$TMP" | awk -F'\t' '

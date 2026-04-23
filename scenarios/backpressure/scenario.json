@@ -1,0 +1,44 @@
+{
+  "scenario_id": "backpressure",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-resilience-baseline",
+  "description": "Overload target beyond capacity. Measure error rate, shed-rate, and latency tail under sustained overload. Target must not OOM or deadlock.",
+  "endpoint": "GET /plaintext",
+  "mode": "overload-shed",
+  "tier": "community",
+  "driver": ["k6"],
+  "transport": ["h1"],
+  "loopback": true,
+  "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h1 is mandatory in all result artifacts.",
+  "load_profile": {
+    "stages": [
+      {"duration": "30s", "target_vus": 100, "phase": "baseline"},
+      {"duration": "30s", "target_vus": 500, "phase": "ramp-overload"},
+      {"duration": "60s", "target_vus": 500, "phase": "sustain-overload"},
+      {"duration": "30s", "target_vus": 100, "phase": "recover"},
+      {"duration": "30s", "target_vus": 100, "phase": "confirm-recovery"}
+    ],
+    "note": "Latency tail and error ratio are the primary metrics. RPS is secondary."
+  },
+  "thresholds": {
+    "max_error_rate": 0.30,
+    "note": "30% error rate is acceptable during overload phase. Crash or OOM is a hard failure."
+  },
+  "fixed_contracts": {
+    "community_h1_k6_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-k6",
+      "transport_mode": "loopback-h1",
+      "vus_overload_target": 500,
+      "vus_baseline": 100,
+      "warmup_seconds": 30,
+      "duration_seconds": 180,
+      "required_profile": "perf-box-amd64",
+      "note": "Total run = 180s sustained overload phase (stages: baseline 30s + ramp 30s + sustain 60s + recover 30s + confirm 30s). Latency tail and error ratio are the primary claim evidence."
+    }
+  },
+  "claim_scope": "exploratory",
+  "claim_scope_note": "Resilience characterization only. No comparative throughput claims."
+}

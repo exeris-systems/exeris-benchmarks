@@ -1,0 +1,53 @@
+{
+  "scenario_id": "keepalive-steady",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-keepalive-baseline",
+  "description": "Steady-state latency and throughput with long-lived keepalive connections. All drivers use keepalive by default. Tests stable connection reuse efficiency across H1, H2, and H3.",
+  "endpoint": "GET /plaintext",
+  "mode": "keepalive-steady",
+  "tier": "community",
+  "driver": ["wrk", "k6", "h2load"],
+  "transport": ["h1", "h2", "h3"],
+  "loopback": true,
+  "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h1 is mandatory in all result artifacts.",
+  "concurrency": {
+    "connections": 100,
+    "threads": 4,
+    "note": "Do not use Connection: close. Keepalive is the test condition."
+  },
+  "fixed_contracts": {
+    "community_h1_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "threads": 4,
+      "connections": 100,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64"
+    },
+    "community_h2_v1": {
+      "tier": "community",
+      "protocol_mode": "h2",
+      "benchmark_family": "runtime-h2load",
+      "transport_mode": "loopback-h2c",
+      "connections": 100,
+      "streams_per_connection": 10,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64"
+    }
+  },
+  "protocol_support": {
+    "h1": {"status": "runnable", "driver": "wrk + k6"},
+    "h2": {"status": "runnable", "driver": "h2load"},
+    "h3": {
+      "status": "not-runnable",
+      "reason": "H3/QUIC keepalive requires dedicated QUIC toolchain not confirmed in runtime/drivers.",
+      "backlog_ref": "P2-02"
+    }
+  },
+  "claim_scope": "exploratory"
+}

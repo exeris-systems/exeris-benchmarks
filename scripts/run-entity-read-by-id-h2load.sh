@@ -56,11 +56,13 @@ TARGET_RUNTIME="${TARGET_RUNTIME:-community}"
 TARGET_BUILD="${TARGET_BUILD:-jvm}"
 SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-0}"
 ALLOW_EXTERNAL_DB="${BENCHMARK_ALLOW_EXTERNAL_DB:-0}"
+ALLOW_EXTERNAL_TARGET="${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}"
 EXERIS_DB_POOL_MIN_SIZE="${EXERIS_DB_POOL_MIN_SIZE:-16}"
 EXERIS_DB_POOL_MAX_SIZE="${EXERIS_DB_POOL_MAX_SIZE:-256}"
 ENTITY_READ_PREFLIGHT_TIMEOUT="${ENTITY_READ_PREFLIGHT_TIMEOUT:-60}"
+TARGET_PORT="${BENCHMARK_TARGET_PORT:-8080}"
 
-BASE_URL="http://localhost:8080"
+BASE_URL="${BASE_URL:-http://localhost:${TARGET_PORT}}"
 SCENARIO_DIR="scenarios/entity-read-by-id"
 DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
 DB_INIT_SQL_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql"
@@ -208,6 +210,13 @@ if [[ "$SKIP_TARGET_BUILD" != "0" && "$SKIP_TARGET_BUILD" != "1" ]]; then
   exit 1
 fi
 
+if [[ "$ALLOW_EXTERNAL_TARGET" != "0" && "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
+  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_TARGET must be 0 or 1 (got: $ALLOW_EXTERNAL_TARGET)" >&2
+  exit 1
+fi
+
+require_positive_int "BENCHMARK_TARGET_PORT" "$TARGET_PORT"
+
 require_positive_int "--threads" "$THREADS"
 require_positive_int "--connections" "$CONNECTIONS"
 require_positive_int "--max-concurrent-streams" "$MAX_CONCURRENT_STREAMS"
@@ -350,7 +359,7 @@ apply_seed_sql() {
 target_reachable() {
   curl -sf "$BASE_URL/health" >/dev/null 2>&1 || \
   curl -sf "$BASE_URL/health/ready" >/dev/null 2>&1 || \
-  (echo > /dev/tcp/127.0.0.1/8080) >/dev/null 2>&1
+  bench_port_reachable "$TARGET_PORT"
 }
 
 wait_for_target() {
@@ -440,12 +449,26 @@ fi
 
 # Step 5: Capture env
 echo "[step 5] Capturing environment..."
-../scripts/capture-env.sh --profile "$PROFILE" --tool h2load > "$OUTPUT_DIR/env.json" || true
+"${REPO_ROOT}/scripts/capture-env.sh" --profile "$PROFILE" --tool h2load > "$OUTPUT_DIR/env.json" || true
 
 # Step 6: Start target
 echo "[step 6] Ensuring benchmark target app..."
-if [[ "${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}" != "1" ]]; then
+if [[ "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
   stop_stale_local_target_if_any
+  if bench_port_reachable "$TARGET_PORT"; then
+    requested_target_port="$TARGET_PORT"
+    TARGET_PORT="$(bench_find_available_local_port "$TARGET_PORT")"
+    BASE_URL="http://localhost:${TARGET_PORT}"
+    echo "[step 6] WARN: localhost:$requested_target_port is occupied and external target reuse is disabled; using managed target on localhost:$TARGET_PORT"
+  fi
+fi
+
+if target_reachable; then
+  if [[ "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
+    echo "ERROR: benchmark target already reachable at $BASE_URL and BENCHMARK_ALLOW_EXTERNAL_TARGET is not 1" >&2
+    exit 1
+  fi
+  echo "[step 6] WARN: Reusing externally managed target at $BASE_URL (BENCHMARK_ALLOW_EXTERNAL_TARGET=1)"
 fi
 
 if ! target_reachable; then
@@ -477,7 +500,7 @@ if ! target_reachable; then
 
   echo "[step 6] Starting benchmark target app..."
   TARGET_CMD=(env \
-    EXERIS_PORT=8080 \
+    EXERIS_PORT="$TARGET_PORT" \
     EXERIS_DB_JDBC_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db" \
     EXERIS_DB_USERNAME=benchmark \
     EXERIS_DB_PASSWORD=benchmark \
@@ -677,7 +700,7 @@ jq -n \
   }' > "$RESULT_FILE"
 
 # Reproducibility metadata
-if [[ -f "$OUTPUT_DIR/env.json" ]]; then
+if [[ -s "$OUTPUT_DIR/env.json" ]] && jq -e . "$OUTPUT_DIR/env.json" >/dev/null 2>&1; then
   JDK_VENDOR="$(jq -r '.jdk.vendor // "unknown"' "$OUTPUT_DIR/env.json")"
   JDK_VERSION="$(jq -r '.jdk.version // "unknown"' "$OUTPUT_DIR/env.json")"
   HARDWARE_PROFILE_REF="$(jq -r '.hardware_profile // "unknown"' "$OUTPUT_DIR/env.json")"

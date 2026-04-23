@@ -44,9 +44,11 @@ LOCALITY_MODE_ENABLED="${BENCHMARK_ENABLE_LOCALITY_MODE:-0}"
 BENCHMARK_LOCALITY_STRICT="${BENCHMARK_LOCALITY_STRICT:-0}"
 SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-0}"
 ENTITY_READ_PREFLIGHT_TIMEOUT="${ENTITY_READ_PREFLIGHT_TIMEOUT:-60}"
+ALLOW_EXTERNAL_TARGET="${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}"
+TARGET_PORT="${BENCHMARK_TARGET_PORT:-8080}"
 DURATION_OVERRIDE=""
 CONTRACT_NAME=""
-BASE_URL="http://localhost:8080"
+BASE_URL="${BASE_URL:-http://localhost:${TARGET_PORT}}"
 SCENARIO_DIR="scenarios/entity-read-by-id"
 DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
 DB_INIT_SQL_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql"
@@ -242,6 +244,13 @@ if [[ "$SKIP_TARGET_BUILD" != "0" && "$SKIP_TARGET_BUILD" != "1" ]]; then
   echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD must be 0 or 1 (got: $SKIP_TARGET_BUILD)"
   exit 1
 fi
+
+if [[ "$ALLOW_EXTERNAL_TARGET" != "0" && "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
+  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_TARGET must be 0 or 1 (got: $ALLOW_EXTERNAL_TARGET)"
+  exit 1
+fi
+
+require_positive_int "BENCHMARK_TARGET_PORT" "$TARGET_PORT"
 
 require_positive_int "--threads" "$THREADS"
 require_positive_int "--connections" "$CONNECTIONS"
@@ -566,7 +575,7 @@ target_reachable() {
   if curl -sf "$BASE_URL/health/ready" >/dev/null 2>&1; then
     return 0
   fi
-  if (echo > /dev/tcp/127.0.0.1/8080) >/dev/null 2>&1; then
+  if bench_port_reachable "$TARGET_PORT"; then
     return 0
   fi
   return 1
@@ -723,12 +732,18 @@ echo "[step 5/9] Capturing environment..."
 
 # Step 6: Warmup
 echo "[step 6/9] Ensuring benchmark target app is available..."
-if [[ "${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}" != "1" ]]; then
+if [[ "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
   stop_stale_local_target_if_any
+  if bench_port_reachable "$TARGET_PORT"; then
+    requested_target_port="$TARGET_PORT"
+    TARGET_PORT="$(bench_find_available_local_port "$TARGET_PORT")"
+    BASE_URL="http://localhost:${TARGET_PORT}"
+    echo "[step 6/9] WARN: localhost:$requested_target_port is occupied and external target reuse is disabled; using managed target on localhost:$TARGET_PORT"
+  fi
 fi
 
 if target_reachable; then
-  if [[ "${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}" != "1" ]]; then
+  if [[ "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
     echo "ERROR: benchmark target already reachable at $BASE_URL and BENCHMARK_ALLOW_EXTERNAL_TARGET is not 1"
     echo "ERROR: external target is disallowed for backendMode integrity"
     exit 1
@@ -738,7 +753,7 @@ if target_reachable; then
     echo "ERROR: set BENCHMARK_REQUIRE_BACKEND_EVIDENCE=0 to allow external target with warning-only evidence semantics"
     exit 1
   fi
-  echo "[step 6/9] WARN: Reusing externally managed target (BENCHMARK_ALLOW_EXTERNAL_TARGET=1); backend mode evidence cannot be guaranteed"
+  echo "[step 6/9] WARN: Reusing externally managed target at $BASE_URL (BENCHMARK_ALLOW_EXTERNAL_TARGET=1); backend mode evidence cannot be guaranteed"
 fi
 
 if ! target_reachable; then
@@ -810,7 +825,7 @@ if ! target_reachable; then
 
   echo "[step 6/9] Starting benchmark target app..."
   TARGET_CMD=(env \
-    EXERIS_PORT=8080 \
+    EXERIS_PORT="$TARGET_PORT" \
     EXERIS_DB_JDBC_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db" \
     EXERIS_DB_USERNAME=benchmark \
     EXERIS_DB_PASSWORD=benchmark \

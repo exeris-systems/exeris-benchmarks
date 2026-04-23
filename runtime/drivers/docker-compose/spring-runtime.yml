@@ -23,7 +23,7 @@ services:
       EXERIS_LOG_LEVEL: WARN
       EXERIS_METRICS: "false"
       # Spring-specific
-      SPRING_MAIN_BANNER-MODE: "off"
+      SPRING_MAIN_BANNER_MODE: "off"
       LOGGING_LEVEL_ROOT: "WARN"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:9001/health"]

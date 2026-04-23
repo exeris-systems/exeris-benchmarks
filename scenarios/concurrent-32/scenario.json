@@ -1,0 +1,53 @@
+{
+  "scenario_id": "concurrent-32",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-concurrency-baseline",
+  "description": "Low/medium contention behavior and latency tail at 32 concurrent connections. Measures dispatcher behavior, thread contention, and latency distribution at moderate load.",
+  "endpoint": "GET /plaintext",
+  "mode": "concurrent-load",
+  "tier": "community",
+  "driver": ["wrk", "k6", "h2load"],
+  "transport": ["h1", "h2", "h3"],
+  "loopback": true,
+  "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h1 is mandatory in all result artifacts. Loopback saturates before network-path at this concurrency level.",
+  "concurrency": {
+    "connections": 32,
+    "threads": 4,
+    "note": "Fixed at 32 connections. Do not scale up — see concurrent-256 for high-contention scenario."
+  },
+  "fixed_contracts": {
+    "community_h1_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "threads": 4,
+      "connections": 32,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64"
+    },
+    "community_h2_v1": {
+      "tier": "community",
+      "protocol_mode": "h2",
+      "benchmark_family": "runtime-h2load",
+      "transport_mode": "loopback-h2c",
+      "connections": 32,
+      "streams_per_connection": 1,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64"
+    }
+  },
+  "protocol_support": {
+    "h1": {"status": "runnable", "driver": "wrk + k6"},
+    "h2": {"status": "runnable", "driver": "h2load"},
+    "h3": {
+      "status": "not-runnable",
+      "reason": "H3/QUIC requires dedicated QUIC toolchain not confirmed in runtime/drivers.",
+      "backlog_ref": "P2-02"
+    }
+  },
+  "claim_scope": "exploratory"
+}

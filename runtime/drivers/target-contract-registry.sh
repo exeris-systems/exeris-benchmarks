@@ -25,7 +25,6 @@ target_registry_root() {
 normalize_target_alias() {
   local raw_id="${1:-}"
   case "${raw_id}" in
-    community) echo "exeris-native-community" ;;
     enterprise) echo "exeris-kernel-enterprise" ;;
     spring-benchmark-app|spring-runtime) echo "spring-jvm-vt-tuned" ;;
     spring-app-axon) echo "spring-app-axon" ;;

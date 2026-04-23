@@ -1,0 +1,40 @@
+# h2load flags for entity-read-by-id scenario
+# Endpoint: GET /api/v1/users
+#
+# Two transport axes — H1 (loopback-h1) and H2c (loopback-h2c).
+# H1 and H2c results are NOT comparable with each other or with wrk H1 results
+# without explicit driver-equivalence caveats.
+#
+# Run a separate warmup pass (-D <warmup_seconds>) and discard its output
+# before the measurement pass described below.
+
+# ── Axis: H1 (loopback-h1) ────────────────────────────────────────────────
+# Mirrors wrk H1 contracts (connections=128, threads=4, duration=120s).
+# Use --h1 to force HTTP/1.1 over cleartext TCP.
+# max-concurrent-streams=1 matches H1 one-request-per-connection semantics.
+# Comparison against wrk H1 results requires explicit cross-driver caveat.
+H2LOAD_H1_TRANSPORT_MODE=loopback-h1
+H2LOAD_H1_CONNECTIONS=128
+H2LOAD_H1_THREADS=4
+H2LOAD_H1_MAX_CONCURRENT_STREAMS=1
+H2LOAD_H1_WARMUP_DURATION_SECONDS=60
+H2LOAD_H1_DURATION_SECONDS=120
+# Warmup (discard output):
+#   h2load --h1 -c 128 -t 4 -m 1 -D 60 http://localhost:8080/api/v1/users
+# Measurement:
+#   h2load --h1 -c 128 -t 4 -m 1 -D 120 http://localhost:8080/api/v1/users
+
+# ── Axis: H2c / prior-knowledge (loopback-h2c) ───────────────────────────
+# Exploratory only. Not comparable to H1 or wrk results.
+# h2load defaults to h2c prior-knowledge for http:// targets (no --upgrade flag needed).
+# max-concurrent-streams=10 is a starting point; must be documented in result artifact.
+H2LOAD_H2C_TRANSPORT_MODE=loopback-h2c
+H2LOAD_H2C_CONNECTIONS=128
+H2LOAD_H2C_THREADS=4
+H2LOAD_H2C_MAX_CONCURRENT_STREAMS=10
+H2LOAD_H2C_WARMUP_DURATION_SECONDS=60
+H2LOAD_H2C_DURATION_SECONDS=120
+# Warmup (discard output):
+#   h2load -c 128 -t 4 -m 10 -D 60 http://localhost:8080/api/v1/users
+# Measurement:
+#   h2load -c 128 -t 4 -m 10 -D 120 http://localhost:8080/api/v1/users

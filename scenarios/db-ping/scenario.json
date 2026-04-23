@@ -1,0 +1,16 @@
+{
+  "scenario_id": "db-ping",
+  "version": "1",
+  "benchmark_family": "guard",
+  "target_classification": "smoke-guard",
+  "description": "Smoke/guard probe for database connectivity. GET /db/ping must return expected status. Used as pre-run infrastructure check. Not a throughput benchmark.",
+  "endpoint": "GET /db/ping",
+  "mode": "smoke-guard",
+  "tier": "community",
+  "driver": ["k6"],
+  "transport": ["h1"],
+  "loopback": true,
+  "loopback_caveat": "Guard probe only. Not a performance comparison artifact.",
+  "claim_scope": "none",
+  "claim_scope_note": "DB ping probe is a guard/smoke scenario. No performance claims permitted."
+}

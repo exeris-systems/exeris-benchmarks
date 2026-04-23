@@ -42,28 +42,33 @@ Rules:
 
 ## Initial Target Set Labels
 
-The initial allowed `target_id` set:
+The active allowed `target_id` set is:
 
 Substrate must not be inferred from tuning labels; native-image targets must use explicit native `target_id` values.
 
-- `exeris-native-community`
-- `exeris-runtime-community`
 - `exeris-benchmark-app-community-h1`
 - `spring-jvm-vt-tuned`
 - `spring-native-default`
 - `quarkus-jvm-vt-tuned`
 - `quarkus-native-default`
 
+Legacy, non-runnable historical `target_id` values retained only for auditability:
+
+- `exeris-native-community`
+- `exeris-runtime-community`
+
 Suggested `target_descriptor` values:
 
-- `Exeris native image (Community)`
-- `Exeris runtime JVM (Community)`
 - `Exeris standalone benchmark app (Community, H1)`
 - `Spring Boot JVM + virtual threads (tuned)`
 - `Spring Boot native image`
 - `Quarkus JVM + virtual threads (tuned)`
 - `Quarkus native image`
 
+Legacy historical descriptors:
+
+- `Exeris native image (Community, legacy non-runnable)`
+- `Exeris runtime JVM (Community, legacy non-runnable)`
 ## Runtime Target Contract Registry
 
 Runtime driver scripts resolve launch settings through `runtime/drivers/target-contract-registry.sh`.

@@ -5,11 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MATRIX_PATH="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
 
-# Runnable targets listed here are intentionally not yet part of any scenario
-# comparative manifest but are retained for future baseline expansion.
+# Runnable targets listed here are intentionally baseline-only and are not part
+# of any scenario comparative manifest.
 JUSTIFIED_UNUSED_RUNNABLE_TARGETS=(
-  "exeris-e2e-community-h2c"
-  "exeris-runtime-community"
+  "exeris-e2e-community-h2"
 )
 
 fail_count=0

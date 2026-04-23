@@ -35,8 +35,8 @@
     },
     "tier": {
       "type": "string",
-      "description": "Target tier: JDK, Community, Enterprise, or variant",
-      "enum": ["JDK", "Community", "Enterprise", "NettyTcNative"]
+      "description": "Target tier. Canonical published values are JDK, Community, Enterprise, and NettyTcNative; lowercase runtime-style values are accepted for backward compatibility.",
+      "enum": ["JDK", "Community", "Enterprise", "NettyTcNative", "jdk", "community", "enterprise", "nettytcnative"]
     },
     "phase": {
       "type": "string",

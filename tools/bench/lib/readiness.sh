@@ -273,6 +273,41 @@ bench_extract_port_from_url() {
   esac
 }
 
+bench_port_reachable() {
+  local port="$1"
+
+  if [[ -z "$port" ]]; then
+    return 1
+  fi
+
+  (echo > /dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1
+}
+
+bench_find_available_local_port() {
+  local preferred_port="${1:-8080}"
+  local fallback_start="${2:-18080}"
+  local candidate
+
+  if ! bench_port_reachable "$preferred_port"; then
+    printf '%s\n' "$preferred_port"
+    return 0
+  fi
+
+  if [[ "$fallback_start" == "$preferred_port" ]]; then
+    fallback_start=$((preferred_port + 1))
+  fi
+
+  for candidate in $(seq "$fallback_start" $((fallback_start + 200))); do
+    if ! bench_port_reachable "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  echo "ERROR: no free localhost port available for benchmark target fallback" >&2
+  return 1
+}
+
 bench_detect_pid_for_port() {
   local port="$1"
   local pid=""

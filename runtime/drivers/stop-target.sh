@@ -67,6 +67,7 @@ case "${START_MODE}" in
     else
       # Stop all known compose stacks
       for f in "$SCRIPT_DIR"/docker-compose/*.yml; do
+        [[ -e "$f" ]] || continue
         compose_cmd --file "$f" down --remove-orphans 2>/dev/null || true
       done
     fi

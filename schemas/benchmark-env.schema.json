@@ -30,7 +30,7 @@
     },
     "hardware_profile": {
       "type": "string",
-      "enum": ["dev-laptop", "ci-runner", "perf-box-amd64", "perf-box-arm64", "docker-container"],
+      "enum": ["dev-laptop", "dev-isolated", "ci-runner", "perf-box-amd64", "perf-box-arm64", "docker-container"],
       "description": "Canonical hardware profile identifier from docs/hardware-profiles.md."
     },
     "cpu": {

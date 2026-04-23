@@ -10,6 +10,7 @@ const errorRate = new Rate('errors');
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 // Max acceptable error rate before we consider load-shed broken
 const MAX_ERROR_RATE = parseFloat(__ENV.MAX_ERROR_RATE || '0.30');  // 30%
+const ACCEPTABLE_STATUSES = http.expectedStatuses(200, 429, 503);
 
 export const options = {
   stages: [
@@ -28,7 +29,10 @@ export const options = {
 };
 
 export default function () {
-  const res = http.get(`${BASE_URL}/plaintext`, { timeout: '5s' });
+  const res = http.get(`${BASE_URL}/plaintext`, {
+    timeout: '5s',
+    responseCallback: ACCEPTABLE_STATUSES,
+  });
 
   // Under backpressure, 503 / 429 / 200 are all acceptable; crashes are not.
   const ok = check(res, {

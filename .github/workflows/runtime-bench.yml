@@ -42,13 +42,13 @@ jobs:
           distribution: 'temurin'
 
       - name: Install wrk
-        if: ${{ github.event.inputs.tool == 'wrk' || github.event.inputs.tool == '' }}
+        if: ${{ (github.event.inputs.tool || 'wrk') == 'wrk' }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y wrk
 
       - name: Install k6
-        if: ${{ github.event.inputs.tool == 'k6' }}
+        if: ${{ (github.event.inputs.tool || 'wrk') == 'k6' }}
         run: |
           sudo gpg -k
           sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
@@ -59,7 +59,7 @@ jobs:
           sudo apt-get install -y k6
 
       - name: Install nghttp2 (h2load)
-        if: ${{ github.event.inputs.tool == 'h2load' }}
+        if: ${{ (github.event.inputs.tool || 'wrk') == 'h2load' }}
         run: sudo apt-get update -qq && sudo apt-get install -y nghttp2
 
       - name: Start target application

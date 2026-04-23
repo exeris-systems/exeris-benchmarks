@@ -141,7 +141,7 @@
     "outcome": {
       "type": "string",
       "description": "Canonical outcome classification.",
-      "enum": ["ok", "startup_failed", "oom_killed", "timeout_killed", "benchmark_failed", "cgroup_setup_failed", "unknown"]
+      "enum": ["ok", "startup_failed", "oom_killed", "readiness_timeout", "limit_mismatch"]
     },
     "generated_at_utc": {
       "type": "string",

@@ -3,6 +3,9 @@ name: Publish Results
 on:
   workflow_dispatch:
     inputs:
+      source_run_id:
+        description: 'Workflow run ID that produced the artifacts to publish'
+        required: true
       result_artifact:
         description: 'Artifact name containing result JSON'
         required: true
@@ -23,6 +26,7 @@ on:
         default: 'false'
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
@@ -33,20 +37,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download result artifact
         uses: actions/download-artifact@v4
         with:
+          github-token: ${{ github.token }}
           name: ${{ github.event.inputs.result_artifact }}
+          run-id: ${{ github.event.inputs.source_run_id }}
           path: results/downloaded/
 
       - name: Download env artifact
         if: ${{ github.event.inputs.env_artifact != '' }}
         uses: actions/download-artifact@v4
         with:
+          github-token: ${{ github.token }}
           name: ${{ github.event.inputs.env_artifact }}
+          run-id: ${{ github.event.inputs.source_run_id }}
           path: results/downloaded/
         continue-on-error: true
 

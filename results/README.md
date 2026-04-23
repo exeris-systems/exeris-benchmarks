@@ -42,7 +42,7 @@ Interpretation rules:
 Generate protocol matrix report:
 
 ```bash
-./scripts/report-protocol-matrix.sh results/raw > results/reports/protocol-matrix.md
+./scripts/report-protocol-matrix.sh results/normalized > results/reports/protocol-matrix.md
 ```
 
 ## Publication modes and JFR confidentiality guard

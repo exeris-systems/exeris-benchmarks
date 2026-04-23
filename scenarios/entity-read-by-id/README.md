@@ -92,9 +92,9 @@ Results will be written to `results/raw/entity-read-by-id/<timestamp>/`.
 
 | Parameter | Value |
 |---|---|
-| Connections | 32 |
+| Connections | 128 |
 | Threads | 4 |
 | Connection pool size | 10 (declared fixed variable) |
 
-> Note: 32 connections may undersaturate the DB connection pool.
+> The current `wrk.env` and `wrk2.env` contract fixes the client at 128 connections and 4 threads.
 > `connection_pool_size` is a declared fixed variable — do not vary without a new scenario version.

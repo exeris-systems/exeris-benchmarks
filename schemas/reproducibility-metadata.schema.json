@@ -85,9 +85,9 @@
     },
     "hardware_profile": {
       "type": "string",
-      "description": "Hardware environment classification (must be canonical)",
-      "enum": ["linux-generic", "aarch64-generic", "dev-laptop", "ci-runner", "docker-container"],
-      "examples": ["linux-generic"]
+      "description": "Hardware environment classification. Canonical ids match docs/hardware-profiles.md and benchmark-env.schema.json; legacy linux-generic and aarch64-generic remain accepted for older artifacts only.",
+      "enum": ["dev-laptop", "dev-isolated", "ci-runner", "perf-box-amd64", "perf-box-arm64", "docker-container", "linux-generic", "aarch64-generic"],
+      "examples": ["perf-box-amd64"]
     },
     "manifest_version": {
       "type": "string",

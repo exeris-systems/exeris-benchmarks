@@ -33,7 +33,7 @@ export const options = {
 
 export function setup() {
   if (NETEM_DELAY_MS === 'MISSING' || NETEM_LOSS_PCT === 'MISSING') {
-    console.error('FATAL: NETEM_DELAY_MS and NETEM_LOSS_PCT must be set. Run is invalid without impairment metadata.');
+    throw new Error('FATAL: NETEM_DELAY_MS and NETEM_LOSS_PCT must be set. Refusing to run without required impairment metadata.');
   }
   return {
     netem_delay_ms:  NETEM_DELAY_MS,
@@ -42,7 +42,7 @@ export function setup() {
   };
 }
 
-export default function (data) {
+export default function runLossyNetworkScenario(data) {
   const res = http.get(`${BASE_URL}/plaintext`);
 
   const ok = check(res, {

@@ -3,7 +3,7 @@
 
 local payload = string.rep("x", 700)
 local body = string.format(
-  '{"id":"bench-0001","type":"echo_request","ts":"2026-01-01T00:00:00Z","data":"%s"}',
+  '{"id":"bench-0001","type":"echo_request","timestamp":"2026-01-01T00:00:00Z","payload":{"name":"benchmark-user","email":"bench@exeris.io","region":"eu-west","tier":"community","roles":["user","reader"],"metadata":{"created":"2026-01-01","version":"1.0.0","flags":["flag_a","flag_b","flag_c"]},"data":"%s"}}',
   payload
 )
 

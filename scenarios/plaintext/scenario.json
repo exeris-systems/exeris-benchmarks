@@ -33,8 +33,10 @@
       "protocol_mode": "h1",
       "benchmark_family": "runtime-k6",
       "transport_mode": "loopback-h1",
+      "ramp_up_seconds": 30,
       "warmup_seconds": 60,
       "duration_seconds": 60,
+      "ramp_down_seconds": 10,
       "vus": 100
     }
   },

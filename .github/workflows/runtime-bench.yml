@@ -46,9 +46,7 @@ jobs:
       - name: Install k6
         if: ${{ (github.event.inputs.tool || 'wrk') == 'k6' }}
         run: |
-          sudo gpg -k
-          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
-            --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
             | sudo tee /etc/apt/sources.list.d/k6.list
           sudo apt-get update -qq
@@ -85,6 +83,9 @@ jobs:
               ./scripts/run-h2load.sh "targets/exeris-kernel/$TARGET" "$SCENARIO" ;;
             k6)
               ./scripts/run-k6.sh "$SCENARIO" ;;
+            *)
+              echo "Unsupported benchmark tool: '$TOOL'. Expected one of: wrk, h2load, k6." >&2
+              exit 1 ;;
           esac
 
       - name: Stop target application

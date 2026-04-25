@@ -28,12 +28,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download benchmark results
+      - name: Download benchmark results (workflow_run)
+        if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v4
         with:
-          name: ${{ github.event.inputs.result_artifact || (github.event.workflow_run.name == 'Runtime Benchmarks' && format('runtime-results-{0}', github.event.workflow_run.id)) || format('jmh-results-{0}', github.event.workflow_run.id) }}
+          name: ${{ github.event.workflow_run.name == 'Runtime Benchmarks' && format('runtime-results-{0}', github.event.workflow_run.id) || format('jmh-results-{0}', github.event.workflow_run.id) }}
           path: results/downloaded/
           run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Download benchmark results (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.inputs.result_artifact }}
+          path: results/downloaded/
           github-token: ${{ github.token }}
 
       - name: Install jq + python3

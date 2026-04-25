@@ -5,9 +5,9 @@ ACTION="${1:-up}"
 CONTAINER_NAME="${CONTAINER_NAME:-exeris-community-postgres}"
 IMAGE="${IMAGE:-postgres:16.2}"
 HOST_PORT="${HOST_PORT:-5432}"
-DB_NAME="${DB_NAME:-exeris}"
-DB_USER="${DB_USER:-exeris}"
-DB_PASSWORD="${DB_PASSWORD:-exeris}"
+DB_NAME="${DB_NAME:-benchmark_db}"
+DB_USER="${DB_USER:-benchmark}"
+DB_PASSWORD="${DB_PASSWORD:-benchmark}"
 WAIT_SECONDS="${WAIT_SECONDS:-30}"
 
 usage() {

@@ -108,7 +108,7 @@ jobs:
         run: |
           TIER="${{ github.event.inputs.target_tier }}"
           MODE="${{ github.event.inputs.target_mode }}"
-          BASELINE_DIR="baselines/${TIER}"
+          BASELINE_DIR="baselines/${TIER}/${MODE}"
           mkdir -p "$BASELINE_DIR"
           PROFILE="$(jq -r '.hardware_profile // "unknown"' "${{ steps.locate.outputs.env_file }}" 2>/dev/null || echo 'unknown')"
           cp "${{ steps.locate.outputs.result }}" "$BASELINE_DIR/${PROFILE}.json"

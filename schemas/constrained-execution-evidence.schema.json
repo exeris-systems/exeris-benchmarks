@@ -26,12 +26,12 @@
     },
     "target_runtime": {
       "type": "string",
-      "description": "Runtime identifier for the target. Prefer runtime_family when available.",
+      "description": "Deprecated legacy field. Prefer artifact_provenance.runtime_family. Retained for backward compatibility.",
       "enum": ["community", "quarkus", "spring-boot", "micronaut", "helidon", "vert-x", "jdk-baseline", "custom"]
     },
     "target_build": {
       "type": "string",
-      "description": "Build mode identifier. Prefer artifact_provenance.build_mode when available.",
+      "description": "Deprecated legacy field. Prefer artifact_provenance.build_mode. Retained for backward compatibility.",
       "enum": ["jvm", "native", "aot-jvm"]
     },
     "artifact_provenance": {

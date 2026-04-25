@@ -3,6 +3,7 @@
 -- Output format intentionally matches wrk's Latency Distribution block so the
 -- existing grep -oP '95(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' pattern captures it.
 done = function(summary, latency, requests)
+  if not latency then return end
   local p95_us = latency:percentile(95.0)
   if not p95_us then return end
   local val

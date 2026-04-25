@@ -39,9 +39,6 @@ export const options = {
 };
 
 export function setup() {
-  if (NETEM_DELAY_MS === 'MISSING' || NETEM_LOSS_PCT === 'MISSING') {
-    throw new Error('FATAL: NETEM_DELAY_MS and NETEM_LOSS_PCT must be set. Refusing to run without required impairment metadata.');
-  }
   return {
     netem_delay_ms:  NETEM_DELAY_MS,
     netem_loss_pct:  NETEM_LOSS_PCT,

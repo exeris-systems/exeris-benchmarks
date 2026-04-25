@@ -62,7 +62,8 @@ case "${START_MODE}" in
       if [[ -f "$COMPOSE" ]]; then
         compose_cmd --file "$COMPOSE" down --remove-orphans
       else
-        echo "WARN: Resolved compose file does not exist: $COMPOSE"
+        echo "CONFIG_ERROR: Resolved compose file does not exist: $COMPOSE" >&2
+        exit 64
       fi
     else
       # Stop all known compose stacks

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Target to benchmark (community / enterprise / spring-runtime)'
+        description: 'Target to benchmark (community / enterprise / spring-runtime / quarkus-runtime)'
         required: true
         default: 'community'
       scenario:
@@ -77,11 +77,25 @@ jobs:
           SCENARIO="${{ github.event.inputs.scenario || 'scenarios/plaintext' }}"
           mkdir -p results/raw
 
+          case "$TARGET" in
+            community)
+              TARGET_DIR="targets/exeris-community-app" ;;
+            enterprise)
+              TARGET_DIR="enterprise/targets/exeris-kernel" ;;
+            spring-runtime)
+              TARGET_DIR="targets/spring-benchmark-app" ;;
+            quarkus-runtime)
+              TARGET_DIR="targets/quarkus-benchmark-app" ;;
+            *)
+              echo "Unsupported target: '$TARGET'. Expected one of: community, enterprise, spring-runtime, quarkus-runtime." >&2
+              exit 1 ;;
+          esac
+
           case "$TOOL" in
             wrk)
-              ./scripts/run-wrk.sh "targets/exeris-kernel/$TARGET" "$SCENARIO" ;;
+              ./scripts/run-wrk.sh "$TARGET_DIR" "$SCENARIO" ;;
             h2load)
-              ./scripts/run-h2load.sh "targets/exeris-kernel/$TARGET" "$SCENARIO" ;;
+              ./scripts/run-h2load.sh "$TARGET_DIR" "$SCENARIO" ;;
             k6)
               ./scripts/run-k6.sh "$SCENARIO" ;;
             *)

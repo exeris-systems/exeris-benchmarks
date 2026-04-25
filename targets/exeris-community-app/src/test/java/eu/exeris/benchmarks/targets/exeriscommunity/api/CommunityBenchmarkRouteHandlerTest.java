@@ -1,5 +1,18 @@
 package eu.exeris.benchmarks.targets.exeriscommunity.api;
 
+import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalLong;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+
 import eu.exeris.benchmarks.targets.exeriscommunity.application.BenchmarkUseCaseService;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.CartView;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.OrderResponse;
@@ -16,16 +29,6 @@ import eu.exeris.kernel.spi.http.HttpMethod;
 import eu.exeris.kernel.spi.http.HttpRequest;
 import eu.exeris.kernel.spi.http.HttpStatus;
 import eu.exeris.kernel.spi.http.HttpVersion;
-import java.lang.foreign.ValueLayout;
-import java.util.List;
-import java.util.Map;
-import java.util.OptionalLong;
-import java.util.UUID;
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -49,6 +52,36 @@ final class CommunityBenchmarkRouteHandlerTest {
         assertNotNull(exchange.response());
         assertFalse(exchange.response().hasBody());
         assertEquals(HttpStatus.OK, exchange.response().status());
+    }
+
+    @Test
+    void plaintextRouteRespondsWithPlaintextBody() {
+        BenchmarkUseCaseService useCaseService = new StaticUseCaseService();
+        TestSupport.CapturingAllocator allocator = new TestSupport.CapturingAllocator();
+        CommunityBenchmarkRouteHandler handler = new CommunityBenchmarkRouteHandler(
+            useCaseService,
+            testSecurityProvider(),
+            ignored -> OptionalLong.of(1L),
+            allocator
+        );
+        TestSupport.CapturingExchange exchange = TestSupport.CapturingExchange.get("/plaintext");
+
+        handler.handlePlaintext(exchange);
+
+        assertNotNull(exchange.response());
+        assertTrue(exchange.response().hasBody());
+        assertEquals(HttpStatus.OK, exchange.response().status());
+
+        byte[] payload = exchange.response().body()
+            .segment()
+            .asSlice(0L, exchange.response().body().size())
+            .toArray(ValueLayout.JAVA_BYTE);
+
+        assertEquals("plaintext", new String(payload, StandardCharsets.US_ASCII));
+        assertEquals(0, allocator.lastAllocated().closeCount());
+
+        exchange.response().body().close();
+        assertEquals(1, allocator.lastAllocated().closeCount());
     }
 
     @Test

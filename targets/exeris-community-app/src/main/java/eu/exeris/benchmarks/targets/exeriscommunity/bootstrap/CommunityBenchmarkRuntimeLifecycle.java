@@ -1,8 +1,14 @@
 package eu.exeris.benchmarks.targets.exeriscommunity.bootstrap;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
+
+import eu.exeris.benchmarks.targets.exeriscommunity.api.CommunityBenchmarkRouteHandler;
 import eu.exeris.benchmarks.targets.exeriscommunity.application.BenchmarkUseCaseService;
 import eu.exeris.benchmarks.targets.exeriscommunity.application.RepositoryBackedBenchmarkUseCaseService;
-import eu.exeris.benchmarks.targets.exeriscommunity.api.CommunityBenchmarkRouteHandler;
 import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.events.DomainEventPublisher;
 import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.graph.GraphFriendsOfFriendsAdapter;
 import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.graph.GraphShopAdapter;
@@ -20,20 +26,15 @@ import eu.exeris.kernel.core.security.SecurityInterceptor;
 import eu.exeris.kernel.spi.context.KernelProviders;
 import eu.exeris.kernel.spi.events.EventEngine;
 import eu.exeris.kernel.spi.flow.FlowEngine;
-import eu.exeris.kernel.spi.http.HttpKernelProviders;
 import eu.exeris.kernel.spi.http.HttpExchange;
 import eu.exeris.kernel.spi.http.HttpHandler;
+import eu.exeris.kernel.spi.http.HttpKernelProviders;
 import eu.exeris.kernel.spi.http.HttpMethod;
 import eu.exeris.kernel.spi.http.HttpServerEngine;
 import eu.exeris.kernel.spi.http.HttpStatus;
 import eu.exeris.kernel.spi.memory.MemoryAllocator;
 import eu.exeris.kernel.spi.persistence.PersistenceEngine;
 import eu.exeris.kernel.spi.persistence.TransactionalExecutor;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
 import jdk.jfr.FlightRecorder;
 import jdk.jfr.Recording;
 
@@ -101,6 +102,7 @@ public final class CommunityBenchmarkRuntimeLifecycle {
             new CommunityBenchmarkRouteHandler(useCaseService, securityInterceptor, principalRepository::findUserIdByPrincipal, allocator);
         HttpRouter router = HttpRouter.builder()
                 .route(HttpMethod.GET, "/health",       routeHandler::handleHealth)
+                .route(HttpMethod.GET, "/plaintext",    routeHandler::handlePlaintext)
                 .route(HttpMethod.GET, "/db/ping",      routeHandler::handleDbPing)
                 .route(HttpMethod.GET, "/api/v1/users", routeHandler::handleUsers)
                 .route(HttpMethod.GET, "/api/v1/graph/friends-of-friends/without-interests",

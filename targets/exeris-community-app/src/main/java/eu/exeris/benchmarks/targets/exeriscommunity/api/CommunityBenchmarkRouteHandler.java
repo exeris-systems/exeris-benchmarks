@@ -1,5 +1,16 @@
 package eu.exeris.benchmarks.targets.exeriscommunity.api;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalLong;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.LongConsumer;
+
 import eu.exeris.benchmarks.targets.exeriscommunity.application.BenchmarkUseCaseService;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.AddToCartRequest;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.CartItemView;
@@ -16,22 +27,13 @@ import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.graph.GraphUn
 import eu.exeris.kernel.core.security.SecurityInterceptor;
 import eu.exeris.kernel.spi.context.KernelProviders;
 import eu.exeris.kernel.spi.http.HttpExchange;
-import eu.exeris.kernel.spi.security.ImmutableStorageContext;
-import eu.exeris.kernel.spi.security.StorageContext;
+import eu.exeris.kernel.spi.http.HttpHeader;
 import eu.exeris.kernel.spi.http.HttpResponse;
 import eu.exeris.kernel.spi.http.HttpStatus;
 import eu.exeris.kernel.spi.memory.LoanedBuffer;
 import eu.exeris.kernel.spi.memory.MemoryAllocator;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
-import java.util.OptionalLong;
-import java.util.UUID;
-import java.util.function.Function;
-import java.util.function.LongConsumer;
+import eu.exeris.kernel.spi.security.ImmutableStorageContext;
+import eu.exeris.kernel.spi.security.StorageContext;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -43,6 +45,8 @@ public final class CommunityBenchmarkRouteHandler {
     private static final int INTERESTS_LIMIT = 10;
     private static final int DEFAULT_FOF_LIMIT = 50;
     private static final int DEFAULT_RECOMMENDATION_LIMIT = 10;
+    private static final byte[] PLAINTEXT_BODY = "plaintext".getBytes(StandardCharsets.US_ASCII);
+    private static final List<HttpHeader> PLAINTEXT_HEADERS = List.of(new HttpHeader("content-type", "text/plain; charset=utf-8"));
 
     private final BenchmarkUseCaseService useCaseService;
     private final SecurityInterceptor interceptor;
@@ -63,6 +67,23 @@ public final class CommunityBenchmarkRouteHandler {
 
     public void handleHealth(HttpExchange exchange) {
         exchange.respond(HttpStatus.OK);
+    }
+
+    public void handlePlaintext(HttpExchange exchange) {
+        LoanedBuffer responseBody = allocator.allocateNetwork(PLAINTEXT_BODY.length);
+        try {
+            MemorySegment.copy(MemorySegment.ofArray(PLAINTEXT_BODY), 0L, responseBody.segment(), 0L, PLAINTEXT_BODY.length);
+            responseBody.setSize(PLAINTEXT_BODY.length);
+            exchange.respond(new HttpResponse(
+                HttpStatus.OK,
+                exchange.request().version(),
+                PLAINTEXT_HEADERS,
+                responseBody
+            ));
+        } catch (RuntimeException exception) {
+            responseBody.close();
+            throw exception;
+        }
     }
 
     public void handleDbPing(HttpExchange exchange) {

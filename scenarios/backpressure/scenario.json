@@ -31,12 +31,13 @@
       "protocol_mode": "h1",
       "benchmark_family": "runtime-k6",
       "transport_mode": "loopback-h1",
-      "vus_overload_target": 500,
-      "vus_baseline": 100,
+      "overload_rate_rps": 2000,
+      "baseline_rate_rps": 200,
+      "executor": "ramping-arrival-rate",
       "warmup_seconds": 30,
       "duration_seconds": 180,
       "required_profile": "perf-box-amd64",
-      "note": "Total run = 180s sustained overload phase (stages: baseline 30s + ramp 30s + sustain 60s + recover 30s + confirm 30s). Latency tail and error ratio are the primary claim evidence."
+      "note": "ramping-arrival-rate executor; BASELINE_RATE and OVERLOAD_RATE are configurable env vars. Total run = 180s (baseline 30s + ramp 30s + sustain 60s + recover 30s + confirm 30s). Latency tail and error ratio are the primary claim evidence."
     }
   },
   "claim_scope": "exploratory",

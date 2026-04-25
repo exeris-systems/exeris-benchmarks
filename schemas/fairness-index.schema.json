@@ -37,7 +37,7 @@
       "type": "number",
       "minimum": 0.0,
       "maximum": 1.0,
-      "description": "Weighted composite fairness score: 0.3*error_symmetry + 0.4*latency_symmetry + 0.2*throughput_confidence. Weights deliberately sum to 0.9; 0.1 reserved for future metadata_symmetry metric."
+      "description": "Weighted composite fairness score, normalised to the 0.0-1.0 range: (0.3*error_symmetry + 0.4*latency_symmetry + 0.2*throughput_confidence) / 0.9. The current component weights sum to 0.9; 0.1 remains reserved for a future metadata_symmetry metric."
     },
     "interpretation": {
       "type": "string",

@@ -13,7 +13,7 @@ Docker Compose configurations for containerized benchmark targets and support se
 ## Running Compose Stack
 
 ```bash
-docker-compose up -d
+docker compose up -d
 # Services available at:
 #   exeris-runtime: http://localhost:8080
 #   postgres: localhost:5432
@@ -22,7 +22,7 @@ docker-compose up -d
 ## Profile: baseline
 
 ```bash
-docker-compose --profile baseline up -d
+docker compose --profile baseline up -d
 # Includes: exeris-runtime, postgres
 ```
 

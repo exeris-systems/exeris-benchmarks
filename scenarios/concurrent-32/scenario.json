@@ -10,7 +10,7 @@
   "driver": ["wrk", "k6", "h2load"],
   "transport": ["h1", "h2", "h3"],
   "loopback": true,
-  "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h1 is mandatory in all result artifacts. Loopback saturates before network-path at this concurrency level.",
+  "loopback_caveat": "Results are not equivalent to network-path benchmarks. H1 result artifacts must use transport_mode=loopback-h1, and H2 result artifacts must use transport_mode=loopback-h2c. Loopback saturates before network-path at this concurrency level.",
   "concurrency": {
     "connections": 32,
     "threads": 4,

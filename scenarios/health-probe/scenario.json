@@ -7,7 +7,7 @@
   "endpoint": "GET /health",
   "mode": "smoke-guard",
   "tier": "community",
-  "driver": ["k6"],
+  "driver": ["k6", "wrk"],
   "transport": ["h1"],
   "loopback": true,
   "loopback_caveat": "Guard probe only. Not a performance comparison artifact.",

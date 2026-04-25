@@ -10,7 +10,7 @@
   "driver": ["wrk", "k6", "h2load"],
   "transport": ["h1", "h2", "h3"],
   "loopback": true,
-  "loopback_caveat": "256 connections on loopback will likely saturate the target. Results are NOT equivalent to network-path benchmarks and NOT comparable to concurrent-32 results without explicit caveat. transport_mode=loopback-h1 is mandatory in all result artifacts.",
+  "loopback_caveat": "256 connections on loopback will likely saturate the target. Results are NOT equivalent to network-path benchmarks and NOT comparable to concurrent-32 results without explicit caveat. transport_mode must match the protocol-specific fixed contract in all result artifacts (loopback-h1 for H1, loopback-h2c for H2).",
   "concurrency": {
     "connections": 256,
     "threads": 4,

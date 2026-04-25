@@ -10,7 +10,7 @@
   "driver": ["k6", "h2load"],
   "transport": ["h1", "h2"],
   "loopback": true,
-  "loopback_caveat": "Cold-connect loopback measurements reflect kernel TCP stack cost without network RTT. Results are NOT comparable to measurements with network path. transport_mode=loopback-h1 is mandatory in all result artifacts.",
+  "loopback_caveat": "Cold-connect loopback measurements reflect kernel TCP stack cost without network RTT. Results are NOT comparable to measurements with network path. H1 result artifacts must use transport_mode=loopback-h1; H2 result artifacts must use transport_mode=loopback-h2c.",
   "concurrency": {
     "connections": 1,
     "note": "Single connection per iteration by design. VU count is not persistent connection count."

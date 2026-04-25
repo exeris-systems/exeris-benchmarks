@@ -83,7 +83,8 @@ case "${START_MODE}" in
     ;;
   external)
     if [[ -z "${EXTERNAL_STOP_CMD:-}" ]]; then
-      echo "No EXTERNAL_STOP_CMD configured for START_MODE=external"
+      echo "CONFIG_ERROR: EXTERNAL_STOP_CMD is required for START_MODE=external" >&2
+      exit 64
     else
       echo "Running external stop command"
       bash -lc "$EXTERNAL_STOP_CMD"

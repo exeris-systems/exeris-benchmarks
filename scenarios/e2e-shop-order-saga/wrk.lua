@@ -11,10 +11,12 @@ local json = require("cjson");
 local request_count = 0;
 local error_count = 0;
 local product_id = 1;
+local run_id = os.getenv("EXERIS_RUN_ID") or os.getenv("RUN_ID") or "run0";
 
--- Function to generate unique username
+-- Deterministic username for reproducible runs.
+-- Includes explicit run identifier and monotonic request_count.
 function generate_username()
-  return string.format("user_%d_%d", os.time(), request_count);
+  return string.format("user_%s_%08d", run_id, request_count);
 end
 
 -- Deterministic function to get product ID.

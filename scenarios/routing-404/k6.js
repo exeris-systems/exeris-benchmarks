@@ -9,6 +9,7 @@ import { Rate } from 'k6/metrics';
 
 const errorRate = new Rate('errors');
 const BASE_URL = __ENV.BASE_URL || __ENV.K6_BASE_URL || 'http://localhost:8080';
+const expected404 = http.expectedStatuses(404);
 
 export const options = {
   stages: [
@@ -25,7 +26,9 @@ export const options = {
 };
 
 export default function () {
-  const res = http.get(`${BASE_URL}/does-not-exist`);
+  const res = http.get(`${BASE_URL}/does-not-exist`, {
+    responseCallback: expected404,
+  });
 
   const ok = check(res, {
     'status is 404': (r) => r.status === 404,

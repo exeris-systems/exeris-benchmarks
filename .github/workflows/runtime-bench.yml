@@ -59,16 +59,7 @@ jobs:
       - name: Start target application
         run: |
           TARGET="${{ github.event.inputs.target || 'community' }}"
-          ./runtime/drivers/start-target.sh "$TARGET" &
-          TARGET_PID=$!
-          echo "TARGET_PID=$TARGET_PID" >> $GITHUB_ENV
-          for _ in $(seq 1 15); do
-            if ! kill -0 "$TARGET_PID" 2>/dev/null; then
-              wait "$TARGET_PID"
-              exit $?
-            fi
-            sleep 1
-          done
+          ./runtime/drivers/start-target.sh "$TARGET"
 
       - name: Capture environment
         run: |
@@ -98,7 +89,8 @@ jobs:
       - name: Stop target application
         if: always()
         run: |
-          ./runtime/drivers/stop-target.sh || true
+          TARGET="${{ github.event.inputs.target || 'community' }}"
+          ./runtime/drivers/stop-target.sh "$TARGET" || true
 
       - name: Upload results
         uses: actions/upload-artifact@v4

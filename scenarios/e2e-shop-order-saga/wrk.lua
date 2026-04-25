@@ -33,7 +33,7 @@ function parse_json_field(response_body, field)
   return nil;
 end
 
--- Setup function (called once per connection)
+-- Setup function (called once per thread)
 function setup(thread)
   -- Per-thread setup if needed
   thread.request_num = 0;
@@ -60,14 +60,14 @@ function request()
     wrk.method = "POST";
     wrk.path = "/api/v1/auth/register";
     wrk.headers["Content-Type"] = "application/json";
-    return body;
+    return wrk.format(nil, nil, nil, body);
 
   elseif step == 1 then
     -- Step 2: Get recommendations
     wrk.method = "GET";
     wrk.path = "/api/v1/products/recommended?limit=10";
     wrk.headers["Content-Type"] = "application/json";
-    return nil;
+    return wrk.format();
 
   elseif step == 2 then
     -- Step 3: Add to cart
@@ -80,14 +80,14 @@ function request()
     wrk.method = "POST";
     wrk.path = "/api/v1/cart/add";
     wrk.headers["Content-Type"] = "application/json";
-    return body;
+    return wrk.format(nil, nil, nil, body);
 
   elseif step == 3 then
     -- Step 4: Get cart
     wrk.method = "GET";
     wrk.path = "/api/v1/cart";
     wrk.headers["Content-Type"] = "application/json";
-    return nil;
+    return wrk.format();
 
   elseif step == 4 then
     -- Step 5: Place order
@@ -99,7 +99,7 @@ function request()
     wrk.method = "POST";
     wrk.path = "/api/v1/orders";
     wrk.headers["Content-Type"] = "application/json";
-    return body;
+    return wrk.format(nil, nil, nil, body);
   end
 end
 

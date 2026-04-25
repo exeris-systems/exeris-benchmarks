@@ -17,9 +17,11 @@ function generate_username()
   return string.format("user_%d_%d", os.time(), request_count);
 end
 
--- Simple function to get random product ID
+-- Deterministic function to get product ID.
+-- Cycles through product IDs 1..500 based on request_count so request
+-- sequences are reproducible across runs.
 function get_random_product_id()
-  return math.random(1, 500);
+  return (request_count % 500) + 1;
 end
 
 -- Function to extract response field

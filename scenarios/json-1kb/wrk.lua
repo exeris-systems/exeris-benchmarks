@@ -1,5 +1,5 @@
 -- wrk Lua script for 1 KB JSON POST echo benchmark
--- Usage: wrk -t 4 -c 100 -d 30s --latency --script runtime/wrk/lua/json-post.lua http://localhost:8080/echo
+-- Usage: wrk -t 4 -c 100 -d 30s --latency --script scenarios/json-1kb/wrk.lua http://localhost:8080/echo
 
 local payload = string.rep("x", 700)
 local body = string.format(

@@ -60,8 +60,15 @@ jobs:
         run: |
           TARGET="${{ github.event.inputs.target || 'community' }}"
           ./runtime/drivers/start-target.sh "$TARGET" &
-          echo "TARGET_PID=$!" >> $GITHUB_ENV
-          sleep 15  # allow startup
+          TARGET_PID=$!
+          echo "TARGET_PID=$TARGET_PID" >> $GITHUB_ENV
+          for _ in $(seq 1 15); do
+            if ! kill -0 "$TARGET_PID" 2>/dev/null; then
+              wait "$TARGET_PID"
+              exit $?
+            fi
+            sleep 1
+          done
 
       - name: Capture environment
         run: |

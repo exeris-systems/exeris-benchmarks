@@ -71,11 +71,11 @@ jobs:
         id: compare
         run: |
           if [ "${{ steps.locate.outputs.baseline_exists }}" != "true" ]; then
-            cat > comparison.md <<EOF
-          ## Exeris Benchmark Comparison
-          No baseline comparison was performed because the baseline file \`${{ steps.locate.outputs.baseline }}\` does not exist in this repository yet.
-          Result file located: \`${{ steps.locate.outputs.result }}\`
-          EOF
+            cat > comparison.md <<'EOF'
+## Exeris Benchmark Comparison
+No baseline comparison was performed because the baseline file `${{ steps.locate.outputs.baseline }}` does not exist in this repository yet.
+Result file located: `${{ steps.locate.outputs.result }}`
+EOF
             echo "exit_code=0" >> $GITHUB_OUTPUT
             cat comparison.md
             exit 0

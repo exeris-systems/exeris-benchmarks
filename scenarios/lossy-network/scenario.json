@@ -13,8 +13,8 @@
     "tool": "tc netem",
     "apply_command_template": "sudo tc qdisc add dev lo root netem delay ${NETEM_DELAY_MS}ms ${NETEM_JITTER_MS}ms loss ${NETEM_LOSS_PCT}%",
     "remove_command": "sudo tc qdisc del dev lo root",
-    "required_env_vars": ["NETEM_DELAY_MS", "NETEM_LOSS_PCT", "NETEM_JITTER_MS"],
-    "optional_env_vars": [],
+    "required_env_vars": ["NETEM_DELAY_MS", "NETEM_LOSS_PCT"],
+    "optional_env_vars": ["NETEM_JITTER_MS"],
     "metadata_capture": "MANDATORY — NETEM_DELAY_MS, NETEM_LOSS_PCT, and NETEM_JITTER_MS must appear in result metadata. Run is invalid for comparison without captured impairment profile."
   },
   "loopback": true,

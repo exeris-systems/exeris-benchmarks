@@ -18,6 +18,13 @@ const NETEM_DELAY_MS  = __ENV.NETEM_DELAY_MS  || 'MISSING';
 const NETEM_LOSS_PCT  = __ENV.NETEM_LOSS_PCT   || 'MISSING';
 const NETEM_JITTER_MS = __ENV.NETEM_JITTER_MS  || '0';
 
+if (NETEM_DELAY_MS === 'MISSING' || NETEM_LOSS_PCT === 'MISSING') {
+  throw new Error(
+    'NETEM_DELAY_MS and NETEM_LOSS_PCT are required. Set them before running: ' +
+    'export NETEM_DELAY_MS=20 NETEM_LOSS_PCT=1.0'
+  );
+}
+
 export const options = {
   stages: [
     { duration: '30s',  target: 20 },  // ramp-up under impairment

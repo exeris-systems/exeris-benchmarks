@@ -12,7 +12,7 @@ on:
       baseline_path:
         description: 'Baseline file path relative to repo root'
         required: true
-        default: 'baselines/community/ci-runner.json'
+        default: 'baselines/community/pure/ci-runner.json'
 
 permissions:
   contents: read
@@ -56,7 +56,7 @@ jobs:
             echo "::error::No benchmark result JSON was found in results/downloaded/. Ensure the benchmark workflow publishes a .json result artifact."
             exit 1
           fi
-          BASELINE="${{ github.event.inputs.baseline_path || 'baselines/community/ci-runner.json' }}"
+          BASELINE="${{ github.event.inputs.baseline_path || 'baselines/community/pure/ci-runner.json' }}"
           if [ -f "$BASELINE" ]; then
             BASELINE_EXISTS=true
           else

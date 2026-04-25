@@ -55,14 +55,14 @@
     },
     "benchmark_commit_sha": {
       "type": "string",
-      "description": "Git commit SHA of exeris-benchmarks repository at execution",
-      "pattern": "^[a-f0-9]{40}$|^unknown$",
+      "description": "Git commit SHA of exeris-benchmarks repository at execution; accepts abbreviated (7+ chars) or full 40-character SHAs",
+      "pattern": "^[a-f0-9]{7,40}$|^unknown$",
       "examples": ["a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b", "unknown"]
     },
     "target_commit_sha": {
       "type": "string",
-      "description": "Git commit SHA of benchmark target (exeris-kernel or exeris-enterprise) at execution",
-      "pattern": "^[a-f0-9]{40}$|^unknown$",
+      "description": "Git commit SHA of benchmark target (exeris-kernel or exeris-enterprise) at execution; accepts abbreviated (7+ chars) or full 40-character SHAs",
+      "pattern": "^[a-f0-9]{7,40}$|^unknown$",
       "examples": ["a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b", "unknown"]
     },
     "jdk_vendor": {

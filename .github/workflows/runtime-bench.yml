@@ -54,7 +54,10 @@ jobs:
 
       - name: Install nghttp2 (h2load)
         if: ${{ (github.event.inputs.tool || 'wrk') == 'h2load' }}
-        run: sudo apt-get update -qq && sudo apt-get install -y nghttp2
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nghttp2-client
+          command -v h2load
 
       - name: Start target application
         run: |

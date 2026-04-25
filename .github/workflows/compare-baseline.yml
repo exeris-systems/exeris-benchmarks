@@ -43,13 +43,34 @@ jobs:
         id: locate
         run: |
           RESULT="$(find results/downloaded/ -name '*.json' ! -name 'env-*' | sort | tail -1)"
+          if [ -z "$RESULT" ]; then
+            echo "::error::No benchmark result JSON was found in results/downloaded/. Ensure the benchmark workflow publishes a .json result artifact."
+            exit 1
+          fi
           BASELINE="${{ github.event.inputs.baseline_path || 'baselines/community/ci-runner.json' }}"
+          if [ -f "$BASELINE" ]; then
+            BASELINE_EXISTS=true
+          else
+            BASELINE_EXISTS=false
+            echo "::notice::Baseline file '$BASELINE' was not found. A comparison will not be performed for this run."
+          fi
           echo "result=$RESULT"   >> $GITHUB_OUTPUT
           echo "baseline=$BASELINE" >> $GITHUB_OUTPUT
+          echo "baseline_exists=$BASELINE_EXISTS" >> $GITHUB_OUTPUT
 
       - name: Run comparison
         id: compare
         run: |
+          if [ "${{ steps.locate.outputs.baseline_exists }}" != "true" ]; then
+            cat > comparison.md <<EOF
+          ## Exeris Benchmark Comparison
+          No baseline comparison was performed because the baseline file \`${{ steps.locate.outputs.baseline }}\` does not exist in this repository yet.
+          Result file located: \`${{ steps.locate.outputs.result }}\`
+          EOF
+            echo "exit_code=0" >> $GITHUB_OUTPUT
+            cat comparison.md
+            exit 0
+          fi
           set +e
           ./scripts/compare-results.sh \
             "${{ steps.locate.outputs.baseline }}" \

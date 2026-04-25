@@ -9,7 +9,7 @@ import { Rate } from 'k6/metrics';
 // Purpose: JSON parse + serialize cost at small payload
 
 const errorRate = new Rate('errors');
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
+const BASE_URL = __ENV.BASE_URL || __ENV.K6_BASE_URL || 'http://localhost:8080';
 
 // ~1 KB JSON payload
 const PAYLOAD = JSON.stringify({

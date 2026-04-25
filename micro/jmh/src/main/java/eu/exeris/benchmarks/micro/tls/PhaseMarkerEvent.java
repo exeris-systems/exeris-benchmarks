@@ -9,16 +9,17 @@ import jdk.jfr.Name;
 import jdk.jfr.StackTrace;
 
 /**
- * JFR marker event emitted at the start of each JMH measurement iteration.
+ * JFR marker event emitted at the start of each JMH iteration.
  *
- * <p>Used by {@code extract-jfr-metrics.sh} to isolate measurement-window JFR events
+ * <p>This event may be emitted for both warmup and measurement iterations; use the
+ * {@code phase} field to distinguish them when isolating measurement-window JFR events
  * from setup-phase events (e.g. GC triggered by {@code @Setup(Level.Trial)}).
- * Only events occurring after the first {@code eu.exeris.bench.PhaseMarkerEvent}
- * are included in metric aggregation.
+ * Only events occurring after the first measurement-phase
+ * {@code eu.exeris.bench.PhaseMarkerEvent} are included in metric aggregation.
  */
 @Name("eu.exeris.bench.PhaseMarkerEvent")
 @Label("Benchmark Phase Marker")
-@Description("Emitted at the start of each JMH measurement iteration to mark the measurement window boundary")
+@Description("Emitted at the start of each JMH iteration; use the phase field to distinguish warmup from measurement")
 @Category({"Exeris", "Benchmark"})
 @StackTrace(false)
 @Enabled(true)

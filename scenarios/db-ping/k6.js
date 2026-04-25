@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
-const baseUrl = __ENV.BASE_URL || 'http://127.0.0.1:18080';
+const baseUrl = __ENV.BASE_URL || __ENV.K6_BASE_URL || 'http://127.0.0.1:18080';
 const expectedStatus = Number(__ENV.EXPECT_STATUS || 503);
 
 export const options = {

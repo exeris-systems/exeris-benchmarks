@@ -18,10 +18,6 @@ on:
         description: 'Benchmark tool (wrk / h2load / k6)'
         required: true
         default: 'wrk'
-      kernel_version:
-        description: 'exeris-kernel version/tag to benchmark'
-        required: false
-        default: 'latest'
 
 permissions:
   contents: read

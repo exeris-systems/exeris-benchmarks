@@ -10,13 +10,13 @@ import { Rate, Trend } from 'k6/metrics';
 
 const errorRate = new Rate('errors');
 const tlsHandshakeTrend = new Trend('tls_handshake_ms', true);
-const BASE_URL = __ENV.BASE_URL || 'https://localhost:8443';
+const BASE_URL = __ENV.BASE_URL || __ENV.K6_BASE_URL || 'https://localhost:8443';
 
 export const options = {
   stages: [
     { duration: '30s',  target: 10 },  // ramp-up
-    { duration: '60s',  target: 20 },  // warmup — allow TLS session cache warming
-    { duration: '120s', target: 20 },  // measurement — cold handshakes (no session resumption)
+    { duration: '60s',  target: 20 },  // warmup — JVM/server state stabilisation (Connection: close forces new TLS per request)
+    { duration: '120s', target: 20 },  // measurement — each request forces a new TCP+TLS handshake via Connection: close
     { duration: '10s',  target: 0  },  // ramp-down
   ],
   thresholds: {

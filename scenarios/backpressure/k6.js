@@ -7,7 +7,7 @@ import { Rate } from 'k6/metrics';
 //          Target must not OOM or deadlock. Graceful degradation is the pass criterion.
 
 const errorRate = new Rate('errors');
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
+const BASE_URL = __ENV.BASE_URL || __ENV.K6_BASE_URL || 'http://localhost:8080';
 // Max acceptable error rate before we consider load-shed broken
 const MAX_ERROR_RATE = parseFloat(__ENV.MAX_ERROR_RATE || '0.30');  // 30%
 const ACCEPTABLE_STATUSES = http.expectedStatuses(200, 429, 503);

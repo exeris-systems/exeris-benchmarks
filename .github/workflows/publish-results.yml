@@ -62,10 +62,26 @@ jobs:
       - name: Locate files
         id: locate
         run: |
-          RESULT="$(find results/downloaded/ -name '*.json' ! -name 'env-*' | sort | tail -1)"
-          ENV_FILE="$(find results/downloaded/ -name 'env-*.json' | sort | tail -1 || true)"
-          echo "result=$RESULT"   >> $GITHUB_OUTPUT
-          echo "env_file=$ENV_FILE" >> $GITHUB_OUTPUT
+          mapfile -t RESULT_MATCHES < <(find results/downloaded/ -type f \( -name 'jmh-*.json' -o -name 'k6-*.json' -o -name 'result-*.json' \) | sort)
+          if [[ "${#RESULT_MATCHES[@]}" -eq 0 ]]; then
+            echo "Error: No result JSON found in results/downloaded/. Expected one of: jmh-*.json, k6-*.json, result-*.json." >&2
+            exit 1
+          fi
+          if [[ "${#RESULT_MATCHES[@]}" -gt 1 ]]; then
+            echo "Error: Multiple result JSON files found in results/downloaded/. Expected exactly one:" >&2
+            printf ' - %s\n' "${RESULT_MATCHES[@]}" >&2
+            exit 1
+          fi
+          RESULT="${RESULT_MATCHES[0]}"
+          mapfile -t ENV_MATCHES < <(find results/downloaded/ -type f -name 'env-*.json' | sort)
+          if [[ "${#ENV_MATCHES[@]}" -gt 1 ]]; then
+            echo "Error: Multiple env JSON files found in results/downloaded/. Expected at most one:" >&2
+            printf ' - %s\n' "${ENV_MATCHES[@]}" >&2
+            exit 1
+          fi
+          ENV_FILE="${ENV_MATCHES[0]:-}"
+          echo "result=$RESULT"   >> "$GITHUB_OUTPUT"
+          echo "env_file=$ENV_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Archive to history
         run: |

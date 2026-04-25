@@ -11,7 +11,7 @@ const errorRate = new Rate('errors');
 const latencyTrend = new Trend('request_latency', true);
 
 // Override BASE_URL via K6_ENV or --env BASE_URL=http://...
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
+const BASE_URL = __ENV.BASE_URL || __ENV.K6_BASE_URL || 'http://localhost:8080';
 
 export const options = {
   stages: [

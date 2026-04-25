@@ -247,7 +247,7 @@ Required metadata to capture at benchmark start:
 **Database/Graph Backend:** identical within each declared backend track (Track A: PostgreSQL + Neo4j, Track B: PostgreSQL + PGQ).  
 **Known Differences (acceptable):**
 - Exeris: Flow orchestration is kernel-built; zero additional framework overhead
-- Quarkus/Spring: Axon Framework adds ~3–5% overhead (documented, expected)
+- Quarkus/Spring: saga behavior is provided through Axon Framework. The cost of Axon, event dispatching, saga state management, and related operational machinery is treated as part of the workflow stack cost for this scenario. No fixed overhead percentage is assumed.
 - Graph: All use Neo4j Bolt (Community driver with heap allocation tax)
 
 Cross-track backend mixing (Neo4j vs PGQ) is non-equivalent by definition and allowed only for stack-level descriptive reporting with explicit caveats.
@@ -295,6 +295,27 @@ Compensation Rate = (Orders with final state COMPENSATED) / (Total Orders)
 Expected: < 5% (realistic payment decline + inventory shortage rate)
 Threshold: > 10% indicates unhealthy saga execution
 ```
+
+---
+
+### Saga machinery cost note
+
+No fixed Axon overhead percentage is assumed.
+
+Earlier planning notes treated saga-framework overhead as a small constant. Actual
+measurements show that the cost is scenario-dependent and includes more than the
+framework call overhead alone.
+
+For Quarkus/Spring targets, the measured stack cost includes:
+- Axon saga state management
+- command/event dispatch
+- handler execution path
+- persistence/outbox interaction
+- status resolution behavior
+- operational footprint required to provide comparable saga semantics
+
+Therefore, results from this scenario should describe the observed
+workflow-stack cost, not a generic Axon overhead percentage.
 
 ---
 

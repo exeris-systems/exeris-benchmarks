@@ -43,6 +43,29 @@
     <maven.compiler.plugin.version>3.12.1</maven.compiler.plugin.version>
   </properties>
 
+  <repositories>
+    <repository>
+      <id>github-exeris-kernel</id>
+      <url>https://maven.pkg.github.com/exeris-systems/exeris-kernel</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>github-exeris-spring-runtime</id>
+      <url>https://maven.pkg.github.com/exeris-systems/exeris-spring-runtime</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
   <dependencies>
     <!-- JMH core -->
     <dependency>

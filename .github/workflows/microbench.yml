@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   jmh-smoke:
@@ -40,7 +41,10 @@ jobs:
           cache: maven
 
       - name: Build JMH module
-        run: mvn -f micro/jmh/pom.xml clean package -DskipTests -q
+        run: mvn -s .github/maven-settings-gpr.xml -f micro/jmh/pom.xml clean package -DskipTests -q
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Run JMH benchmarks
         run: |

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/fairness-index/v1",
+  "title": "FairnessIndex",
+  "description": "Computed fairness index quantifying measurement symmetry between two benchmark targets.",
+  "type": "object",
+  "required": [
+    "error_symmetry",
+    "latency_symmetry",
+    "throughput_confidence",
+    "composite_score",
+    "interpretation",
+    "computed_at",
+    "targets"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "error_symmetry": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Symmetry score for error rates between the two targets. 1.0 = both below 0.5% error; 0.0 = either above 1.0% error. Weight: 0.3."
+    },
+    "latency_symmetry": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Symmetry score across latency percentile pairs (p50/p75/p90/p95/p99). 1.0 = max normalized diff < 10%; 0.0 = max normalized diff > 50%. Weight: 0.4."
+    },
+    "throughput_confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Confidence score derived from the throughput ratio (min/max). 1.0 = ratio > 0.9; 0.5 = ratio < 0.7. Weight: 0.2."
+    },
+    "composite_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Weighted composite fairness score, normalized to the 0.0-1.0 range: (0.3*error_symmetry + 0.4*latency_symmetry + 0.2*throughput_confidence) / 0.9. The current component weights sum to 0.9; 0.1 remains reserved for a future metadata_symmetry metric."
+    },
+    "interpretation": {
+      "type": "string",
+      "enum": ["highly_fair", "fairly_comparable", "moderate_asymmetry", "unsuitable"],
+      "description": "Human-readable interpretation of composite_score: highly_fair >= 0.85, fairly_comparable >= 0.70, moderate_asymmetry >= 0.50, unsuitable < 0.50."
+    },
+    "computed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when this index was computed."
+    },
+    "targets": {
+      "type": "array",
+      "description": "Exactly two target_id strings identifying the compared targets.",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "string"
+      }
+    },
+    "asymmetry_notes": {
+      "type": "array",
+      "description": "Optional human-readable notes about detected or declared asymmetries.",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

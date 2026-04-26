@@ -1,0 +1,17 @@
+{
+  "manifest_version": "1",
+  "scenario_id": "entity-read-by-id",
+  "schema_migration_version": "V1",
+  "db_type": "postgresql",
+  "db_image": "postgres:16.2",
+  "entity_count": 1000,
+  "user_count": 1000,
+  "interest_count": 200,
+  "friendship_count_min": 10000,
+  "user_interest_count_min": 10000,
+  "id_range": { "min": 1, "max": 1000 },
+  "seed_file": "scenarios/entity-read-by-id/seed/entities.sql",
+  "seed_file_sha256": "b88ca97981461c5f7a133ef399e486e31568f7dbee2b4027103f31c609047b18",
+  "idempotency": "INSERT ... ON CONFLICT (id) DO UPDATE SET ...",
+  "created_at": "2026-03-25"
+}

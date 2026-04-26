@@ -1,0 +1,59 @@
+{
+  "scenario_id": "handshake-cold",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-tls-baseline",
+  "description": "Cold TLS handshake latency. Primary metric: TLS handshake duration (crypto cost). Secondary: compare H2+TLS vs H3/QUIC handshake latency (H3 pending toolchain). Linked to P2-02 D3 Community Loopback Handshake Benchmark.",
+  "endpoint": "GET /plaintext",
+  "mode": "tls-handshake-cold",
+  "tier": "community",
+  "driver": ["k6", "h2load"],
+  "transport": ["h2-tls", "h1-tls"],
+  "loopback": true,
+  "loopback_caveat": "TLS handshake loopback measurements reflect crypto + kernel cost without network RTT. Results are NOT comparable to measurements with network path. transport_mode=loopback-h2-tls is mandatory in all result artifacts.",
+  "tls": {
+    "cert_tool": "tools/bench/lib/certs.sh",
+    "key_type": "RSA-2048",
+    "session_resumption": false,
+    "session_resumption_note": "Session resumption MUST be disabled to ensure cold handshake measurement."
+  },
+  "key_metrics": [
+    "http_req_tls_handshaking (p50, p99) — primary",
+    "http_req_connecting (p50, p99) — secondary",
+    "http_req_duration (p50, p99)"
+  ],
+  "protocol_support": {
+    "h2-tls": {
+      "status": "runnable",
+      "driver": "k6 + h2load",
+      "note": "RSA-2048 self-signed cert via certs.sh. k6 insecureSkipTLSVerify=true for test cert."
+    },
+    "h1-tls": {
+      "status": "runnable",
+      "driver": "k6",
+      "note": "Optional H1+TLS baseline. Same cert."
+    },
+    "h3-quic": {
+      "status": "not-runnable",
+      "reason": "H3/QUIC handshake (0-RTT vs 1-RTT QUIC crypto) requires dedicated QUIC toolchain. No confirmed driver in runtime/drivers.",
+      "backlog_ref": "P2-02"
+    }
+  },
+  "fixed_contracts": {
+    "community_h2_tls_rsa2048_v1": {
+      "tier": "community",
+      "protocol_mode": "h2-tls",
+      "benchmark_family": "runtime-k6",
+      "transport_mode": "loopback-h2-tls",
+      "key_type": "RSA-2048",
+      "session_resumption": false,
+      "vus": 20,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64"
+    }
+  },
+  "claim_scope": "exploratory",
+  "backlog_ref": "P2-02",
+  "comparison_axis_note": "H1-TLS vs H2-TLS handshake comparison requires same cert, same key type, and same session-resumption setting. Do not compare RSA-2048 to EC P-256 without explicit key-type caveat."
+}

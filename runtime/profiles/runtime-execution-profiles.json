@@ -1,0 +1,83 @@
+{
+  "schema_version": "1",
+  "profiles": [
+    {
+      "execution_profile_id": "runtime-constrained-128m-0p5vcpu-v1",
+      "benchmark_family": "runtime-wrk",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 0.5,
+        "quota_us": 50000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 128,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "serial",
+        "active_processor_count": 1,
+        "max_ram_mb": 128
+      },
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "Exploratory constrained runtime smoke profile only. Not eligible for comparative, baseline, or historical regression workflows."
+    },
+    {
+      "execution_profile_id": "runtime-constrained-256m-1vcpu-v1",
+      "benchmark_family": "runtime-wrk",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 1,
+        "quota_us": 100000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 256,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "serial",
+        "active_processor_count": 1,
+        "max_ram_mb": 256
+      },
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "Exploratory constrained runtime smoke profile only at 256MB and 1vCPU. Not eligible for comparative, baseline, or historical regression workflows."
+    }
+  ]
+}

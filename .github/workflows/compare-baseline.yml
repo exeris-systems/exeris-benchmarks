@@ -1,0 +1,135 @@
+name: Compare Against Baseline
+
+on:
+  workflow_run:
+    workflows: ["Microbenchmarks (JMH)", "Runtime Benchmarks"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      result_artifact:
+        description: 'Artifact name containing result JSON'
+        required: true
+      baseline_path:
+        description: 'Baseline file path relative to repo root'
+        required: true
+        default: 'baselines/community/pure/ci-runner.json'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  compare:
+    name: Compare vs baseline
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download benchmark results (workflow_run)
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.workflow_run.name == 'Runtime Benchmarks' && format('runtime-results-{0}', github.event.workflow_run.id) || format('jmh-results-{0}', github.event.workflow_run.id) }}
+          path: results/downloaded/
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Download benchmark results (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.inputs.result_artifact }}
+          path: results/downloaded/
+          github-token: ${{ github.token }}
+
+      - name: Install jq + python3
+        run: sudo apt-get update -qq && sudo apt-get install -y jq python3
+
+      - name: Locate result and baseline
+        id: locate
+        run: |
+          RESULT="$(find results/downloaded/ -name '*.json' ! -name 'env-*' | sort | tail -1)"
+          if [ -z "$RESULT" ]; then
+            echo "::error::No benchmark result JSON was found in results/downloaded/. Ensure the benchmark workflow publishes a .json result artifact."
+            exit 1
+          fi
+          BASELINE="${{ github.event.inputs.baseline_path || 'baselines/community/pure/ci-runner.json' }}"
+          if [ -f "$BASELINE" ]; then
+            BASELINE_EXISTS=true
+          else
+            BASELINE_EXISTS=false
+            echo "::notice::Baseline file '$BASELINE' was not found. A comparison will not be performed for this run."
+          fi
+          echo "result=$RESULT"   >> $GITHUB_OUTPUT
+          echo "baseline=$BASELINE" >> $GITHUB_OUTPUT
+          echo "baseline_exists=$BASELINE_EXISTS" >> $GITHUB_OUTPUT
+
+      - name: Run comparison
+        id: compare
+        run: |
+          if [ "${{ steps.locate.outputs.baseline_exists }}" != "true" ]; then
+            cat > comparison.md <<'EOF'
+## Exeris Benchmark Comparison
+No baseline comparison was performed because the baseline file `${{ steps.locate.outputs.baseline }}` does not exist in this repository yet.
+Result file located: `${{ steps.locate.outputs.result }}`
+EOF
+            echo "exit_code=0" >> $GITHUB_OUTPUT
+            cat comparison.md
+            exit 0
+          fi
+          set +e
+          ./scripts/compare-results.sh \
+            "${{ steps.locate.outputs.baseline }}" \
+            "${{ steps.locate.outputs.result }}" \
+            > comparison.md 2>&1
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          cat comparison.md
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request' || github.event.workflow_run.event == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('comparison.md', 'utf8');
+            const issueNumber = context.payload.workflow_run?.pull_requests?.[0]?.number || context.issue.number;
+
+            if (!issueNumber) {
+              console.log('No associated PR number found for this run; skipping PR comment.');
+              return;
+            }
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+            const existing = comments.find(c => c.body.includes('Exeris Benchmark Comparison'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body,
+              });
+            }
+
+      - name: Write step summary
+        run: cat comparison.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail on blocking regression
+        if: steps.compare.outputs.exit_code != '0'
+        run: |
+          echo "::error::Blocking performance regression detected. See comparison report."
+          exit 1

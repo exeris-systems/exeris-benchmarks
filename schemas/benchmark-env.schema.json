@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/benchmark-env/v1",
+  "title": "BenchmarkEnvironment",
+  "description": "Captured execution environment for a single benchmark run.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "captured_at",
+    "hardware_profile",
+    "cpu",
+    "memory_gb",
+    "os",
+    "kernel",
+    "jdk",
+    "jvm_flags",
+    "benchmark_tool"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1",
+      "description": "Schema version identifier."
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when capture-env.sh was executed."
+    },
+    "hardware_profile": {
+      "type": "string",
+      "enum": ["dev-laptop", "dev-isolated", "ci-runner", "perf-box-amd64", "perf-box-arm64", "docker-container", "linux-generic", "aarch64-generic"],
+      "description": "Hardware profile identifier from docs/hardware-profiles.md. Canonical values are preferred; legacy values `linux-generic` and `aarch64-generic` remain accepted for older artifacts."
+    },
+    "cpu": {
+      "type": "object",
+      "required": ["model", "physical_cores", "logical_threads", "architecture"],
+      "properties": {
+        "model": { "type": "string" },
+        "physical_cores": { "type": "integer", "minimum": 1 },
+        "logical_threads": { "type": "integer", "minimum": 1 },
+        "architecture": { "type": "string", "enum": ["x86_64", "aarch64"] },
+        "frequency_mhz": { "type": "integer" },
+        "turbo_boost": { "type": "boolean" },
+        "cpu_governor": { "type": "string" },
+        "isolated_cpus": { "type": "string" }
+      }
+    },
+    "memory_gb": {
+      "type": "number",
+      "minimum": 1
+    },
+    "memory_type": {
+      "type": "string",
+      "description": "e.g. DDR4-3200, LPDDR5"
+    },
+    "os": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "kernel": {
+      "type": "string",
+      "description": "kernel uname -r output."
+    },
+    "jdk": {
+      "type": "object",
+      "required": ["vendor", "version"],
+      "properties": {
+        "vendor": { "type": "string", "description": "e.g. Eclipse Temurin, GraalVM, Amazon Corretto" },
+        "version": { "type": "string", "description": "Full version string from java -version" },
+        "major_version": { "type": "integer" }
+      }
+    },
+    "jvm_flags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "All JVM flags applied for this run."
+    },
+    "benchmark_tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": ["jmh", "wrk", "wrk2", "h2load", "k6"]
+        },
+        "version": { "type": "string" }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "properties": {
+        "wrk":    { "type": "string" },
+        "wrk2":   { "type": "string" },
+        "h2load": { "type": "string" },
+        "k6":     { "type": "string" },
+        "jmh":    { "type": "string" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "description": "The application under test.",
+      "properties": {
+        "repo": { "type": "string" },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "version": { "type": "string" },
+        "mode": { "type": "string", "enum": ["pure", "compat", "native", "jdbc-bridge", "baseline-db"] },
+        "tier": { "type": "string", "enum": ["community", "enterprise"] },
+        "runtime_family": {
+          "type": "string",
+          "description": "Runtime framework/platform identity of the application under test.",
+          "enum": ["exeris", "quarkus", "spring-boot", "micronaut", "helidon", "vert-x", "jdk-baseline", "custom"]
+        },
+        "artifact_kind": {
+          "type": "string",
+          "description": "Packaging and distribution form of the target artifact.",
+          "enum": ["jvm-jar", "native-image", "uber-jar", "fat-jar", "aot-jvm"]
+        },
+        "execution_vm": {
+          "type": "string",
+          "description": "VM executing the artifact at runtime. 'none' for native-image targets with no JVM.",
+          "enum": ["jvm", "none"]
+        },
+        "build_mode": {
+          "type": "string",
+          "description": "Compilation and execution strategy of the target artifact.",
+          "enum": ["jit", "native", "aot-jvm"]
+        }
+      }
+    },
+    "container": {
+      "type": "object",
+      "description": "Present only when hardware_profile is docker-container.",
+      "properties": {
+        "runtime": { "type": "string" },
+        "cpu_limit": { "type": "number" },
+        "memory_limit_mb": { "type": "integer" },
+        "network_mode": { "type": "string" }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

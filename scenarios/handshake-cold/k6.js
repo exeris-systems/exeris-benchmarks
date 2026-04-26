@@ -1,0 +1,48 @@
+import http from 'k6/http';
+import { check } from 'k6';
+import { Rate, Trend } from 'k6/metrics';
+
+// Scenario: handshake-cold
+// Purpose: Cold TLS handshake latency measurement.
+// Primary: HTTPS/H2+TLS baseline (H3/QUIC pending toolchain).
+// Measures: TLS handshake duration as reported by http_req_tls_handshaking metric.
+// NOTE: k6 does not expose per-handshake crypto detail. Use JFR/async-profiler for crypto breakdown.
+
+const errorRate = new Rate('errors');
+const tlsHandshakeTrend = new Trend('tls_handshake_ms', true);
+const BASE_URL = __ENV.BASE_URL || __ENV.K6_BASE_URL || 'https://localhost:8443';
+const EXPECTED_PROTOCOL = __ENV.EXPECTED_PROTOCOL || 'HTTP/2.0';
+const ASSERT_PROTOCOL = (__ENV.ASSERT_PROTOCOL || '1').toLowerCase() !== '0';
+
+export const options = {
+  stages: [
+    { duration: '30s',  target: 10 },  // ramp-up
+    { duration: '60s',  target: 20 },  // warmup — JVM/server state stabilisation with fresh connections per request
+    { duration: '120s', target: 20 },  // measurement — each request uses a new TCP+TLS handshake
+    { duration: '10s',  target: 0  },  // ramp-down
+  ],
+  thresholds: {
+    http_req_failed:          ['rate<0.01'],
+    http_req_tls_handshaking: ['p(99)<100'],  // cold TLS p99 < 100ms on loopback
+    errors:                   ['rate<0.01'],
+  },
+  insecureSkipTLSVerify: true,
+  noConnectionReuse: true,
+};
+
+export default function () {
+  const res = http.get(`${BASE_URL}/plaintext`);
+
+  const checks = {
+    'status is 200': (r) => r.status === 200,
+  };
+
+  if (ASSERT_PROTOCOL) {
+    checks[`protocol is ${EXPECTED_PROTOCOL}`] = (r) => r.proto === EXPECTED_PROTOCOL;
+  }
+
+  const ok = check(res, checks);
+
+  errorRate.add(!ok);
+  tlsHandshakeTrend.add(res.timings.tls_handshaking);
+}

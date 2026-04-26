@@ -1,0 +1,558 @@
+{
+  "scenario_id": "e2e-shop-order-saga",
+  "version": "1",
+  "schema_version": "2",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-e2e-baseline",
+  "description": "End-to-end shop order saga: user registration → graph-based product recommendations → cart operations → order placement → multi-step saga orchestration with compensation",
+  "endpoints": [
+    "POST /api/v1/auth/register",
+    "GET /api/v1/products/recommended",
+    "POST /api/v1/cart/add",
+    "GET /api/v1/cart",
+    "POST /api/v1/orders"
+  ],
+  "mode": "stateful-e2e-saga",
+  "tier": "community",
+  "driver": ["k6"],
+  "transport": ["h2c"],
+  "loopback": true,
+  "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h2c is mandatory in all result artifacts.",
+  "claim_scope": "exploratory",
+  "concurrency": {
+    "virtual_users": 100,
+    "ramp_up_time": "1m",
+    "warmup_time": "1m",
+    "measurement_time": "3m",
+    "think_time_ms_min": 800,
+    "think_time_ms_max": 2500,
+    "note": "100 VUs with 800-2500ms think-time between saga steps"
+  },
+  "db": {
+    "type": "postgresql",
+    "image": "postgres:16.2",
+    "schema_migration_version": "V3_E2E_SAGA_KERNEL_OUTBOX",
+    "connection_pool_size": 20
+  },
+  "graph_backend": {
+    "type": "neo4j",
+    "image": "neo4j:5.16-community",
+    "driver": "bolt",
+    "connection_pool_size": 10
+  },
+  "graph_tracks": {
+    "neo4j": {
+      "track_id": "track_a_neo4j",
+      "backend_family": "neo4j",
+      "backend_mode": "neo4j-bolt",
+      "workload_profile_key": "e2e-shop-order-saga-community-h2c-loopback-runtime-k6-neo4j",
+      "required_contracts": [
+        "exeris_community_h2c_v1",
+        "quarkus_axon_neo4j_v1",
+        "spring_boot_axon_neo4j_v1"
+      ],
+      "claim_scope": "coverage_limited_saga_engine_not_equivalent",
+      "comparison_class": "platform-natural-stack",
+      "equivalence_note": "Saga orchestration via platform-recommended approach: exeris=flow-native, quarkus=axon-framework, spring=axon-framework. Not algorithmically equivalent. Comparison reflects real-world platform adoption cost, not isolated runtime performance.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "coverage_limited_saga_engine_not_equivalent",
+        "order_poll_latency_ms": "coverage_limited_saga_engine_not_equivalent"
+      }
+    },
+    "pgq_pure": {
+      "track_id": "track_b1_pgq_pure",
+      "backend_family": "postgres-graph",
+      "backend_engine": "pgq",
+      "backend_mode": "pgq-pure",
+      "graph_query_model": "pgq-sql",
+      "workload_profile_key": "e2e-shop-order-saga-community-h2c-loopback-runtime-k6-pgq-pure",
+      "required_contracts": [
+        "exeris_community_h2c_pgq_v2",
+        "quarkus_axon_pgq_v2",
+        "spring_boot_axon_pgq_v2"
+      ],
+      "claim_scope": "coverage_limited_until_all_targets_eligible",
+      "backend_equivalence_class": "postgres_graph_pgq_pure",
+      "comparison_class": "platform-natural-stack",
+      "equivalence_note": "Saga orchestration via platform-recommended approach: exeris=flow-native, quarkus=axon-framework, spring=axon-framework. Not algorithmically equivalent. Comparison reflects real-world platform adoption cost, not isolated runtime performance."
+    },
+    "age_compat": {
+      "track_id": "track_b2_age_compat",
+      "backend_family": "postgres-graph",
+      "backend_engine": "apache-age",
+      "backend_mode": "age-compat",
+      "graph_query_model": "opencypher-age",
+      "workload_profile_key": "e2e-shop-order-saga-community-h2c-loopback-runtime-k6-age-compat",
+      "required_contracts": [
+        "exeris_community_h2c_age_compat_v1",
+        "quarkus_axon_age_compat_v1",
+        "spring_boot_axon_age_compat_v1"
+      ],
+      "claim_scope": "compatibility_only_until_full_parity",
+      "backend_equivalence_class": "postgres_graph_age_compat",
+      "comparison_class": "platform-natural-stack",
+      "equivalence_note": "Saga orchestration via platform-recommended approach: exeris=flow-native, quarkus=axon-framework, spring=axon-framework. Not algorithmically equivalent. Comparison reflects real-world platform adoption cost, not isolated runtime performance."
+    },
+    "pgq": {
+      "track_id": "track_b_pgq",
+      "backend_family": "postgres-graph",
+      "backend_mode": "pgq",
+      "workload_profile_key": "e2e-shop-order-saga-community-h2c-loopback-runtime-k6-pgq",
+      "required_contracts": [
+        "exeris_community_h2c_pgq_v2",
+        "quarkus_axon_pgq_v2",
+        "spring_boot_axon_pgq_v2"
+      ],
+      "claim_scope": "coverage_limited_until_all_targets_eligible",
+      "deprecated": true,
+      "alias_of": "pgq_pure",
+      "notes": "Use pgq_pure or age_compat; do not aggregate alias with new tracks"
+    }
+  },
+  "target_backend_support": {
+    "exeris-community-app": [
+      "neo4j",
+      "postgres-graph"
+    ],
+    "quarkus-app-axon": [
+      "neo4j",
+      "postgres-graph"
+    ],
+    "spring-app-axon": [
+      "neo4j",
+      "postgres-graph"
+    ]
+  },
+  "target_backend_support_status": {
+    "exeris-community-app": {
+      "neo4j": "eligible",
+      "postgres-graph": "eligible",
+      "pgq-pure": "eligible",
+      "age-compat": "planned"
+    },
+    "quarkus-app-axon": {
+      "neo4j": "eligible",
+      "postgres-graph": "planned",
+      "pgq-pure": "planned",
+      "age-compat": "eligible"
+    },
+    "spring-app-axon": {
+      "neo4j": "eligible",
+      "postgres-graph": "planned",
+      "pgq-pure": "planned",
+      "age-compat": "eligible"
+    }
+  },
+  "claim_guardrails": {
+    "no_cross_backend_claims": true,
+    "no_mixed_baseline_aggregate_claims": true,
+    "require_track_label_in_every_claim": true,
+    "forbid_cross_track_pairing": true,
+    "forbid_mixed_backend_equivalence_class": true
+  },
+  "seed": {
+    "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+    "manifest_version": "1",
+    "idempotency": "INSERT ... ON CONFLICT (id) DO UPDATE",
+    "pre_run_verification": "row_count_and_hash",
+    "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh",
+    "idempotency_guarantee": "Re-running seed.sql produces identical state across users, products, inventory, product_relationships, and user_purchase_history tables. Results without passing pre-run verification are invalid."
+  },
+  "workload_invariants": {
+    "payment_fail_rate": 0.03,
+    "payment_fail_rate_env": "EXERIS_SAGA_PAYMENT_FAIL_RATE",
+    "payment_fail_rate_note": "All targets participating in cross-runtime comparison MUST be configured with identical payment_fail_rate. Runs where any target deviates from this value are invalid for comparative purposes. Exeris: configured via EXERIS_SAGA_PAYMENT_FAIL_RATE env var. Quarkus/Spring Axon targets: must configure equivalent fail injection via their own mechanism at the same rate.",
+    "fairness_enforcement": "payment_fail_rate_mismatch_is_disqualifying",
+    "k6_poll_budget": {
+      "max_poll_attempts": 25,
+      "poll_interval_seconds": 1,
+      "rationale": "25-attempt budget allows compensation (COMPENSATING state) time to reach terminal COMPENSATED state before marking saga as unresolved"
+    }
+  },
+  "fixed_contracts": {
+    "exeris_community_h2c_v1": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h2c",
+      "target_app": "exeris-community-app",
+      "comparison_type": "cross-runtime-e2e-saga",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "saga_orchestration": "flow-native",
+      "graph_backend": "graph-l2-native",
+      "event_backend": "events-l3-outbox",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "comparison_class": "platform-natural-stack",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "coverage_limited_saga_engine_not_equivalent",
+        "order_poll_latency_ms": "coverage_limited_saga_engine_not_equivalent"
+      }
+    },
+    "quarkus_axon_neo4j_v1": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h2c",
+      "target_app": "quarkus-app-axon",
+      "framework": "quarkus",
+      "saga_framework": "axon-framework",
+      "graph_backend": "neo4j-bolt",
+      "event_backend": "axon-event-sourcing-outbox",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "claim_scope": "coverage_limited_saga_engine_not_equivalent",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
+      "comparison_class": "platform-natural-stack",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "coverage_limited_saga_engine_not_equivalent",
+        "order_poll_latency_ms": "coverage_limited_saga_engine_not_equivalent"
+      }
+    },
+    "spring_boot_axon_neo4j_v1": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h2c",
+      "target_app": "spring-app-axon",
+      "framework": "spring-boot",
+      "saga_framework": "axon-framework",
+      "graph_backend": "neo4j-bolt",
+      "event_backend": "axon-event-sourcing-outbox",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "claim_scope": "coverage_limited_saga_engine_not_equivalent",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
+      "comparison_class": "platform-natural-stack",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "coverage_limited_saga_engine_not_equivalent",
+        "order_poll_latency_ms": "coverage_limited_saga_engine_not_equivalent"
+      }
+    },
+    "exeris_community_h2c_pgq_v2": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h2c",
+      "target_app": "exeris-community-app",
+      "comparison_type": "cross-runtime-e2e-saga",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "saga_orchestration": "flow-native",
+      "graph_backend": "pgq",
+      "event_backend": "events-l3-outbox",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "guard",
+      "claim_scope": "coverage_limited",
+      "comparison_class": "platform-natural-stack"
+    },
+    "quarkus_axon_pgq_v2": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h2c",
+      "target_app": "quarkus-app-axon",
+      "framework": "quarkus",
+      "saga_framework": "axon-framework",
+      "graph_backend": "pgq",
+      "event_backend": "axon-event-sourcing-outbox",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "guard",
+      "claim_scope": "coverage_limited",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
+      "comparison_class": "platform-natural-stack"
+    },
+    "spring_boot_axon_pgq_v2": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h2c",
+      "target_app": "spring-app-axon",
+      "framework": "spring-boot",
+      "saga_framework": "axon-framework",
+      "graph_backend": "pgq",
+      "event_backend": "axon-event-sourcing-outbox",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "guard",
+      "claim_scope": "coverage_limited",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
+      "comparison_class": "platform-natural-stack"
+    },
+    "exeris_community_h2c_age_compat_v1": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h2c",
+      "target_app": "exeris-community-app",
+      "comparison_type": "cross-runtime-e2e-saga",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "saga_orchestration": "flow-native",
+      "graph_backend": "apache-age",
+      "graph_query_model": "opencypher-age",
+      "backend_equivalence_class": "postgres_graph_age_compat",
+      "event_backend": "events-l3-outbox",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "planned",
+      "claim_scope": "compatibility_only",
+      "comparison_class": "platform-natural-stack"
+    },
+    "quarkus_axon_age_compat_v1": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h2c",
+      "target_app": "quarkus-app-axon",
+      "framework": "quarkus",
+      "saga_framework": "axon-framework",
+      "graph_backend": "apache-age",
+      "graph_query_model": "opencypher-age",
+      "backend_equivalence_class": "postgres_graph_age_compat",
+      "event_backend": "axon-event-sourcing-outbox",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "planned",
+      "claim_scope": "compatibility_only",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
+      "comparison_class": "platform-natural-stack"
+    },
+    "spring_boot_axon_age_compat_v1": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h2c",
+      "target_app": "spring-app-axon",
+      "framework": "spring-boot",
+      "saga_framework": "axon-framework",
+      "graph_backend": "apache-age",
+      "graph_query_model": "opencypher-age",
+      "backend_equivalence_class": "postgres_graph_age_compat",
+      "event_backend": "axon-event-sourcing-outbox",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "planned",
+      "claim_scope": "compatibility_only",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
+      "comparison_class": "platform-natural-stack"
+    }
+  }
+}

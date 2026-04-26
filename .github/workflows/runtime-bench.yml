@@ -1,0 +1,117 @@
+name: Runtime Benchmarks
+
+on:
+  schedule:
+    # Nightly at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target to benchmark (community / enterprise / spring-runtime / quarkus-runtime)'
+        required: true
+        default: 'community'
+      scenario:
+        description: 'Scenario directory (e.g. scenarios/plaintext)'
+        required: false
+        default: 'scenarios/plaintext'
+      tool:
+        description: 'Benchmark tool (wrk / h2load / k6)'
+        required: true
+        default: 'wrk'
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-bench:
+    name: Runtime benchmark (${{ github.event.inputs.target || 'community' }}, ${{ github.event.inputs.tool || 'wrk' }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout exeris-benchmarks
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Install wrk
+        if: ${{ (github.event.inputs.tool || 'wrk') == 'wrk' }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y wrk
+
+      - name: Install k6
+        if: ${{ (github.event.inputs.tool || 'wrk') == 'k6' }}
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -qq
+          sudo apt-get install -y k6
+
+      - name: Install nghttp2 (h2load)
+        if: ${{ (github.event.inputs.tool || 'wrk') == 'h2load' }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nghttp2-client
+          command -v h2load
+
+      - name: Start target application
+        run: |
+          TARGET="${{ github.event.inputs.target || 'community' }}"
+          ./runtime/drivers/start-target.sh "$TARGET"
+
+      - name: Capture environment
+        run: |
+          mkdir -p results/raw
+          ./scripts/capture-env.sh --profile ci-runner \
+            > results/raw/env-runtime-${{ github.run_id }}.json || true
+
+      - name: Run benchmark
+        run: |
+          TOOL="${{ github.event.inputs.tool || 'wrk' }}"
+          TARGET="${{ github.event.inputs.target || 'community' }}"
+          SCENARIO="${{ github.event.inputs.scenario || 'scenarios/plaintext' }}"
+          mkdir -p results/raw
+
+          case "$TARGET" in
+            community)
+              TARGET_DIR="targets/exeris-community-app" ;;
+            enterprise)
+              TARGET_DIR="enterprise/targets/exeris-kernel" ;;
+            spring-runtime)
+              TARGET_DIR="targets/spring-benchmark-app" ;;
+            quarkus-runtime)
+              TARGET_DIR="targets/quarkus-benchmark-app" ;;
+            *)
+              echo "Unsupported target: '$TARGET'. Expected one of: community, enterprise, spring-runtime, quarkus-runtime." >&2
+              exit 1 ;;
+          esac
+
+          case "$TOOL" in
+            wrk)
+              ./scripts/run-wrk.sh "$TARGET_DIR" "$SCENARIO" ;;
+            h2load)
+              ./scripts/run-h2load.sh "$TARGET_DIR" "$SCENARIO" ;;
+            k6)
+              ./scripts/run-k6.sh "$SCENARIO" ;;
+            *)
+              echo "Unsupported benchmark tool: '$TOOL'. Expected one of: wrk, h2load, k6." >&2
+              exit 1 ;;
+          esac
+
+      - name: Stop target application
+        if: always()
+        run: |
+          TARGET="${{ github.event.inputs.target || 'community' }}"
+          ./runtime/drivers/stop-target.sh "$TARGET" || true
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-results-${{ github.run_id }}
+          path: results/raw/
+          retention-days: 30

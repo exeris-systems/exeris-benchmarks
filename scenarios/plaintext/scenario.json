@@ -1,0 +1,45 @@
+{
+  "scenario_id": "plaintext",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-throughput-baseline",
+  "description": "TechEmpower-equivalent plaintext GET baseline. Minimum routing overhead. GET /plaintext returns 200 OK with body 'plaintext' (9 bytes).",
+  "endpoint": "GET /plaintext",
+  "mode": "throughput-baseline",
+  "tier": "community",
+  "driver": ["wrk", "k6", "h2load"],
+  "transport": ["h1", "h2"],
+  "loopback": true,
+  "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h1 or loopback-h2 is mandatory in all result artifacts.",
+  "concurrency": {
+    "connections": 100,
+    "threads": 4,
+    "note": "Default: 4 threads, 100 connections. Override via WRK_CONNECTIONS / VUS env."
+  },
+  "fixed_contracts": {
+    "community_h1_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "threads": 4,
+      "connections": 100,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64"
+    },
+    "community_h1_k6_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-k6",
+      "transport_mode": "loopback-h1",
+      "ramp_up_seconds": 30,
+      "warmup_seconds": 60,
+      "duration_seconds": 60,
+      "ramp_down_seconds": 10,
+      "vus": 100
+    }
+  },
+  "claim_scope": "exploratory",
+  "claim_scope_note": "Promote to comparison_eligible after repeated runs on perf-box-amd64 with full reproducibility metadata."
+}

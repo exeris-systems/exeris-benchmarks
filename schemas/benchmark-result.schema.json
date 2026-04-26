@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/benchmark-result/v1",
+  "title": "BenchmarkResult",
+  "description": "Normalized result artifact for a single benchmark run.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "timestamp",
+    "scenario",
+    "tool",
+    "env_ref",
+    "metrics"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Unique run identifier. Format: <scenario>-<YYYYMMDD-HHmmss>-<sha7>"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scenario": {
+      "type": "string",
+      "description": "Scenario name from docs/scenario-catalog.md"
+    },
+    "tool": {
+      "type": "string",
+      "enum": ["jmh", "wrk", "wrk2", "h2load", "k6"]
+    },
+    "env_ref": {
+      "type": "string",
+      "description": "Path to the associated BenchmarkEnvironment JSON file."
+    },
+    "transport_mode": {
+      "type": "string",
+      "enum": ["loopback-h1", "loopback-h2", "loopback-h3", "network-h1", "network-h2", "network-h3"],
+      "description": "Transport layer and network path. loopback-h1 results are not equivalent to network-path measurements."
+    },
+    "seed_ref": {
+      "type": "object",
+      "required": ["manifest_version", "scenario_id", "verified"],
+      "properties": {
+        "manifest_version": { "type": "string" },
+        "scenario_id": { "type": "string" },
+        "schema_migration_version": { "type": "string" },
+        "entity_count": { "type": "integer", "minimum": 1 },
+        "verified": { "type": "boolean", "description": "true only if verify-seed.sh exited 0 before this run" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "repo": { "type": "string" },
+        "commit_sha": { "type": "string" },
+        "version": { "type": "string" },
+        "mode": { "type": "string", "enum": ["pure", "compat", "native", "jdbc-bridge", "baseline-db"] },
+        "tier": { "type": "string", "enum": ["community", "enterprise"], "description": "Exeris product tier. Applies to runtime and product-scoped benchmarks only. For TLS micro benchmarks use 'harness_model' instead." },
+        "harness_model": {
+          "type": "string",
+          "enum": ["external-baseline", "core-engine", "fd-owner", "memory-bio", "runtime-harness"],
+          "description": "TLS micro-benchmark harness contract. Describes the observable transport and allocator model used by the benchmark, not product architecture. Use instead of 'tier' for TLS matrix rows (B/C/D families). Values: 'external-baseline' = third-party reference (JDK SSLEngine, Netty tcnative); 'core-engine' = engine-level benchmark with no full transport wiring (guard paths, state-machine, core JMH); 'fd-owner' = real loopback socket with kernel I/O crossing; 'memory-bio' = in-process inject/drain, no socket, no syscall; 'runtime-harness' = full runtime harness integration probe."
+        },
+        "protocol": { "type": "string", "enum": ["h1", "h2", "h3"] },
+        "runtime_family": {
+          "type": "string",
+          "description": "Runtime framework/platform identity of the application under test.",
+          "enum": ["exeris", "quarkus", "spring-boot", "micronaut", "helidon", "vert-x", "jdk-baseline", "custom"]
+        },
+        "artifact_kind": {
+          "type": "string",
+          "description": "Packaging and distribution form of the target artifact.",
+          "enum": ["jvm-jar", "native-image", "uber-jar", "fat-jar", "aot-jvm"]
+        },
+        "execution_vm": {
+          "type": "string",
+          "description": "VM executing the artifact at runtime. 'none' for native-image targets with no JVM.",
+          "enum": ["jvm", "none"]
+        },
+        "build_mode": {
+          "type": "string",
+          "description": "Compilation and execution strategy of the target artifact.",
+          "enum": ["jit", "native", "aot-jvm"]
+        }
+      }
+    },
+    "comparison_axis": {
+      "type": "string",
+      "description": "Report axis classification for this result.",
+      "enum": ["within-tier", "cross-tier-same-protocol", "standalone"]
+    },
+    "execution_class": {
+      "type": "string",
+      "description": "Execution intent classification for claim guardrails.",
+      "enum": ["guard", "regression", "exploratory"]
+    },
+    "claim_scope": {
+      "type": "string",
+      "description": "Claim eligibility classification derived from status and execution intent.",
+      "enum": ["exploratory", "comparison_eligible", "descriptive_partial", "descriptive_only", "none"]
+    },
+    "final_reason": {
+      "type": "string",
+      "description": "Canonical postprocess reason code for eligibility/status decisions.",
+      "enum": [
+        "ok",
+        "partial_json",
+        "empty_json",
+        "invalid_json",
+        "benchmark_exit_nonzero",
+        "postprocess_exit_nonzero",
+        "missing_jfr",
+        "missing_metrics",
+        "missing_metadata"
+      ]
+    },
+    "runner_status": {
+      "type": "string",
+      "description": "Canonical runtime runner status for this artifact.",
+      "enum": ["success", "partial", "failed"]
+    },
+    "reproducibility_status": {
+      "type": "string",
+      "description": "Canonical reproducibility completeness state.",
+      "enum": ["complete", "incomplete_artifacts", "incomplete_metadata", "not_assessable"]
+    },
+    "run_config": {
+      "type": "object",
+      "description": "Tool-specific run configuration parameters.",
+      "properties": {
+        "duration_seconds": { "type": "integer" },
+        "warmup_seconds": { "type": "integer" },
+        "threads": { "type": "integer" },
+        "connections": { "type": "integer" },
+        "target_rps": { "type": "integer", "description": "wrk2 / k6 steady-rate target" },
+        "max_streams": { "type": "integer", "description": "h2load -m" },
+        "total_requests": { "type": "integer", "description": "h2load -n" },
+        "forks": { "type": "integer", "description": "JMH -f" },
+        "warmup_iterations": { "type": "integer", "description": "JMH -wi" },
+        "measurement_iterations": { "type": "integer", "description": "JMH -i" },
+        "payload_file": { "type": "string" },
+        "payload_size_bytes": { "type": "integer" },
+        "execution_profile_id": { "type": "string", "description": "Execution profile identifier (e.g. runtime-constrained-128m-0p5vcpu-v1)." },
+        "contract_id": { "type": "string", "description": "Fixed contract identifier from scenario.json fixed_contracts." },
+        "track_id": { "type": "string", "description": "Track identifier (e.g. track-c)." },
+        "result_namespace": { "type": "string", "description": "Relative path namespace for result artifact directory." },
+        "soak_duration_class": {
+          "type": "string",
+          "description": "Soak duration class. smoke=≤30s exploratory; guard=~10m; regression=~30m; contract=~2h.",
+          "enum": ["smoke", "guard", "regression", "contract"]
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Normalized metric values. All latency in microseconds, throughput in req/s.",
+      "properties": {
+        "throughput_rps": { "type": "number" },
+        "latency_mean_us": { "type": "number" },
+        "latency_stdev_us": { "type": "number" },
+        "latency_min_us": { "type": "number" },
+        "latency_max_us": { "type": "number" },
+        "latency_p50_us": { "type": "number" },
+        "latency_p75_us": { "type": "number" },
+        "latency_p90_us": { "type": "number" },
+        "latency_p99_us": { "type": "number" },
+        "latency_p999_us": { "type": "number" },
+        "error_rate_pct": { "type": "number" },
+        "total_requests": { "type": "integer" },
+        "total_errors": { "type": "integer" },
+        "jmh_score": { "type": "number", "description": "Raw JMH score value" },
+        "jmh_score_error": { "type": "number", "description": "JMH 99% CI half-width" },
+        "jmh_score_unit": { "type": "string" },
+        "jmh_alloc_rate_norm_bytes": {
+          "type": "number",
+          "description": "gc.alloc.rate.norm from -prof gc. 0 expected on zero-alloc paths."
+        }
+      }
+    },
+    "run_track": {
+      "type": "string",
+      "description": "Run track classification for constrained vs unconstrained families.",
+      "enum": ["constrained", "unconstrained"]
+    },
+    "constrained_family": {
+      "type": "string",
+      "description": "Constrained benchmark family. Required when run_track=constrained.",
+      "enum": ["constrained-survivability", "efficiency-density", "performance-ceiling"]
+    },
+    "soak_duration_class": {
+      "type": "string",
+      "description": "Soak duration class for this result. smoke=≤30s exploratory; guard=~10m; regression=~30m; contract=~2h.",
+      "enum": ["smoke", "guard", "regression", "contract"]
+    },
+    "degradation_class": {
+      "type": "string",
+      "description": "Observed failure/degradation mode under constraint. Populate when runner_status != success or timeout_rate is elevated.",
+      "enum": ["graceful-shed", "timeout-flood", "crash", "oom", "unobservable"]
+    },
+    "correctness_under_constraint": {
+      "type": "object",
+      "description": "Axis 1: Correctness under constraint. Populated for constrained-survivability family runs.",
+      "properties": {
+        "total_errors": { "type": "integer", "minimum": 0, "description": "Total error responses (HTTP non-2xx + connection errors)." },
+        "app_errors": { "type": "integer", "minimum": 0, "description": "HTTP 5xx application-level error responses." },
+        "timeout_count": { "type": "integer", "minimum": 0, "description": "Request timeout count (connection or read timeout)." },
+        "success_ratio": { "type": "number", "minimum": 0, "maximum": 1, "description": "successful_requests / total_requests." }
+      }
+    },
+    "efficiency_metrics": {
+      "type": "object",
+      "description": "Axis 2: Cost efficiency metrics. Requires valid constrained run evidence with cpu_throttle_ratio.",
+      "properties": {
+        "success_rps_per_effective_cpu": {
+          "type": ["number", "null"],
+          "description": "successful_rps / (declared_vcpu * (1 - cpu_throttle_ratio)). null when cpu_throttle_ratio unavailable."
+        },
+        "success_rps_per_64m_heap": {
+          "type": ["number", "null"],
+          "description": "successful_rps per 64 MiB of declared heap budget (MaxRAM / 64)."
+        },
+        "p90_under_budget_us": {
+          "type": ["number", "null"],
+          "description": "latency_p90_us measured while under declared budget constraint. Copied from metrics.latency_p90_us for constrained runs."
+        },
+        "timeout_rate_pct": { "type": "number", "minimum": 0, "maximum": 100, "description": "timeout_count / total_requests * 100." },
+        "cpu_throttle_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "nr_throttled / nr_periods from cgroup cpu.stat. Sourced from constrained-execution-evidence.json."
+        }
+      }
+    },
+    "raw_output": {
+      "type": "string",
+      "description": "Full raw stdout from the benchmark tool (optional, for debugging)."
+    },
+    "notes": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Arbitrary labels, e.g. release-candidate, regression-investigation."
+    }
+  }
+}

@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/target-asset-matrix/v1",
+  "title": "TargetAssetMatrix",
+  "description": "Operational runnable-state matrix for runtime comparative target launch contracts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "targets"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_id",
+          "tier",
+          "protocol_mode",
+          "launcher_mode",
+          "profile_id",
+          "health_url",
+          "asset_state",
+          "eligibility_class",
+          "missing_assets"
+        ],
+        "properties": {
+          "target_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["community", "enterprise"]
+          },
+          "protocol_mode": {
+            "type": "string",
+            "enum": ["h1", "h2", "h2c", "h3"]
+          },
+          "launcher_mode": {
+            "type": "string",
+            "enum": ["docker", "jar", "external"]
+          },
+          "env_file": {
+            "type": "string"
+          },
+          "profile_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "compose_file": {
+            "type": "string"
+          },
+          "jar_path": {
+            "type": "string"
+          },
+          "health_url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "asset_state": {
+            "type": "string",
+            "enum": ["runnable", "non_runnable"]
+          },
+          "eligibility_class": {
+            "type": "string",
+            "enum": ["baseline-candidate", "locality-research", "non-runnable"]
+          },
+          "missing_assets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "non_runnable_reason": {
+            "type": "string"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "launcher_mode": {
+                  "const": "docker"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "env_file",
+                "compose_file"
+              ],
+              "properties": {
+                "env_file": {
+                  "minLength": 1
+                },
+                "compose_file": {
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "launcher_mode": {
+                  "const": "jar"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "env_file",
+                "jar_path"
+              ],
+              "properties": {
+                "env_file": {
+                  "minLength": 1
+                },
+                "jar_path": {
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "launcher_mode": {
+                  "const": "external"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "env_file"
+              ],
+              "properties": {
+                "env_file": {
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "asset_state": {
+                  "const": "runnable"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "eligibility_class": {
+                  "enum": ["baseline-candidate", "locality-research"]
+                },
+                "missing_assets": {
+                  "maxItems": 0
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "required": [
+                      "non_runnable_reason"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "non_runnable_reason": {
+                        "maxLength": 0
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "compose_file"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "compose_file": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "jar_path"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "jar_path": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "asset_state": {
+                  "const": "non_runnable"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "non_runnable_reason"
+              ],
+              "properties": {
+                "eligibility_class": {
+                  "const": "non-runnable"
+                },
+                "non_runnable_reason": {
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

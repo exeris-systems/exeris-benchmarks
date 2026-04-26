@@ -1,0 +1,54 @@
+{
+  "scenario_id": "concurrent-256",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-concurrency-baseline",
+  "description": "High contention behavior, queueing, and backpressure interaction at 256 concurrent connections. Loopback will likely saturate the target; results are exploratory until perf-box-amd64 run.",
+  "endpoint": "GET /plaintext",
+  "mode": "concurrent-load",
+  "tier": "community",
+  "driver": ["wrk", "k6", "h2load"],
+  "transport": ["h1", "h2", "h3"],
+  "loopback": true,
+  "loopback_caveat": "256 connections on loopback will likely saturate the target. Results are NOT equivalent to network-path benchmarks and NOT comparable to concurrent-32 results without explicit caveat. transport_mode must match the protocol-specific fixed contract in all result artifacts (loopback-h1 for H1, loopback-h2c for H2).",
+  "concurrency": {
+    "connections": 256,
+    "threads": 4,
+    "note": "Fixed at 256 connections. High-contention scenario. Do not compare directly to concurrent-32 results."
+  },
+  "fixed_contracts": {
+    "community_h1_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "threads": 4,
+      "connections": 256,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64"
+    },
+    "community_h2_v1": {
+      "tier": "community",
+      "protocol_mode": "h2",
+      "benchmark_family": "runtime-h2load",
+      "transport_mode": "loopback-h2c",
+      "connections": 256,
+      "streams_per_connection": 1,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64"
+    }
+  },
+  "protocol_support": {
+    "h1": {"status": "runnable", "driver": "wrk + k6"},
+    "h2": {"status": "runnable", "driver": "h2load"},
+    "h3": {
+      "status": "not-runnable",
+      "reason": "H3/QUIC requires dedicated QUIC toolchain not confirmed in runtime/drivers.",
+      "backlog_ref": "P2-02"
+    }
+  },
+  "claim_scope": "exploratory",
+  "claim_scope_note": "Must NOT be compared to concurrent-32 results without explicit concurrency-axis caveat. Promote to comparison_eligible only after repeated runs on perf-box-amd64."
+}

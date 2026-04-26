@@ -1,0 +1,132 @@
+# Infrastructure stack for e2e-shop-order-saga benchmark
+# Services: postgres:16.2 (with seed.sql), neo4j:5.16-community, axonserver:2024.2.22
+# graph_track: neo4j | tier: community | transport: loopback-h2c
+# Usage: docker compose -f runtime/compose/e2e-shop-order-saga.yml up -d
+# Seed is loaded automatically via initdb on first start.
+# Stop: docker compose -f runtime/compose/e2e-shop-order-saga.yml down -v
+#
+# PRE-FLIGHT HARNESS NOTE — Spring Boot target (Axon Server mode):
+#   axon.axonserver.enabled=true — Spring connects to Axon Server at localhost:8124.
+#   Production simulation: commands routed via CommandGateway → Axon Server → OrderAggregate.
+#   benchmark-axonserver container MUST be healthy before starting Spring target.
+#   Axon Server CPU/RSS is NOT captured by per-process resource sampler — it runs in Docker.
+#   Use docker stats exeris-e2e-saga-axonserver for Axon Server resource attribution.
+#   All resource comparisons vs Exeris Community MUST note: Exeris saga overhead is fully
+#   inside the Exeris JVM process; Axon Server overhead is in a separate container (not counted).
+#
+#   REQUIRED METADATA to capture at benchmark start:
+#     - axon.axonserver.enabled from running Spring app (expected: true)
+#     - Axon Server health at localhost:8024 (expected: healthy)
+#     - Spring app JAR build commit SHA
+#     - Hardware profile + JDK version
+#     - k6 script version / commit SHA
+
+services:
+  benchmark-postgres:
+    image: postgres:16.2
+    container_name: exeris-e2e-saga-postgres
+    command:
+      - postgres
+      - -c
+      - max_connections=300
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ../db/seed/v1_core.sql:/docker-entrypoint-initdb.d/01-v1-core.sql:ro
+      - ../db/seed/v2_shop.sql:/docker-entrypoint-initdb.d/02-v2-shop.sql:ro
+      - ../db/seed/v3_outbox_axon.sql:/docker-entrypoint-initdb.d/03-v3-outbox-axon.sql:ro
+      - e2e-saga-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  benchmark-db-seed:
+    image: postgres:16.2
+    container_name: exeris-e2e-saga-db-seed
+    depends_on:
+      benchmark-postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: benchmark-postgres
+      PGPORT: "5432"
+      PGDATABASE: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    volumes:
+      - ../db/seed/v0_clean.sql:/seed/v0_clean.sql:ro
+      - ../db/seed/v1_core.sql:/seed/v1_core.sql:ro
+      - ../db/seed/v2_shop.sql:/seed/v2_shop.sql:ro
+      - ../db/seed/v3_outbox_axon.sql:/seed/v3_outbox_axon.sql:ro
+    command: >
+      bash -c "
+        echo '[seed] Cleaning existing data (v0_clean)...' &&
+        psql -f /seed/v0_clean.sql &&
+        echo '[seed] Applying v1_core...' &&
+        psql -f /seed/v1_core.sql &&
+        echo '[seed] Applying v2_shop...' &&
+        psql -f /seed/v2_shop.sql &&
+        echo '[seed] Applying v3_outbox_axon...' &&
+        psql -f /seed/v3_outbox_axon.sql &&
+        echo '[seed] All migrations applied.'
+      "
+    restart: "no"
+
+  benchmark-neo4j:
+    image: neo4j:5.16-community
+    container_name: exeris-e2e-saga-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_PLUGINS: "[]"
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 2g
+      NEO4J_server_memory_pagecache_size: 512m
+      NEO4J_dbms_memory_transaction_total_max: 1500m
+      NEO4J_server_bolt_thread__pool__min__size: 20
+      NEO4J_server_bolt_thread__pool__max__size: 200
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - e2e-saga-neo4jdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  benchmark-axonserver:
+    image: axoniq/axonserver:2024.2.22
+    container_name: exeris-e2e-saga-axonserver
+    environment:
+      AXONIQ_AXONSERVER_NAME: exeris-bench-axonserver
+      AXONIQ_AXONSERVER_HOSTNAME: localhost
+      AXONIQ_AXONSERVER_DEVMODE_ENABLED: "true"
+      JAVA_TOOL_OPTIONS: "-Daxoniq.axonserver.devmode.enabled=true"
+    ports:
+      - "8024:8024"
+      - "8124:8124"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8024/actuator/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 36
+      start_period: 20s
+
+volumes:
+  e2e-saga-pgdata:
+    driver: local
+  e2e-saga-neo4jdata:
+    driver: local

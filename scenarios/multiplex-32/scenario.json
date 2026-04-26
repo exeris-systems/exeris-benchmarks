@@ -1,0 +1,57 @@
+{
+  "scenario_id": "multiplex-32",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-multiplexing-baseline",
+  "description": "HTTP/2 stream multiplexing behavior at 32 concurrent streams per connection. H1 is not applicable. Primary driver: h2load (-c 1 -m 32). k6 secondary driver simulates concurrency via VUs, NOT true stream multiplexing — use h2load results for multiplexing claims.",
+  "endpoint": "GET /plaintext",
+  "mode": "stream-multiplex",
+  "tier": "community",
+  "driver": ["h2load", "k6"],
+  "transport": ["h2", "h3"],
+  "loopback": true,
+  "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h2c is mandatory in all result artifacts.",
+  "concurrency": {
+    "connections": 1,
+    "streams_per_connection": 32,
+    "note": "h2load: 1 connection, 32 streams (true multiplexing). k6: 32 VUs sharing connections (NOT equivalent)."
+  },
+  "key_metrics": [
+    "Throughput (RPS) — primary",
+    "http_req_duration p50, p99 — latency tail under stream contention",
+    "HOL-blocking signals — latency variance across concurrent streams"
+  ],
+  "protocol_support": {
+    "h2": {
+      "status": "runnable",
+      "driver": "h2load",
+      "note": "True stream multiplexing. -c 1 -m 32."
+    },
+    "h3": {
+      "status": "not-runnable",
+      "reason": "H3/QUIC stream multiplexing requires confirmed QUIC driver. H3 eliminates H2 HOL-blocking at transport layer — primary comparison value pending toolchain.",
+      "backlog_ref": "P2-02"
+    },
+    "h1": {
+      "status": "not-applicable",
+      "reason": "H1 does not support stream multiplexing. This scenario is H2/H3 only by definition."
+    }
+  },
+  "driver_equivalence_note": "h2load and k6 are NOT equivalent for this scenario. h2load -c 1 -m 32 measures true single-connection stream multiplexing. k6 with 32 VUs measures multi-connection concurrent load. Claims must specify driver. Do not mix results.",
+  "fixed_contracts": {
+    "community_h2c_h2load_v1": {
+      "tier": "community",
+      "protocol_mode": "h2",
+      "benchmark_family": "runtime-h2load",
+      "transport_mode": "loopback-h2c",
+      "connections": 1,
+      "streams_per_connection": 32,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "required_profile": "perf-box-amd64",
+      "note": "Authoritative contract for stream-multiplexing claims. k6 results are supplementary only."
+    }
+  },
+  "claim_scope": "exploratory",
+  "comparison_axis_note": "H2 vs H3 multiplexing comparison will require H3 toolchain. Do not conflate stream count with connection count in result labels."
+}

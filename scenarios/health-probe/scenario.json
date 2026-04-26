@@ -1,0 +1,16 @@
+{
+  "scenario_id": "health-probe",
+  "version": "1",
+  "benchmark_family": "guard",
+  "target_classification": "smoke-guard",
+  "description": "Smoke/guard probe. GET /health must return 200. Used as pre-run liveness check and post-run smoke gate. Not a throughput benchmark.",
+  "endpoint": "GET /health",
+  "mode": "smoke-guard",
+  "tier": "community",
+  "driver": ["k6", "wrk"],
+  "transport": ["h1"],
+  "loopback": true,
+  "loopback_caveat": "Guard probe only. Not a performance comparison artifact.",
+  "claim_scope": "none",
+  "claim_scope_note": "Health probe is a guard/smoke scenario. No performance claims permitted."
+}

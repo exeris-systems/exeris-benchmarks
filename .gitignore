@@ -1,4 +1,5 @@
 target/
+!targets/exeris-benchmark-app/src/main/java/eu/exeris/kernel/benchmark/target/
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
@@ -15,3 +16,38 @@ buildNumber.properties
 .project
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
+
+# Exeris Benchmarks — additional ignores
+# IDE
+.idea/
+*.iml
+.vscode/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Raw large result files — keep normalized/ and history/ only
+# Uncomment if results/raw/ grows too large:
+# results/raw/*.txt
+# results/raw/k6-*.json
+
+# Environment files with real values — template is committed, actuals are not
+runtime/drivers/env/*.env
+!runtime/drivers/env/template.env
+
+# Exeris enterprise confidentiality — enterprise provider classes in git-ignored env files
+enterprise/env/enterprise-sysprops.env
+env/.local/
+
+# Temp
+*.tmp
+*.log
+
+# Comparative benchmark quarantine and audit logs
+quarantine/
+comparative-audit.log
+**/target-a-pidfile
+**/target-b-pidfile
+**/sync-log.txt
+

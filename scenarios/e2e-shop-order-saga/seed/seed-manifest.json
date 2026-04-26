@@ -1,0 +1,113 @@
+{
+  "manifest_id": "e2e-shop-order-saga-seed-v1",
+  "description": "Seed manifest for e2e-shop-order-saga benchmark",
+  "tables": {
+    "users": {
+      "row_count": 1000,
+      "columns": ["id", "username", "email", "password_hash", "created_at"],
+      "indexes": ["username", "email"],
+      "idempotency_key": "id"
+    },
+    "products": {
+      "row_count": 500,
+      "columns": ["id", "name", "description", "price", "category"],
+      "categories": ["Electronics", "Books", "Clothing", "Home", "Sports"],
+      "price_range": [9.99, 999.99],
+      "idempotency_key": "id"
+    },
+    "inventory": {
+      "row_count": 500,
+      "columns": ["product_id", "quantity_available", "reserved"],
+      "quantity_range": [50, 500],
+      "foreign_key": "product_id → products.id",
+      "idempotency_key": "product_id"
+    },
+    "product_relationships": {
+      "row_count_expected": 1000,
+      "columns": ["source_product_id", "target_product_id", "similarity_score"],
+      "similarity_range": [0.5, 1.0],
+      "edges_per_product": "2-5",
+      "foreign_keys": [
+        "source_product_id → products.id",
+        "target_product_id → products.id"
+      ],
+      "idempotency_key": ["source_product_id", "target_product_id"]
+    },
+    "user_purchase_history": {
+      "row_count_expected": 1000,
+      "columns": ["id", "user_id", "product_id", "purchased_at"],
+      "purchases_per_user": "1-3",
+      "foreign_keys": [
+        "user_id → users.id",
+        "product_id → products.id"
+      ],
+      "idempotency_key": "id"
+    },
+    "carts": {
+      "row_count": 0,
+      "columns": ["id", "user_id", "status", "created_at", "updated_at"],
+      "foreign_key": "user_id → users.id"
+    },
+    "cart_items": {
+      "row_count": 0,
+      "columns": ["id", "cart_id", "product_id", "quantity", "price"],
+      "foreign_keys": [
+        "cart_id → carts.id",
+        "product_id → products.id"
+      ],
+      "uniques": ["cart_id,product_id"]
+    },
+    "user_principals": {
+      "row_count": 0,
+      "columns": ["principal_uuid", "user_id", "created_at"],
+      "foreign_key": "user_id → users.id",
+      "uniques": ["principal_uuid", "user_id"]
+    },
+    "exeris_outbox": {
+      "row_count": 0,
+      "columns": ["id", "aggregate_type", "aggregate_id", "event_type", "payload_json", "published_at", "attempts", "last_error", "created_at"]
+    },
+    "exeris_outbox_dlq": {
+      "row_count": 0,
+      "columns": ["id", "outbox_id", "aggregate_id", "event_type", "payload_json", "error_message", "failed_at"]
+    }
+  },
+  "neo4j_graph": {
+    "description": "Neo4j graph backend seeding for product recommendations",
+    "nodes": {
+      "Product": {
+        "count": 500,
+        "properties": ["id", "name", "price", "category"],
+        "constraint": "CREATE CONSTRAINT product_id_unique IF NOT EXISTS FOR (p:Product) REQUIRE p.id IS UNIQUE"
+      }
+    },
+    "relationships": {
+      "SIMILAR_TO": {
+        "count_expected": 1000,
+        "properties": ["similarity_score"],
+        "description": "Product similarity edges for recommendation engine"
+      },
+      "PURCHASED_BY": {
+        "count_expected": 1000,
+        "properties": ["purchase_date"],
+        "description": "User purchase history for recommendation training"
+      }
+    }
+  },
+  "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh",
+  "verification_checks": [
+    "PostgreSQL connect test",
+    "users row count >= 1000",
+    "products row count >= 500",
+    "inventory row count >= 500",
+    "product_relationships row count >= 1000",
+    "user_purchase_history row count >= 1000",
+    "carts table exists",
+    "cart_items table exists",
+    "user_principals table exists",
+    "exeris_outbox table exists",
+    "exeris_outbox_dlq table exists",
+    "Neo4j connect test",
+    "Neo4j Product node count >= 500"
+  ]
+}

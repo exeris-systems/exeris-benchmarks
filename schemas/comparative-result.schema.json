@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/comparative-result/v1",
+  "title": "ComparativeResult",
+  "description": "Aggregated result artifact for a comparative benchmark run across exactly two targets.",
+  "type": "object",
+  "required": [
+    "comparative_id",
+    "timestamp_utc",
+    "scenario_id",
+    "contract_id",
+    "track_id",
+    "pair_id",
+    "pair_order",
+    "claim_status",
+    "measurement_seconds",
+    "warmup_seconds",
+    "targets",
+    "fairness_index",
+    "gate_status",
+    "eligibility_gates",
+    "rejection_codes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "comparative_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this comparative run (UUID v4)."
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the comparative run was initiated."
+    },
+    "scenario_id": {
+      "type": "string",
+      "description": "Scenario name, must match scenarios/<id>/scenario.json#scenario_id."
+    },
+    "contract_id": {
+      "type": "string",
+      "description": "Contract identifier from scenario fixed_contracts (e.g. fixed_contract_v1)."
+    },
+    "track_id": {
+      "type": "string",
+      "description": "Execution track identifier (e.g. track-r, track-n). Comparative math is invalid across mixed track_id values."
+    },
+    "pair_id": {
+      "type": "string",
+      "description": "Comparison unit identifier for AB/BA paired execution tracking."
+    },
+    "pair_order": {
+      "type": "string",
+      "enum": ["ab", "ba"],
+      "description": "Order label for this artifact's pair execution direction."
+    },
+    "claim_status": {
+      "type": "string",
+      "enum": ["comparison_eligible", "non_eligible", "descriptive_only"],
+      "description": "Final claim status after strict gates and reporting guard."
+    },
+    "measurement_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "description": "Duration of the measurement window in seconds (warmup excluded)."
+    },
+    "warmup_seconds": {
+      "type": "integer",
+      "minimum": 10,
+      "description": "Duration of the warmup window in seconds (discarded from metrics)."
+    },
+    "targets": {
+      "type": "array",
+      "description": "Exactly two target result summaries included in this comparison.",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "target_id",
+          "maturity_level",
+          "tier",
+          "protocol_mode",
+          "transport_mode",
+          "metrics"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "target_id": {
+            "type": "string",
+            "description": "Target identifier, must match comparative-pair-manifest.json#compatible_targets[].target_id."
+          },
+          "maturity_level": {
+            "type": "string",
+            "description": "Target maturity classification (e.g. production, exploratory)."
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["community", "enterprise"],
+            "description": "Target tier. Cross-tier comparisons require explicit override_gates entry."
+          },
+          "protocol_mode": {
+            "type": "string",
+            "enum": ["h1", "h2", "h3"],
+            "description": "HTTP protocol mode used during this run."
+          },
+          "transport_mode": {
+            "type": "string",
+            "enum": [
+              "loopback-h1",
+              "loopback-h2",
+              "loopback-h3",
+              "network-h1",
+              "network-h2",
+              "network-h3"
+            ],
+            "description": "Transport layer and network path. loopback-h1 results are not equivalent to network-path measurements."
+          },
+          "metrics": {
+            "type": "object",
+            "required": [
+              "throughput_rps",
+              "latency_p50_us",
+              "latency_p95_us",
+              "latency_p99_us",
+              "error_rate_pct",
+              "total_requests",
+              "total_errors"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "throughput_rps": {
+                "type": "number",
+                "description": "Measured throughput in requests per second."
+              },
+              "latency_p50_us": {
+                "type": "number",
+                "description": "50th percentile latency in microseconds."
+              },
+              "latency_p75_us": {
+                "type": "number",
+                "description": "75th percentile latency in microseconds (optional but recommended)."
+              },
+              "latency_p90_us": {
+                "type": "number",
+                "description": "90th percentile latency in microseconds (optional but recommended)."
+              },
+              "latency_p95_us": {
+                "type": "number",
+                "description": "95th percentile latency in microseconds."
+              },
+              "latency_p99_us": {
+                "type": "number",
+                "description": "99th percentile latency in microseconds."
+              },
+              "error_rate_pct": {
+                "type": "number",
+                "description": "Percentage of requests that resulted in errors (0.0–100.0)."
+              },
+              "total_requests": {
+                "type": "integer",
+                "description": "Total number of requests issued during the measurement window."
+              },
+              "total_errors": {
+                "type": "integer",
+                "description": "Total number of error responses during the measurement window."
+              }
+            }
+          }
+        }
+      }
+    },
+    "fairness_index": {
+      "$ref": "https://exeris.io/schemas/fairness-index/v1",
+      "description": "Computed fairness index for this comparison pair."
+    },
+    "gate_status": {
+      "type": "object",
+      "description": "Results of strict comparative gates.",
+      "required": [
+        "track_isolation",
+        "eligibility",
+        "equivalence",
+        "ab_ba",
+        "drift",
+        "metadata",
+        "pin_verification",
+        "schema",
+        "quarantine",
+        "reporting_guard"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "track_isolation": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G1: Track R/Track N isolation; mixed tracks are rejected."
+        },
+        "eligibility": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G2: only comparison_eligible/success/complete/ok rows enter comparative math."
+        },
+        "equivalence": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G3: strict scenario/contract/tier/protocol/mode/payload/concurrency/warmup/measurement/jvm class equivalence."
+        },
+        "ab_ba": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G4: AB and BA execution orders are both required for the comparison unit."
+        },
+        "drift": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G5: drift snapshot placeholder; missing metadata or threshold breach fails."
+        },
+        "metadata": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G6: commit SHA, JDK/tool versions, JVM flags, hardware profile, scenario and target classification required."
+        },
+        "pin_verification": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G7: exact pinned versions must exist and match actual versions."
+        },
+        "schema": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G8: schema validation fail-closed, including validator availability checks."
+        },
+        "quarantine": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G9: machine-readable rejection codes required for transparency."
+        },
+        "reporting_guard": {
+          "$ref": "#/$defs/gate_result",
+          "description": "Gate G10: report must include explicit axis labels/track label and no cross-track claims."
+        }
+      }
+    },
+    "eligibility_gates": {
+      "type": "object",
+      "description": "Copy of strict gate outcomes used for claim-eligibility evaluation.",
+      "$ref": "#/$defs/strict_gate_status"
+    },
+    "rejection_codes": {
+      "type": "array",
+      "description": "Machine-readable rejection reason codes for non-eligible runs.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-form human-readable notes about this comparative run."
+    },
+    "override_gates": {
+      "type": "array",
+      "description": "List of gate IDs that have been explicitly overridden with justification.",
+      "items": {
+        "type": "object",
+        "required": ["gate_id", "justification", "override_by"],
+        "additionalProperties": false,
+        "properties": {
+          "gate_id": {
+            "type": "string",
+            "enum": ["maturity", "equivalence", "endpoint", "payload", "fairness", "error", "measurement", "metadata"]
+          },
+          "justification": {
+            "type": "string"
+          },
+          "override_by": {
+            "type": "string",
+            "description": "Identifier of the person or system that approved this override."
+          }
+        }
+      }
+    },
+    "known_asymmetries": {
+      "type": "array",
+      "description": "Documented known asymmetries between targets that may affect result interpretation.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "gate_result": {
+      "type": "object",
+      "required": ["pass_fail", "reason", "rejection_code"],
+      "additionalProperties": false,
+      "properties": {
+        "pass_fail": {
+          "type": "string",
+          "enum": ["PASS", "FAIL"],
+          "description": "Gate outcome. FAIL blocks comparative claim eligibility."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable explanation of the gate outcome."
+        },
+        "rejection_code": {
+          "type": "string",
+          "description": "Machine-readable rejection code. Use 'none' for PASS rows."
+        }
+      }
+    },
+    "strict_gate_status": {
+      "type": "object",
+      "required": [
+        "track_isolation",
+        "eligibility",
+        "equivalence",
+        "ab_ba",
+        "drift",
+        "metadata",
+        "pin_verification",
+        "schema",
+        "quarantine",
+        "reporting_guard"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "track_isolation": { "$ref": "#/$defs/gate_result" },
+        "eligibility": { "$ref": "#/$defs/gate_result" },
+        "equivalence": { "$ref": "#/$defs/gate_result" },
+        "ab_ba": { "$ref": "#/$defs/gate_result" },
+        "drift": { "$ref": "#/$defs/gate_result" },
+        "metadata": { "$ref": "#/$defs/gate_result" },
+        "pin_verification": { "$ref": "#/$defs/gate_result" },
+        "schema": { "$ref": "#/$defs/gate_result" },
+        "quarantine": { "$ref": "#/$defs/gate_result" },
+        "reporting_guard": { "$ref": "#/$defs/gate_result" }
+      }
+    }
+  }
+}

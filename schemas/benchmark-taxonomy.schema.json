@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/benchmark-taxonomy/v1",
+  "title": "BenchmarkTaxonomy",
+  "description": "Formal taxonomy definition for Exeris benchmark families, constrained run classes, reporting axes, and efficiency contract structure.",
+  "type": "object",
+  "required": ["schema_version", "taxonomy_version", "constrained_families", "soak_duration_ladder", "reporting_axes", "efficiency_contract_v1"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "1" },
+    "taxonomy_version": { "type": "string", "const": "1.0" },
+
+    "constrained_families": {
+      "type": "object",
+      "description": "Three formal constrained benchmark families. Each is a separate comparison axis and must not be collapsed without explicit caveats.",
+      "required": ["constrained-survivability", "efficiency-density", "performance-ceiling"],
+      "additionalProperties": false,
+      "properties": {
+        "constrained-survivability": {
+          "type": "object",
+          "required": ["description", "primary_question", "reporting_axis", "metrics", "claim_scope_max", "comparison_policy"],
+          "properties": {
+            "description": { "type": "string" },
+            "primary_question": { "type": "string" },
+            "reporting_axis": { "type": "string" },
+            "metrics": { "type": "array", "items": { "type": "string" } },
+            "claim_scope_max": { "type": "string" },
+            "comparison_policy": { "type": "string" }
+          }
+        },
+        "efficiency-density": {
+          "type": "object",
+          "required": ["description", "primary_question", "reporting_axis", "metrics", "claim_scope_max", "comparison_policy", "denominator_note"],
+          "properties": {
+            "description": { "type": "string" },
+            "primary_question": { "type": "string" },
+            "reporting_axis": { "type": "string" },
+            "metrics": { "type": "array", "items": { "type": "string" } },
+            "claim_scope_max": { "type": "string" },
+            "comparison_policy": { "type": "string" },
+            "denominator_note": { "type": "string" }
+          }
+        },
+        "performance-ceiling": {
+          "type": "object",
+          "required": ["description", "primary_question", "reporting_axis", "metrics", "claim_scope_max", "comparison_policy"],
+          "properties": {
+            "description": { "type": "string" },
+            "primary_question": { "type": "string" },
+            "reporting_axis": { "type": "string" },
+            "metrics": { "type": "array", "items": { "type": "string" } },
+            "claim_scope_max": { "type": "string" },
+            "comparison_policy": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "soak_duration_ladder": {
+      "type": "object",
+      "description": "Ordered soak duration classes. Each class gates minimum execution_class and claim eligibility.",
+      "required": ["smoke", "guard", "regression", "contract"],
+      "additionalProperties": false,
+      "properties": {
+        "smoke":      { "$ref": "#/$defs/soak_level" },
+        "guard":      { "$ref": "#/$defs/soak_level" },
+        "regression": { "$ref": "#/$defs/soak_level" },
+        "contract":   { "$ref": "#/$defs/soak_level" }
+      }
+    },
+
+    "reporting_axes": {
+      "type": "object",
+      "description": "Four mandatory reporting axes for constrained benchmark results.",
+      "required": ["correctness_under_constraint", "cost_efficiency", "degradation_behavior", "stability"],
+      "additionalProperties": false,
+      "properties": {
+        "correctness_under_constraint": { "$ref": "#/$defs/reporting_axis" },
+        "cost_efficiency":              { "$ref": "#/$defs/reporting_axis" },
+        "degradation_behavior":         { "$ref": "#/$defs/reporting_axis" },
+        "stability":                    { "$ref": "#/$defs/reporting_axis" }
+      }
+    },
+
+    "efficiency_contract_v1": {
+      "type": "object",
+      "description": "Efficiency contract definition for 1.0. Not a performance ceiling contract. Defines survivability and efficiency floors under constrained budget.",
+      "required": ["version", "description", "constraints"],
+      "properties": {
+        "version": { "type": "string", "const": "1.0" },
+        "description": { "type": "string" },
+        "constraints": {
+          "type": "object",
+          "required": ["no_crash_under_budget", "error_rate_ceiling_pct", "throughput_floor_rps", "degradation_monotonicity", "degradation_observability"],
+          "properties": {
+            "no_crash_under_budget":         { "type": "string" },
+            "error_rate_ceiling_pct":        { "type": "number", "minimum": 0 },
+            "throughput_floor_rps":          { "type": ["number", "string"] },
+            "degradation_monotonicity":      { "type": "string" },
+            "degradation_observability":     { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "soak_level": {
+      "type": "object",
+      "required": ["nominal_duration", "min_execution_class", "claim_scope_max", "note"],
+      "properties": {
+        "nominal_duration":    { "type": "string" },
+        "min_execution_class": { "type": "string", "enum": ["exploratory", "guard", "regression"] },
+        "claim_scope_max":     { "type": "string", "enum": ["exploratory", "descriptive_only", "comparison_eligible"] },
+        "note":                { "type": "string" }
+      }
+    },
+    "reporting_axis": {
+      "type": "object",
+      "required": ["description", "applicable_families", "metrics", "min_soak_class"],
+      "properties": {
+        "description":          { "type": "string" },
+        "applicable_families":  { "type": "array", "items": { "type": "string" } },
+        "metrics":              { "type": "array", "items": { "type": "string" } },
+        "min_soak_class":       { "type": "string", "enum": ["smoke", "guard", "regression", "contract"] },
+        "note":                 { "type": "string" }
+      }
+    }
+  }
+}

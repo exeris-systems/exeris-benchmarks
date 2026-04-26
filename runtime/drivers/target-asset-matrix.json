@@ -1,0 +1,180 @@
+{
+  "schema_version": "1",
+  "targets": [
+    {
+      "target_id": "exeris-native-community",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "docker",
+      "env_file": "runtime/drivers/env/community.env",
+      "profile_id": "community-native-default",
+      "compose_file": "runtime/drivers/docker-compose/community.yml",
+      "jar_path": "",
+      "health_url": "http://localhost:8080/health",
+      "asset_state": "non_runnable",
+      "eligibility_class": "non-runnable",
+      "missing_assets": [
+        "runtime/drivers/env/community.env"
+      ],
+      "non_runnable_reason": "runtime/drivers/env/community.env is not provisioned, and this legacy community docker launcher contract is stale for the native-labeled target."
+    },
+    {
+      "target_id": "exeris-runtime-community",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "docker",
+      "env_file": "runtime/drivers/env/community.env",
+      "profile_id": "community-runtime-default",
+      "compose_file": "runtime/drivers/docker-compose/community.yml",
+      "jar_path": "",
+      "health_url": "http://localhost:8080/health",
+      "asset_state": "non_runnable",
+      "eligibility_class": "non-runnable",
+      "missing_assets": [
+        "runtime/drivers/env/community.env"
+      ],
+      "non_runnable_reason": "runtime/drivers/env/community.env is not provisioned, and this legacy community docker launcher contract is stale for the runtime-labeled target."
+    },
+    {
+      "target_id": "exeris-benchmark-app-community-h1",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/exeris-community-runtime.env",
+      "profile_id": "exeris-benchmark-app-community-h1",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9000/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": ""
+    },
+    {
+      "target_id": "exeris-e2e-community-h2",
+      "tier": "community",
+      "protocol_mode": "h2",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/exeris-e2e-runtime.env",
+      "profile_id": "exeris-e2e-community-h2",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "https://localhost:8080/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": ""
+    },
+    {
+      "target_id": "exeris-community-app",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/exeris-e2e-runtime.env",
+      "profile_id": "exeris-community-app",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:8080/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": ""
+    },
+    {
+      "target_id": "spring-jvm-vt-tuned",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/spring-runtime.env",
+      "profile_id": "spring-jvm-vt-tuned",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9001/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": ""
+    },
+    {
+      "target_id": "spring-app-axon",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/spring-runtime.env",
+      "profile_id": "spring-app-axon",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9001/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": ""
+    },
+    {
+      "target_id": "spring-native-default",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "docker",
+      "env_file": "runtime/drivers/env/spring-native.env",
+      "profile_id": "spring-native-default",
+      "compose_file": "runtime/drivers/docker-compose/spring-native.yml",
+      "jar_path": "",
+      "health_url": "http://localhost:8080/actuator/health",
+      "asset_state": "non_runnable",
+      "eligibility_class": "non-runnable",
+      "missing_assets": [
+        "runtime/drivers/env/spring-native.env",
+        "runtime/drivers/docker-compose/spring-native.yml"
+      ],
+      "non_runnable_reason": "No Spring native launcher assets are provisioned in runtime/drivers for this profile."
+    },
+    {
+      "target_id": "quarkus-jvm-vt-tuned",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/quarkus-runtime.env",
+      "profile_id": "quarkus-jvm-vt-tuned",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "https://localhost:9002/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": ""
+    },
+    {
+      "target_id": "quarkus-app-axon",
+      "tier": "community",
+      "protocol_mode": "h2c",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/quarkus-runtime.env",
+      "profile_id": "quarkus-app-axon",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9002/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": ""
+    },
+    {
+      "target_id": "quarkus-native-default",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "docker",
+      "env_file": "runtime/drivers/env/quarkus-native.env",
+      "profile_id": "quarkus-native-default",
+      "compose_file": "runtime/drivers/docker-compose/quarkus-native.yml",
+      "jar_path": "",
+      "health_url": "http://localhost:8080/health",
+      "asset_state": "non_runnable",
+      "eligibility_class": "non-runnable",
+      "missing_assets": [
+        "runtime/drivers/env/quarkus-native.env",
+        "runtime/drivers/docker-compose/quarkus-native.yml"
+      ],
+      "non_runnable_reason": "No Quarkus native launcher assets are provisioned in runtime/drivers for this profile."
+    }
+  ]
+}

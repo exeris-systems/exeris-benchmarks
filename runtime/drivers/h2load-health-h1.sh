@@ -2,7 +2,7 @@
 set -euo pipefail
 
 HOST="${HOST:-127.0.0.1}"
-PORT="${PORT:-18080}"
+PORT="${PORT:-8080}"
 N="${N:-10000}"
 C="${C:-100}"
 T="${T:-4}"

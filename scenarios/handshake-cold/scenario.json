@@ -8,7 +8,7 @@
   "mode": "tls-handshake-cold",
   "tier": "community",
   "driver": ["k6", "h2load"],
-  "transport": ["h2-tls"],
+  "transport": ["h2-tls", "h1-tls"],
   "loopback": true,
   "loopback_caveat": "TLS handshake loopback measurements reflect crypto + kernel cost without network RTT. Results are NOT comparable to measurements with network path. transport_mode=loopback-h2-tls is mandatory in all result artifacts.",
   "tls": {

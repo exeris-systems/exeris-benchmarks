@@ -36,6 +36,8 @@
 | `exploratory` | 30 s | dev-isolated, dev-laptop, ci-runner | descriptive only | yes |
 | `comparison-eligible` | 60 s | **perf-box-amd64** | throughput, p50 (indicative) | yes |
 
+> **NOTE:** `comparison-eligible` is **not** a currently valid scope for this scenario. Treat it as a future promotion target only, pending an explicit update to `scenario.json` to change `claim_scope` from `exploratory` to `comparison-eligible`.
+
 ---
 
 ## Seed requirement

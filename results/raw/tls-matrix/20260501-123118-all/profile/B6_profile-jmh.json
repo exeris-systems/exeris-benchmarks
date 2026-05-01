@@ -1,0 +1,986 @@
+[
+  {
+    "jmhVersion": "1.37",
+    "benchmark": "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput",
+    "mode": "thrpt",
+    "threads": 1,
+    "forks": 1,
+    "jvm": "<redacted-jvm-path>",
+    "jvmArgs": [
+      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+      "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--enable-native-access=ALL-UNNAMED",
+      "-XX:+UseZGC",
+      "-XX:+UnlockExperimentalVMOptions",
+      "-Xms256m",
+      "-Xmx256m",
+      "-Dexeris.tls.community.certPem=<redacted-path>",
+      "-Dexeris.tls.community.keyPem=<redacted-path>",
+      "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+      "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>",
+      "-XX:StartFlightRecording=filename=<redacted-path>,settings=profile,dumponexit=true"
+    ],
+    "jdkVersion": "26",
+    "vmName": "Java HotSpot(TM) 64-Bit Server VM",
+    "vmVersion": "26+35-2893",
+    "warmupIterations": 5,
+    "warmupTime": "2 s",
+    "warmupBatchSize": 1,
+    "measurementIterations": 5,
+    "measurementTime": "5 s",
+    "measurementBatchSize": 1,
+    "params": {
+      "payloadBytes": "128"
+    },
+    "primaryMetric": {
+      "score": 578351.1848889131,
+      "scoreError": 4086.7565056600038,
+      "scoreConfidence": [
+        574264.428383253,
+        582437.9413945731
+      ],
+      "scorePercentiles": {
+        "0.0": 577093.2409788364,
+        "50.0": 578091.1067394705,
+        "90.0": 579607.776000523,
+        "95.0": 579607.776000523,
+        "99.0": 579607.776000523,
+        "99.9": 579607.776000523,
+        "99.99": 579607.776000523,
+        "99.999": 579607.776000523,
+        "99.9999": 579607.776000523,
+        "100.0": 579607.776000523
+      },
+      "scoreUnit": "ops/s",
+      "rawData": [
+        [
+          579607.776000523,
+          577093.2409788364,
+          578091.1067394705,
+          579270.0383931922,
+          577693.7623325435
+        ]
+      ]
+    },
+    "secondaryMetrics": {
+      "drainBytes": {
+        "score": 2149513332,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          2149513332,
+          2149513332
+        ],
+        "scorePercentiles": {
+          "0.0": 426644442,
+          "50.0": 430777614,
+          "90.0": 432061374,
+          "95.0": 432061374,
+          "99.0": 432061374,
+          "99.9": 432061374,
+          "99.99": 432061374,
+          "99.999": 432061374,
+          "99.9999": 432061374,
+          "100.0": 432061374
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            4.2897996E+8,
+            426644442,
+            430777614,
+            432061374,
+            431049942
+          ]
+        ]
+      },
+      "drainReadOps": {
+        "score": 131187.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          131187.0,
+          131187.0
+        ],
+        "scorePercentiles": {
+          "0.0": 26055.0,
+          "50.0": 26275.0,
+          "90.0": 26334.0,
+          "95.0": 26334.0,
+          "99.0": 26334.0,
+          "99.9": 26334.0,
+          "99.99": 26334.0,
+          "99.999": 26334.0,
+          "99.9999": 26334.0,
+          "100.0": 26334.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            26231.0,
+            26055.0,
+            26275.0,
+            26334.0,
+            26292.0
+          ]
+        ]
+      },
+      "socketWriteBytes": {
+        "score": 2149513332,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          2149513332,
+          2149513332
+        ],
+        "scorePercentiles": {
+          "0.0": 426644442,
+          "50.0": 430777614,
+          "90.0": 432061374,
+          "95.0": 432061374,
+          "99.0": 432061374,
+          "99.9": 432061374,
+          "99.99": 432061374,
+          "99.999": 432061374,
+          "99.9999": 432061374,
+          "100.0": 432061374
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            4.2897996E+8,
+            426644442,
+            430777614,
+            432061374,
+            431049942
+          ]
+        ]
+      },
+      "submittedPayloadBytes": {
+        "score": 1850756096,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          1850756096,
+          1850756096
+        ],
+        "scorePercentiles": {
+          "0.0": 369346816,
+          "50.0": 369985664,
+          "90.0": 3.709536E+8,
+          "95.0": 3.709536E+8,
+          "99.0": 3.709536E+8,
+          "99.9": 3.709536E+8,
+          "99.99": 3.709536E+8,
+          "99.999": 3.709536E+8,
+          "99.9999": 3.709536E+8,
+          "100.0": 3.709536E+8
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            3.709536E+8,
+            369346816,
+            369985664,
+            370739968,
+            369730048
+          ]
+        ]
+      },
+      "wrapCalls": {
+        "score": 14459032,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          14459032,
+          14459032
+        ],
+        "scorePercentiles": {
+          "0.0": 2885522.0,
+          "50.0": 2890513.0,
+          "90.0": 2898075.0,
+          "95.0": 2898075.0,
+          "99.0": 2898075.0,
+          "99.9": 2898075.0,
+          "99.99": 2898075.0,
+          "99.999": 2898075.0,
+          "99.9999": 2898075.0,
+          "100.0": 2898075.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            2898075.0,
+            2885522.0,
+            2890513.0,
+            2896406.0,
+            2888516.0
+          ]
+        ]
+      },
+      "wrapCipherBytes": {
+        "score": 0.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          0.0,
+          0.0
+        ],
+        "scorePercentiles": {
+          "0.0": 0.0,
+          "50.0": 0.0,
+          "90.0": 0.0,
+          "95.0": 0.0,
+          "99.0": 0.0,
+          "99.9": 0.0,
+          "99.99": 0.0,
+          "99.999": 0.0,
+          "99.9999": 0.0,
+          "100.0": 0.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "jmhVersion": "1.37",
+    "benchmark": "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput",
+    "mode": "thrpt",
+    "threads": 1,
+    "forks": 1,
+    "jvm": "<redacted-jvm-path>",
+    "jvmArgs": [
+      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+      "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--enable-native-access=ALL-UNNAMED",
+      "-XX:+UseZGC",
+      "-XX:+UnlockExperimentalVMOptions",
+      "-Xms256m",
+      "-Xmx256m",
+      "-Dexeris.tls.community.certPem=<redacted-path>",
+      "-Dexeris.tls.community.keyPem=<redacted-path>",
+      "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+      "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>",
+      "-XX:StartFlightRecording=filename=<redacted-path>,settings=profile,dumponexit=true"
+    ],
+    "jdkVersion": "26",
+    "vmName": "Java HotSpot(TM) 64-Bit Server VM",
+    "vmVersion": "26+35-2893",
+    "warmupIterations": 5,
+    "warmupTime": "2 s",
+    "warmupBatchSize": 1,
+    "measurementIterations": 5,
+    "measurementTime": "5 s",
+    "measurementBatchSize": 1,
+    "params": {
+      "payloadBytes": "1024"
+    },
+    "primaryMetric": {
+      "score": 482440.79277382436,
+      "scoreError": 33530.80931023897,
+      "scoreConfidence": [
+        448909.9834635854,
+        515971.60208406334
+      ],
+      "scorePercentiles": {
+        "0.0": 466902.8694044343,
+        "50.0": 486227.1689476667,
+        "90.0": 487249.2565728007,
+        "95.0": 487249.2565728007,
+        "99.0": 487249.2565728007,
+        "99.9": 487249.2565728007,
+        "99.99": 487249.2565728007,
+        "99.999": 487249.2565728007,
+        "99.9999": 487249.2565728007,
+        "100.0": 487249.2565728007
+      },
+      "scoreUnit": "ops/s",
+      "rawData": [
+        [
+          486311.0839042078,
+          487249.2565728007,
+          485513.5850400122,
+          486227.1689476667,
+          466902.8694044343
+        ]
+      ]
+    },
+    "secondaryMetrics": {
+      "drainBytes": {
+        "score": 12612811354,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          12612811354,
+          12612811354
+        ],
+        "scorePercentiles": {
+          "0.0": 2441606276,
+          "50.0": 2.54229449E+9,
+          "90.0": 2.54775526E+9,
+          "95.0": 2.54775526E+9,
+          "99.0": 2.54775526E+9,
+          "99.9": 2.54775526E+9,
+          "99.99": 2.54775526E+9,
+          "99.999": 2.54775526E+9,
+          "99.9999": 2.54775526E+9,
+          "100.0": 2.54775526E+9
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            2542580048,
+            2.54775526E+9,
+            2.53857528E+9,
+            2.54229449E+9,
+            2441606276
+          ]
+        ]
+      },
+      "drainReadOps": {
+        "score": 765612.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          765612.0,
+          765612.0
+        ],
+        "scorePercentiles": {
+          "0.0": 148217.0,
+          "50.0": 154315.0,
+          "90.0": 154650.0,
+          "95.0": 154650.0,
+          "99.0": 154650.0,
+          "99.9": 154650.0,
+          "99.99": 154650.0,
+          "99.999": 154650.0,
+          "99.9999": 154650.0,
+          "100.0": 154650.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            154336.0,
+            154650.0,
+            154094.0,
+            154315.0,
+            148217.0
+          ]
+        ]
+      },
+      "socketWriteBytes": {
+        "score": 12612811354,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          12612811354,
+          12612811354
+        ],
+        "scorePercentiles": {
+          "0.0": 2441606276,
+          "50.0": 2.54229449E+9,
+          "90.0": 2.54775526E+9,
+          "95.0": 2.54775526E+9,
+          "99.0": 2.54775526E+9,
+          "99.9": 2.54775526E+9,
+          "99.99": 2.54775526E+9,
+          "99.999": 2.54775526E+9,
+          "99.9999": 2.54775526E+9,
+          "100.0": 2.54775526E+9
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            2542580048,
+            2.54775526E+9,
+            2.53857528E+9,
+            2.54229449E+9,
+            2441606276
+          ]
+        ]
+      },
+      "submittedPayloadBytes": {
+        "score": 12350701568,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          12350701568,
+          12350701568
+        ],
+        "scorePercentiles": {
+          "0.0": 2390586368,
+          "50.0": 2.48952832E+9,
+          "90.0": 2494763008,
+          "95.0": 2494763008,
+          "99.0": 2494763008,
+          "99.9": 2494763008,
+          "99.99": 2494763008,
+          "99.999": 2494763008,
+          "99.9999": 2494763008,
+          "100.0": 2494763008
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            2489959424,
+            2494763008,
+            2485864448,
+            2.48952832E+9,
+            2390586368
+          ]
+        ]
+      },
+      "wrapCalls": {
+        "score": 12061232,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          12061232,
+          12061232
+        ],
+        "scorePercentiles": {
+          "0.0": 2334557.0,
+          "50.0": 2431180.0,
+          "90.0": 2436292.0,
+          "95.0": 2436292.0,
+          "99.0": 2436292.0,
+          "99.9": 2436292.0,
+          "99.99": 2436292.0,
+          "99.999": 2436292.0,
+          "99.9999": 2436292.0,
+          "100.0": 2436292.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            2431601.0,
+            2436292.0,
+            2427602.0,
+            2431180.0,
+            2334557.0
+          ]
+        ]
+      },
+      "wrapCipherBytes": {
+        "score": 0.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          0.0,
+          0.0
+        ],
+        "scorePercentiles": {
+          "0.0": 0.0,
+          "50.0": 0.0,
+          "90.0": 0.0,
+          "95.0": 0.0,
+          "99.0": 0.0,
+          "99.9": 0.0,
+          "99.99": 0.0,
+          "99.999": 0.0,
+          "99.9999": 0.0,
+          "100.0": 0.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "jmhVersion": "1.37",
+    "benchmark": "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput",
+    "mode": "thrpt",
+    "threads": 1,
+    "forks": 1,
+    "jvm": "<redacted-jvm-path>",
+    "jvmArgs": [
+      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+      "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--enable-native-access=ALL-UNNAMED",
+      "-XX:+UseZGC",
+      "-XX:+UnlockExperimentalVMOptions",
+      "-Xms256m",
+      "-Xmx256m",
+      "-Dexeris.tls.community.certPem=<redacted-path>",
+      "-Dexeris.tls.community.keyPem=<redacted-path>",
+      "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+      "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>",
+      "-XX:StartFlightRecording=filename=<redacted-path>,settings=profile,dumponexit=true"
+    ],
+    "jdkVersion": "26",
+    "vmName": "Java HotSpot(TM) 64-Bit Server VM",
+    "vmVersion": "26+35-2893",
+    "warmupIterations": 5,
+    "warmupTime": "2 s",
+    "warmupBatchSize": 1,
+    "measurementIterations": 5,
+    "measurementTime": "5 s",
+    "measurementBatchSize": 1,
+    "params": {
+      "payloadBytes": "4096"
+    },
+    "primaryMetric": {
+      "score": 298097.81312785594,
+      "scoreError": 5489.931477096417,
+      "scoreConfidence": [
+        292607.88165075955,
+        303587.74460495234
+      ],
+      "scorePercentiles": {
+        "0.0": 296079.40336398885,
+        "50.0": 298873.82028395595,
+        "90.0": 299259.76703984255,
+        "95.0": 299259.76703984255,
+        "99.0": 299259.76703984255,
+        "99.9": 299259.76703984255,
+        "99.99": 299259.76703984255,
+        "99.999": 299259.76703984255,
+        "99.9999": 299259.76703984255,
+        "100.0": 299259.76703984255
+      },
+      "scoreUnit": "ops/s",
+      "rawData": [
+        [
+          296079.40336398885,
+          297113.06267745583,
+          299259.76703984255,
+          299163.01227403677,
+          298873.82028395595
+        ]
+      ]
+    },
+    "secondaryMetrics": {
+      "drainBytes": {
+        "score": 30687497652,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          30687497652,
+          30687497652
+        ],
+        "scorePercentiles": {
+          "0.0": 6095698742,
+          "50.0": 6153555454,
+          "90.0": 6161445344,
+          "95.0": 6161445344,
+          "99.0": 6161445344,
+          "99.9": 6161445344,
+          "99.99": 6161445344,
+          "99.999": 6161445344,
+          "99.9999": 6161445344,
+          "100.0": 6161445344
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            6095698742,
+            6.1171792E+9,
+            6161445344,
+            6159618912,
+            6153555454
+          ]
+        ]
+      },
+      "drainReadOps": {
+        "score": 1863184.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          1863184.0,
+          1863184.0
+        ],
+        "scorePercentiles": {
+          "0.0": 370114.0,
+          "50.0": 373617.0,
+          "90.0": 374081.0,
+          "95.0": 374081.0,
+          "99.0": 374081.0,
+          "99.9": 374081.0,
+          "99.99": 374081.0,
+          "99.999": 374081.0,
+          "99.9999": 374081.0,
+          "100.0": 374081.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            370114.0,
+            371408.0,
+            374081.0,
+            373964.0,
+            373617.0
+          ]
+        ]
+      },
+      "socketWriteBytes": {
+        "score": 30687497652,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          30687497652,
+          30687497652
+        ],
+        "scorePercentiles": {
+          "0.0": 6095698742,
+          "50.0": 6153555454,
+          "90.0": 6161445344,
+          "95.0": 6161445344,
+          "99.0": 6161445344,
+          "99.9": 6161445344,
+          "99.99": 6161445344,
+          "99.999": 6161445344,
+          "99.9999": 6161445344,
+          "100.0": 6161445344
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            6095698742,
+            6.1171792E+9,
+            6161445344,
+            6159618912,
+            6153555454
+          ]
+        ]
+      },
+      "submittedPayloadBytes": {
+        "score": 3.052572672E+10,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          3.052572672E+10,
+          3.052572672E+10
+        ],
+        "scorePercentiles": {
+          "0.0": 6063808512,
+          "50.0": 6121037824,
+          "90.0": 6128934912,
+          "95.0": 6128934912,
+          "99.0": 6128934912,
+          "99.9": 6128934912,
+          "99.99": 6128934912,
+          "99.999": 6128934912,
+          "99.9999": 6128934912,
+          "100.0": 6128934912
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            6063808512,
+            6084980736,
+            6128934912,
+            6126964736,
+            6121037824
+          ]
+        ]
+      },
+      "wrapCalls": {
+        "score": 7452570.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          7452570.0,
+          7452570.0
+        ],
+        "scorePercentiles": {
+          "0.0": 1480422.0,
+          "50.0": 1494394.0,
+          "90.0": 1496322.0,
+          "95.0": 1496322.0,
+          "99.0": 1496322.0,
+          "99.9": 1496322.0,
+          "99.99": 1496322.0,
+          "99.999": 1496322.0,
+          "99.9999": 1496322.0,
+          "100.0": 1496322.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            1480422.0,
+            1485591.0,
+            1496322.0,
+            1495841.0,
+            1494394.0
+          ]
+        ]
+      },
+      "wrapCipherBytes": {
+        "score": 0.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          0.0,
+          0.0
+        ],
+        "scorePercentiles": {
+          "0.0": 0.0,
+          "50.0": 0.0,
+          "90.0": 0.0,
+          "95.0": 0.0,
+          "99.0": 0.0,
+          "99.9": 0.0,
+          "99.99": 0.0,
+          "99.999": 0.0,
+          "99.9999": 0.0,
+          "100.0": 0.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "jmhVersion": "1.37",
+    "benchmark": "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput",
+    "mode": "thrpt",
+    "threads": 1,
+    "forks": 1,
+    "jvm": "<redacted-jvm-path>",
+    "jvmArgs": [
+      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+      "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--enable-native-access=ALL-UNNAMED",
+      "-XX:+UseZGC",
+      "-XX:+UnlockExperimentalVMOptions",
+      "-Xms256m",
+      "-Xmx256m",
+      "-Dexeris.tls.community.certPem=<redacted-path>",
+      "-Dexeris.tls.community.keyPem=<redacted-path>",
+      "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+      "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>",
+      "-XX:StartFlightRecording=filename=<redacted-path>,settings=profile,dumponexit=true"
+    ],
+    "jdkVersion": "26",
+    "vmName": "Java HotSpot(TM) 64-Bit Server VM",
+    "vmVersion": "26+35-2893",
+    "warmupIterations": 5,
+    "warmupTime": "2 s",
+    "warmupBatchSize": 1,
+    "measurementIterations": 5,
+    "measurementTime": "5 s",
+    "measurementBatchSize": 1,
+    "params": {
+      "payloadBytes": "16384"
+    },
+    "primaryMetric": {
+      "score": 123068.95638828861,
+      "scoreError": 1800.3789539972731,
+      "scoreConfidence": [
+        121268.57743429134,
+        124869.33534228589
+      ],
+      "scorePercentiles": {
+        "0.0": 122489.64325026801,
+        "50.0": 123134.04773997955,
+        "90.0": 123537.20107377869,
+        "95.0": 123537.20107377869,
+        "99.0": 123537.20107377869,
+        "99.9": 123537.20107377869,
+        "99.99": 123537.20107377869,
+        "99.999": 123537.20107377869,
+        "99.9999": 123537.20107377869,
+        "100.0": 123537.20107377869
+      },
+      "scoreUnit": "ops/s",
+      "rawData": [
+        [
+          122695.54143874485,
+          123488.34843867205,
+          123537.20107377869,
+          122489.64325026801,
+          123134.04773997955
+        ]
+      ]
+    },
+    "secondaryMetrics": {
+      "drainBytes": {
+        "score": 5.047723828E+10,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          5.047723828E+10,
+          5.047723828E+10
+        ],
+        "scorePercentiles": {
+          "0.0": 10047914246,
+          "50.0": 10100809216,
+          "90.0": 10133883514,
+          "95.0": 10133883514,
+          "99.0": 10133883514,
+          "99.9": 10133883514,
+          "99.99": 10133883514,
+          "99.999": 10133883514,
+          "99.9999": 10133883514,
+          "100.0": 10133883514
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            10064812228,
+            10129819076,
+            10133883514,
+            10047914246,
+            10100809216
+          ]
+        ]
+      },
+      "drainReadOps": {
+        "score": 3076648.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          3076648.0,
+          3076648.0
+        ],
+        "scorePercentiles": {
+          "0.0": 612429.0,
+          "50.0": 615633.0,
+          "90.0": 617665.0,
+          "95.0": 617665.0,
+          "99.0": 617665.0,
+          "99.9": 617665.0,
+          "99.99": 617665.0,
+          "99.999": 617665.0,
+          "99.9999": 617665.0,
+          "100.0": 617665.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            613469.0,
+            617452.0,
+            617665.0,
+            612429.0,
+            615633.0
+          ]
+        ]
+      },
+      "socketWriteBytes": {
+        "score": 5.047723828E+10,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          5.047723828E+10,
+          5.047723828E+10
+        ],
+        "scorePercentiles": {
+          "0.0": 10047914246,
+          "50.0": 10100809216,
+          "90.0": 10133883514,
+          "95.0": 10133883514,
+          "99.0": 10133883514,
+          "99.9": 10133883514,
+          "99.99": 10133883514,
+          "99.999": 10133883514,
+          "99.9999": 10133883514,
+          "100.0": 10133883514
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            10064812228,
+            10129819076,
+            10133883514,
+            10047914246,
+            10100809216
+          ]
+        ]
+      },
+      "submittedPayloadBytes": {
+        "score": 5.040996352E+10,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          5.040996352E+10,
+          5.040996352E+10
+        ],
+        "scorePercentiles": {
+          "0.0": 1.003454464E+10,
+          "50.0": 10087317504,
+          "90.0": 10120380416,
+          "95.0": 10120380416,
+          "99.0": 10120380416,
+          "99.9": 10120380416,
+          "99.99": 10120380416,
+          "99.999": 10120380416,
+          "99.9999": 10120380416,
+          "100.0": 10120380416
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            10051387392,
+            10116333568,
+            10120380416,
+            1.003454464E+10,
+            10087317504
+          ]
+        ]
+      },
+      "wrapCalls": {
+        "score": 3076780.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          3076780.0,
+          3076780.0
+        ],
+        "scorePercentiles": {
+          "0.0": 612460.0,
+          "50.0": 615681.0,
+          "90.0": 617699.0,
+          "95.0": 617699.0,
+          "99.0": 617699.0,
+          "99.9": 617699.0,
+          "99.99": 617699.0,
+          "99.999": 617699.0,
+          "99.9999": 617699.0,
+          "100.0": 617699.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            613488.0,
+            617452.0,
+            617699.0,
+            612460.0,
+            615681.0
+          ]
+        ]
+      },
+      "wrapCipherBytes": {
+        "score": 0.0,
+        "scoreError": "NaN",
+        "scoreConfidence": [
+          0.0,
+          0.0
+        ],
+        "scorePercentiles": {
+          "0.0": 0.0,
+          "50.0": 0.0,
+          "90.0": 0.0,
+          "95.0": 0.0,
+          "99.0": 0.0,
+          "99.9": 0.0,
+          "99.99": 0.0,
+          "99.999": 0.0,
+          "99.9999": 0.0,
+          "100.0": 0.0
+        },
+        "scoreUnit": "#",
+        "rawData": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      }
+    }
+  }
+]

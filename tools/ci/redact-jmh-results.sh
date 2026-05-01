@@ -55,6 +55,7 @@ redact_one() {
 
   # Redact .jvmArgs entries: keep the -Dkey= prefix, replace the value
   # for cryptoProviderClass/memoryProviderClass (FQCN) and certPem/keyPem (filesystem path).
+  # Also redact -XX:StartFlightRecording=filename=<path> (JFR path leaks runner FS layout).
   # Also redact .jvm runtime path. Leave benchmark FQCN intact — that's the ownership model name.
   jq '
     def redact_arg:
@@ -62,6 +63,8 @@ redact_one() {
         sub("=.*$"; "=" + "'"$REDACT_VALUE_FQCN"'")
       elif test("^-D(exeris\\.tls\\.[^=]+\\.(certPem|keyPem))=") then
         sub("=.*$"; "=" + "'"$REDACT_VALUE_PATH"'")
+      elif test("^-XX:StartFlightRecording=") then
+        gsub("filename=[^,]*"; "filename=" + "'"$REDACT_VALUE_PATH"'")
       else . end;
 
     map(

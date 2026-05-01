@@ -44,8 +44,12 @@ case "$MODE" in
   *) echo "ERROR: Invalid MODE: $MODE"; exit 1 ;;
 esac
 
-# Iterate benchmarks (B3, B4, B5, B6, B6b, B7)
-BENCHMARKS=("B3" "B4" "B5" "B6" "B6b" "B7")
+# Iterate benchmarks. Two external baselines (B3/B4) plus the CORE OffHeapTlsEngine
+# measured under both ownership models: FD-owner (B6/B6b) and Memory-BIO (B5).
+# B7 was removed — the manifest entry referenced ExerisEnterpriseTlsBenchmark which
+# has no Java implementation in the JMH module; OffHeapTlsEngine under Memory-BIO
+# (B5) is the canonical row for in-process bio-connector measurements.
+BENCHMARKS=("B3" "B4" "B5" "B6" "B6b")
 
 # Select newest jar by mtime for a glob pattern.
 select_latest_jar() {
@@ -130,7 +134,7 @@ ENTERPRISE_JAR=$(select_latest_jar "$HOME/.m2/repository/eu/exeris/exeris-kernel
 ENTERPRISE_BENCH_SELECTED=0
 for benchmark_id in "${BENCHMARKS[@]}"; do
   if [[ -z "$BENCH_FILTER" || "$benchmark_id" =~ $BENCH_FILTER ]]; then
-    if [[ "$benchmark_id" == "B7" || "$benchmark_id" == "B5" ]]; then
+    if [[ "$benchmark_id" == "B5" ]]; then
       ENTERPRISE_BENCH_SELECTED=1
       break
     fi
@@ -138,7 +142,7 @@ for benchmark_id in "${BENCHMARKS[@]}"; do
 done
 
 if [[ -z "$ENTERPRISE_JAR" && "$ENTERPRISE_BENCH_SELECTED" == "1" ]]; then
-  echo "ERROR: Enterprise jar is required for B7/B5 but was not found in ~/.m2/repository/eu/exeris/exeris-kernel-enterprise/." >&2
+  echo "ERROR: Enterprise jar is required for B5 (Memory-BIO) but was not found in ~/.m2/repository/eu/exeris/exeris-kernel-enterprise/." >&2
   exit 1
 fi
 
@@ -151,7 +155,7 @@ build_classpath_for_benchmark() {
     B6|B6b)
       printf '%s:%s' "$BENCHMARKS_JAR" "$COMMUNITY_JAR"
       ;;
-    B7|B5)
+    B5)
       if [[ -z "$ENTERPRISE_JAR" ]]; then
         echo "ERROR: Enterprise jar required for $benchmark_id classpath" >&2
         return 1

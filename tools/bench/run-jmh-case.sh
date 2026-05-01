@@ -280,7 +280,16 @@ if [[ "$REQUIRES_CERTS" == "true" ]]; then
   fi
 fi
 
-# Setup environment variables based on manifest sysprops_env_source
+# Setup environment variables based on manifest sysprops_env_source.
+# Two related-but-distinct manifest fields:
+#   sysprops_env_source — which env file to source for provider FQCN env vars
+#                         (community → env/community-sysprops.env,
+#                          enterprise → enterprise/env/enterprise-sysprops.env,
+#                          none → no env file)
+#   provider_tier       — which -Dexeris.tls.<tier>.* tier to set the FQCNs on
+#                         (must match the benchmark's providerTier() override; e.g.
+#                          OffHeapTlsEngineMemoryBioBenchmark.providerTier()=
+#                          "bio-offheap-engine"). Defaults to sysprops_env_source.
 MANIFEST_ENV_SOURCE=$(echo "$BENCH_CONFIG" | jq -r '.sysprops_env_source // "community"' 2>/dev/null)
 EFFECTIVE_ENV_SOURCE="$MANIFEST_ENV_SOURCE"
 
@@ -295,6 +304,8 @@ case "$EFFECTIVE_ENV_SOURCE" in
     exit 1
     ;;
 esac
+
+PROVIDER_TIER=$(echo "$BENCH_CONFIG" | jq -r '.provider_tier // .sysprops_env_source // "community"' 2>/dev/null)
 
 if [[ "$EFFECTIVE_ENV_SOURCE" != "none" ]]; then
   if [[ "$EFFECTIVE_ENV_SOURCE" == "enterprise" ]]; then
@@ -349,13 +360,28 @@ if [[ "$REQUIRES_CERTS" == "true" ]]; then
   fi
 fi
 
-# Add provider class properties from env vars only when source is explicit tier env.
+# Add provider class properties from env vars on the tier the benchmark actually
+# resolves (provider_tier). The source env file is selected by sysprops_env_source;
+# the tier the -D goes on is selected by provider_tier. They are usually the same
+# (community/community, enterprise/enterprise) but diverge for B5 where the engine
+# bringup is sourced from enterprise but the benchmark's providerTier() returns
+# "bio-offheap-engine".
 if [[ "$EFFECTIVE_ENV_SOURCE" == "community" ]]; then
-  JVM_ARGS+=("-Dexeris.tls.community.cryptoProviderClass=${EXERIS_COMMUNITY_CRYPTO_PROVIDER_CLASS}")
-  JVM_ARGS+=("-Dexeris.tls.community.memoryProviderClass=${EXERIS_COMMUNITY_MEMORY_PROVIDER_CLASS}")
+  CRYPTO_FQCN="${EXERIS_COMMUNITY_CRYPTO_PROVIDER_CLASS:-}"
+  MEMORY_FQCN="${EXERIS_COMMUNITY_MEMORY_PROVIDER_CLASS:-}"
 elif [[ "$EFFECTIVE_ENV_SOURCE" == "enterprise" ]]; then
-  JVM_ARGS+=("-Dexeris.tls.enterprise.cryptoProviderClass=${EXERIS_ENTERPRISE_CRYPTO_PROVIDER_CLASS}")
-  JVM_ARGS+=("-Dexeris.tls.enterprise.memoryProviderClass=${EXERIS_ENTERPRISE_MEMORY_PROVIDER_CLASS}")
+  CRYPTO_FQCN="${EXERIS_ENTERPRISE_CRYPTO_PROVIDER_CLASS:-}"
+  MEMORY_FQCN="${EXERIS_ENTERPRISE_MEMORY_PROVIDER_CLASS:-}"
+else
+  CRYPTO_FQCN=""
+  MEMORY_FQCN=""
+fi
+
+if [[ -n "$CRYPTO_FQCN" ]]; then
+  JVM_ARGS+=("-Dexeris.tls.${PROVIDER_TIER}.cryptoProviderClass=${CRYPTO_FQCN}")
+fi
+if [[ -n "$MEMORY_FQCN" ]]; then
+  JVM_ARGS+=("-Dexeris.tls.${PROVIDER_TIER}.memoryProviderClass=${MEMORY_FQCN}")
 fi
 
 # Add headless flag if requested

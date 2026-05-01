@@ -6,14 +6,18 @@ on:
     paths:
       - 'micro/jmh/**'
       - 'scripts/run-jmh.sh'
+      - 'tools/ci/provider-classpath-community/**'
+      - '.github/workflows/microbench.yml'
   pull_request:
     paths:
       - 'micro/jmh/**'
       - 'scripts/run-jmh.sh'
+      - 'tools/ci/provider-classpath-community/**'
+      - '.github/workflows/microbench.yml'
   workflow_dispatch:
     inputs:
       bench_pattern:
-        description: 'JMH benchmark regex pattern (empty = SPI-free baselines only: SslEngine + NettyTcNative)'
+        description: 'JMH benchmark regex (empty = SslEngine + NettyTcNative + FdOwnerTlsEngineLoopback*)'
         required: false
         default: ''
       forks:
@@ -27,7 +31,7 @@ permissions:
 
 jobs:
   jmh-smoke:
-    name: JMH smoke run
+    name: JMH smoke run (B3 + B4 + B6 + B6b)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -46,20 +50,53 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ github.token }}
 
+      - name: Resolve Community provider classpath
+        # The micro/jmh module deliberately depends only on exeris-kernel-spi/core. The
+        # FD-owner benchmarks (B6, B6b) load CommunityKernelCryptoProvider/CommunityMemoryProvider
+        # via reflection. We resolve the runtime classpath of exeris-kernel-community here
+        # (no compile-time dep, no fat-jar bundling) and append it to -cp at runtime.
+        run: |
+          mvn -s .github/maven-settings-gpr.xml -B \
+              -f tools/ci/provider-classpath-community/pom.xml \
+              dependency:build-classpath \
+              -Dmdep.outputFile=$RUNNER_TEMP/community-cp.txt \
+              -Dmdep.includeScope=runtime
+          echo "Resolved $(tr ':' '\n' < $RUNNER_TEMP/community-cp.txt | wc -l) jar(s) for Community provider classpath."
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Generate ephemeral TLS cert/key (RSA-2048, 30 day)
+        run: |
+          mkdir -p $RUNNER_TEMP/certs
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout $RUNNER_TEMP/certs/smoke-key.pem \
+            -out   $RUNNER_TEMP/certs/smoke-cert.pem \
+            -days 30 -subj "/CN=exeris-bench-smoke"
+
       - name: Run JMH benchmarks
         run: |
-          # The CI smoke run defaults to the SPI-free baselines (B3 SslEngineTlsBenchmark
-          # and B4 NettyTcNativeTlsBenchmark). The FD-owner / Memory-BIO / Enterprise rows
-          # require -Dexeris.tls.<tier>.cryptoProviderClass + memoryProviderClass + cert/key
-          # and an SPI provider implementation on the classpath, none of which the smoke
-          # workflow supplies. Use workflow_dispatch with bench_pattern to override.
+          # Default pattern includes B3/B4 (SPI-free baselines) and B6/B6b (FD-owner
+          # ownership model via Community provider). Memory-BIO (B5) requires the
+          # Enterprise provider — it lives in microbench-enterprise.yml.
           BENCH_PATTERN="${{ github.event.inputs.bench_pattern }}"
-          BENCH_PATTERN="${BENCH_PATTERN:-(SslEngineTlsBenchmark|NettyTcNativeTlsBenchmark)}"
+          BENCH_PATTERN="${BENCH_PATTERN:-(SslEngineTlsBenchmark|NettyTcNativeTlsBenchmark|FdOwnerTlsEngineLoopback)}"
           FORKS="${{ github.event.inputs.forks || '1' }}"
           mkdir -p results/raw
+
+          CP="micro/jmh/target/benchmarks.jar:$(cat $RUNNER_TEMP/community-cp.txt)"
+
           java \
+            --enable-native-access=ALL-UNNAMED \
+            --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
+            --add-opens=java.base/java.io=ALL-UNNAMED \
             -XX:+UseG1GC -XX:+AlwaysPreTouch -Xms256m -Xmx256m \
-            -jar micro/jmh/target/benchmarks.jar \
+            -Dexeris.tls.community.cryptoProviderClass=eu.exeris.kernel.community.crypto.CommunityKernelCryptoProvider \
+            -Dexeris.tls.community.memoryProviderClass=eu.exeris.kernel.community.memory.CommunityMemoryProvider \
+            -Dexeris.tls.community.certPem=$RUNNER_TEMP/certs/smoke-cert.pem \
+            -Dexeris.tls.community.keyPem=$RUNNER_TEMP/certs/smoke-key.pem \
+            -cp "$CP" \
+            org.openjdk.jmh.Main \
             "$BENCH_PATTERN" \
             -wi 3 -i 5 -f "$FORKS" \
             -rf json -rff results/raw/jmh-ci-${{ github.run_id }}.json
@@ -68,6 +105,13 @@ jobs:
         run: |
           ./scripts/capture-env.sh --profile ci-runner \
             > results/raw/env-ci-${{ github.run_id }}.json || true
+
+      - name: Redact provider FQCNs and JVM paths from JMH results
+        # Results are intended to be shareable. JMH records every -D in the JSON's jvmArgs[];
+        # the unredacted form would expose CommunityKernelCryptoProvider / CommunityMemoryProvider
+        # FQCNs and the runner's JDK path. Strip those before upload.
+        run: |
+          ./tools/ci/redact-jmh-results.sh results/raw/jmh-ci-${{ github.run_id }}.json
 
       - name: Upload JMH results
         uses: actions/upload-artifact@v4

@@ -7,7 +7,7 @@
 
   <groupId>eu.exeris.benchmarks</groupId>
   <artifactId>exeris-benchmarks-jmh</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.0.0</version>
   <packaging>jar</packaging>
 
   <name>Exeris :: Benchmarks :: JMH Microbenchmarks</name>
@@ -18,7 +18,7 @@
   </description>
 
   <properties>
-    <java.version>21</java.version>
+    <java.version>26</java.version>
     <maven.compiler.source>${java.version}</maven.compiler.source>
     <maven.compiler.target>${java.version}</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -28,8 +28,7 @@
     <async.profiler.version>3.0</async.profiler.version>
 
     <!-- Exeris artifact versions — override via -Dexeris.kernel.version=... -->
-    <exeris.kernel.version>0.5.0-SNAPSHOT</exeris.kernel.version>
-    <exeris.spring.runtime.version>0.1.0-SNAPSHOT</exeris.spring.runtime.version>
+    <exeris.kernel.version>0.5.0</exeris.kernel.version>
 
     <!-- netty-tcnative — B4 comparative benchmark.
          Classifier controls the native artifact; override per host OS:
@@ -118,29 +117,6 @@
       <artifactId>exeris-kernel-core</artifactId>
       <version>${exeris.kernel.version}</version>
     </dependency>
-    <dependency>
-      <groupId>eu.exeris</groupId>
-      <artifactId>exeris-spring-runtime-web</artifactId>
-      <version>${exeris.spring.runtime.version}</version>
-    </dependency>
-
-    <!-- Exeris Kernel Enterprise API (optional tier)
-    <dependency>
-      <groupId>eu.exeris</groupId>
-      <artifactId>exeris-kernel-enterprise-api</artifactId>
-      <version>${exeris.kernel.version}</version>
-      <optional>true</optional>
-    </dependency>
-    -->
-
-    <!-- Exeris Spring Runtime (optional)
-    <dependency>
-      <groupId>eu.exeris</groupId>
-      <artifactId>exeris-spring-runtime</artifactId>
-      <version>${exeris.spring.runtime.version}</version>
-      <optional>true</optional>
-    </dependency>
-    -->
   </dependencies>
 
   <build>

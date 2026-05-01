@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CI bootstrap pom: resolves the runtime classpath of the Exeris Community SPI provider
+  (eu.exeris:exeris-kernel-community), so the benchmark JVM can load it via reflection at
+  runtime without making the micro/jmh module compile-time dependent on a specific
+  KernelCryptoProvider implementation.
+
+  Usage in CI:
+    mvn -s .github/maven-settings-gpr.xml -B \
+        -f tools/ci/provider-classpath-community/pom.xml \
+        dependency:build-classpath \
+        -Dmdep.outputFile=$RUNNER_TEMP/community-cp.txt \
+        -Dmdep.includeScope=runtime
+
+    java -cp "micro/jmh/target/benchmarks.jar:$(cat $RUNNER_TEMP/community-cp.txt)" \
+         -Dexeris.tls.community.cryptoProviderClass=eu.exeris.kernel.community.crypto.CommunityKernelCryptoProvider \
+         ...
+         org.openjdk.jmh.Main "(SslEngine|NettyTcNative|FdOwnerTlsEngineLoopback)"
+
+  Local equivalent: scripts/run-primary-tls-matrix.sh already resolves the jar from ~/.m2.
+  This pom exists only to give CI a deterministic Maven-resolved classpath instead of glob
+  matching.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.exeris.benchmarks.ci</groupId>
+  <artifactId>provider-classpath-community</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+
+  <name>Exeris :: Benchmarks :: CI :: Community Provider Classpath Bootstrap</name>
+
+  <properties>
+    <!-- Pin to the same release line micro/jmh declares; bump in lockstep with that pom. -->
+    <exeris.kernel.version>0.5.0</exeris.kernel.version>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>github-exeris-kernel</id>
+      <url>https://maven.pkg.github.com/exeris-systems/exeris-kernel</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-community</artifactId>
+      <version>${exeris.kernel.version}</version>
+    </dependency>
+  </dependencies>
+</project>

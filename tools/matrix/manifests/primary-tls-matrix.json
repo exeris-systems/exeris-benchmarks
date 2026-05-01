@@ -1,9 +1,9 @@
 {
   "version": "1.0.0",
   "metadata": {
-    "description": "Primary TLS benchmark matrix covering baseline JDK, Netty TCNative, Exeris Community, and Exeris Enterprise",
+    "description": "Primary TLS benchmark matrix covering external baselines (JDK SSLEngine, Netty TCNative) and CORE OffHeapTlsEngine measured under two ownership models: FD-owner (real loopback socket) and Memory-BIO (in-process). Provider FQCN is a config knob, not the benchmark identity.",
     "maintained_by": "benchmark-team",
-    "last_updated": "2026-03-18"
+    "last_updated": "2026-05-01"
   },
   "benchmarks": [
     {
@@ -95,14 +95,15 @@
     },
     {
       "id": "B6",
-      "class": "ExerisCommunityTlsBenchmark",
+      "class": "FdOwnerTlsEngineLoopbackBenchmark",
       "family": "micro",
-      "implementation_variant": "exeris-community",
-      "tier": "Community",
-      "scenario_classification": "tls-record-path-community-fd-owner-kernel-write-loopback",
-      "description": "Exeris Community tier TLS benchmark with pure Java crypto and memory providers",
+      "implementation_variant": "offheap-tls-engine",
+      "tier": "fd-owner",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-write-loopback",
+      "description": "CORE OffHeapTlsEngine measured under the FD-owner ownership model — TlsEngine owns a real loopback socket FD; encrypt path includes write(2)",
       "requires_certs": true,
       "sysprops_env_source": "community",
+      "provider_tier": "community",
       "common_jvm_args": [
         "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
         "--add-opens=java.base/java.io=ALL-UNNAMED",
@@ -142,14 +143,15 @@
     },
     {
       "id": "B6b",
-      "class": "ExerisCommunityTlsRoundTripBenchmark",
+      "class": "FdOwnerTlsEngineLoopbackRoundTripBenchmark",
       "family": "micro",
-      "implementation_variant": "exeris-community",
-      "tier": "Community",
-      "scenario_classification": "tls-record-path-community-fd-owner-kernel-roundtrip-loopback",
-      "description": "Exeris Community tier TLS full roundtrip benchmark: encrypt+write(2)+loopback+read(2)+decrypt",
+      "implementation_variant": "offheap-tls-engine",
+      "tier": "fd-owner",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-roundtrip-loopback",
+      "description": "CORE OffHeapTlsEngine measured under the FD-owner ownership model — full roundtrip: encrypt+write(2)+loopback+read(2)+decrypt",
       "requires_certs": true,
       "sysprops_env_source": "community",
+      "provider_tier": "community",
       "common_jvm_args": [
         "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
         "--add-opens=java.base/java.io=ALL-UNNAMED",
@@ -188,62 +190,16 @@
       }
     },
     {
-      "id": "B7",
-      "class": "ExerisEnterpriseTlsBenchmark",
-      "family": "micro",
-      "implementation_variant": "exeris-enterprise",
-      "tier": "Enterprise",
-      "scenario_classification": "tls-record-path-enterprise-memory-bio-inprocess",
-      "description": "Exeris Enterprise tier TLS benchmark with optimized native crypto and memory providers (CONFIDENTIAL)",
-      "requires_certs": true,
-      "sysprops_env_source": "enterprise",
-      "common_jvm_args": [
-        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
-        "--add-opens=java.base/java.io=ALL-UNNAMED",
-        "--enable-native-access=ALL-UNNAMED",
-        "-XX:+UseZGC",
-        "-XX:+UnlockExperimentalVMOptions",
-        "-Xms256m",
-        "-Xmx256m"
-      ],
-      "cert_properties": {
-        "certPem": "exeris.tls.enterprise.certPem",
-        "keyPem": "exeris.tls.enterprise.keyPem"
-      },
-      "phases": {
-        "baseline": {
-          "jmh_opts": ["-wi", "5", "-i", "10", "-w", "3s", "-r", "5s", "-f", "3"],
-          "jvm_arg_overrides": [],
-          "jfr_enabled": false,
-          "gc_profiler_enabled": false,
-          "expected_case_count": 8
-        },
-        "profile": {
-          "jmh_opts": ["-wi", "5", "-i", "5", "-w", "2s", "-r", "5s", "-f", "1"],
-          "jvm_arg_overrides": [],
-          "jfr_enabled": true,
-          "gc_profiler_enabled": false,
-          "expected_case_count": 8
-        },
-        "gc": {
-          "jmh_opts": ["-wi", "5", "-i", "5", "-w", "2s", "-r", "3s", "-f", "1"],
-          "jvm_arg_overrides": ["-prof", "gc"],
-          "jfr_enabled": false,
-          "gc_profiler_enabled": true,
-          "expected_case_count": 8
-        }
-      }
-    },
-    {
       "id": "B5",
       "class": "OffHeapTlsEngineMemoryBioBenchmark",
       "family": "micro",
-      "implementation_variant": "exeris-offheap-engine",
-      "tier": "Enterprise",
-      "scenario_classification": "tls-record-path-offheap-engine-memory-bio-inprocess",
-      "description": "OffHeapTlsEngine engine-level benchmark via neutral in-process Memory-BIO harness (transport-agnostic lens, CONFIDENTIAL)",
+      "implementation_variant": "offheap-tls-engine",
+      "tier": "memory-bio",
+      "scenario_classification": "tls-record-path-memory-bio-inprocess",
+      "description": "CORE OffHeapTlsEngine measured under the Memory-BIO ownership model — engine owns in-process bio connector; no socket, no syscall",
       "requires_certs": true,
       "sysprops_env_source": "enterprise",
+      "provider_tier": "bio-offheap-engine",
       "common_jvm_args": [
         "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
         "--add-opens=java.base/java.io=ALL-UNNAMED",
@@ -254,8 +210,8 @@
         "-Xmx256m"
       ],
       "cert_properties": {
-        "certPem": "exeris.tls.enterprise.certPem",
-        "keyPem": "exeris.tls.enterprise.keyPem"
+        "certPem": "exeris.tls.bio-offheap-engine.certPem",
+        "keyPem": "exeris.tls.bio-offheap-engine.keyPem"
       },
       "phases": {
         "baseline": {

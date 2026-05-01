@@ -457,7 +457,7 @@ if [[ "$run_should" == true ]]; then
       "micro/jmh build failed — cannot run NettyTcNativeTlsBenchmark"
     record_missing "B6" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
       "exeris-benchmarks-micro-jmh" \
-      "micro/jmh build failed — cannot run ExerisCommunityTlsBenchmark"
+      "micro/jmh build failed — cannot run FdOwnerTlsEngineLoopbackBenchmark"
     record_missing "B7" "SHOULD" "enterprise" "tcp-tls-1.3" "B" "implementation-variant" \
       "exeris-benchmarks-micro-jmh" \
       "micro/jmh build failed — cannot run ExerisEnterpriseTlsBenchmark"
@@ -470,7 +470,7 @@ if [[ "$run_should" == true ]]; then
 
     if has_tls_spi_provider_config "community"; then
       run_micro_step "B6" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
-        "exeris-benchmarks-micro-jmh" "ExerisCommunityTlsBenchmark"
+        "exeris-benchmarks-micro-jmh" "FdOwnerTlsEngineLoopbackBenchmark"
     else
       record_missing "B6" "SHOULD" "community" "tcp-tls-1.3" "B" "implementation-variant" \
         "exeris-benchmarks-micro-jmh" \

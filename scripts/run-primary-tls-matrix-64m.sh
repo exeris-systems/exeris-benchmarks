@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# run-primary-tls-matrix-64m.sh - run B4/B5/B6/B6b/B7 with 64m heap profile
+# run-primary-tls-matrix-64m.sh - run B4/B5/B6/B6b with 64m heap profile
 #
 # Usage:
 #   MODE=all HEADLESS=1 ./scripts/run-primary-tls-matrix-64m.sh
+#
+# B7 was removed in lockstep with the manifest cleanup — ExerisEnterpriseTlsBenchmark
+# had no Java implementation; B5 (Memory-BIO over OffHeapTlsEngine) is the canonical
+# in-process bio-connector row.
 
 set -euo pipefail
 
@@ -29,9 +33,9 @@ TMP_MANIFEST="$(mktemp "${TMPDIR:-/tmp}/primary-tls-matrix-64m.XXXXXX.json")"
 trap 'rm -f "$TMP_MANIFEST"' EXIT
 
 jq '
-    .metadata.description = ((.metadata.description // "") + " [heap-profile:64m for B4/B5/B6/B6b/B7]")
+    .metadata.description = ((.metadata.description // "") + " [heap-profile:64m for B4/B5/B6/B6b]")
   | .benchmarks |= map(
-      if (.id == "B4" or .id == "B5" or .id == "B6" or .id == "B6b" or .id == "B7") then
+      if (.id == "B4" or .id == "B5" or .id == "B6" or .id == "B6b") then
         .common_jvm_args = (
           ((.common_jvm_args // []) | map(select((test("^-Xms") or test("^-Xmx")) | not)))
           + ["-Xms64m", "-Xmx64m"]
@@ -42,7 +46,7 @@ jq '
     )
 ' "$BASE_MANIFEST" > "$TMP_MANIFEST"
 
-BENCH_FILTER="${BENCH_FILTER:-^B(4|5|6|6b|7)$}"
+BENCH_FILTER="${BENCH_FILTER:-^B(4|5|6|6b)$}"
 
 ENV_ARGS=("MANIFEST_FILE=$TMP_MANIFEST" "BENCH_FILTER=$BENCH_FILTER")
 [[ -n "${MODE+x}" ]] && ENV_ARGS+=("MODE=$MODE")

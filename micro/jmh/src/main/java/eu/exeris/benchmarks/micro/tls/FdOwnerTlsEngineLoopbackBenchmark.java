@@ -11,15 +11,25 @@ import org.openjdk.jmh.infra.Blackhole;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JMH benchmark for Community-tier Exeris TLS engine (B6).
+ * JMH benchmark for the FD-owner TLS engine ownership model (B6).
  *
- * <p>Exercises the Community FD-owner TLS path via a real loopback socket pair.
- * See {@link AbstractCommunityTlsBenchmark} for transport model constraints and comparison caveats.
+ * <p>Exercises a {@link eu.exeris.kernel.spi.crypto.TlsEngine} that owns a real socket
+ * file descriptor via a loopback socket pair. See {@link AbstractFdOwnerTlsEngineBenchmark}
+ * for the ownership-model contract and Memory-BIO comparison caveats.
+ *
+ * <p><b>Provider tier:</b> {@code "community"} — preserves existing system-property
+ * wiring ({@code -Dexeris.tls.community.cryptoProviderClass}/{@code memoryProviderClass}/
+ * {@code certPem}/{@code keyPem}) so manifest configuration continues to work.
  */
-public class ExerisCommunityTlsBenchmark extends AbstractCommunityTlsBenchmark {
+public class FdOwnerTlsEngineLoopbackBenchmark extends AbstractFdOwnerTlsEngineBenchmark {
 
     @Override
     protected String tier() {
+        return "fd-owner-engine";
+    }
+
+    @Override
+    protected String providerTier() {
         return "community";
     }
 

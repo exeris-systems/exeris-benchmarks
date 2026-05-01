@@ -134,6 +134,38 @@ mvn clean package -DskipTests
 java -jar target/benchmarks.jar -wi 3 -i 5 -f 1
 ```
 
+#### GitHub Packages auth for Exeris snapshots
+
+`eu.exeris:*` snapshot dependencies are resolved from GitHub Packages (from
+`exeris-kernel` and `exeris-spring-runtime`), not Maven Central.
+
+Minimal `~/.m2/settings.xml` server entries:
+
+```xml
+<servers>
+	<server>
+		<id>github-exeris-kernel</id>
+		<username>${env.GITHUB_ACTOR}</username>
+		<password>${env.GITHUB_TOKEN}</password>
+	</server>
+	<server>
+		<id>github-exeris-spring-runtime</id>
+		<username>${env.GITHUB_ACTOR}</username>
+		<password>${env.GITHUB_TOKEN}</password>
+	</server>
+</servers>
+```
+
+Local build example:
+
+```bash
+export GITHUB_ACTOR="your-github-username"
+export GITHUB_TOKEN="ghp_xxx"
+mvn -s .github/maven-settings-gpr.xml -f micro/jmh/pom.xml clean package -DskipTests
+```
+
+Token requirement: use a PAT with package read access (and repository read access if package visibility requires it).
+
 ### Runtime benchmarks (wrk)
 ```bash
 ./scripts/run-wrk.sh targets/exeris-community-app scenarios/plaintext

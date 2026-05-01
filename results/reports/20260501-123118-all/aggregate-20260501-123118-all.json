@@ -1,0 +1,1185 @@
+[
+  {
+    "run_id": "B3_baseline_20260501125742",
+    "scenario": "B3",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "jdk-sslengine",
+      "tier": "JDK"
+    },
+    "execution_class": "guard",
+    "claim_scope": "comparison_eligible",
+    "final_reason": "ok",
+    "benchmark_family": "baseline",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 905854.7550364443,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 2.35825,
+      "latency_p99_us": 2.96775,
+      "latency_p999_us": 5.677,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=128": 1776277.6030960004,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=1024": 1155254.446994708,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=4096": 525563.5610961018,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=16384": 166323.40895896722
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 0.611,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.912,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.9180000000000001,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 5.992
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 0.721,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 1.122,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 2.148,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 7.88
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 3.088,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 3.644,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 4.5680000000000005,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 11.408
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T10:57:42Z",
+      "benchmark_id": "B3",
+      "tier": "JDK",
+      "phase": "baseline",
+      "implementation_variant": "jdk-sslengine",
+      "family": "baseline",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B3",
+      "scenario_classification": "tls-record-path-jdk-sslengine-inmemory-direct-only"
+    }
+  },
+  {
+    "run_id": "B4_baseline_20260501132407",
+    "scenario": "B4",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "netty-tcnative",
+      "tier": "JDK"
+    },
+    "execution_class": "guard",
+    "claim_scope": "comparison_eligible",
+    "final_reason": "ok",
+    "benchmark_family": "baseline",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 850225.0384365739,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 1.6087500000000001,
+      "latency_p99_us": 2.7155,
+      "latency_p999_us": 4.265000000000001,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=128": 1213514.1935480738,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=1024": 1042971.8385068016,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=4096": 771765.9265519422,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=16384": 372648.19513947784
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 0.977,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 1.106,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.452,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 2.9
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 1.958,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 2.144,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 2.552,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 4.208
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 3.18,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 3.576,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 4.376,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 5.928
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T11:24:07Z",
+      "benchmark_id": "B4",
+      "tier": "JDK",
+      "phase": "baseline",
+      "implementation_variant": "netty-tcnative",
+      "family": "baseline",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B4",
+      "scenario_classification": "tls-record-path-netty-tcnative-wiring-model-embedded-channel-pipeline",
+      "wiring_model": "embedded-channel-pipeline"
+    }
+  },
+  {
+    "run_id": "B5_baseline_20260501135023",
+    "scenario": "B5",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "offheap-tls-engine",
+      "tier": "memory-bio"
+    },
+    "execution_class": "guard",
+    "claim_scope": "comparison_eligible",
+    "final_reason": "ok",
+    "benchmark_family": "micro",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 923617.4227330703,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 1.7895,
+      "latency_p99_us": 2.1035000000000004,
+      "latency_p999_us": 3.6189999999999998,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=128": 1583150.92909648,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=1024": 1204583.0858187538,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=4096": 677809.1926747267,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=16384": 228926.48334232118
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=128": 0.5760000000000001,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.776,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.446,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=16384": 4.36
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=128": 0.601,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.801,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.492,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=16384": 5.5200000000000005
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=128": 2.144,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=1024": 2.392,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=4096": 3.196,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=16384": 6.744
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T11:50:23Z",
+      "benchmark_id": "B5",
+      "tier": "memory-bio",
+      "phase": "baseline",
+      "implementation_variant": "offheap-tls-engine",
+      "family": "micro",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m",
+        "-Dexeris.tls.bio-offheap-engine.certPem=<redacted-path>",
+        "-Dexeris.tls.bio-offheap-engine.keyPem=<redacted-path>",
+        "-Dexeris.tls.bio-offheap-engine.cryptoProviderClass=<redacted-fqcn>",
+        "-Dexeris.tls.bio-offheap-engine.memoryProviderClass=<redacted-fqcn>"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B5",
+      "scenario_classification": "tls-record-path-memory-bio-inprocess"
+    }
+  },
+  {
+    "run_id": "B6_baseline_20260501140328",
+    "scenario": "B6",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "offheap-tls-engine",
+      "tier": "fd-owner"
+    },
+    "execution_class": "guard",
+    "claim_scope": "comparison_eligible",
+    "final_reason": "ok",
+    "benchmark_family": "micro",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 365375.3088278622,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=128": 575894.7603032016,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=1024": 465812.34065645904,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=4096": 297281.12466690526,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=16384": 122513.00968488278
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T12:03:28Z",
+      "benchmark_id": "B6",
+      "tier": "fd-owner",
+      "phase": "baseline",
+      "implementation_variant": "offheap-tls-engine",
+      "family": "micro",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m",
+        "-Dexeris.tls.community.certPem=<redacted-path>",
+        "-Dexeris.tls.community.keyPem=<redacted-path>",
+        "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+        "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B6",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-write-loopback"
+    }
+  },
+  {
+    "run_id": "B6b_baseline_20260501142939",
+    "scenario": "B6b",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "offheap-tls-engine",
+      "tier": "fd-owner"
+    },
+    "execution_class": "guard",
+    "claim_scope": "comparison_eligible",
+    "final_reason": "ok",
+    "benchmark_family": "micro",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 0.09172777378255462,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 11.572,
+      "latency_p99_us": 14.828,
+      "latency_p999_us": 16.708,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 0.11008326220923065,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.10565103235297649,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 0.0907833196977661,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 0.06039348087024522
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 9.120000000000001,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 9.456,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 10.976,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 16.736
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 12.144,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 12.288,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 14.272,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 20.608
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 14.016,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 13.904,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 16,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 22.912
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T12:29:39Z",
+      "benchmark_id": "B6b",
+      "tier": "fd-owner",
+      "phase": "baseline",
+      "implementation_variant": "offheap-tls-engine",
+      "family": "micro",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m",
+        "-Dexeris.tls.community.certPem=<redacted-path>",
+        "-Dexeris.tls.community.keyPem=<redacted-path>",
+        "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+        "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B6b",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-roundtrip-loopback"
+    }
+  },
+  {
+    "run_id": "B3_profile_20260501143431",
+    "scenario": "B3",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "jdk-sslengine",
+      "tier": "JDK"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "baseline",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 891634.4908235669,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 2.36175,
+      "latency_p99_us": 3.7775000000000003,
+      "latency_p999_us": 10.666,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=128": 1738323.320652753,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=1024": 1136356.8540276778,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=4096": 526419.8332643346,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=16384": 165437.955349502
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 0.621,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.882,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.9120000000000001,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 6.032
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 1.758,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 2.088,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 3.2560000000000002,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 8.008000000000001
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 4.936,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 5.136,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 13.84,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 18.752
+      }
+    },
+    "jfr_metrics": {
+      "cpu": {
+        "jvm_user_percent_max": 9.18,
+        "jvm_system_percent_max": 0.33,
+        "machine_total_percent_max": 9.59,
+        "cpu_percent_max": 9.51
+      },
+      "memory": {
+        "max_rss_bytes": 370483200,
+        "max_rss_kb": 361800,
+        "max_rss_mb": 353,
+        "heap_used_max_bytes": 243269632,
+        "rss_source": "jdk.ResidentSetSize"
+      },
+      "gc": {
+        "gc_count": 90,
+        "gc_pause_max_ms": 19.854,
+        "gc_pause_total_ms": 693.439,
+        "heap_used_bytes_max": 243269632,
+        "heap_committed_bytes_max": 268435456
+      },
+      "warnings": []
+    },
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T12:34:31Z",
+      "benchmark_id": "B3",
+      "tier": "JDK",
+      "phase": "profile",
+      "implementation_variant": "jdk-sslengine",
+      "family": "baseline",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B3",
+      "scenario_classification": "tls-record-path-jdk-sslengine-inmemory-direct-only"
+    }
+  },
+  {
+    "run_id": "B4_profile_20260501143926",
+    "scenario": "B4",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "netty-tcnative",
+      "tier": "JDK"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "baseline",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 859166.208912187,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 1.58575,
+      "latency_p99_us": 2.933,
+      "latency_p999_us": 6.666684000000358,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=128": 1237248.5116255395,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=1024": 1056002.1802157143,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=4096": 766799.1094402105,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=16384": 376615.03436728404
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 0.937,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 1.092,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.442,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 2.872
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 2.028,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 2.2520000000000002,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 2.708,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 4.744
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 4.5000720000006265,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 5.634103999999351,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 7.290112000000663,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 9.242448000000788
+      }
+    },
+    "jfr_metrics": {
+      "cpu": {
+        "jvm_user_percent_max": 10.02,
+        "jvm_system_percent_max": 0.25,
+        "machine_total_percent_max": 100,
+        "cpu_percent_max": 10.26
+      },
+      "memory": {
+        "max_rss_bytes": 395472896,
+        "max_rss_kb": 386204,
+        "max_rss_mb": 377,
+        "heap_used_max_bytes": 243269632,
+        "rss_source": "jdk.ResidentSetSize"
+      },
+      "gc": {
+        "gc_count": 33,
+        "gc_pause_max_ms": 21.251,
+        "gc_pause_total_ms": 568.257,
+        "heap_used_bytes_max": 243269632,
+        "heap_committed_bytes_max": 268435456
+      },
+      "warnings": []
+    },
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T12:39:26Z",
+      "benchmark_id": "B4",
+      "tier": "JDK",
+      "phase": "profile",
+      "implementation_variant": "netty-tcnative",
+      "family": "baseline",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B4",
+      "scenario_classification": "tls-record-path-netty-tcnative-wiring-model-embedded-channel-pipeline",
+      "wiring_model": "embedded-channel-pipeline"
+    }
+  },
+  {
+    "run_id": "B5_profile_20260501144413",
+    "scenario": "B5",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "offheap-tls-engine",
+      "tier": "memory-bio"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "micro",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 919617.0629007904,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 1.7955,
+      "latency_p99_us": 2.2215,
+      "latency_p999_us": 4.196443999999959,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=128": 1576064.1210871716,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=1024": 1193691.084278761,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=4096": 677921.647388184,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=16384": 230791.39884904493
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=128": 0.5760000000000001,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.776,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.462,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=16384": 4.368
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=128": 0.596,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.806,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.532,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=16384": 5.952
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=128": 2.316,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=1024": 3.000719999999972,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=4096": 3.88,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=16384": 7.589055999999866
+      }
+    },
+    "jfr_metrics": {
+      "cpu": {
+        "jvm_user_percent_max": 9.5,
+        "jvm_system_percent_max": 0.08,
+        "machine_total_percent_max": 9.59,
+        "cpu_percent_max": 9.59
+      },
+      "memory": {
+        "max_rss_bytes": 420999168,
+        "max_rss_kb": 411132,
+        "max_rss_mb": 401,
+        "heap_used_max_bytes": 0,
+        "rss_source": "jdk.ResidentSetSize"
+      },
+      "gc": {
+        "gc_count": 0,
+        "gc_pause_max_ms": 0,
+        "gc_pause_total_ms": 0,
+        "heap_used_bytes_max": 0,
+        "heap_committed_bytes_max": 0
+      },
+      "warnings": [
+        "jdk.GarbageCollection events not found"
+      ]
+    },
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T12:44:13Z",
+      "benchmark_id": "B5",
+      "tier": "memory-bio",
+      "phase": "profile",
+      "implementation_variant": "offheap-tls-engine",
+      "family": "micro",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m",
+        "-Dexeris.tls.bio-offheap-engine.certPem=<redacted-path>",
+        "-Dexeris.tls.bio-offheap-engine.keyPem=<redacted-path>",
+        "-Dexeris.tls.bio-offheap-engine.cryptoProviderClass=<redacted-fqcn>",
+        "-Dexeris.tls.bio-offheap-engine.memoryProviderClass=<redacted-fqcn>"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B5",
+      "scenario_classification": "tls-record-path-memory-bio-inprocess"
+    }
+  },
+  {
+    "run_id": "B6b_profile_20260501145123",
+    "scenario": "B6b",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "offheap-tls-engine",
+      "tier": "fd-owner"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "micro",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 0.09157802254183503,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 11.312000000000001,
+      "latency_p99_us": 14.719999999999999,
+      "latency_p999_us": 21.16,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 0.10976256727485448,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.10561917033073791,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 0.09127381525382232,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 0.05965653730792544
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 9.024000000000001,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 9.44,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 10.416,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 16.368000000000002
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 12.128,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 12.72,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 13.68,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 20.352
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 16.928,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 19.936,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 18.976,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 28.8
+      }
+    },
+    "jfr_metrics": {
+      "cpu": {
+        "jvm_user_percent_max": 6.29,
+        "jvm_system_percent_max": 4.25,
+        "machine_total_percent_max": 10.42,
+        "cpu_percent_max": 10.54
+      },
+      "memory": {
+        "max_rss_bytes": 166432768,
+        "max_rss_kb": 162532,
+        "max_rss_mb": 158,
+        "heap_used_max_bytes": 54525952,
+        "rss_source": "jdk.ResidentSetSize"
+      },
+      "gc": {
+        "gc_count": 1,
+        "gc_pause_max_ms": 17.348,
+        "gc_pause_total_ms": 17.348,
+        "heap_used_bytes_max": 54525952,
+        "heap_committed_bytes_max": 268435456
+      },
+      "warnings": []
+    },
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T12:51:23Z",
+      "benchmark_id": "B6b",
+      "tier": "fd-owner",
+      "phase": "profile",
+      "implementation_variant": "offheap-tls-engine",
+      "family": "micro",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m",
+        "-Dexeris.tls.community.certPem=<redacted-path>",
+        "-Dexeris.tls.community.keyPem=<redacted-path>",
+        "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+        "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B6b",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-roundtrip-loopback"
+    }
+  },
+  {
+    "run_id": "B6_profile_20260501144637",
+    "scenario": "B6",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "offheap-tls-engine",
+      "tier": "fd-owner"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "micro",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 370489.68679472053,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=128": 578351.1848889131,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=1024": 482440.79277382436,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=4096": 298097.81312785594,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=16384": 123068.95638828861
+      }
+    },
+    "jfr_metrics": {
+      "cpu": {
+        "jvm_user_percent_max": 7.01,
+        "jvm_system_percent_max": 5.96,
+        "machine_total_percent_max": 12.44,
+        "cpu_percent_max": 12.97
+      },
+      "memory": {
+        "max_rss_bytes": 155291648,
+        "max_rss_kb": 151652,
+        "max_rss_mb": 148,
+        "heap_used_max_bytes": 54525952,
+        "rss_source": "jdk.ResidentSetSize"
+      },
+      "gc": {
+        "gc_count": 1,
+        "gc_pause_max_ms": 17.28,
+        "gc_pause_total_ms": 17.28,
+        "heap_used_bytes_max": 54525952,
+        "heap_committed_bytes_max": 268435456
+      },
+      "warnings": []
+    },
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T12:46:37Z",
+      "benchmark_id": "B6",
+      "tier": "fd-owner",
+      "phase": "profile",
+      "implementation_variant": "offheap-tls-engine",
+      "family": "micro",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m",
+        "-Dexeris.tls.community.certPem=<redacted-path>",
+        "-Dexeris.tls.community.keyPem=<redacted-path>",
+        "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+        "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B6",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-write-loopback"
+    }
+  },
+  {
+    "run_id": "B3_gc_20260501145451",
+    "scenario": "B3",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "jdk-sslengine",
+      "tier": "JDK"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "baseline",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 905411.9815661078,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 2.34375,
+      "latency_p99_us": 3.06625,
+      "latency_p999_us": 6.238834000000148,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=128": 1771834.667877629,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=1024": 1152025.6576788477,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=4096": 527855.1088141855,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapThroughput|payload=16384": 169932.4918937694
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 0.581,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.896,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.8980000000000001,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 6
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 0.681,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 1.092,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 2.548,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 7.944
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 3.1903440000005068,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 3.7323840000000783,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 4.728,
+        "eu.exeris.benchmarks.micro.tls.SslEngineTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 13.304608000000009
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T12:54:51Z",
+      "benchmark_id": "B3",
+      "tier": "JDK",
+      "phase": "gc",
+      "implementation_variant": "jdk-sslengine",
+      "family": "baseline",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B3",
+      "scenario_classification": "tls-record-path-jdk-sslengine-inmemory-direct-only"
+    }
+  },
+  {
+    "run_id": "B4_gc_20260501145821",
+    "scenario": "B4",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "netty-tcnative",
+      "tier": "JDK"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "baseline",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 855756.816472068,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 1.6055000000000001,
+      "latency_p99_us": 2.7175000000000002,
+      "latency_p999_us": 4.3337530000002005,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=128": 1238205.618260226,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=1024": 1042053.3204335257,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=4096": 765553.3772407522,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapThroughput|payload=16384": 377214.94995376776
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 0.962,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 1.106,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.462,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 2.892
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 1.942,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 2.168,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 2.568,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 4.192
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=128": 3.3383400000000836,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=1024": 3.843688000000082,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=4096": 4.275096000000369,
+        "eu.exeris.benchmarks.micro.tls.NettyTcNativeTlsBenchmark.wrapUnwrapRoundTrip|payload=16384": 5.877888000000268
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T12:58:21Z",
+      "benchmark_id": "B4",
+      "tier": "JDK",
+      "phase": "gc",
+      "implementation_variant": "netty-tcnative",
+      "family": "baseline",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B4",
+      "scenario_classification": "tls-record-path-netty-tcnative-wiring-model-embedded-channel-pipeline",
+      "wiring_model": "embedded-channel-pipeline"
+    }
+  },
+  {
+    "run_id": "B5_gc_20260501150146",
+    "scenario": "B5",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "offheap-tls-engine",
+      "tier": "memory-bio"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "micro",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 921574.2984958333,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 1.7930000000000001,
+      "latency_p99_us": 2.1966400000000137,
+      "latency_p999_us": 3.847482000000193,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=128": 1585991.634607989,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=1024": 1219543.0509867016,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=4096": 651267.3074974178,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapThroughput|payload=16384": 229495.20089122467
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=128": 0.5710000000000001,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.771,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.462,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=16384": 4.368
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=128": 0.596,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.806,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=4096": 1.516,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=16384": 5.8685600000000555
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=128": 2.201072000000626,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=1024": 2.524,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=4096": 3.6088560000001455,
+        "eu.exeris.benchmarks.micro.tls.OffHeapTlsEngineMemoryBioBenchmark.wrapUnwrapRoundTrip|payload=16384": 7.056
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T13:01:46Z",
+      "benchmark_id": "B5",
+      "tier": "memory-bio",
+      "phase": "gc",
+      "implementation_variant": "offheap-tls-engine",
+      "family": "micro",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m",
+        "-Dexeris.tls.bio-offheap-engine.certPem=<redacted-path>",
+        "-Dexeris.tls.bio-offheap-engine.keyPem=<redacted-path>",
+        "-Dexeris.tls.bio-offheap-engine.cryptoProviderClass=<redacted-fqcn>",
+        "-Dexeris.tls.bio-offheap-engine.memoryProviderClass=<redacted-fqcn>"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B5",
+      "scenario_classification": "tls-record-path-memory-bio-inprocess"
+    }
+  },
+  {
+    "run_id": "B6b_gc_20260501150653",
+    "scenario": "B6b",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "offheap-tls-engine",
+      "tier": "fd-owner"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "micro",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 0.09135779826196196,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "latency_mean_us": 11.436000000000002,
+      "latency_p99_us": 14.864,
+      "latency_p999_us": 21.02500800000015,
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 0.10988748766702024,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 0.10533413545868472,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 0.09021505232155451,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 0.059994517600588305
+      },
+      "latency_p50_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 9.104000000000001,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 9.392,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 10.88,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 16.368000000000002
+      },
+      "latency_p99_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 12.224,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 12.64,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 14.304,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 20.288
+      },
+      "latency_p999_us_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=128": 14.752,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=1024": 20.339039999999105,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=4096": 20.534528000000865,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackRoundTripBenchmark.wrapUnwrapRoundTrip|payload=16384": 28.47446400000062
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T13:06:53Z",
+      "benchmark_id": "B6b",
+      "tier": "fd-owner",
+      "phase": "gc",
+      "implementation_variant": "offheap-tls-engine",
+      "family": "micro",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m",
+        "-Dexeris.tls.community.certPem=<redacted-path>",
+        "-Dexeris.tls.community.keyPem=<redacted-path>",
+        "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+        "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B6b",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-roundtrip-loopback"
+    }
+  },
+  {
+    "run_id": "B6_gc_20260501150329",
+    "scenario": "B6",
+    "tool": "jmh",
+    "target": {
+      "repo": "exeris-benchmarks",
+      "commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "mode": "offheap-tls-engine",
+      "tier": "fd-owner"
+    },
+    "execution_class": "exploratory",
+    "claim_scope": "descriptive_only",
+    "final_reason": "ok",
+    "benchmark_family": "micro",
+    "comparison_axis": "none",
+    "metrics": {
+      "throughput_rps": 367328.45133078645,
+      "throughput_rps_scope": "aggregate_over_all_thrpt_rows",
+      "throughput_rps_by_case": {
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=128": 576022.8558736348,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=1024": 470488.86403669755,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=4096": 298693.1541860403,
+        "eu.exeris.benchmarks.micro.tls.FdOwnerTlsEngineLoopbackBenchmark.wrapThroughput|payload=16384": 124108.93122677326
+      }
+    },
+    "jfr_metrics": null,
+    "reproducibility_metadata": {
+      "timestamp": "2026-05-01T13:03:29Z",
+      "benchmark_id": "B6",
+      "tier": "fd-owner",
+      "phase": "gc",
+      "implementation_variant": "offheap-tls-engine",
+      "family": "micro",
+      "benchmark_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "target_commit_sha": "f778683bf1d343d0c6a3a595d2d3b754c44a696c",
+      "jdk_vendor": "oracle",
+      "jdk_version": "26",
+      "jvm_flags": [
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseZGC",
+        "-XX:+UnlockExperimentalVMOptions",
+        "-Xms256m",
+        "-Xmx256m",
+        "-Dexeris.tls.community.certPem=<redacted-path>",
+        "-Dexeris.tls.community.keyPem=<redacted-path>",
+        "-Dexeris.tls.community.cryptoProviderClass=<redacted-fqcn>",
+        "-Dexeris.tls.community.memoryProviderClass=<redacted-fqcn>"
+      ],
+      "hardware_profile": "linux-generic",
+      "manifest_version": "1.0.0",
+      "scenario_id": "B6",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-write-loopback"
+    }
+  }
+]

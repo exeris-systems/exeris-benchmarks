@@ -27,11 +27,17 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Abstract JMH harness for Community-tier TLS engine benchmarks.
+ * Abstract JMH harness for the FD-owner TLS engine ownership model.
  *
- * <p><b>Measurement scope:</b> {@code wrapThroughput} measures TLS encrypt + {@code write(2)} kernel syscall
- * via a real loopback socket FD. This is structurally NOT equivalent to Enterprise Memory-BIO throughput,
- * which has no kernel-crossing cost. Do not compare these numbers without explicit transport-model labeling.
+ * <p><b>Ownership model:</b> the {@link TlsEngine} owns a real socket file descriptor.
+ * Encrypt path includes a {@code write(2)} kernel crossing per record via the bound FD;
+ * decrypt path includes a {@code read(2)} crossing. This is the {@code fd-owner} harness
+ * model row in the TLS matrix and is the structural counterpart to
+ * {@link AbstractMemoryBioTlsEngineBenchmark} (no socket, no syscall).
+ *
+ * <p><b>Comparison caveat:</b> NOT directly comparable to Memory-BIO measurements without
+ * explicit transport-model labels — FD-owner numbers include kernel crossings that
+ * Memory-BIO numbers exclude.
  *
  * <p><b>JDK constraint:</b> FD extraction uses {@code sun.nio.ch.SocketChannelImpl} internal APIs,
  * verified on JDK 21+. May break on future JDK versions if the internal field is renamed or removed.
@@ -52,7 +58,7 @@ import java.util.concurrent.atomic.AtomicLong;
         // the duplication seen in '# VM options:'. Keep only the annotation-specific hint.
         "-XX:+PreserveFramePointer"
     })
-public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBenchmarkSupport {
+public abstract class AbstractFdOwnerTlsEngineBenchmark extends AbstractExerisTlsBenchmarkSupport {
 
     @Param({"128", "1024", "4096", "16384"})
     public int payloadBytes;
@@ -91,9 +97,20 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
 
     protected abstract String tier();
 
+    /**
+     * Returns the provider-lookup tier key used to resolve system properties
+     * (e.g. {@code exeris.tls.<providerTier()>.cryptoProviderClass}).
+     *
+     * <p>Override when the benchmark identity ({@link #tier()}) differs from
+     * the provider configuration tier. Default: delegates to {@link #tier()}.
+     */
+    protected String providerTier() {
+        return tier();
+    }
+
     @Setup(Level.Trial)
     public void setUp() throws Exception {
-        ResolvedProviderConfig config = resolveProviderConfig(tier());
+        ResolvedProviderConfig config = resolveProviderConfig(providerTier());
         memoryProvider = instantiate(config.memoryProviderClass(), MemoryProvider.class, "memoryProviderClass");
         allocator = memoryProvider.createAllocator(MemoryProviderConfig.defaults());
         cryptoProvider = instantiateWithAllocator(
@@ -123,8 +140,8 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
         clientFd = extractFd(clientChannel);
         serverFd = extractFd(serverChannel);
 
-        bindCommunityEndpoint(clientEngine, clientFd, clientChannel);
-        bindCommunityEndpoint(serverEngine, serverFd, serverChannel);
+        bindFdOwnerEndpoint(clientEngine, clientFd, clientChannel);
+        bindFdOwnerEndpoint(serverEngine, serverFd, serverChannel);
 
         clientEngine.notifyBound();
         serverEngine.notifyBound();
@@ -260,7 +277,7 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
                 if (wrapStatus == TlsStatus.NEED_WRAP) {
                     continue;
                 }
-                throw new IllegalStateException("Community wrapUnwrapRoundTrip wrap failed"
+                throw new IllegalStateException("FdOwner wrapUnwrapRoundTrip wrap failed"
                         + " tier=" + tier()
                         + " payload=" + payloadBytes
                         + " attempt=" + (wrapAttempt + 1)
@@ -269,7 +286,7 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
             }
 
             if (wrapStatus != TlsStatus.OK && wrapStatus != TlsStatus.FINISHED) {
-                throw new IllegalStateException("Community wrapUnwrapRoundTrip wrap exhausted "
+                throw new IllegalStateException("FdOwner wrapUnwrapRoundTrip wrap exhausted "
                         + MAX_WRAP_ATTEMPTS + " attempts"
                         + " tier=" + tier()
                         + " payload=" + payloadBytes
@@ -303,7 +320,7 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
                     if (producedProgress || consumedCipherProgress) {
                         continue;
                     }
-                    throw new IllegalStateException("Community wrapUnwrapRoundTrip unwrap stalled"
+                    throw new IllegalStateException("FdOwner wrapUnwrapRoundTrip unwrap stalled"
                             + " tier=" + tier()
                             + " payload=" + payloadBytes
                             + " wrapStatus=" + wrapStatus
@@ -316,7 +333,7 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
                             + " input=" + (unwrapInput == clientCipher ? "clientCipher" : "emptyBuffer"));
                 }
 
-                throw new IllegalStateException("Community wrapUnwrapRoundTrip unwrap failed"
+                throw new IllegalStateException("FdOwner wrapUnwrapRoundTrip unwrap failed"
                         + " tier=" + tier()
                         + " payload=" + payloadBytes
                         + " wrapStatus=" + wrapStatus
@@ -328,7 +345,7 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
                         + " cipherRemaining=" + remainingCipher);
             }
 
-            throw new IllegalStateException("Community wrapUnwrapRoundTrip unwrap exhausted "
+            throw new IllegalStateException("FdOwner wrapUnwrapRoundTrip unwrap exhausted "
                     + MAX_UNWRAP_ATTEMPTS + " attempts"
                     + " tier=" + tier()
                     + " payload=" + payloadBytes
@@ -340,7 +357,7 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
                     + " cipherRemaining=" + clientCipher.size());
 
         } catch (RuntimeException e) {
-            throw new IllegalStateException("Community wrapUnwrapRoundTrip failed: " + e.getMessage(), e);
+            throw new IllegalStateException("FdOwner wrapUnwrapRoundTrip failed: " + e.getMessage(), e);
         }
     }
 
@@ -379,7 +396,7 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
                     break;
                 }
             }
-        }, "community-tls-drain");
+        }, "fd-owner-tls-drain");
         drainThread.setDaemon(true);
         drainThread.start();
     }
@@ -406,7 +423,7 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
             } catch (TimeoutException e) {
                 clientHandshake.cancel(true);
                 serverHandshake.cancel(true);
-                throw new IllegalStateException("Community TLS handshake timed out after 10 seconds", e);
+                throw new IllegalStateException("FdOwner TLS handshake timed out after 10 seconds", e);
             } catch (ExecutionException e) {
                 clientHandshake.cancel(true);
                 serverHandshake.cancel(true);
@@ -414,11 +431,11 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
                 if (failureCause == null) {
                     failureCause = e;
                 }
-                throw new IllegalStateException("Community TLS handshake failed", failureCause);
+                throw new IllegalStateException("FdOwner TLS handshake failed", failureCause);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Community TLS handshake interrupted", e);
+            throw new IllegalStateException("FdOwner TLS handshake interrupted", e);
         }
     }
 
@@ -435,11 +452,11 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
             outbound.setSize(0);
             tlsEngine.beginHandshake(outbound);
         }
-        throw new IllegalStateException("Community " + sideLabel + " handshake exceeded "
+        throw new IllegalStateException("FdOwner " + sideLabel + " handshake exceeded "
                 + MAX_HANDSHAKE_STEPS + " steps for tier=" + tier());
     }
 
-    private void bindCommunityEndpoint(TlsEngine engine, int fd, SocketChannel channel) {
+    private void bindFdOwnerEndpoint(TlsEngine engine, int fd, SocketChannel channel) {
         Method bindFd = findMethod(engine.getClass(), "bindFileDescriptor", int.class);
         if (bindFd != null) {
             try {
@@ -460,7 +477,7 @@ public abstract class AbstractCommunityTlsBenchmark extends AbstractExerisTlsBen
             }
         }
 
-        throw new IllegalStateException("CommunityTlsEngine does not expose bindFileDescriptor or bindSocketChannel");
+        throw new IllegalStateException("FD-owner TlsEngine does not expose bindFileDescriptor or bindSocketChannel");
     }
 
     private static int extractFd(SocketChannel sc) {

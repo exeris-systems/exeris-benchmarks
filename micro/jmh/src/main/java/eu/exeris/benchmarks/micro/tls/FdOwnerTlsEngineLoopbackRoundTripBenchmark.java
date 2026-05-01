@@ -11,23 +11,32 @@ import org.openjdk.jmh.infra.Blackhole;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JMH benchmark for Community-tier Exeris TLS full roundtrip (B6b).
+ * JMH benchmark for the FD-owner TLS engine full roundtrip (B6b).
  *
  * <p><b>Measurement scope:</b> TLS encrypt + {@code write(2)} via client FD + TCP loopback
  * traversal + {@code read(2)} via server FD + TLS decrypt. Both kernel crossings are included.
  *
- * <p><b>Comparison caveat:</b> NOT directly comparable to Enterprise Memory-BIO roundtrip.
- * Community includes 2 kernel syscalls ({@code write(2)} + {@code read(2)}).
- * Enterprise has 0 kernel crossings. Label explicitly in all reports.
+ * <p><b>Comparison caveat:</b> NOT directly comparable to a Memory-BIO roundtrip.
+ * FD-owner includes 2 kernel syscalls ({@code write(2)} + {@code read(2)});
+ * Memory-BIO has 0 kernel crossings. Label explicitly in all reports.
  *
- * <p><b>No drain thread:</b> Unlike {@link ExerisCommunityTlsBenchmark}, this harness does NOT
+ * <p><b>No drain thread:</b> Unlike {@link FdOwnerTlsEngineLoopbackBenchmark}, this harness does NOT
  * start the drain thread. Server-side consumption is performed exclusively by
  * {@code serverEngine.unwrap()} within the benchmark method body.
+ *
+ * <p><b>Provider tier:</b> {@code "community"} — preserves existing system-property
+ * wiring ({@code -Dexeris.tls.community.cryptoProviderClass}/{@code memoryProviderClass}/
+ * {@code certPem}/{@code keyPem}) so manifest configuration continues to work.
  */
-public class ExerisCommunityTlsRoundTripBenchmark extends AbstractCommunityTlsBenchmark {
+public class FdOwnerTlsEngineLoopbackRoundTripBenchmark extends AbstractFdOwnerTlsEngineBenchmark {
 
     @Override
     protected String tier() {
+        return "fd-owner-engine";
+    }
+
+    @Override
+    protected String providerTier() {
         return "community";
     }
 

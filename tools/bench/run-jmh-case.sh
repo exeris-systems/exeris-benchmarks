@@ -4,7 +4,7 @@
 # Usage:
 #   ./tools/bench/run-jmh-case.sh \
 #     --benchmark-id B6 \
-#     --class ExerisCommunityTlsBenchmark \
+#     --class FdOwnerTlsEngineLoopbackBenchmark \
 #     --phase baseline \
 #     --output-dir results/run-1 \
 #     --manifest-file tools/matrix/manifests/primary-tls-matrix.json \
@@ -220,7 +220,7 @@ done
 # Validation
 if [[ -z "$BENCHMARK_ID" || -z "$CLASS" || -z "$PHASE" || -z "$OUTPUT_DIR" || -z "$MANIFEST_FILE" ]]; then
   echo "ERROR: Missing required arguments" >&2
-  echo "Usage: $0 --benchmark-id B6 --class ExerisCommunityTlsBenchmark --phase baseline --output-dir DIR --manifest-file FILE [--env-source community] [--headless]" >&2
+  echo "Usage: $0 --benchmark-id B6 --class FdOwnerTlsEngineLoopbackBenchmark --phase baseline --output-dir DIR --manifest-file FILE [--env-source community] [--headless]" >&2
   exit 1
 fi
 

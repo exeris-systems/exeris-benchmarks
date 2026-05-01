@@ -53,7 +53,7 @@ carry explicit transport and wiring labels for every row.
 | B3 | `SslEngineTlsBenchmark` | in-memory `ByteBuffer` (no socket, no syscall) | JVM heap `ByteBuffer` | JVM GC-managed heap | external baseline — pure crypto cost, no I/O |
 | B4 | `NettyTcNativeTlsBenchmark` | `EmbeddedChannel` in-memory pipeline (no socket, no syscall) | Netty pooled direct `ByteBuf` | `PooledByteBufAllocator` (Netty) | external baseline — pipeline + pooling cost |
 | B5 | `OffHeapTlsEngineMemoryBioBenchmark` | neutral in-process Memory-BIO engine-level lens, no socket, no syscall | off-heap `LoanedBuffer` | off-heap allocator (Memory-BIO lens) | Exeris OffHeapTlsEngine in-process Memory-BIO lens — not equivalent to FD-owner integration path |
-| B6 | `ExerisCommunityTlsBenchmark` | FD-owner real loopback socket, `write(2)` kernel crossing per record | off-heap `LoanedBuffer` | off-heap allocator (FD-owner harness) | FD-owner integration lens — real loopback socket with kernel crossing |
+| B6 | `FdOwnerTlsEngineLoopbackBenchmark` | FD-owner real loopback socket, `write(2)` kernel crossing per record | off-heap `LoanedBuffer` | off-heap allocator (FD-owner harness) | FD-owner integration lens — real loopback socket with kernel crossing |
 
 Cross-row conclusions in this set must preserve transport-model differences and
 must not flatten FD-owner socket and Memory-BIO paths into a single equivalence claim.
@@ -118,7 +118,7 @@ missing-data caveat for each absent dimension.
 | B3 | SHOULD | external-baseline | tcp-tls-1.3 | B | implementation-variant | Comparative record-path benchmark vs JDK SSLEngine | jmh_comparative | implemented | publishable |
 | B4 | SHOULD | external-baseline | tcp-tls-1.3 | B | implementation-variant | Comparative Netty TLS pipeline benchmark via netty-tcnative `SslHandler` + `EmbeddedChannel` | jmh_comparative | implemented | needs-validation |
 | B5g | SHOULD | core-engine | tcp-tls-1.3 | B | within-tier | TLS wrapper guard micro benchmark (Community scope) | jmh_micro | implemented | partial |
-| B6 | SHOULD | fd-owner | tcp-tls-1.3 | B | implementation-variant | Comparative record-path benchmark via Exeris SPI-native `TlsEngine` — FD-owner/socket harness (`SSL_set_fd`, real loopback socket; `wrapThroughput` only) | jmh_comparative | implemented | needs-validation |
+| B6 | SHOULD | fd-owner | tcp-tls-1.3 | B | implementation-variant | Comparative record-path benchmark via Exeris SPI-native `TlsEngine` under the FD-owner ownership model (real loopback socket, `wrapThroughput` only) | jmh_comparative | implemented | needs-validation |
 | B5 | SHOULD | memory-bio | tcp-tls-1.3 | B | implementation-variant | OffHeapTlsEngine engine-level lens via neutral in-process Memory-BIO harness; not equivalent to FD-owner integration path | jmh_comparative | implemented | needs-validation |
 | D3 | SHOULD | fd-owner | tcp-tls-1.3 | D | implementation-variant | FD-owner loopback handshake comparative benchmark | jmh_comparative | planned | blocked-pr-60 |
 | D4 | STRETCH | runtime-harness | tcp-tls-1.3 | D | cross-transport-model | Lifecycle probes integrated under `exeris-benchmarks` runtime harness | runtime_probe | stretch | blocked |
@@ -132,7 +132,7 @@ missing-data caveat for each absent dimension.
 | B3 | `SslEngineTlsBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/SslEngineTlsBenchmark.java` |
 | B4 | `NettyTcNativeTlsBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/NettyTcNativeTlsBenchmark.java` |
 | B5g | `CommunityTlsEngineGuardBenchmark` | `exeris-kernel/exeris-kernel-community/src/test/java/eu/exeris/kernel/community/crypto/CommunityTlsEngineGuardBenchmark.java` |
-| B6 | `ExerisCommunityTlsBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/ExerisCommunityTlsBenchmark.java` |
+| B6 | `FdOwnerTlsEngineLoopbackBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/FdOwnerTlsEngineLoopbackBenchmark.java` |
 | B5 | `OffHeapTlsEngineMemoryBioBenchmark` | `exeris-benchmarks/micro/jmh/src/main/java/eu/exeris/benchmarks/micro/tls/OffHeapTlsEngineMemoryBioBenchmark.java` |
 
 ## Artifact Type Reference

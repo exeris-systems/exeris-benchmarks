@@ -53,7 +53,7 @@ Or use the repo script:
 | `ResponseBuilderBenchmark` | Response builder | Minimal allocation per response |
 | `SslEngineTlsBenchmark` | TLS 1.3 record path (JDK SSLEngine) | Comparative baseline B3 |
 | `NettyTcNativeTlsBenchmark` | TLS 1.3 Netty pipeline path (`SslHandler` + `EmbeddedChannel` over netty-tcnative) | Comparative baseline B4 |
-| `ExerisCommunityTlsBenchmark` | TLS 1.3 record path (Exeris SPI-native `TlsEngine`, Community FD-owner/socket harness) | Comparative variant B6 (SPI-native, includes kernel I/O) |
+| `FdOwnerTlsEngineLoopbackBenchmark` | TLS 1.3 record path (Exeris SPI-native `TlsEngine` under the FD-owner ownership model — real loopback socket) | Comparative variant B6 (SPI-native, includes kernel I/O) |
 | `OffHeapTlsEngineMemoryBioBenchmark` | TLS 1.3 OffHeapTlsEngine engine-level lens (neutral in-process Memory-BIO harness) | Comparative variant B5 (engine-level in-process BIO lens) |
 
 ## Primary comparative set
@@ -86,15 +86,17 @@ tier-specific transport harnesses:
 
 - `AbstractExerisTlsBenchmarkSupport`: shared static setup helpers, provider/memory
    resolution, and common benchmark support utilities.
-- `AbstractCommunityTlsBenchmark` (B6): FD-owner socket transport. OpenSSL is bound
-   to a real socket fd via `SSL_set_fd`; setup uses loopback
+- `AbstractFdOwnerTlsEngineBenchmark` (B6): FD-owner ownership model — the
+   `TlsEngine` owns a real socket fd (e.g. via `SSL_set_fd`). Setup uses loopback
    `ServerSocketChannel` + `SocketChannel`, fd reflection extraction,
    `bindFileDescriptor(int fd)`, `notifyBound()`, and virtual-thread handshake.
    A persistent drain thread prevents send-buffer saturation in
    `wrapThroughput`.
-Benchmark exposure by tier:
 
-- `ExerisCommunityTlsBenchmark` (B6): `wrapThroughput` only.
+Benchmark exposure:
+
+- `FdOwnerTlsEngineLoopbackBenchmark` (B6): `wrapThroughput` only.
+- `FdOwnerTlsEngineLoopbackRoundTripBenchmark` (B6b): `wrapUnwrapRoundTrip` only.
 
 Property resolution order is always tier-specific first, then global fallback.
 
@@ -120,11 +122,11 @@ Examples:
 
 ```bash
 java \
-   -Dexeris.tls.community.cryptoProviderClass=com.acme.bench.CommunityKernelCryptoProvider \
-   -Dexeris.tls.community.memoryProviderClass=com.acme.bench.CommunityMemoryProvider \
-   -Dexeris.tls.community.certPem=/tmp/community-cert.pem \
-   -Dexeris.tls.community.keyPem=/tmp/community-key.pem \
-   -jar target/benchmarks.jar ExerisCommunityTlsBenchmark
+   -Dexeris.tls.community.cryptoProviderClass=com.acme.bench.FdBindingKernelCryptoProvider \
+   -Dexeris.tls.community.memoryProviderClass=com.acme.bench.PooledMemoryProvider \
+   -Dexeris.tls.community.certPem=/tmp/bench-cert.pem \
+   -Dexeris.tls.community.keyPem=/tmp/bench-key.pem \
+   -jar target/benchmarks.jar FdOwnerTlsEngineLoopbackBenchmark
 ```
 
 ## Comparative caveat: B3/B4 vs B6/B5

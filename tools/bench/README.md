@@ -15,7 +15,7 @@ Manifest-driven shell runners for the primary TLS JMH matrix.
 ```bash
 ./tools/bench/run-jmh-case.sh \
   --benchmark-id B6 \
-  --class ExerisCommunityTlsBenchmark \
+  --class FdOwnerTlsEngineLoopbackBenchmark \
   --phase baseline \
   --output-dir results/manual-run \
   --manifest-file tools/matrix/manifests/primary-tls-matrix.json \

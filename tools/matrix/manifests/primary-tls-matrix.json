@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "metadata": {
-    "description": "Primary TLS benchmark matrix covering baseline JDK, Netty TCNative, Exeris Community, and Exeris Enterprise",
+    "description": "Primary TLS benchmark matrix covering baseline JDK, Netty TCNative, FD-owner ownership model, and Exeris Enterprise",
     "maintained_by": "benchmark-team",
     "last_updated": "2026-03-18"
   },
@@ -95,12 +95,12 @@
     },
     {
       "id": "B6",
-      "class": "ExerisCommunityTlsBenchmark",
+      "class": "FdOwnerTlsEngineLoopbackBenchmark",
       "family": "micro",
-      "implementation_variant": "exeris-community",
-      "tier": "Community",
-      "scenario_classification": "tls-record-path-community-fd-owner-kernel-write-loopback",
-      "description": "Exeris Community tier TLS benchmark with pure Java crypto and memory providers",
+      "implementation_variant": "fd-owner-tls-engine",
+      "tier": "fd-owner",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-write-loopback",
+      "description": "FD-owner TLS engine benchmark — TlsEngine owns a real loopback socket FD; encrypt path includes write(2)",
       "requires_certs": true,
       "sysprops_env_source": "community",
       "common_jvm_args": [
@@ -142,12 +142,12 @@
     },
     {
       "id": "B6b",
-      "class": "ExerisCommunityTlsRoundTripBenchmark",
+      "class": "FdOwnerTlsEngineLoopbackRoundTripBenchmark",
       "family": "micro",
-      "implementation_variant": "exeris-community",
-      "tier": "Community",
-      "scenario_classification": "tls-record-path-community-fd-owner-kernel-roundtrip-loopback",
-      "description": "Exeris Community tier TLS full roundtrip benchmark: encrypt+write(2)+loopback+read(2)+decrypt",
+      "implementation_variant": "fd-owner-tls-engine",
+      "tier": "fd-owner",
+      "scenario_classification": "tls-record-path-fd-owner-kernel-roundtrip-loopback",
+      "description": "FD-owner TLS engine full roundtrip benchmark: encrypt+write(2)+loopback+read(2)+decrypt",
       "requires_certs": true,
       "sysprops_env_source": "community",
       "common_jvm_args": [

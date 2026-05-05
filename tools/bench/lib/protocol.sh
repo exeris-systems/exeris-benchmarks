@@ -39,13 +39,41 @@ bench_derive_transport_mode() {
   esac
 }
 
+_bench_protocol_mode_from_asset_matrix() {
+  local target_app_name="$1"
+  command -v jq >/dev/null 2>&1 || return 1
+
+  local matrix_path="${BENCH_TARGET_ASSET_MATRIX_PATH:-}"
+  if [[ -z "$matrix_path" ]]; then
+    local _self_dir
+    _self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    matrix_path="${_self_dir}/../../../runtime/drivers/target-asset-matrix.json"
+  fi
+  [[ -f "$matrix_path" ]] || return 1
+
+  local mode
+  mode="$(jq -r --arg id "$target_app_name" \
+    '(.targets[]? | select(.target_id == $id) | .protocol_mode) // ""' \
+    "$matrix_path" 2>/dev/null)"
+  case "$mode" in
+    h1|h2|h2c|https-h1) echo "$mode"; return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 bench_derive_declared_protocol_mode() {
-  # Allow callers to bypass name-sniffing when the app name carries no protocol token.
+  # Priority: explicit override > target-asset-matrix declaration > name-sniff fallback.
+  # The matrix lookup prevents misclassification of targets whose names lack an
+  # h1/h2/h2c token (e.g. "quarkus-app-axon"), which previously fell through to
+  # the "h2" default and forced SSL onto an h2c-declared endpoint.
   if [[ -n "${BENCH_PROTOCOL_MODE_OVERRIDE:-}" ]]; then
     echo "$BENCH_PROTOCOL_MODE_OVERRIDE"
     return 0
   fi
   local target_app_name="$1"
+  if _bench_protocol_mode_from_asset_matrix "$target_app_name"; then
+    return 0
+  fi
   local normalized
   normalized="$(printf '%s' "$target_app_name" | tr '[:upper:]' '[:lower:]')"
   if [[ "$normalized" == *"h2c"* ]]; then

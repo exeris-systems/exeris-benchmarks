@@ -1,0 +1,473 @@
+{
+  "schema_version": "1",
+  "run_id": "e2e-shop-order-saga-20260505T115008Z",
+  "timestamp": "2026-05-05T11:50:08Z",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "quarkus_axon_neo4j_v1",
+  "target_app": "quarkus-app-axon",
+  "graph_track": "neo4j",
+  "tier": "community",
+  "benchmark_family": "runtime",
+  "run_timestamp_utc": "20260505T115008Z",
+  "commit_sha": "6c29d84ce2e4536dfd17c7a21197666a89e3dfbd",
+  "protocol_mode": "h1",
+  "transport_mode": "loopback-h1",
+  "claim_scope": "exploratory",
+  "tool": "k6",
+  "k6_exit_code": 99,
+  "runner_status": "threshold_failure",
+  "final_reason": "threshold_failure",
+  "reproducibility_status": "complete",
+  "output_dir": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T115008Z-baseline",
+  "metrics": {
+    "tool": "k6",
+    "orders_initiated": 661,
+    "saga_success_rate": 0.9818181818181818,
+    "saga_compensated_rate": 0,
+    "http_reqs_total": 4471,
+    "http_reqs_rate": 16.96988062912418,
+    "http_req_duration_avg_ms": 10.454456131961534,
+    "http_req_duration_p90_ms": 25.485137,
+    "http_req_duration_p95_ms": 30.276600000000002,
+    "iteration_duration_avg_ms": 7343.212888693934,
+    "iteration_duration_p90_ms": 7967.204475699999,
+    "iteration_duration_p95_ms": 8487.1416419,
+    "error_rate_pct": 0
+  },
+  "run_metadata": {
+    "scenario_id": "e2e-shop-order-saga",
+    "contract_id": "quarkus_axon_neo4j_v1",
+    "target_app": "quarkus-app-axon",
+    "graph_track": "neo4j",
+    "hardware_profile": "dev-laptop",
+    "tier": "community",
+    "benchmark_family": "runtime",
+    "protocol_mode": "h1",
+    "transport_mode": "loopback-h1",
+    "protocol_mode_declared": "h2c",
+    "protocol_mode_observed": "h2c",
+    "protocol_mode_observed_k6": "h1",
+    "protocol_tags_observed_k6": "HTTP/1.1",
+    "transport_mode_declared": "loopback-h2c",
+    "transport_mode_observed": "loopback-h2c",
+    "protocol_probe_non_blocking": true,
+    "protocol_probe_endpoint": "http://localhost:9002/health",
+    "comparison_axis": "within-tier-protocol",
+    "claim_scope": "exploratory",
+    "commit_sha": "6c29d84ce2e4536dfd17c7a21197666a89e3dfbd",
+    "run_timestamp_utc": "20260505T115008Z",
+    "base_url": "http://localhost:9002",
+    "output_dir": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T115008Z-baseline",
+    "env_file": "env.json",
+    "tool": "k6",
+    "jfr_enabled": true,
+    "jfr_settings": "profile",
+    "jfr_file": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T115008Z-baseline/target-quarkus-app-axon-20260505T115008Z.jfr",
+    "perf_stat_enabled": false,
+    "k6_exit_code": 99,
+    "runner_status": "threshold_failure",
+    "logs_dir": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T115008Z-baseline/logs",
+    "infra_contract": {
+      "compose_ref": "runtime/compose/e2e-shop-order-saga.yml",
+      "compose_sha256": "7c226179339fd1d802715be81661033c9c746c54cca6c429407a59f003a8ccf6",
+      "seed_baseline": {
+        "apply_script_ref": "runtime/db/seed/seed-apply.sh",
+        "apply_script_sha256": "77edc81798840c7367d773866a1a71382b44cc675646f5da1e8469e72e73363e"
+      },
+      "seed_overlay": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "manifest_id": "e2e-shop-order-saga-seed-v1",
+        "manifest_sha256": "9f1710f4864205086789e0d72fa97666f72e438d3e7ae6b68be27b186c0782d0",
+        "verification_script_ref": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh",
+        "verification_script_sha256": "cf4f4b15d01ec20399766e004702a885a2fd18158918bd6cea81f9c0c5edad03",
+        "verification_skipped": false
+      }
+    },
+    "metadata": {
+      "jdk_vendor": "Oracle Corporation",
+      "jdk_version": "26",
+      "benchmark_tool_version": "not_installed",
+      "jvm_flags": [],
+      "hardware_profile": "dev-laptop",
+      "scenario_id": "e2e-shop-order-saga",
+      "target_classification": "runtime-exploratory"
+    },
+    "pinned_versions": {
+      "jdk_version": "26",
+      "benchmark_tool_version": "not_installed",
+      "target_commit_sha": "6c29d84ce2e4536dfd17c7a21197666a89e3dfbd"
+    },
+    "actual_versions": {
+      "jdk_version": "26",
+      "benchmark_tool_version": "not_installed",
+      "target_commit_sha": "6c29d84ce2e4536dfd17c7a21197666a89e3dfbd"
+    },
+    "runtime_log": {
+      "launcher_mode": "standalone-jar",
+      "env_file": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T115008Z-baseline/env.json",
+      "jar_path": "targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar",
+      "jar_exists": true,
+      "jar_sha256": "0e806516b5cf46ae71963024fc556e38cc10cd5bf7d2911a2a6a722a21b43ad2",
+      "jar_size_bytes": 75945540,
+      "jar_mtime_utc": "2026-05-04T13:55:09Z",
+      "detection_method": "proc_cmdline"
+    },
+    "jfr_capture": {
+      "pid": "101629",
+      "jcmd_available": true,
+      "check_ok": true,
+      "recording_detected": true,
+      "dump_attempted": true,
+      "dump_success": true,
+      "stop_attempted": true,
+      "stop_success": true,
+      "stop_recording_name": "quarkus_app_axon_20260505T115008Z",
+      "jfr_file": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T115008Z-baseline/target-quarkus-app-axon-20260505T115008Z.jfr",
+      "note": ""
+    },
+    "jfr_start": {
+      "pid": "101629",
+      "jcmd_available": true,
+      "start_attempted": true,
+      "start_success": true,
+      "recording_already_present": false,
+      "recording_name": "quarkus_app_axon_20260505T115008Z",
+      "note": "replaced existing recording; recording started"
+    }
+  },
+  "k6_summary": {
+    "root_group": {
+      "name": "",
+      "path": "",
+      "id": "d41d8cd98f00b204e9800998ecf8427e",
+      "groups": {},
+      "checks": {
+        "register: 201 Created": {
+          "id": "14d9f28b3e841d34777d55712eb14fef",
+          "passes": 661,
+          "fails": 0,
+          "name": "register: 201 Created",
+          "path": "::register: 201 Created"
+        },
+        "recommend: 200 OK": {
+          "name": "recommend: 200 OK",
+          "path": "::recommend: 200 OK",
+          "id": "4c60a158f427f563c0a415da917ed47d",
+          "passes": 661,
+          "fails": 0
+        },
+        "cart add: 201 Created": {
+          "name": "cart add: 201 Created",
+          "path": "::cart add: 201 Created",
+          "id": "85c944a623cdac58db4c3a5df0297746",
+          "passes": 661,
+          "fails": 0
+        },
+        "cart get: 200 OK": {
+          "passes": 661,
+          "fails": 0,
+          "name": "cart get: 200 OK",
+          "path": "::cart get: 200 OK",
+          "id": "78c7a764d13a28c3fd6f58f37c8ef700"
+        },
+        "order create: 202 Accepted": {
+          "id": "54b999d33409286b33a3a867cf7c1211",
+          "passes": 661,
+          "fails": 0,
+          "name": "order create: 202 Accepted",
+          "path": "::order create: 202 Accepted"
+        }
+      }
+    },
+    "metrics": {
+      "http_reqs": {
+        "count": 4471,
+        "rate": 16.96988062912418
+      },
+      "saga_unresolved": {
+        "passes": 12,
+        "fails": 648,
+        "thresholds": {
+          "rate<0.01": true
+        },
+        "value": 0.01818181818181818
+      },
+      "http_req_waiting": {
+        "p(95)": 30.188265,
+        "avg": 10.387547293894002,
+        "min": 0.369209,
+        "med": 4.112071,
+        "max": 1226.732871,
+        "p(90)": 25.398194
+      },
+      "data_sent": {
+        "count": 2944238,
+        "rate": 11174.987117810628
+      },
+      "req_failed_other": {
+        "passes": 0,
+        "fails": 0,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0
+      },
+      "saga_compensated": {
+        "fails": 660,
+        "passes": 0,
+        "thresholds": {
+          "rate<0.08": false
+        },
+        "value": 0
+      },
+      "order_create_latency_ms": {
+        "med": 26.281655,
+        "max": 1226.847966,
+        "p(90)": 40.14185,
+        "p(95)": 64.205486,
+        "avg": 35.66304897125567,
+        "min": 14.193988
+      },
+      "cart_get_latency_ms": {
+        "avg": 4.819449411497727,
+        "min": 1.321004,
+        "med": 3.100935,
+        "max": 86.390098,
+        "p(90)": 5.339939,
+        "p(95)": 17.525092
+      },
+      "saga_poll_404_exhausted": {
+        "fails": 660,
+        "passes": 0,
+        "thresholds": {
+          "rate<0.01": false
+        },
+        "value": 0
+      },
+      "data_received": {
+        "count": 1513107,
+        "rate": 5743.065347593872
+      },
+      "admission_rejected": {
+        "fails": 0,
+        "passes": 0,
+        "thresholds": {
+          "rate<0.05": false
+        },
+        "value": 0
+      },
+      "cart_add_latency_ms": {
+        "max": 132.177145,
+        "p(90)": 22.14628,
+        "p(95)": 34.289586,
+        "avg": 15.576206835098336,
+        "min": 8.160873,
+        "med": 13.132567
+      },
+      "http_req_receiving": {
+        "max": 0.33749,
+        "p(90)": 0.067005,
+        "p(95)": 0.0763625,
+        "avg": 0.046719328338179496,
+        "min": 0.012263,
+        "med": 0.044052
+      },
+      "req_timed_out": {
+        "fails": 0,
+        "passes": 0,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0
+      },
+      "iteration_duration": {
+        "p(90)": 7967.204475699999,
+        "p(95)": 8487.1416419,
+        "avg": 7343.212888693934,
+        "min": 3942.68911,
+        "med": 6629.9910545,
+        "max": 46518.527046
+      },
+      "http2_rate": {
+        "passes": 0,
+        "fails": 4471,
+        "value": 0
+      },
+      "http_req_connecting": {
+        "p(90)": 0,
+        "p(95)": 0,
+        "avg": 0.0018001724446432563,
+        "min": 0,
+        "med": 0,
+        "max": 0.604127
+      },
+      "http_req_duration{expected_response:true}": {
+        "p(95)": 30.276600000000002,
+        "avg": 10.454456131961534,
+        "min": 0.394697,
+        "med": 4.176891,
+        "max": 1226.847966,
+        "p(90)": 25.485137
+      },
+      "iterations": {
+        "count": 660,
+        "rate": 2.5050595426575617
+      },
+      "checks": {
+        "fails": 0,
+        "passes": 3305,
+        "value": 1
+      },
+      "saga_success": {
+        "passes": 648,
+        "fails": 12,
+        "thresholds": {
+          "rate>0.96": false
+        },
+        "value": 0.9818181818181818
+      },
+      "http_req_blocked": {
+        "max": 0.667735,
+        "p(90)": 0.007323,
+        "p(95)": 0.008401,
+        "avg": 0.00781963050771638,
+        "min": 0.001623,
+        "med": 0.005239
+      },
+      "vus_max": {
+        "value": 50,
+        "min": 50,
+        "max": 50
+      },
+      "http_req_duration": {
+        "med": 4.176891,
+        "max": 1226.847966,
+        "p(90)": 25.485137,
+        "p(95)": 30.276600000000002,
+        "avg": 10.454456131961534,
+        "min": 0.394697,
+        "thresholds": {
+          "p(99)<5000": false
+        }
+      },
+      "orders_initiated": {
+        "count": 661,
+        "rate": 2.508855087419164
+      },
+      "auth_latency_ms": {
+        "p(95)": 16.121525,
+        "avg": 8.057257931921326,
+        "min": 3.377721,
+        "med": 8.510771,
+        "max": 40.248849,
+        "p(90)": 11.507409
+      },
+      "saga_failed": {
+        "passes": 0,
+        "fails": 660,
+        "value": 0
+      },
+      "recommend_latency_ms": {
+        "avg": 4.5188508260211755,
+        "min": 1.333988,
+        "med": 2.973617,
+        "max": 77.789047,
+        "p(90)": 5.48962,
+        "p(95)": 17.467835
+      },
+      "errors": {
+        "passes": 12,
+        "fails": 648,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0.01818181818181818
+      },
+      "http_req_failed": {
+        "passes": 0,
+        "fails": 4471,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0
+      },
+      "http_req_sending": {
+        "avg": 0.020189509729366895,
+        "min": 0.005891,
+        "med": 0.019146,
+        "max": 1.15856,
+        "p(90)": 0.026299,
+        "p(95)": 0.029880499999999997
+      },
+      "order_poll_latency_ms": {
+        "avg": 1.1786117735849078,
+        "min": 0.394697,
+        "med": 0.875193,
+        "max": 21.991702,
+        "p(90)": 1.3297795,
+        "p(95)": 1.870093
+      },
+      "http_req_tls_handshaking": {
+        "med": 0,
+        "max": 0,
+        "p(90)": 0,
+        "p(95)": 0,
+        "avg": 0,
+        "min": 0
+      },
+      "saga_status_resolved": {
+        "passes": 648,
+        "fails": 12,
+        "thresholds": {
+          "rate>0.98": false
+        },
+        "value": 0.9818181818181818
+      },
+      "vus": {
+        "value": 1,
+        "min": 1,
+        "max": 26
+      },
+      "polls_completed": {
+        "count": 1166,
+        "rate": 4.4256051920283594
+      }
+    }
+  },
+  "resource_metrics": {
+    "sample_count": 257,
+    "cpu_time_seconds": 22.250000,
+    "host_logical_cpus": 12,
+    "cpu_util_percent_of_one_core": 0.0000,
+    "avg_cores_used": 0.0000,
+    "cpu_util_percent_of_host_total": 0.0000,
+    "rss_kb_min": 330572,
+    "rss_kb_avg": 635582,
+    "peak_rss_kb": 752112,
+    "vmsize_kb_min": 21732988,
+    "vmsize_kb_avg": 24049667,
+    "peak_vmsize_kb": 24130256,
+    "threads_min": 59,
+    "threads_avg": 91,
+    "peak_threads": 94,
+    "vmhwm_kb_max": 753428,
+    "smaps_rss_kb_avg": 636824,
+    "smaps_rss_kb_max": 753428,
+    "cgroup_memory_current_kb_avg": 33199246,
+    "cgroup_memory_current_kb_max": 35031308,
+    "jvm": {
+      "pid": 101629,
+      "heap_used_kb": 139600,
+      "heap_committed_kb": 442368,
+      "heap_reserved_kb": 15917056,
+      "nmt_total_reserved_kb": 17973773,
+      "nmt_total_committed_kb": 761629,
+      "nmt_java_heap_reserved_kb": 15917056,
+      "nmt_java_heap_committed_kb": 442368,
+      "offheap_kb_estimate": 319261,
+      "offheap_estimate_source": "nmt_minus_java_heap",
+      "nmt_enabled": true
+    }
+  }
+}

@@ -1,0 +1,34 @@
+=== ENDPOINT PREFLIGHT ===
+Timestamp: 2026-05-05T12:10:32.629190946Z
+Base URL: http://localhost:9001
+
+--- GET http://localhost:9001/health ---
+HTTP/1.1   status: 200
+Body:
+{"status":"ok"}
+
+--- GET http://localhost:9001/db/ping ---
+HTTP/1.1   status: 401
+Body:
+
+
+--- GET http://localhost:9001/api/v1/users ---
+HTTP/1.1   status: 401
+Body:
+
+
+--- GET http://localhost:9001/api/v1/products/recommended ---
+HTTP/1.1   status: 401
+Body:
+
+
+--- GET http://localhost:9001/api/v1/cart ---
+HTTP/1.1   status: 401
+Body:
+
+
+--- POST endpoints (skipped in preflight -- side effects) ---
+  POST http://localhost:9001/api/v1/auth/register
+  POST http://localhost:9001/api/v1/cart/add
+  POST http://localhost:9001/api/v1/orders
+

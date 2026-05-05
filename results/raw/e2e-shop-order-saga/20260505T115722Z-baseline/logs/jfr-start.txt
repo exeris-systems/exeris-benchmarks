@@ -1,0 +1,8 @@
+134190:
+No available recordings.
+
+Use jcmd 134190 JFR.start to start a recording.
+134190:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 134190 JFR.dump name=exeris_community_app_20260505T115722Z filename=FILEPATH to copy recording data to file.

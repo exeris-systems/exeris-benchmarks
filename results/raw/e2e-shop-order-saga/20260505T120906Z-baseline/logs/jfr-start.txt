@@ -1,0 +1,8 @@
+172039:
+No available recordings.
+
+Use jcmd 172039 JFR.start to start a recording.
+172039:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 172039 JFR.dump name=spring_app_axon_20260505T120906Z filename=FILEPATH to copy recording data to file.

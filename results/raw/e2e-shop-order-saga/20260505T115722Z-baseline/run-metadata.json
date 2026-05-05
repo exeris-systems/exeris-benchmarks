@@ -1,0 +1,51 @@
+{
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "exeris_community_h2c_v1",
+  "target_app": "exeris-community-app",
+  "graph_track": "neo4j",
+  "hardware_profile": "dev-laptop",
+  "tier": "community",
+  "benchmark_family": "runtime",
+  "protocol_mode": "h1",
+  "transport_mode": "loopback-h1",
+  "protocol_mode_declared": "h2c",
+  "protocol_mode_observed": "h2c",
+  "protocol_mode_observed_k6": "h1",
+  "protocol_tags_observed_k6": "HTTP/1.1",
+  "transport_mode_declared": "loopback-h2c",
+  "transport_mode_observed": "loopback-h2c",
+  "protocol_probe_non_blocking": true,
+  "protocol_probe_endpoint": "http://localhost:8080/health",
+  "comparison_axis": "within-tier-protocol",
+  "claim_scope": "exploratory",
+  "commit_sha": "6c29d84ce2e4536dfd17c7a21197666a89e3dfbd",
+  "run_timestamp_utc": "20260505T115722Z",
+  "base_url": "http://localhost:8080",
+  "output_dir": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T115722Z-baseline",
+  "env_file": "env.json",
+  "tool": "k6",
+  "jfr_enabled": true,
+  "jfr_settings": "profile",
+  "jfr_file": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T115722Z-baseline/target-exeris-community-app-20260505T115722Z.jfr",
+  "perf_stat_enabled": false,
+  "k6_exit_code": 0,
+  "runner_status": "clean",
+  "logs_dir": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T115722Z-baseline/logs",
+  "infra_contract": {
+    "compose_ref": "runtime/compose/e2e-shop-order-saga.yml",
+    "compose_sha256": "7c226179339fd1d802715be81661033c9c746c54cca6c429407a59f003a8ccf6",
+    "seed_baseline": {
+      "apply_script_ref": "runtime/db/seed/seed-apply.sh",
+      "apply_script_sha256": "77edc81798840c7367d773866a1a71382b44cc675646f5da1e8469e72e73363e"
+    },
+    "seed_overlay": {
+      "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+      "manifest_version": "1",
+      "manifest_id": "e2e-shop-order-saga-seed-v1",
+      "manifest_sha256": "9f1710f4864205086789e0d72fa97666f72e438d3e7ae6b68be27b186c0782d0",
+      "verification_script_ref": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh",
+      "verification_script_sha256": "cf4f4b15d01ec20399766e004702a885a2fd18158918bd6cea81f9c0c5edad03",
+      "verification_skipped": false
+    }
+  }
+}

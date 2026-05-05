@@ -33,7 +33,7 @@
       <dependency>
         <groupId>org.neo4j.bolt</groupId>
         <artifactId>neo4j-bolt-connection-bom</artifactId>
-        <version>6.0.2</version>
+        <version>11.0.2</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -65,8 +65,8 @@
       <artifactId>postgresql</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.neo4j.driver</groupId>
-      <artifactId>neo4j-java-driver</artifactId>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-neo4j</artifactId>
     </dependency>
     <dependency>
       <groupId>org.axonframework</groupId>

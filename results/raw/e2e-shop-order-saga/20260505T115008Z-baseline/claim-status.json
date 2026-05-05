@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "quarkus_axon_neo4j_v1",
+  "target_app": "quarkus-app-axon",
+  "graph_track": "neo4j",
+  "hardware_profile": "dev-laptop",
+  "claim_scope": "exploratory",
+  "rejection_codes": [
+    "non_canonical_hardware_profile"
+  ],
+  "reason": "not perf-box-amd64 hardware profile"
+}

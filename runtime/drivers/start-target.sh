@@ -122,8 +122,15 @@ case "${START_MODE}" in
     # See docs/methodology.md: "JFR ring-buffer early-phase loss"
     # GC log path uses /tmp (local fs) to avoid I/O overhead on network-backed CI filesystems.
     _tgt_stdout_log="${TARGET_LOG_DIR}/target-stdout-${RUN_TIMESTAMP}.log"
+    
+    # Java 26 module system compatibility for Neo4j driver + Eclipse Collections
+    # ServiceLoader requires access to jdk.internal.module for proper service discovery.
+    # See: https://github.com/neo4j-java/neo4j-java-driver/issues (Java 26 compatibility)
+    _module_opens="--add-opens java.base/jdk.internal.module=ALL-UNNAMED"
+    
     # shellcheck disable=SC2086
     java ${JVM_FLAGS:-} \
+      "${_module_opens}" \
       "-Xlog:gc*,safepoint:file=${TARGET_LOG_DIR}/gc-${RUN_TIMESTAMP}.log:time,uptime,level,tags" \
       "-Xlog:safepoint:file=${TARGET_LOG_DIR}/safepoint-${RUN_TIMESTAMP}.log:time,uptime,level,tags" \
       "-XX:StartFlightRecording=filename=${TARGET_LOG_DIR}/jfr-${RUN_TIMESTAMP}.jfr,settings=profile,duration=0,maxsize=256m,dumponexit=true" \
@@ -143,6 +150,9 @@ case "${START_MODE}" in
       bash -lc "cd '$ROOT' && $EXTERNAL_STOP_CMD" || true
     fi
     echo "  External runner command: $EXTERNAL_START_CMD"
+    # Java 26 module system compatibility for Neo4j driver + Eclipse Collections
+    # Add --add-opens flag to EXERIS_JAVA_OPTS so it's used by EXTERNAL_START_CMD
+    export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} --add-opens java.base/jdk.internal.module=ALL-UNNAMED"
     bash -lc "cd '$ROOT' && $EXTERNAL_START_CMD"
     ;;
   *)

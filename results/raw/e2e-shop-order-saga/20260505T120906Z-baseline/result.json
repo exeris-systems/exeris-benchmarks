@@ -1,0 +1,473 @@
+{
+  "schema_version": "1",
+  "run_id": "e2e-shop-order-saga-20260505T120906Z",
+  "timestamp": "2026-05-05T12:09:06Z",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "spring_boot_axon_neo4j_v1",
+  "target_app": "spring-app-axon",
+  "graph_track": "neo4j",
+  "tier": "community",
+  "benchmark_family": "runtime",
+  "run_timestamp_utc": "20260505T120906Z",
+  "commit_sha": "6c29d84ce2e4536dfd17c7a21197666a89e3dfbd",
+  "protocol_mode": "h1",
+  "transport_mode": "loopback-h1",
+  "claim_scope": "exploratory",
+  "tool": "k6",
+  "k6_exit_code": 99,
+  "runner_status": "threshold_failure",
+  "final_reason": "threshold_failure",
+  "reproducibility_status": "complete",
+  "output_dir": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T120906Z-baseline",
+  "metrics": {
+    "tool": "k6",
+    "orders_initiated": 662,
+    "saga_success_rate": 0.9878419452887538,
+    "saga_compensated_rate": 0,
+    "http_reqs_total": 5039,
+    "http_reqs_rate": 18.662914837042717,
+    "http_req_duration_avg_ms": 4.774897224052397,
+    "http_req_duration_p90_ms": 11.150527799999999,
+    "http_req_duration_p95_ms": 14.649004999999983,
+    "iteration_duration_avg_ms": 8102.414993197561,
+    "iteration_duration_p90_ms": 8905.772661,
+    "iteration_duration_p95_ms": 9277.813349099999,
+    "error_rate_pct": 0
+  },
+  "run_metadata": {
+    "scenario_id": "e2e-shop-order-saga",
+    "contract_id": "spring_boot_axon_neo4j_v1",
+    "target_app": "spring-app-axon",
+    "graph_track": "neo4j",
+    "hardware_profile": "dev-laptop",
+    "tier": "community",
+    "benchmark_family": "runtime",
+    "protocol_mode": "h1",
+    "transport_mode": "loopback-h1",
+    "protocol_mode_declared": "h2c",
+    "protocol_mode_observed": "h2c",
+    "protocol_mode_observed_k6": "h1",
+    "protocol_tags_observed_k6": "HTTP/1.1",
+    "transport_mode_declared": "loopback-h2c",
+    "transport_mode_observed": "loopback-h2c",
+    "protocol_probe_non_blocking": true,
+    "protocol_probe_endpoint": "http://localhost:9001/health",
+    "comparison_axis": "within-tier-protocol",
+    "claim_scope": "exploratory",
+    "commit_sha": "6c29d84ce2e4536dfd17c7a21197666a89e3dfbd",
+    "run_timestamp_utc": "20260505T120906Z",
+    "base_url": "http://localhost:9001",
+    "output_dir": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T120906Z-baseline",
+    "env_file": "env.json",
+    "tool": "k6",
+    "jfr_enabled": true,
+    "jfr_settings": "profile",
+    "jfr_file": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T120906Z-baseline/target-spring-app-axon-20260505T120906Z.jfr",
+    "perf_stat_enabled": false,
+    "k6_exit_code": 99,
+    "runner_status": "threshold_failure",
+    "logs_dir": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T120906Z-baseline/logs",
+    "infra_contract": {
+      "compose_ref": "runtime/compose/e2e-shop-order-saga.yml",
+      "compose_sha256": "7c226179339fd1d802715be81661033c9c746c54cca6c429407a59f003a8ccf6",
+      "seed_baseline": {
+        "apply_script_ref": "runtime/db/seed/seed-apply.sh",
+        "apply_script_sha256": "77edc81798840c7367d773866a1a71382b44cc675646f5da1e8469e72e73363e"
+      },
+      "seed_overlay": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "manifest_id": "e2e-shop-order-saga-seed-v1",
+        "manifest_sha256": "9f1710f4864205086789e0d72fa97666f72e438d3e7ae6b68be27b186c0782d0",
+        "verification_script_ref": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh",
+        "verification_script_sha256": "cf4f4b15d01ec20399766e004702a885a2fd18158918bd6cea81f9c0c5edad03",
+        "verification_skipped": false
+      }
+    },
+    "metadata": {
+      "jdk_vendor": "Oracle Corporation",
+      "jdk_version": "26",
+      "benchmark_tool_version": "not_installed",
+      "jvm_flags": [],
+      "hardware_profile": "dev-laptop",
+      "scenario_id": "e2e-shop-order-saga",
+      "target_classification": "runtime-exploratory"
+    },
+    "pinned_versions": {
+      "jdk_version": "26",
+      "benchmark_tool_version": "not_installed",
+      "target_commit_sha": "6c29d84ce2e4536dfd17c7a21197666a89e3dfbd"
+    },
+    "actual_versions": {
+      "jdk_version": "26",
+      "benchmark_tool_version": "not_installed",
+      "target_commit_sha": "6c29d84ce2e4536dfd17c7a21197666a89e3dfbd"
+    },
+    "runtime_log": {
+      "launcher_mode": "standalone-jar",
+      "env_file": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T120906Z-baseline/env.json",
+      "jar_path": "targets/spring-benchmark-app/target/spring-benchmark-app-1.0.0-SNAPSHOT.jar",
+      "jar_exists": true,
+      "jar_sha256": "8bb04eb95ec6e8ceef24ae3ad3aba34eb66eb9b2b3b69690ccb598c9ac584989",
+      "jar_size_bytes": 92524214,
+      "jar_mtime_utc": "2026-05-04T17:10:43Z",
+      "detection_method": "proc_cmdline"
+    },
+    "jfr_capture": {
+      "pid": "172039",
+      "jcmd_available": true,
+      "check_ok": true,
+      "recording_detected": true,
+      "dump_attempted": true,
+      "dump_success": true,
+      "stop_attempted": true,
+      "stop_success": true,
+      "stop_recording_name": "spring_app_axon_20260505T120906Z",
+      "jfr_file": "/home/arkstack/exeris-systems/exeris-benchmarks/results/raw/e2e-shop-order-saga/20260505T120906Z-baseline/target-spring-app-axon-20260505T120906Z.jfr",
+      "note": ""
+    },
+    "jfr_start": {
+      "pid": "172039",
+      "jcmd_available": true,
+      "start_attempted": true,
+      "start_success": true,
+      "recording_already_present": false,
+      "recording_name": "spring_app_axon_20260505T120906Z",
+      "note": "replaced existing recording; recording started"
+    }
+  },
+  "k6_summary": {
+    "root_group": {
+      "checks": {
+        "register: 201 Created": {
+          "name": "register: 201 Created",
+          "path": "::register: 201 Created",
+          "id": "14d9f28b3e841d34777d55712eb14fef",
+          "passes": 662,
+          "fails": 0
+        },
+        "recommend: 200 OK": {
+          "path": "::recommend: 200 OK",
+          "id": "4c60a158f427f563c0a415da917ed47d",
+          "passes": 662,
+          "fails": 0,
+          "name": "recommend: 200 OK"
+        },
+        "cart add: 201 Created": {
+          "name": "cart add: 201 Created",
+          "path": "::cart add: 201 Created",
+          "id": "85c944a623cdac58db4c3a5df0297746",
+          "passes": 662,
+          "fails": 0
+        },
+        "cart get: 200 OK": {
+          "passes": 662,
+          "fails": 0,
+          "name": "cart get: 200 OK",
+          "path": "::cart get: 200 OK",
+          "id": "78c7a764d13a28c3fd6f58f37c8ef700"
+        },
+        "order create: 202 Accepted": {
+          "id": "54b999d33409286b33a3a867cf7c1211",
+          "passes": 662,
+          "fails": 0,
+          "name": "order create: 202 Accepted",
+          "path": "::order create: 202 Accepted"
+        }
+      },
+      "name": "",
+      "path": "",
+      "id": "d41d8cd98f00b204e9800998ecf8427e",
+      "groups": {}
+    },
+    "metrics": {
+      "http_reqs": {
+        "count": 5039,
+        "rate": 18.662914837042717
+      },
+      "saga_poll_404_exhausted": {
+        "passes": 0,
+        "fails": 658,
+        "thresholds": {
+          "rate<0.01": false
+        },
+        "value": 0
+      },
+      "http2_rate": {
+        "passes": 0,
+        "fails": 5039,
+        "value": 0
+      },
+      "data_sent": {
+        "count": 3402146,
+        "rate": 12600.508247903459
+      },
+      "http_req_duration": {
+        "p(95)": 14.649004999999983,
+        "avg": 4.774897224052397,
+        "min": 0.469957,
+        "med": 3.101097,
+        "max": 177.615079,
+        "p(90)": 11.150527799999999,
+        "thresholds": {
+          "p(99)<5000": false
+        }
+      },
+      "orders_initiated": {
+        "rate": 2.451845529295947,
+        "count": 662
+      },
+      "http_req_blocked": {
+        "avg": 0.008072442349672564,
+        "min": 0.001803,
+        "med": 0.00515,
+        "max": 0.536882,
+        "p(90)": 0.006983,
+        "p(95)": 0.007995999999999994
+      },
+      "cart_get_latency_ms": {
+        "p(95)": 5.810949149999994,
+        "avg": 3.617404297583082,
+        "min": 1.447521,
+        "med": 3.0088749999999997,
+        "max": 108.749248,
+        "p(90)": 4.647174899999999
+      },
+      "vus_max": {
+        "max": 50,
+        "value": 50,
+        "min": 50
+      },
+      "http_req_tls_handshaking": {
+        "avg": 0,
+        "min": 0,
+        "med": 0,
+        "max": 0,
+        "p(90)": 0,
+        "p(95)": 0
+      },
+      "admission_rejected": {
+        "passes": 0,
+        "fails": 0,
+        "thresholds": {
+          "rate<0.05": false
+        },
+        "value": 0
+      },
+      "vus": {
+        "value": 2,
+        "min": 2,
+        "max": 28
+      },
+      "http_req_failed": {
+        "passes": 0,
+        "fails": 5039,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0
+      },
+      "http_req_waiting": {
+        "min": 0.411168,
+        "med": 3.013995,
+        "max": 177.350465,
+        "p(90)": 11.017896599999998,
+        "p(95)": 14.490853499999965,
+        "avg": 4.670873795594354
+      },
+      "auth_latency_ms": {
+        "med": 6.0282895,
+        "max": 45.610996,
+        "p(90)": 10.7398403,
+        "p(95)": 12.0647139,
+        "avg": 7.491744859516612,
+        "min": 3.803237
+      },
+      "saga_status_resolved": {
+        "passes": 650,
+        "fails": 8,
+        "thresholds": {
+          "rate>0.98": false
+        },
+        "value": 0.9878419452887538
+      },
+      "order_create_latency_ms": {
+        "avg": 5.288281499999996,
+        "min": 2.105338,
+        "med": 3.8788635,
+        "max": 177.615079,
+        "p(90)": 7.5603139,
+        "p(95)": 10.522031449999991
+      },
+      "recommend_latency_ms": {
+        "avg": 3.3308906752265894,
+        "min": 1.586961,
+        "med": 2.825538,
+        "max": 22.915904,
+        "p(90)": 4.7320907,
+        "p(95)": 5.948655949999995
+      },
+      "data_received": {
+        "count": 2801297,
+        "rate": 10375.147319758533
+      },
+      "order_poll_latency_ms": {
+        "min": 0.469957,
+        "med": 1.085386,
+        "max": 17.022376,
+        "p(90)": 1.7899881999999998,
+        "p(95)": 2.2011337999999996,
+        "avg": 1.2348188565644864
+      },
+      "http_req_duration{expected_response:true}": {
+        "avg": 4.774897224052397,
+        "min": 0.469957,
+        "med": 3.101097,
+        "max": 177.615079,
+        "p(90)": 11.150527799999999,
+        "p(95)": 14.649004999999983
+      },
+      "http_req_connecting": {
+        "p(90)": 0,
+        "p(95)": 0,
+        "avg": 0.002034605477277237,
+        "min": 0,
+        "med": 0,
+        "max": 0.445512
+      },
+      "http_req_sending": {
+        "med": 0.018705,
+        "max": 0.117519,
+        "p(90)": 0.0255698,
+        "p(95)": 0.028844999999999996,
+        "avg": 0.019445745187537233,
+        "min": 0.006162
+      },
+      "iterations": {
+        "count": 658,
+        "rate": 2.4370307526838872
+      },
+      "req_failed_other": {
+        "passes": 0,
+        "fails": 0,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0
+      },
+      "saga_success": {
+        "passes": 650,
+        "fails": 8,
+        "thresholds": {
+          "rate>0.96": false
+        },
+        "value": 0.9878419452887538
+      },
+      "req_timed_out": {
+        "passes": 0,
+        "fails": 0,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0
+      },
+      "http_req_receiving": {
+        "med": 0.067806,
+        "max": 5.115186,
+        "p(90)": 0.11827819999999999,
+        "p(95)": 0.15570899999999996,
+        "avg": 0.08457768327049012,
+        "min": 0.02164
+      },
+      "checks": {
+        "passes": 3310,
+        "fails": 0,
+        "value": 1
+      },
+      "polls_completed": {
+        "count": 1729,
+        "rate": 6.40368719056298
+      },
+      "saga_unresolved": {
+        "passes": 8,
+        "fails": 650,
+        "thresholds": {
+          "rate<0.01": true
+        },
+        "value": 0.0121580547112462
+      },
+      "saga_compensated": {
+        "passes": 0,
+        "fails": 658,
+        "thresholds": {
+          "rate<0.08": false
+        },
+        "value": 0
+      },
+      "errors": {
+        "passes": 8,
+        "fails": 650,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0.0121580547112462
+      },
+      "cart_add_latency_ms": {
+        "p(95)": 19.944347599999997,
+        "avg": 13.392079436555887,
+        "min": 5.839267,
+        "med": 12.248171,
+        "max": 54.439801,
+        "p(90)": 17.9478229
+      },
+      "saga_failed": {
+        "passes": 0,
+        "fails": 658,
+        "value": 0
+      },
+      "iteration_duration": {
+        "avg": 8102.414993197561,
+        "min": 4989.929545,
+        "med": 7710.2777575,
+        "max": 46363.956971,
+        "p(90)": 8905.772661,
+        "p(95)": 9277.813349099999
+      }
+    }
+  },
+  "resource_metrics": {
+    "sample_count": 261,
+    "cpu_time_seconds": 33.260000,
+    "host_logical_cpus": 12,
+    "cpu_util_percent_of_one_core": 0.0000,
+    "avg_cores_used": 0.0000,
+    "cpu_util_percent_of_host_total": 0.0000,
+    "rss_kb_min": 1133220,
+    "rss_kb_avg": 1279124,
+    "peak_rss_kb": 1311908,
+    "vmsize_kb_min": 22062192,
+    "vmsize_kb_avg": 23162348,
+    "peak_vmsize_kb": 23260276,
+    "threads_min": 60,
+    "threads_avg": 78,
+    "peak_threads": 81,
+    "vmhwm_kb_max": 1313012,
+    "smaps_rss_kb_avg": 1280399,
+    "smaps_rss_kb_max": 1313012,
+    "cgroup_memory_current_kb_avg": 32251238,
+    "cgroup_memory_current_kb_max": 33378292,
+    "jvm": {
+      "pid": 172039,
+      "heap_used_kb": 120339,
+      "heap_committed_kb": 860160,
+      "heap_reserved_kb": 15917056,
+      "nmt_total_reserved_kb": 17975222,
+      "nmt_total_committed_kb": 1250770,
+      "nmt_java_heap_reserved_kb": 15917056,
+      "nmt_java_heap_committed_kb": 860160,
+      "offheap_kb_estimate": 390610,
+      "offheap_estimate_source": "nmt_minus_java_heap",
+      "nmt_enabled": true
+    }
+  }
+}

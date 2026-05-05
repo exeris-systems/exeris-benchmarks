@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "exeris_community_h2c_v1",
+  "target_app": "exeris-community-app",
+  "graph_track": "neo4j",
+  "hardware_profile": "dev-laptop",
+  "claim_scope": "exploratory",
+  "rejection_codes": [
+    "non_canonical_hardware_profile"
+  ],
+  "reason": "not perf-box-amd64 hardware profile"
+}

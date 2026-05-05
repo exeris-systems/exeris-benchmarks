@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "spring_boot_axon_neo4j_v1",
+  "target_app": "spring-app-axon",
+  "graph_track": "neo4j",
+  "hardware_profile": "dev-laptop",
+  "claim_scope": "exploratory",
+  "rejection_codes": [
+    "non_canonical_hardware_profile"
+  ],
+  "reason": "not perf-box-amd64 hardware profile"
+}

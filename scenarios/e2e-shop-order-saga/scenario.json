@@ -193,7 +193,7 @@
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
       "saga_orchestration": "flow-native",
-      "graph_backend": "graph-l2-native",
+      "graph_backend": "neo4j-bolt",
       "event_backend": "events-l3-outbox",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",

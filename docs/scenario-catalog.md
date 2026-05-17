@@ -165,9 +165,11 @@ All entries below emit `claim_scope=exploratory`, `comparison_axis=standalone`, 
 Drivers:
 
 - `scripts/run-fuzz-campaign.sh <scenario-dir>` — Jazzer
-- `scripts/run-destructive-slowloris.sh --base-url ...`
-- `scripts/run-destructive-radamsa.sh --base-url ... --protocol h1|h2 --radamsa-seed ...`
-- `scripts/run-arena-lifecycle-leak.sh --base-url ... --target-pid ... --radamsa-seed ...`
+- `scripts/run-destructive-slowloris.sh --base-url ... --target-repo ... --target-mode ... --target-tier ...`
+- `scripts/run-destructive-radamsa.sh --base-url ... --protocol h1|h2 --radamsa-seed ... --target-repo ... --target-mode ... --target-tier ...`
+- `scripts/run-arena-lifecycle-leak.sh --base-url ... --target-pid ... --radamsa-seed ... --target-repo ... --target-mode ... --target-tier ...`
+
+The three runners require `--target-repo`/`--target-mode`/`--target-tier` because the harness cannot introspect which app is behind `BASE_URL`; silently labeling the wrong repo/mode/tier in `result.json` would corrupt reproducibility metadata and cross-stack comparability.
 
 Cross-stack destructive comparisons require explicit timeout / connection-limit / radamsa-seed normalization — see methodology doc.
 

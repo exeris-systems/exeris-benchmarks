@@ -87,9 +87,15 @@ for f in "$ROOT/micro/fuzz"/crash-* "$ROOT/micro/fuzz"/hang-*; do
 done
 shopt -u nullglob
 
+# All numeric counters below are fed to jq --argjson, which aborts on an empty
+# string. Apply ${VAR:-0} + regex sanitization so a missing/unreadable
+# $SUREFIRE_OUT never causes the whole run to crash at the reporting step.
 CRASH_COUNT=$(find "$JAZZER_WORK" -maxdepth 1 -name 'crash-*' 2>/dev/null | wc -l | tr -d ' ')
 HANG_COUNT=$(find "$JAZZER_WORK" -maxdepth 1 -name 'hang-*' 2>/dev/null | wc -l | tr -d ' ')
-OOM_COUNT=$(grep -c 'OutOfMemoryError' "$SUREFIRE_OUT" || true)
+OOM_COUNT=$(grep -c 'OutOfMemoryError' "$SUREFIRE_OUT" 2>/dev/null || echo 0)
+[[ "$CRASH_COUNT" =~ ^[0-9]+$ ]] || CRASH_COUNT=0
+[[ "$HANG_COUNT"  =~ ^[0-9]+$ ]] || HANG_COUNT=0
+[[ "$OOM_COUNT"   =~ ^[0-9]+$ ]] || OOM_COUNT=0
 
 if (( CRASH_COUNT > 0 )); then
   DEGRADATION="crash"
@@ -102,10 +108,11 @@ else
 fi
 
 # Iterations are not reliably extractable from Surefire; Jazzer's libFuzzer
-# output goes to a separate log stream. Best-effort grep.
+# output goes to a separate log stream. Best-effort grep — empty/non-numeric
+# tail must become a literal 0 or jq --argjson aborts.
 ITERATIONS_TOTAL=$(grep -oE '#[0-9]+\b' "$SUREFIRE_OUT" 2>/dev/null \
-  | tr -d '#' | sort -n | tail -1 || echo 0)
-ITERATIONS_TOTAL="${ITERATIONS_TOTAL:-0}"
+  | tr -d '#' | sort -n | tail -1 || true)
+[[ "$ITERATIONS_TOTAL" =~ ^[0-9]+$ ]] || ITERATIONS_TOTAL=0
 
 JAZZER_VERSION="$(cd "$ROOT/micro/fuzz" && mvn -s "$ROOT/.github/maven-settings-gpr.xml" \
   -B help:evaluate -Dexpression=jazzer.version -q -DforceStdout 2>/dev/null || echo "unknown")"
@@ -132,7 +139,7 @@ jq -n \
   --argjson crash "$CRASH_COUNT" \
   --argjson hang "$HANG_COUNT" \
   --argjson oom "$OOM_COUNT" \
-  --argjson iterations "${ITERATIONS_TOTAL:-0}" \
+  --argjson iterations "$ITERATIONS_TOTAL" \
   '{
     schema_version: "1",
     run_id: $run_id,
@@ -166,7 +173,7 @@ jq -n \
   --arg run_id "$RUN_ID" \
   --arg scenario "$SCENARIO_ID" \
   --argjson duration_seconds "$DURATION_SEC" \
-  --argjson iterations "${ITERATIONS_TOTAL:-0}" \
+  --argjson iterations "$ITERATIONS_TOTAL" \
   --argjson crash "$CRASH_COUNT" \
   --argjson oom "$OOM_COUNT" \
   --argjson hang "$HANG_COUNT" \

@@ -10,7 +10,9 @@ Slowloris-style slow-header attack against an externally-launched HTTP/1.1 targe
 GET /?slow=<random> HTTP/1.1\r\nHost: <host>\r\n
 ```
 
-Then loops every `header_delay_seconds`, writing one fake header line per connection. **No** terminating `\r\n\r\n` is ever sent — connections sit half-open consuming server slots until the target's header-receive-timeout evicts them.
+Then loops in lock-step: each iteration walks the connection list, writes one fake header line per connection, then sleeps `header_delay_seconds` once. The per-connection dribble cadence is therefore `header_delay_seconds × N` connections, not `header_delay_seconds` (single-threaded by design — what matters is that no connection sees the terminating `\r\n\r\n` before the target's header-receive-timeout fires). **No** terminating `\r\n\r\n` is ever sent — connections sit half-open consuming server slots until the target's header-receive-timeout evicts them.
+
+Implication for sizing: if you want each connection dribbled every 10s with 1000 connections, set `--header-delay 0.01` (10ms × 1000 ≈ 10s), not `--header-delay 10`. With `--header-delay 10 --connections 1000`, individual connections are dribbled every ~10000s — fine if you only care about how many slots the target lets you hold open, misleading if you want to model per-connection cadence directly.
 
 ## Run
 
@@ -22,12 +24,17 @@ Then loops every `header_delay_seconds`, writing one fake header line per connec
 
 ./scripts/run-destructive-slowloris.sh \
     --base-url http://127.0.0.1:8080 \
+    --target-repo exeris-community-app \
+    --target-mode pure \
+    --target-tier community \
     --connections 1000 \
     --header-delay 10 \
     --duration 120 \
     --cooldown 30 \
     --output results/raw/destructive-slowloris-h1-$(date +%Y%m%d-%H%M%S)
 ```
+
+`--target-{repo,mode,tier}` are REQUIRED — the harness cannot introspect which app is behind `BASE_URL`, and cross-stack comparisons depend on accurate labeling.
 
 ## Pass / fail
 

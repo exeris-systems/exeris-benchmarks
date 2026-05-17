@@ -16,6 +16,9 @@ Radamsa-mutated malformed HTTP/1.1 input attack against an externally-launched t
 ./scripts/run-destructive-radamsa.sh \
     --base-url http://127.0.0.1:8080 \
     --protocol h1 \
+    --target-repo exeris-community-app \
+    --target-mode pure \
+    --target-tier community \
     --rps 500 \
     --duration 120 \
     --cooldown 30 \
@@ -23,7 +26,7 @@ Radamsa-mutated malformed HTTP/1.1 input attack against an externally-launched t
     --output results/raw/destructive-radamsa-h1-$(date +%Y%m%d-%H%M%S)
 ```
 
-`--radamsa-seed` is REQUIRED. Without it the campaign is not reproducible and the artifact is descriptive-only.
+`--radamsa-seed` is REQUIRED. Without it the campaign is not reproducible and the artifact is descriptive-only. `--target-{repo,mode,tier}` are also REQUIRED — the harness cannot guess which app is behind `BASE_URL`, so cross-stack comparisons depend on labeling at invocation.
 
 ## Pass / fail
 

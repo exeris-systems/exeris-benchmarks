@@ -28,9 +28,12 @@
     <junit.jupiter.version>5.10.2</junit.jupiter.version>
     <surefire.version>3.2.5</surefire.version>
 
-    <!-- Exeris artifact versions — override via -Dexeris.kernel.version=...
-         Pin a specific kernel snapshot in CI for reproducibility. -->
-    <exeris.kernel.version>0.5.0</exeris.kernel.version>
+    <!-- Exeris artifact version. Fuzz findings are only re-bisectable if the
+         kernel version is pinned; an unpinned floating snapshot (or worse,
+         a stale literal like 0.5.0) silently invalidates reproducibility.
+         The maven-enforcer rule below rejects the sentinel default. Always
+         pass -Dexeris.kernel.version=<release|timestamped-snapshot>. -->
+    <exeris.kernel.version>UNSPECIFIED-PIN-VIA-Dexeris.kernel.version</exeris.kernel.version>
 
     <!-- Per-FuzzTest wall-clock budget. Override on CLI:
          mvn test -Djazzer.duration=300s -->
@@ -85,6 +88,33 @@
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.4.1</version>
+        <executions>
+          <execution>
+            <id>require-pinned-kernel-version</id>
+            <phase>validate</phase>
+            <goals><goal>enforce</goal></goals>
+            <configuration>
+              <rules>
+                <requireProperty>
+                  <property>exeris.kernel.version</property>
+                  <regex>^(?!UNSPECIFIED-).+</regex>
+                  <regexMessage>
+exeris.kernel.version must be pinned. Pass it explicitly:
+  mvn -Dexeris.kernel.version=&lt;release&gt; ...
+  mvn -Dexeris.kernel.version=&lt;1.2.3-YYYYMMDD.HHMMSS-N&gt; ...
+A floating -SNAPSHOT is non-reproducible; a stale literal silently invalidates findings.
+                  </regexMessage>
+                </requireProperty>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>

@@ -7,7 +7,10 @@
 #
 # Reusable helpers:
 #   destructive_capture_rss <pid>
-#       echoes "<rss_bytes> <vsz_bytes>" on stdout, or "0 0" if unreadable
+#       echoes "<rss_bytes> <vsz_bytes>" on stdout, or "unobtained unobtained"
+#       if the PID is unknown / /proc entry is gone / ps output is empty.
+#       Callers MUST distinguish "unobtained" from numeric 0 — emitting a
+#       literal 0 here would silently classify a no-signal run as "stable".
 #   destructive_jcmd_native_heap_committed <pid>
 #       echoes committed-native-heap-bytes from `jcmd <pid> VM.native_memory summary`
 #       requires NMT to be enabled on the target; echoes "" if unavailable
@@ -28,14 +31,14 @@ DESTR_PROBE_ALIVE=""
 
 destructive_capture_rss() {
   local pid="${1:-}"
-  if [[ -z "$pid" || ! -d "/proc/$pid" ]]; then
-    echo "0 0"
+  if [[ -z "$pid" || "$pid" == "0" || ! -d "/proc/$pid" ]]; then
+    echo "unobtained unobtained"
     return 1
   fi
   local rss_kb vsz_kb
   read -r rss_kb vsz_kb < <(ps -o rss=,vsz= -p "$pid" 2>/dev/null | tr -s ' ' || true)
   if [[ -z "${rss_kb:-}" || -z "${vsz_kb:-}" ]]; then
-    echo "0 0"
+    echo "unobtained unobtained"
     return 1
   fi
   printf '%d %d\n' "$((rss_kb * 1024))" "$((vsz_kb * 1024))"

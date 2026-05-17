@@ -13,13 +13,16 @@ Each iteration:
   4. Close.
 
 The seed is a hand-built minimal valid H2C session for GET /plaintext.
-HPACK Huffman encoding is NOT used (HPACK literal-never-indexed for path,
-:method, :scheme, :authority — keeps the seed analyzable).
+HPACK Huffman encoding is NOT used. The header block uses static-table
+indexed-name encoding where it exists (:method=GET, :scheme=http, :path
+indexed-name) and "literal without indexing, new name" for :authority —
+all to keep the seed bytewise analyzable for triage.
 
 Output: same JSON shape as radamsa-h1-attacker.py.
 """
 
 import argparse
+import ipaddress
 import json
 import shutil
 import socket
@@ -28,6 +31,37 @@ import subprocess
 import sys
 import time
 from urllib.parse import urlparse
+
+
+def assert_loopback_or_die(host: str, allow_non_loopback: bool) -> None:
+    """Refuse to attack anything that resolves to a non-loopback address.
+
+    These scripts are committed attack tooling. Accepting arbitrary URLs would
+    make them trivially weaponizable against unrelated hosts; require an
+    explicit opt-in for non-loopback targets so the default cannot be misused.
+    """
+    if allow_non_loopback:
+        return
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as e:
+        print(f"ERROR: cannot resolve host '{host}': {e}", file=sys.stderr)
+        sys.exit(2)
+    for info in infos:
+        addr = info[4][0]
+        try:
+            if not ipaddress.ip_address(addr).is_loopback:
+                print(
+                    f"ERROR: refusing to attack non-loopback host '{host}' "
+                    f"(resolved to {addr}). Pass --allow-non-loopback to "
+                    f"override (e.g. authorized lab targets).",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+        except ValueError:
+            print(f"ERROR: cannot parse resolved address '{addr}'",
+                  file=sys.stderr)
+            sys.exit(2)
 
 
 H2C_PREFACE = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
@@ -43,19 +77,25 @@ def build_frame(length: int, frame_type: int, flags: int, stream_id: int,
 
 def build_seed_post_preface() -> bytes:
     settings = build_frame(0, 0x4, 0x0, 0, b"")
-    # Minimal HPACK literal headers (no indexing, no Huffman):
-    # :method=GET   — index 2 in static table → 0x82
-    # :scheme=http  — index 6 → 0x86
-    # :path=/plaintext — literal-no-indexing-indexed-name (index 4 :path)
-    #   0x04 (index 4) | 0x00 (literal w/o indexing) -> 0x04, then length-prefixed value
-    # :authority=localhost — literal w/o indexing, new name
+    # Minimal HPACK header block (no indexing, no Huffman). RFC 7541 §6.
+    # :method=GET   — indexed field, static table 2 → 0x82
+    # :scheme=http  — indexed field, static table 6 → 0x86
+    # :path=/plaintext — literal w/o indexing, indexed name 4 (:path):
+    #   0x04 (prefix 0000 + index 4), then 1-byte length-prefixed value.
+    # :authority=localhost — literal w/o indexing, new name:
+    #   0x00 (prefix 0000 + index 0 = new name), then length-prefixed name,
+    #   then length-prefixed value. (Previous code used 0x01 here, which is
+    #   "literal w/o indexing, indexed name 1 (:authority)" — followed by a
+    #   name literal, which is malformed by the spec.)
     method_get = bytes([0x82])
     scheme_http = bytes([0x86])
     path_value = b"/plaintext"
     path_literal = bytes([0x04, len(path_value)]) + path_value
+    authority_name = b":authority"
     authority_value = b"localhost"
     authority_literal = (
-        bytes([0x01, 0x00 | len(b":authority")]) + b":authority"
+        bytes([0x00])
+        + bytes([len(authority_name)]) + authority_name
         + bytes([len(authority_value)]) + authority_value
     )
     hpack = method_get + scheme_http + path_literal + authority_literal
@@ -101,6 +141,10 @@ def main() -> int:
     p.add_argument("--attack-duration-seconds", type=float, default=120.0)
     p.add_argument("--socket-timeout-seconds", type=float, default=2.0)
     p.add_argument("--radamsa-seed", required=True)
+    p.add_argument("--allow-non-loopback", action="store_true",
+                   help="Opt-in: permit a non-loopback target. Default is "
+                        "refuse — these scripts are not general-purpose "
+                        "attack tools.")
     args = p.parse_args()
 
     if shutil.which("radamsa") is None:
@@ -114,6 +158,10 @@ def main() -> int:
         return 2
     host = parsed.hostname
     port = parsed.port or 80
+    if host is None:
+        print("ERROR: base-url has no hostname", file=sys.stderr)
+        return 2
+    assert_loopback_or_die(host, args.allow_non_loopback)
 
     seed = build_seed_post_preface()
 

@@ -26,6 +26,7 @@ Exit code: 0 on clean attack-window close. Non-zero on configuration errors
 """
 
 import argparse
+import ipaddress
 import json
 import shutil
 import socket
@@ -33,6 +34,37 @@ import subprocess
 import sys
 import time
 from urllib.parse import urlparse
+
+
+def assert_loopback_or_die(host: str, allow_non_loopback: bool) -> None:
+    """Refuse to attack anything that resolves to a non-loopback address.
+
+    These scripts are committed attack tooling. Accepting arbitrary URLs would
+    make them trivially weaponizable against unrelated hosts; require an
+    explicit opt-in for non-loopback targets so the default cannot be misused.
+    """
+    if allow_non_loopback:
+        return
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as e:
+        print(f"ERROR: cannot resolve host '{host}': {e}", file=sys.stderr)
+        sys.exit(2)
+    for info in infos:
+        addr = info[4][0]
+        try:
+            if not ipaddress.ip_address(addr).is_loopback:
+                print(
+                    f"ERROR: refusing to attack non-loopback host '{host}' "
+                    f"(resolved to {addr}). Pass --allow-non-loopback to "
+                    f"override (e.g. authorized lab targets).",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+        except ValueError:
+            print(f"ERROR: cannot parse resolved address '{addr}'",
+                  file=sys.stderr)
+            sys.exit(2)
 
 
 SEED_REQUEST = (
@@ -83,6 +115,10 @@ def main() -> int:
     p.add_argument("--socket-timeout-seconds", type=float, default=2.0)
     p.add_argument("--radamsa-seed", required=True,
                    help="Fixed seed for radamsa reproducibility")
+    p.add_argument("--allow-non-loopback", action="store_true",
+                   help="Opt-in: permit a non-loopback target. Default is "
+                        "refuse — these scripts are not general-purpose "
+                        "attack tools.")
     args = p.parse_args()
 
     if shutil.which("radamsa") is None:
@@ -97,6 +133,10 @@ def main() -> int:
         return 2
     host = parsed.hostname
     port = parsed.port or 80
+    if host is None:
+        print("ERROR: base-url has no hostname", file=sys.stderr)
+        return 2
+    assert_loopback_or_die(host, args.allow_non_loopback)
 
     start = time.monotonic()
     deadline = start + args.attack_duration_seconds

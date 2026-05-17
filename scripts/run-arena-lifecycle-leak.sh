@@ -9,6 +9,9 @@
 #   ./scripts/run-arena-lifecycle-leak.sh \
 #       --base-url http://127.0.0.1:8080 \
 #       --target-pid <pid> \
+#       --target-repo <repo-id> \
+#       --target-mode pure|compat|native|jdbc-bridge|baseline-db \
+#       --target-tier community|enterprise \
 #       --radamsa-seed <seed> \
 #       [--duration 600] [--cooldown 60] \
 #       [--memory-stats-endpoint /debug/exeris-memory-stats] \
@@ -24,6 +27,9 @@ source "$ROOT/tools/bench/lib/readiness.sh"
 
 BASE_URL=""
 TARGET_PID=""
+TARGET_REPO=""
+TARGET_MODE=""
+TARGET_TIER=""
 RADAMSA_SEED=""
 DURATION=600
 COOLDOWN=60
@@ -36,6 +42,9 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --base-url)              BASE_URL="$2";          shift 2 ;;
     --target-pid)            TARGET_PID="$2";        shift 2 ;;
+    --target-repo)           TARGET_REPO="$2";       shift 2 ;;
+    --target-mode)           TARGET_MODE="$2";       shift 2 ;;
+    --target-tier)           TARGET_TIER="$2";       shift 2 ;;
     --radamsa-seed)          RADAMSA_SEED="$2";      shift 2 ;;
     --duration)              DURATION="$2";          shift 2 ;;
     --cooldown)              COOLDOWN="$2";          shift 2 ;;
@@ -50,6 +59,18 @@ done
 [[ -z "$BASE_URL"     ]] && { echo "ERROR: --base-url required" >&2; exit 1; }
 [[ -z "$TARGET_PID"   ]] && { echo "ERROR: --target-pid required for RSS/NMT sampling" >&2; exit 1; }
 [[ -z "$RADAMSA_SEED" ]] && { echo "ERROR: --radamsa-seed required" >&2; exit 1; }
+# Mandatory target metadata — see run-destructive-radamsa.sh for rationale.
+[[ -z "$TARGET_REPO" ]] && { echo "ERROR: --target-repo required (reproducibility metadata)" >&2; exit 1; }
+[[ -z "$TARGET_MODE" ]] && { echo "ERROR: --target-mode required (pure|compat|...)" >&2; exit 1; }
+[[ -z "$TARGET_TIER" ]] && { echo "ERROR: --target-tier required (community|enterprise)" >&2; exit 1; }
+case "$TARGET_MODE" in
+  pure|compat|native|jdbc-bridge|baseline-db) ;;
+  *) echo "ERROR: --target-mode must be one of pure|compat|native|jdbc-bridge|baseline-db (got: '$TARGET_MODE')" >&2; exit 1 ;;
+esac
+case "$TARGET_TIER" in
+  community|enterprise) ;;
+  *) echo "ERROR: --target-tier must be community or enterprise (got: '$TARGET_TIER')" >&2; exit 1 ;;
+esac
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 required" >&2; exit 1; }
 command -v radamsa >/dev/null 2>&1 || { echo "ERROR: radamsa not in PATH" >&2; exit 1; }
@@ -78,6 +99,9 @@ probe_memstats() {
 }
 
 echo "=== Pre-attack sampling ==="
+# `read` swallows the return code of `destructive_capture_rss` — intentional.
+# A failed sample emits the "unobtained" sentinel rather than aborting under
+# `set -e`; the sentinel is detected below and turned into JSON null.
 read -r RSS_BEFORE VSZ_BEFORE < <(destructive_capture_rss "$TARGET_PID")
 NHC_BEFORE="$(destructive_jcmd_native_heap_committed "$TARGET_PID" || echo '')"
 LEAKCOUNT_BEFORE="$(probe_memstats before)"
@@ -109,7 +133,13 @@ LEAKCOUNT_AFTER="$(probe_memstats after)"
 destructive_liveness_probe "$BASE_URL" "$HEALTH_PATH" 200 1000 || true
 
 ITERATIONS_TOTAL=$(jq -r '.iterations_total // 0' "$ATTACKER_OUT")
-RSS_DELTA=$(( RSS_AFTER - RSS_BEFORE ))
+if [[ "$RSS_BEFORE" == "unobtained" || "$RSS_AFTER" == "unobtained" ]]; then
+  RSS_OBTAINED=false
+  RSS_DELTA="unobtained"
+else
+  RSS_OBTAINED=true
+  RSS_DELTA=$(( RSS_AFTER - RSS_BEFORE ))
+fi
 NHC_DELTA="null"
 if [[ -n "$NHC_BEFORE" && -n "$NHC_AFTER" ]]; then
   NHC_DELTA=$(( NHC_AFTER - NHC_BEFORE ))
@@ -121,9 +151,13 @@ fi
 
 if (( LEAK_DELTA > 0 )); then
   DEGRADATION="leak-suspected"
-else
+elif [[ "$RSS_OBTAINED" == "true" ]]; then
   DEGRADATION="$(destructive_classify 0 0 0 "$RSS_DELTA" 5 \
-      "${RSS_BEFORE:-1}" "$DESTR_PROBE_ALIVE")"
+      "$RSS_BEFORE" "$DESTR_PROBE_ALIVE")"
+else
+  # RSS unobtained — skip leak-suspected pathway so a missing measurement
+  # is not silently rewritten as "stable".
+  DEGRADATION="$(destructive_classify 0 0 0 0 5 0 "$DESTR_PROBE_ALIVE")"
 fi
 
 RESULT_FILE="$OUTPUT_DIR/result.json"
@@ -133,6 +167,9 @@ jq -n \
   --arg run_id "$RUN_ID" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg sha "$GIT_SHA7" \
+  --arg target_repo "$TARGET_REPO" \
+  --arg target_mode "$TARGET_MODE" \
+  --arg target_tier "$TARGET_TIER" \
   --argjson duration "$DURATION" \
   --argjson iterations "$ITERATIONS_TOTAL" \
   '{
@@ -144,10 +181,10 @@ jq -n \
     env_ref: "",
     transport_mode: "loopback-h1",
     target: {
-      repo: "exeris-community-app",
+      repo: $target_repo,
       commit_sha: $sha,
-      mode: "pure",
-      tier: "community",
+      mode: $target_mode,
+      tier: $target_tier,
       protocol: "h1"
     },
     comparison_axis: "standalone",
@@ -165,11 +202,11 @@ jq -n \
   --arg run_id "$RUN_ID" \
   --argjson duration_seconds "$DURATION" \
   --argjson iterations "$ITERATIONS_TOTAL" \
-  --argjson rss_before "$RSS_BEFORE" \
-  --argjson rss_after "$RSS_AFTER" \
-  --argjson rss_delta "$RSS_DELTA" \
-  --argjson vsz_before "$VSZ_BEFORE" \
-  --argjson vsz_after "$VSZ_AFTER" \
+  --arg rss_before "$RSS_BEFORE" \
+  --arg rss_after "$RSS_AFTER" \
+  --arg rss_delta "$RSS_DELTA" \
+  --arg vsz_before "$VSZ_BEFORE" \
+  --arg vsz_after "$VSZ_AFTER" \
   --arg nhc_delta "$NHC_DELTA" \
   --argjson leak_delta "$LEAK_DELTA" \
   --arg probe_status "$DESTR_PROBE_STATUS" \
@@ -205,12 +242,17 @@ jq -n \
       asserted_alive: ($probe_alive == "true")
     },
     resource_delta: {
-      rss_bytes_before: $rss_before,
-      rss_bytes_after: $rss_after,
-      rss_bytes_delta: $rss_delta,
-      vsz_bytes_before: $vsz_before,
-      vsz_bytes_after: $vsz_after,
-      vsz_bytes_delta: ($vsz_after - $vsz_before),
+      rss_bytes_before: ($rss_before | tonumber? // null),
+      rss_bytes_after:  ($rss_after  | tonumber? // null),
+      rss_bytes_delta:  ($rss_delta  | tonumber? // null),
+      vsz_bytes_before: ($vsz_before | tonumber? // null),
+      vsz_bytes_after:  ($vsz_after  | tonumber? // null),
+      vsz_bytes_delta:  (
+        if ($vsz_before | test("^[0-9]+$")) and ($vsz_after | test("^[0-9]+$"))
+        then (($vsz_after | tonumber) - ($vsz_before | tonumber))
+        else null
+        end
+      ),
       native_heap_committed_bytes_delta: ($nhc_delta | tonumber? // null),
       jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end)
     },
@@ -226,7 +268,11 @@ jq -n \
 echo ""
 echo "=== Summary ==="
 echo "  class       : $DEGRADATION"
-echo "  RSS delta   : $RSS_DELTA bytes (before=$RSS_BEFORE after=$RSS_AFTER)"
+if [[ "$RSS_OBTAINED" == "true" ]]; then
+  echo "  RSS delta   : $RSS_DELTA bytes (before=$RSS_BEFORE after=$RSS_AFTER)"
+else
+  echo "  RSS delta   : unobtained (ps -p $TARGET_PID returned no data)"
+fi
 echo "  NHC delta   : $NHC_DELTA bytes"
 echo "  leak delta  : $LEAK_DELTA"
 echo "  liveness    : $DESTR_PROBE_ALIVE ($DESTR_PROBE_STATUS, ${DESTR_PROBE_DURATION_MS}ms)"

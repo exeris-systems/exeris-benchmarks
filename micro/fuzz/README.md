@@ -31,10 +31,13 @@ micro/fuzz/
 
 ```bash
 # Smoke
-mvn -s ../../.github/maven-settings-gpr.xml test -Djazzer.duration=10s
+mvn -s ../../.github/maven-settings-gpr.xml test \
+    -Dexeris.kernel.version=0.5.0-20260512.123456-7 \
+    -Djazzer.duration=10s
 
 # Single target
 mvn -s ../../.github/maven-settings-gpr.xml test \
+    -Dexeris.kernel.version=0.5.0-20260512.123456-7 \
     -Dtest=Http2FrameParserFuzzTest -Djazzer.duration=60s
 
 # Campaign with sidecar emission
@@ -44,7 +47,7 @@ cd ../..
 
 ## Reproducibility
 
-The `exeris.kernel.version` property pins the kernel snapshot under test. Pin it explicitly in CI (`-Dexeris.kernel.version=0.5.0-20260512.123456-7` style) — `0.5.0-SNAPSHOT` is non-reproducible and findings against it cannot be re-bisected.
+`exeris.kernel.version` has no default — `mvn` aborts at `validate` if the property is not passed. Pin it explicitly in CI (`-Dexeris.kernel.version=0.5.0-20260512.123456-7` style) — `0.5.0-SNAPSHOT` is non-reproducible and findings against it cannot be re-bisected.
 
 Seed corpora MUST be committed; Jazzer mutates outward from them. A campaign without committed seeds is descriptive-only.
 

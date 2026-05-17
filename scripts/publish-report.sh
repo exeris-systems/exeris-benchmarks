@@ -84,7 +84,7 @@ is_destructive_crash_input() {
   local base
   base="$(basename "$file_path")"
   case "$base" in
-    crash-*|oom-*|slow-*|timeout-*|*.fuzz-input|*.radamsa|jazzer-crash-*|jazzer-hang-*)
+    crash-*|oom-*|slowloris-*|slow-attack-*|timeout-*|*.fuzz-input|*.radamsa|jazzer-crash-*|jazzer-hang-*)
       return 0
       ;;
   esac
@@ -188,7 +188,7 @@ fi
 if [[ ${#DESTRUCTIVE_BLOCKED_INPUTS[@]} -gt 0 ]]; then
   echo "ERROR: destructive crash/fuzz inputs are blocked outside internal-only mode (basename pattern check)." >&2
   printf 'Blocked input: %s\n' "${DESTRUCTIVE_BLOCKED_INPUTS[@]}" >&2
-  echo "These files (crash-*, jazzer-crash-*, *.fuzz-input, *.radamsa, slow-*, timeout-*, oom-*)" >&2
+  echo "These files (crash-*, jazzer-crash-*, *.fuzz-input, *.radamsa, slowloris-*, slow-attack-*, timeout-*, oom-*)" >&2
   echo "may contain attacker-supplied bytes. Re-run with --publication-mode internal-only." >&2
   exit 1
 fi

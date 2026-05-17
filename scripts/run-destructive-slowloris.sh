@@ -6,6 +6,9 @@
 # Usage:
 #   ./scripts/run-destructive-slowloris.sh \
 #       --base-url http://127.0.0.1:8080 \
+#       --target-repo <repo-id> \
+#       --target-mode pure|compat|native|jdbc-bridge|baseline-db \
+#       --target-tier community|enterprise \
 #       [--target-pid <pid>] \
 #       [--connections 1000] \
 #       [--header-delay 10] \
@@ -24,6 +27,9 @@ source "$ROOT/tools/bench/lib/readiness.sh"
 
 BASE_URL=""
 TARGET_PID=""
+TARGET_REPO=""
+TARGET_MODE=""
+TARGET_TIER=""
 CONNECTIONS=1000
 HEADER_DELAY=10
 DURATION=120
@@ -35,6 +41,9 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --base-url)        BASE_URL="$2";        shift 2 ;;
     --target-pid)      TARGET_PID="$2";      shift 2 ;;
+    --target-repo)     TARGET_REPO="$2";     shift 2 ;;
+    --target-mode)     TARGET_MODE="$2";     shift 2 ;;
+    --target-tier)     TARGET_TIER="$2";     shift 2 ;;
     --connections)     CONNECTIONS="$2";     shift 2 ;;
     --header-delay)    HEADER_DELAY="$2";    shift 2 ;;
     --duration)        DURATION="$2";        shift 2 ;;
@@ -46,6 +55,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -z "$BASE_URL" ]] && { echo "ERROR: --base-url required" >&2; exit 1; }
+# Mandatory target metadata — see run-destructive-radamsa.sh for rationale.
+[[ -z "$TARGET_REPO" ]] && { echo "ERROR: --target-repo required (reproducibility metadata)" >&2; exit 1; }
+[[ -z "$TARGET_MODE" ]] && { echo "ERROR: --target-mode required (pure|compat|...)" >&2; exit 1; }
+[[ -z "$TARGET_TIER" ]] && { echo "ERROR: --target-tier required (community|enterprise)" >&2; exit 1; }
+case "$TARGET_MODE" in
+  pure|compat|native|jdbc-bridge|baseline-db) ;;
+  *) echo "ERROR: --target-mode must be one of pure|compat|native|jdbc-bridge|baseline-db (got: '$TARGET_MODE')" >&2; exit 1 ;;
+esac
+case "$TARGET_TIER" in
+  community|enterprise) ;;
+  *) echo "ERROR: --target-tier must be community or enterprise (got: '$TARGET_TIER')" >&2; exit 1 ;;
+esac
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 required" >&2; exit 1; }
 
@@ -109,13 +130,26 @@ else
   echo "  DEAD : status=$DESTR_PROBE_STATUS duration_ms=$DESTR_PROBE_DURATION_MS" >&2
 fi
 
-RSS_DELTA=$(( RSS_AFTER - RSS_BEFORE ))
+if [[ "$RSS_BEFORE" == "unobtained" || "$RSS_AFTER" == "unobtained" ]]; then
+  RSS_OBTAINED=false
+  RSS_DELTA="unobtained"
+else
+  RSS_OBTAINED=true
+  RSS_DELTA=$(( RSS_AFTER - RSS_BEFORE ))
+fi
 ATTACKER_JSON="$(cat "$ATTACKER_OUT")"
 ITERATIONS_TOTAL=$(echo "$ATTACKER_JSON" | jq -r '.iterations_total // 0')
 CONNECTIONS_DROPPED=$(echo "$ATTACKER_JSON" | jq -r '.connections_dropped // 0')
 
-DEGRADATION="$(destructive_classify 0 0 "$CONNECTIONS_DROPPED" \
-    "$RSS_DELTA" 5 "${RSS_BEFORE:-1}" "$DESTR_PROBE_ALIVE")"
+if [[ "$RSS_OBTAINED" == "true" ]]; then
+  DEGRADATION="$(destructive_classify 0 0 "$CONNECTIONS_DROPPED" \
+      "$RSS_DELTA" 5 "$RSS_BEFORE" "$DESTR_PROBE_ALIVE")"
+else
+  # RSS unobtained — skip leak-suspected pathway, don't let the classifier
+  # interpret a missing measurement as "stable".
+  DEGRADATION="$(destructive_classify 0 0 "$CONNECTIONS_DROPPED" \
+      0 5 0 "$DESTR_PROBE_ALIVE")"
+fi
 
 RESULT_FILE="$OUTPUT_DIR/result.json"
 FINDINGS_FILE="$OUTPUT_DIR/destructive-findings.json"
@@ -124,6 +158,9 @@ jq -n \
   --arg run_id "$RUN_ID" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg sha "$GIT_SHA7" \
+  --arg target_repo "$TARGET_REPO" \
+  --arg target_mode "$TARGET_MODE" \
+  --arg target_tier "$TARGET_TIER" \
   --argjson duration "$DURATION" \
   --argjson iterations "$ITERATIONS_TOTAL" \
   --argjson crash "$CONNECTIONS_DROPPED" \
@@ -136,10 +173,10 @@ jq -n \
     env_ref: "",
     transport_mode: "loopback-h1",
     target: {
-      repo: "exeris-community-app",
+      repo: $target_repo,
       commit_sha: $sha,
-      mode: "pure",
-      tier: "community",
+      mode: $target_mode,
+      tier: $target_tier,
       protocol: "h1"
     },
     comparison_axis: "standalone",
@@ -162,11 +199,11 @@ jq -n \
   --argjson duration_seconds "$DURATION" \
   --argjson iterations "$ITERATIONS_TOTAL" \
   --argjson connections_dropped "$CONNECTIONS_DROPPED" \
-  --argjson rss_before "$RSS_BEFORE" \
-  --argjson rss_after "$RSS_AFTER" \
-  --argjson rss_delta "$RSS_DELTA" \
-  --argjson vsz_before "$VSZ_BEFORE" \
-  --argjson vsz_after "$VSZ_AFTER" \
+  --arg rss_before "$RSS_BEFORE" \
+  --arg rss_after "$RSS_AFTER" \
+  --arg rss_delta "$RSS_DELTA" \
+  --arg vsz_before "$VSZ_BEFORE" \
+  --arg vsz_after "$VSZ_AFTER" \
   --arg probe_status "$DESTR_PROBE_STATUS" \
   --argjson probe_duration_ms "$DESTR_PROBE_DURATION_MS" \
   --arg probe_alive "$DESTR_PROBE_ALIVE" \
@@ -199,12 +236,17 @@ jq -n \
       asserted_alive: ($probe_alive == "true")
     },
     resource_delta: {
-      rss_bytes_before: $rss_before,
-      rss_bytes_after: $rss_after,
-      rss_bytes_delta: $rss_delta,
-      vsz_bytes_before: $vsz_before,
-      vsz_bytes_after: $vsz_after,
-      vsz_bytes_delta: ($vsz_after - $vsz_before),
+      rss_bytes_before: ($rss_before | tonumber? // null),
+      rss_bytes_after:  ($rss_after  | tonumber? // null),
+      rss_bytes_delta:  ($rss_delta  | tonumber? // null),
+      vsz_bytes_before: ($vsz_before | tonumber? // null),
+      vsz_bytes_after:  ($vsz_after  | tonumber? // null),
+      vsz_bytes_delta:  (
+        if ($vsz_before | test("^[0-9]+$")) and ($vsz_after | test("^[0-9]+$"))
+        then (($vsz_after | tonumber) - ($vsz_before | tonumber))
+        else null
+        end
+      ),
       native_heap_committed_bytes_delta: null,
       jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end)
     },
@@ -220,7 +262,11 @@ echo ""
 echo "=== Summary ==="
 echo "  class      : $DEGRADATION"
 echo "  liveness   : $DESTR_PROBE_ALIVE ($DESTR_PROBE_STATUS, ${DESTR_PROBE_DURATION_MS}ms)"
-echo "  RSS delta  : $RSS_DELTA bytes"
+if [[ "$RSS_OBTAINED" == "true" ]]; then
+  echo "  RSS delta  : $RSS_DELTA bytes"
+else
+  echo "  RSS delta  : unobtained (no PID for sampling)"
+fi
 echo ""
 echo "Artifacts:"
 echo "  $RESULT_FILE"

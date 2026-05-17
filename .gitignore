@@ -44,6 +44,9 @@ env/.local/
 *.tmp
 *.log
 
+# Upstream installer scripts must not be committed
+get-docker.sh
+
 # Comparative benchmark quarantine and audit logs
 quarantine/
 comparative-audit.log

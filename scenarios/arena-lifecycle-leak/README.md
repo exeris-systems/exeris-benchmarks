@@ -27,6 +27,9 @@ target exits during attack                                 → crash or oom
 ./scripts/run-arena-lifecycle-leak.sh \
     --base-url http://127.0.0.1:8080 \
     --target-pid <pid> \
+    --target-repo exeris-community-app \
+    --target-mode pure \
+    --target-tier community \
     --duration 600 \
     --cooldown 60 \
     --radamsa-seed 42 \
@@ -34,4 +37,4 @@ target exits during attack                                 → crash or oom
     --output results/raw/arena-lifecycle-leak-$(date +%Y%m%d-%H%M%S)
 ```
 
-`--target-pid` is mandatory for RSS/NMT sampling. If the target is in a Docker container, pass the container PID (1 inside, or the host-visible PID).
+`--target-pid` is mandatory for RSS/NMT sampling. If the target is in a Docker container, pass the container PID (1 inside, or the host-visible PID). `--target-{repo,mode,tier}` are also mandatory — see destructive-radamsa-h1 README.

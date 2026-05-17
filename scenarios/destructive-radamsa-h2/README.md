@@ -22,11 +22,16 @@ This scenario is H2C-only. TLS fuzzing belongs in the existing `docs/tls-zero-co
 ./scripts/run-destructive-radamsa.sh \
     --base-url http://127.0.0.1:8080 \
     --protocol h2 \
+    --target-repo exeris-community-app \
+    --target-mode pure \
+    --target-tier community \
     --rps 200 \
     --duration 120 \
     --cooldown 30 \
     --radamsa-seed 42 \
     --output results/raw/destructive-radamsa-h2-$(date +%Y%m%d-%H%M%S)
 ```
+
+`--target-{repo,mode,tier}` are REQUIRED — see destructive-radamsa-h1 README.
 
 The liveness probe uses `curl --http2-prior-knowledge http://.../health`. If curl was compiled without `--http2`, the script fails fast with an explicit error.

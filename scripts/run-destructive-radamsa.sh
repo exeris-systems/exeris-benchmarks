@@ -9,6 +9,9 @@
 #       --base-url http://127.0.0.1:8080 \
 #       --protocol h1|h2 \
 #       --radamsa-seed <seed> \
+#       --target-repo <repo-id> \
+#       --target-mode pure|compat|native|jdbc-bridge|baseline-db \
+#       --target-tier community|enterprise \
 #       [--target-pid <pid>] \
 #       [--rps 500] [--duration 120] [--cooldown 30] \
 #       [--health-path /health] [--output <dir>]
@@ -25,6 +28,9 @@ BASE_URL=""
 PROTOCOL=""
 RADAMSA_SEED=""
 TARGET_PID=""
+TARGET_REPO=""
+TARGET_MODE=""
+TARGET_TIER=""
 RPS=500
 DURATION=120
 COOLDOWN=30
@@ -37,6 +43,9 @@ while [[ $# -gt 0 ]]; do
     --protocol)      PROTOCOL="$2";      shift 2 ;;
     --radamsa-seed)  RADAMSA_SEED="$2";  shift 2 ;;
     --target-pid)    TARGET_PID="$2";    shift 2 ;;
+    --target-repo)   TARGET_REPO="$2";   shift 2 ;;
+    --target-mode)   TARGET_MODE="$2";   shift 2 ;;
+    --target-tier)   TARGET_TIER="$2";   shift 2 ;;
     --rps)           RPS="$2";           shift 2 ;;
     --duration)      DURATION="$2";      shift 2 ;;
     --cooldown)      COOLDOWN="$2";      shift 2 ;;
@@ -48,6 +57,20 @@ done
 
 [[ -z "$BASE_URL" ]] && { echo "ERROR: --base-url required" >&2; exit 1; }
 [[ -z "$RADAMSA_SEED" ]] && { echo "ERROR: --radamsa-seed required (campaign reproducibility)" >&2; exit 1; }
+# Target metadata is mandatory: the harness can't introspect which app is behind
+# $BASE_URL, and silently labeling the wrong repo/mode/tier in result.json
+# breaks reproducibility metadata and cross-stack comparisons.
+[[ -z "$TARGET_REPO" ]] && { echo "ERROR: --target-repo required (reproducibility metadata)" >&2; exit 1; }
+[[ -z "$TARGET_MODE" ]] && { echo "ERROR: --target-mode required (pure|compat|...)" >&2; exit 1; }
+[[ -z "$TARGET_TIER" ]] && { echo "ERROR: --target-tier required (community|enterprise)" >&2; exit 1; }
+case "$TARGET_MODE" in
+  pure|compat|native|jdbc-bridge|baseline-db) ;;
+  *) echo "ERROR: --target-mode must be one of pure|compat|native|jdbc-bridge|baseline-db (got: '$TARGET_MODE')" >&2; exit 1 ;;
+esac
+case "$TARGET_TIER" in
+  community|enterprise) ;;
+  *) echo "ERROR: --target-tier must be community or enterprise (got: '$TARGET_TIER')" >&2; exit 1 ;;
+esac
 case "$PROTOCOL" in
   h1|h2) ;;
   *) echo "ERROR: --protocol must be h1 or h2 (got: '$PROTOCOL')" >&2; exit 1 ;;
@@ -70,6 +93,9 @@ if [[ -z "$TARGET_PID" ]]; then
   TARGET_PID="$(bench_detect_pid_for_port "$PORT" 2>/dev/null || true)"
 fi
 
+# destructive_capture_rss emits "unobtained unobtained" when no PID is known;
+# downstream JSON emission turns that into null so a no-signal run is not
+# misread as a stable-with-zero-RSS run.
 read -r RSS_BEFORE VSZ_BEFORE < <(destructive_capture_rss "${TARGET_PID:-0}")
 
 JFR_OUT=""
@@ -111,10 +137,24 @@ ITERATIONS_TOTAL=$(jq -r '.iterations_total // 0' "$ATTACKER_OUT")
 CRASH_COUNT=$(jq -r '.crash_count // 0' "$ATTACKER_OUT")
 HANG_COUNT=$(jq -r '.hang_count // 0' "$ATTACKER_OUT")
 FIVE_XX_COUNT=$(jq -r '.five_xx_count // 0' "$ATTACKER_OUT")
-RSS_DELTA=$(( RSS_AFTER - RSS_BEFORE ))
 
-DEGRADATION="$(destructive_classify "$CRASH_COUNT" 0 "$HANG_COUNT" \
-    "$RSS_DELTA" 5 "${RSS_BEFORE:-1}" "$DESTR_PROBE_ALIVE")"
+if [[ "$RSS_BEFORE" == "unobtained" || "$RSS_AFTER" == "unobtained" ]]; then
+  RSS_OBTAINED=false
+  RSS_DELTA="unobtained"
+else
+  RSS_OBTAINED=true
+  RSS_DELTA=$(( RSS_AFTER - RSS_BEFORE ))
+fi
+
+if [[ "$RSS_OBTAINED" == "true" ]]; then
+  DEGRADATION="$(destructive_classify "$CRASH_COUNT" 0 "$HANG_COUNT" \
+      "$RSS_DELTA" 5 "$RSS_BEFORE" "$DESTR_PROBE_ALIVE")"
+else
+  # RSS path is the only "leak-suspected" signal — skip it when unobtained,
+  # so the classifier doesn't conclude "stable" from a missing measurement.
+  DEGRADATION="$(destructive_classify "$CRASH_COUNT" 0 "$HANG_COUNT" \
+      0 5 0 "$DESTR_PROBE_ALIVE")"
+fi
 
 TRANSPORT_MODE="loopback-${PROTOCOL}"
 RESULT_FILE="$OUTPUT_DIR/result.json"
@@ -127,6 +167,9 @@ jq -n \
   --arg sha "$GIT_SHA7" \
   --arg transport_mode "$TRANSPORT_MODE" \
   --arg protocol "$PROTOCOL" \
+  --arg target_repo "$TARGET_REPO" \
+  --arg target_mode "$TARGET_MODE" \
+  --arg target_tier "$TARGET_TIER" \
   --argjson duration "$DURATION" \
   --argjson iterations "$ITERATIONS_TOTAL" \
   --argjson errors "$((CRASH_COUNT + HANG_COUNT + FIVE_XX_COUNT))" \
@@ -139,10 +182,10 @@ jq -n \
     env_ref: "",
     transport_mode: $transport_mode,
     target: {
-      repo: "exeris-community-app",
+      repo: $target_repo,
       commit_sha: $sha,
-      mode: "pure",
-      tier: "community",
+      mode: $target_mode,
+      tier: $target_tier,
       protocol: $protocol
     },
     comparison_axis: "standalone",
@@ -168,18 +211,17 @@ jq -n \
   --argjson crash "$CRASH_COUNT" \
   --argjson hang "$HANG_COUNT" \
   --argjson five_xx "$FIVE_XX_COUNT" \
-  --argjson rss_before "$RSS_BEFORE" \
-  --argjson rss_after "$RSS_AFTER" \
-  --argjson rss_delta "$RSS_DELTA" \
-  --argjson vsz_before "$VSZ_BEFORE" \
-  --argjson vsz_after "$VSZ_AFTER" \
+  --arg rss_before "$RSS_BEFORE" \
+  --arg rss_after "$RSS_AFTER" \
+  --arg rss_delta "$RSS_DELTA" \
+  --arg vsz_before "$VSZ_BEFORE" \
+  --arg vsz_after "$VSZ_AFTER" \
   --arg probe_status "$DESTR_PROBE_STATUS" \
   --argjson probe_duration_ms "$DESTR_PROBE_DURATION_MS" \
   --arg probe_alive "$DESTR_PROBE_ALIVE" \
   --arg degradation "$DEGRADATION" \
   --arg jfr_path "${JFR_OUT:-}" \
   --arg radamsa_seed "$RADAMSA_SEED" \
-  --arg scenario "$SCENARIO_ID" \
   '{
     schema_version: "1",
     run_id: $run_id,
@@ -207,12 +249,17 @@ jq -n \
       asserted_alive: ($probe_alive == "true")
     },
     resource_delta: {
-      rss_bytes_before: $rss_before,
-      rss_bytes_after: $rss_after,
-      rss_bytes_delta: $rss_delta,
-      vsz_bytes_before: $vsz_before,
-      vsz_bytes_after: $vsz_after,
-      vsz_bytes_delta: ($vsz_after - $vsz_before),
+      rss_bytes_before: ($rss_before | tonumber? // null),
+      rss_bytes_after:  ($rss_after  | tonumber? // null),
+      rss_bytes_delta:  ($rss_delta  | tonumber? // null),
+      vsz_bytes_before: ($vsz_before | tonumber? // null),
+      vsz_bytes_after:  ($vsz_after  | tonumber? // null),
+      vsz_bytes_delta:  (
+        if ($vsz_before | test("^[0-9]+$")) and ($vsz_after | test("^[0-9]+$"))
+        then (($vsz_after | tonumber) - ($vsz_before | tonumber))
+        else null
+        end
+      ),
       native_heap_committed_bytes_delta: null,
       jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end)
     },
@@ -232,7 +279,11 @@ echo "  iterations : $ITERATIONS_TOTAL"
 echo "  crashes    : $CRASH_COUNT"
 echo "  hangs      : $HANG_COUNT"
 echo "  5xx        : $FIVE_XX_COUNT"
-echo "  RSS delta  : $RSS_DELTA bytes"
+if [[ "$RSS_OBTAINED" == "true" ]]; then
+  echo "  RSS delta  : $RSS_DELTA bytes"
+else
+  echo "  RSS delta  : unobtained (no PID for sampling)"
+fi
 echo "  liveness   : $DESTR_PROBE_ALIVE ($DESTR_PROBE_STATUS, ${DESTR_PROBE_DURATION_MS}ms)"
 echo ""
 echo "Artifacts:"

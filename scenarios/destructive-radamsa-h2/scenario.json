@@ -1,0 +1,36 @@
+{
+  "scenario_id": "destructive-radamsa-h2",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-destructive-malformed-input",
+  "description": "Mutated HTTP/2 frame attack against an externally-launched H2C (HTTP/2 cleartext) target. Seed: a single HEADERS frame plus DATA frame for GET /plaintext, mutated by radamsa into invalid frame headers, malformed HPACK blocks, and oversized payloads. Each variant is fired over a fresh TCP connection that starts with the H2C connection preface. PRIMARY CHECK: after attack window + cooldown, target serves clean GET /health with HTTP/2 200 within 1s.",
+  "mode": "destructive-malformed-input",
+  "tier": "community",
+  "driver": ["radamsa"],
+  "transport": ["h2"],
+  "loopback": true,
+  "loopback_caveat": "H2C cleartext only; H2-over-TLS not covered by this scenario. transport_mode=loopback-h2 mandatory.",
+  "attack_profile": {
+    "requests_per_second": 200,
+    "attack_duration_seconds": 120,
+    "cooldown_seconds": 30,
+    "radamsa_seed": "REQUIRED — set via --radamsa-seed",
+    "h2c_preface": "PRI * HTTP/2.0\\r\\n\\r\\nSM\\r\\n\\r\\n"
+  },
+  "liveness_probe": {
+    "mandatory": true,
+    "method": "GET",
+    "path": "/health",
+    "protocol": "h2c",
+    "expected_status": 200,
+    "max_response_ms": 1000,
+    "note": "Liveness probe uses curl --http2-prior-knowledge. nghttp may be used as fallback."
+  },
+  "tolerance": {
+    "rss_growth_pct_max": 5,
+    "max_unexpected_crashes": 0
+  },
+  "claim_scope": "exploratory",
+  "comparison_axis_note": "Cross-stack comparison requires identical --radamsa-seed AND identical H2 server-side limits (max-concurrent-streams, max-frame-size, max-header-list-size). Different limits change what gets rejected at the protocol layer vs the parser layer.",
+  "publication_mode_required": "internal-only"
+}

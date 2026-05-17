@@ -1,0 +1,39 @@
+{
+  "scenario_id": "fuzz-http1-parser",
+  "version": "1",
+  "benchmark_family": "micro",
+  "target_classification": "micro-parser-robustness",
+  "description": "Jazzer-driven byte[] fuzz against eu.exeris.kernel.core.http.http1.Http1RequestParser (parseRequestLine + parseHeaders). Each fuzz iteration wraps the mutated byte[] in a confined Arena MemorySegment and invokes the parser. Whitelisted throwables (Http1ParseException, IndexOutOfBoundsException, IllegalArgumentException, BufferUnderflowException) are recorded but do NOT count as findings. Any other Throwable (NPE, AssertionError, OOM, StackOverflow, VirtualMachineError) is a finding.",
+  "mode": "fuzz-campaign",
+  "tier": "community",
+  "driver": ["jazzer"],
+  "transport": ["none"],
+  "loopback": false,
+  "fuzz": {
+    "tool": "jazzer",
+    "test_class": "eu.exeris.benchmarks.micro.fuzz.Http1RequestParserFuzzTest",
+    "default_duration_seconds": 60,
+    "seed_corpus_dir": "src/test/resources/eu/exeris/benchmarks/micro/fuzz/Http1RequestParserFuzzTest",
+    "expected_throwables": [
+      "eu.exeris.kernel.core.http.http1.Http1ParseException",
+      "java.lang.IndexOutOfBoundsException",
+      "java.lang.IllegalArgumentException",
+      "java.nio.BufferUnderflowException"
+    ],
+    "finding_throwables": [
+      "java.lang.NullPointerException",
+      "java.lang.AssertionError",
+      "java.lang.OutOfMemoryError",
+      "java.lang.StackOverflowError",
+      "java.lang.VirtualMachineError"
+    ]
+  },
+  "tolerance": {
+    "max_unexpected_crashes": 0,
+    "max_hang_count": 0
+  },
+  "claim_scope": "exploratory",
+  "comparison_axis_note": "Fuzz findings are exploratory by construction. Do NOT report iterations/sec as a perf claim — Jazzer's internal coverage feedback makes throughput non-stationary. The relevant axes are robustness (zero unexpected crashes) and Arena leak count delta.",
+  "publication_mode_required": "internal-only",
+  "publication_mode_reason": "Crash inputs produced by Jazzer (crash-<sha1>) contain attacker-supplied bytes; basename blocklist in publish-report.sh blocks them outside internal-only mode."
+}

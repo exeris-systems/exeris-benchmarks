@@ -28,7 +28,7 @@ ROWS_INVALID=0
 VALID_RUNNER_STATUS=("success" "partial" "failed")
 VALID_REPRO_STATUS=("complete" "incomplete_artifacts" "incomplete_metadata" "not_assessable")
 VALID_FINAL_REASON=("ok" "partial_json" "empty_json" "invalid_json" "benchmark_exit_nonzero" "postprocess_exit_nonzero" "missing_jfr" "missing_metrics" "missing_metadata")
-VALID_CLAIM_SCOPE=("comparison_eligible" "descriptive_partial" "descriptive_only" "none")
+VALID_CLAIM_SCOPE=("comparison_eligible" "descriptive_partial" "descriptive_only" "exploratory" "none")
 LEGACY_CLAIM_SCOPE=("eligible" "comparison" "comparative" "descriptive" "partial" "ineligible" "not_eligible" "not_comparison_eligible" "no_claims")
 
 error_count=0

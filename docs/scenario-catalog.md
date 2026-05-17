@@ -149,6 +149,30 @@ script in `runtime/<tool>/`.
 
 ---
 
+## Destructive / fuzz / chaos scenarios
+
+All entries below emit `claim_scope=exploratory`, `comparison_axis=standalone`, and a `destructive-findings.json` sidecar conforming to `schemas/destructive-findings.schema.json`. Methodology, boundary, confidentiality rules: `docs/destructive-fuzz-methodology.md`.
+
+| Scenario | Tier / Family | Driver | What it stresses |
+|---|---|---|---|
+| `fuzz-http1-parser` | community / micro | Jazzer + JUnit 5 | `Http1RequestParser.parseRequestLine` / `parseHeaders` |
+| `fuzz-http2-parser` | community / micro | Jazzer + JUnit 5 | `Http2FrameParser.parseHeader` |
+| `destructive-slowloris-h1` | community / runtime | `runtime/drivers/slowloris.py` | Half-open connection eviction; RSS leak under sustained slow-headers |
+| `destructive-radamsa-h1` | community / runtime | `runtime/drivers/radamsa-h1-attacker.py` | HTTP/1.1 parser robustness against radamsa-mutated requests |
+| `destructive-radamsa-h2` | community / runtime | `runtime/drivers/radamsa-h2-attacker.py` | HTTP/2 frame parser + HPACK decoder robustness (H2C, no TLS) |
+| `arena-lifecycle-leak` | community / runtime | radamsa H1 + jcmd | Arena lifecycle leaks under sustained malformed-input load; RSS / NMT / `MemoryStats.leakCount` delta |
+
+Drivers:
+
+- `scripts/run-fuzz-campaign.sh <scenario-dir>` — Jazzer
+- `scripts/run-destructive-slowloris.sh --base-url ...`
+- `scripts/run-destructive-radamsa.sh --base-url ... --protocol h1|h2 --radamsa-seed ...`
+- `scripts/run-arena-lifecycle-leak.sh --base-url ... --target-pid ... --radamsa-seed ...`
+
+Cross-stack destructive comparisons require explicit timeout / connection-limit / radamsa-seed normalization — see methodology doc.
+
+---
+
 ## Adding a new scenario
 
 1. Create `scenarios/<name>/` directory.

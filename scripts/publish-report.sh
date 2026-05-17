@@ -15,6 +15,7 @@ OUTPUT_DIR=""
 ARCHIVE_DIR=""
 PUBLICATION_MODE="public"
 JFR_ARTIFACTS=()
+DESTRUCTIVE_ARTIFACTS=()
 
 usage() {
   cat <<'EOF'
@@ -28,12 +29,18 @@ Options:
   --archive <dir>             Archive directory for result copy
   --publication-mode <mode>   Publication mode: public|internal-only|redacted (default: public)
   --jfr-artifact <path>       JFR-related artifact candidate for publication (repeatable)
+  --destructive-artifact <path>
+                              Destructive/fuzz artifact candidate (crash input, radamsa
+                              dump, slowloris log). Blocked in public mode by basename.
+                              Repeatable.
   -h, --help                  Show this help
 
 Confidentiality guard:
-  - public: blocks raw JFR artifacts by extension/signature (default-deny)
-  - internal-only: allows raw .jfr artifacts for restricted publication
-  - redacted: allows JFR-related artifacts only if raw JFR is not detected
+  - public: blocks raw JFR artifacts by extension/signature AND destructive
+            crash/fuzz artifacts by basename pattern (default-deny)
+  - internal-only: allows raw .jfr and destructive artifacts for restricted publication
+  - redacted: allows JFR-related artifacts only if raw JFR is not detected; still
+              blocks destructive crash inputs
 EOF
 }
 
@@ -69,6 +76,21 @@ is_raw_jfr_file() {
   [[ "$magic_hex" == "464c5200" ]]
 }
 
+# Basenames of artifacts produced by Jazzer/radamsa/slowloris campaigns that may
+# contain raw attacker bytes (including the original malformed input that
+# crashed the parser). These are blocked in public/redacted publication modes.
+is_destructive_crash_input() {
+  local file_path="$1"
+  local base
+  base="$(basename "$file_path")"
+  case "$base" in
+    crash-*|oom-*|slow-*|timeout-*|*.fuzz-input|*.radamsa|jazzer-crash-*|jazzer-hang-*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --result)  RESULT_FILE="$2"; shift 2 ;;
@@ -77,6 +99,7 @@ while [[ $# -gt 0 ]]; do
     --archive) ARCHIVE_DIR="$2"; shift 2 ;;
     --publication-mode) PUBLICATION_MODE="$2"; shift 2 ;;
     --jfr-artifact) JFR_ARTIFACTS+=("$2"); shift 2 ;;
+    --destructive-artifact) DESTRUCTIVE_ARTIFACTS+=("$2"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
@@ -101,6 +124,13 @@ esac
 for artifact in "${JFR_ARTIFACTS[@]}"; do
   if [[ ! -f "$artifact" ]]; then
     echo "ERROR: --jfr-artifact path does not exist or is not a file: $artifact" >&2
+    exit 1
+  fi
+done
+
+for artifact in "${DESTRUCTIVE_ARTIFACTS[@]}"; do
+  if [[ ! -f "$artifact" ]]; then
+    echo "ERROR: --destructive-artifact path does not exist or is not a file: $artifact" >&2
     exit 1
   fi
 done
@@ -146,6 +176,23 @@ if [[ "$PUBLICATION_MODE" == "redacted" && ${#RAW_JFR_INPUTS[@]} -gt 0 ]]; then
   exit 1
 fi
 
+DESTRUCTIVE_BLOCKED_INPUTS=()
+if [[ "$PUBLICATION_MODE" != "internal-only" ]]; then
+  for artifact in "${DESTRUCTIVE_ARTIFACTS[@]}"; do
+    if is_destructive_crash_input "$artifact"; then
+      DESTRUCTIVE_BLOCKED_INPUTS+=("--destructive-artifact:$artifact")
+    fi
+  done
+fi
+
+if [[ ${#DESTRUCTIVE_BLOCKED_INPUTS[@]} -gt 0 ]]; then
+  echo "ERROR: destructive crash/fuzz inputs are blocked outside internal-only mode (basename pattern check)." >&2
+  printf 'Blocked input: %s\n' "${DESTRUCTIVE_BLOCKED_INPUTS[@]}" >&2
+  echo "These files (crash-*, jazzer-crash-*, *.fuzz-input, *.radamsa, slow-*, timeout-*, oom-*)" >&2
+  echo "may contain attacker-supplied bytes. Re-run with --publication-mode internal-only." >&2
+  exit 1
+fi
+
 CONFIDENTIALITY_STATUS="public-safe-no-raw-jfr"
 JFR_HANDLING="raw-jfr-blocked"
 if [[ "$PUBLICATION_MODE" == "internal-only" ]]; then
@@ -154,6 +201,10 @@ if [[ "$PUBLICATION_MODE" == "internal-only" ]]; then
 elif [[ "$PUBLICATION_MODE" == "redacted" ]]; then
   CONFIDENTIALITY_STATUS="public-redacted"
   JFR_HANDLING="redacted-artifacts-only"
+fi
+
+if [[ ${#DESTRUCTIVE_ARTIFACTS[@]} -gt 0 && "$PUBLICATION_MODE" == "internal-only" ]]; then
+  CONFIDENTIALITY_STATUS="destructive-internal-only"
 fi
 
 mkdir -p "$OUTPUT_DIR"

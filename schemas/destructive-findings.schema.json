@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exeris.io/schemas/destructive-findings/v1",
+  "title": "DestructiveFindings",
+  "description": "Sidecar artifact for destructive / fuzz / chaos campaigns. Lives next to the standard benchmark-result.json. Captures crash/OOM/hang counts, post-attack liveness probe, RSS/native-heap deltas, and a degradation classification. Destructive findings are EXPLORATORY by construction: results are never comparison_eligible and must not enter the comparative aggregation pipeline.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "scenario",
+    "campaign_kind",
+    "duration_seconds",
+    "claim_scope",
+    "findings",
+    "degradation_class"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Matches the run_id of the paired BenchmarkResult artifact."
+    },
+    "scenario": {
+      "type": "string",
+      "description": "Scenario id from docs/scenario-catalog.md (e.g. fuzz-http1-parser, destructive-slowloris-h1)."
+    },
+    "campaign_kind": {
+      "type": "string",
+      "enum": ["jazzer-parser", "slowloris", "radamsa", "arena-lifecycle"]
+    },
+    "duration_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Wall-clock duration of the attack/fuzz window (excluding warmup/cooldown)."
+    },
+    "claim_scope": {
+      "type": "string",
+      "const": "exploratory",
+      "description": "Destructive findings are never comparison_eligible. Locked to exploratory."
+    },
+    "comparison_axis": {
+      "type": "string",
+      "const": "standalone",
+      "description": "Destructive runs do not enter cross-tier or within-tier comparison axes."
+    },
+    "findings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "iterations_total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total fuzz iterations / attack requests dispatched."
+        },
+        "crash_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Unexpected throwables from the SUT (excluding whitelisted parse exceptions). Each is a finding."
+        },
+        "oom_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Iterations where the SUT threw OutOfMemoryError or the JVM exited with OOM-killed."
+        },
+        "hang_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Iterations that exceeded the per-iteration timeout without returning."
+        },
+        "unique_crash_signatures": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Distinct stack-trace top-frames among recorded crashes."
+        },
+        "mean_time_to_crash_us": {
+          "type": ["number", "null"],
+          "description": "Mean microseconds from attack start to first observed crash; null if no crashes."
+        },
+        "leak_count_delta": {
+          "type": "integer",
+          "description": "(MemoryStats.leakCount after) - (MemoryStats.leakCount before). Negative if pool released more than expected."
+        }
+      }
+    },
+    "liveness_probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Post-attack clean-traffic liveness probe. Mandatory for slowloris/radamsa/arena-lifecycle campaigns.",
+      "required": ["asserted_alive"],
+      "properties": {
+        "method": { "type": "string", "enum": ["GET", "HEAD", "POST"] },
+        "path": { "type": "string" },
+        "status_code": { "type": "integer" },
+        "duration_ms": { "type": "number", "minimum": 0 },
+        "expected_status": { "type": "integer" },
+        "expected_max_response_ms": { "type": "number", "minimum": 0 },
+        "asserted_alive": {
+          "type": "boolean",
+          "description": "true iff status_code == expected_status AND duration_ms <= expected_max_response_ms."
+        }
+      }
+    },
+    "resource_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Process resource snapshot before vs after attack window. Optional for jazzer-parser (in-process JMH-like) campaigns.",
+      "properties": {
+        "rss_bytes_before": { "type": "integer", "minimum": 0 },
+        "rss_bytes_after": { "type": "integer", "minimum": 0 },
+        "rss_bytes_delta": { "type": "integer" },
+        "vsz_bytes_before": { "type": "integer", "minimum": 0 },
+        "vsz_bytes_after": { "type": "integer", "minimum": 0 },
+        "vsz_bytes_delta": { "type": "integer" },
+        "native_heap_committed_bytes_delta": { "type": ["integer", "null"] },
+        "jfr_recording_path": {
+          "type": ["string", "null"],
+          "description": "Path to the JFR recording covering the attack window. NEVER published in public mode."
+        }
+      }
+    },
+    "degradation_class": {
+      "type": "string",
+      "enum": ["graceful-shed", "timeout-flood", "crash", "oom", "leak-suspected", "stable"],
+      "description": "Observed failure/degradation classification. 'stable' = target absorbed attack and liveness probe passed within tolerance."
+    },
+    "tool_versions": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Pinned versions of attack tooling (jazzer, radamsa, slowloris-driver) and kernel artifact under test."
+    },
+    "seeds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jazzer_seed_corpus_sha256": { "type": "string" },
+        "radamsa_seed": { "type": "string" },
+        "slowloris_config_sha256": { "type": "string" }
+      },
+      "description": "Reproducibility seeds. Without these the campaign is not reproducible and the artifact is descriptive-only."
+    },
+    "tolerance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Scenario-declared tolerance thresholds that produced the degradation_class.",
+      "properties": {
+        "rss_growth_pct_max": { "type": "number" },
+        "native_heap_committed_growth_pct_max": { "type": "number" },
+        "max_unexpected_crashes": { "type": "integer", "minimum": 0 },
+        "max_hang_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "publication_mode": {
+      "type": "string",
+      "enum": ["internal-only"],
+      "description": "Destructive findings sidecars are locked to internal-only publication. Crash inputs and raw attack corpora may contain attacker-supplied bytes and are blocked in public/redacted modes by publish-report.sh."
+    },
+    "notes": { "type": "string" }
+  }
+}

@@ -33,7 +33,7 @@
     },
     "tool": {
       "type": "string",
-      "enum": ["jmh", "wrk", "wrk2", "h2load", "k6"]
+      "enum": ["jmh", "wrk", "wrk2", "h2load", "k6", "jazzer", "slowloris", "radamsa"]
     },
     "env_ref": {
       "type": "string",

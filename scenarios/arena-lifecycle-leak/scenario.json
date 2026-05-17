@@ -1,0 +1,32 @@
+{
+  "scenario_id": "arena-lifecycle-leak",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-resource-arena-lifecycle",
+  "description": "Sustained malformed-input load (driver: radamsa over H1 OR a Jazzer in-process driver) followed by cooldown + forced GC. Measures process RSS delta, native-heap committed delta (when NMT enabled on the target), and MemoryAllocator.stats().leakCount() delta (when the target exposes the diagnostic endpoint). PASS: deltas within tolerance. FAIL (degradation_class=leak-suspected): RSS delta correlates with attack duration, i.e. each error path that fails to close its Arena pinches a buffer permanently.",
+  "mode": "destructive-leak-detection",
+  "tier": "community",
+  "driver": ["radamsa"],
+  "transport": ["h1"],
+  "loopback": true,
+  "loopback_caveat": "transport_mode=loopback-h1 mandatory.",
+  "attack_profile": {
+    "requests_per_second": 500,
+    "attack_duration_seconds": 600,
+    "cooldown_seconds": 60,
+    "force_gc_iterations": 2,
+    "radamsa_seed": "REQUIRED"
+  },
+  "instrumentation": {
+    "rss_sampling": "MANDATORY — before attack, end of attack window, post-cooldown after forced GC",
+    "jcmd_nmt": "OPTIONAL — captured when target was launched with -XX:NativeMemoryTracking=summary or detail",
+    "jfr_recording": "RECOMMENDED — jdk.ObjectAllocationSample + jdk.JavaMonitorEnter + custom Arena lifecycle events if instrumented in kernel"
+  },
+  "tolerance": {
+    "rss_growth_pct_max": 5,
+    "native_heap_committed_growth_pct_max": 10
+  },
+  "claim_scope": "exploratory",
+  "comparison_axis_note": "RSS growth tolerance is target-specific. A target with a fixed off-heap pool will show ~0% growth regardless of leaks (leaks materialize as pool exhaustion, not RSS growth). For pool-backed targets, prefer MemoryAllocator.stats().leakCount() over RSS as the primary signal.",
+  "publication_mode_required": "internal-only"
+}

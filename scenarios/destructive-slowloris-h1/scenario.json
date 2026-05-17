@@ -1,0 +1,34 @@
+{
+  "scenario_id": "destructive-slowloris-h1",
+  "version": "1",
+  "benchmark_family": "runtime",
+  "target_classification": "runtime-destructive-slow-resource-exhaustion",
+  "description": "Slowloris-style attack against an externally-launched HTTP/1.1 target. N concurrent TCP connections open, each writing a partial request header byte-by-byte with a sleep between bytes; never sends the final CRLF CRLF that completes the headers. PRIMARY CHECK: after attack_duration_seconds + cooldown_seconds, target serves clean GET /health with 200 OK within max_response_ms. SECONDARY CHECK: process RSS delta within rss_growth_pct_max (no leaked connection state).",
+  "mode": "destructive-slow-attack",
+  "tier": "community",
+  "driver": ["slowloris"],
+  "transport": ["h1"],
+  "loopback": true,
+  "loopback_caveat": "Loopback can mask socket-buffer effects relative to network paths. transport_mode=loopback-h1 mandatory.",
+  "attack_profile": {
+    "connection_count": 1000,
+    "header_delay_seconds": 10,
+    "attack_duration_seconds": 120,
+    "cooldown_seconds": 30,
+    "note": "Bumping connection_count >= the target's max-connections limit is the point of the test. The harness does NOT enforce a cap; pick connection_count according to the target's configured limit."
+  },
+  "liveness_probe": {
+    "mandatory": true,
+    "method": "GET",
+    "path": "/health",
+    "expected_status": 200,
+    "max_response_ms": 1000
+  },
+  "tolerance": {
+    "rss_growth_pct_max": 5,
+    "max_hang_count": 0
+  },
+  "claim_scope": "exploratory",
+  "comparison_axis_note": "Cross-stack slowloris results are NOT comparable without explicit normalization of (a) max-concurrent-connections, (b) header-receive-timeout, (c) idle-connection-eviction interval. Different runtimes have different defaults; comparison without normalizing these is apples-to-oranges. Label connection_count, header_delay_seconds, attack_duration_seconds in any cross-stack report row.",
+  "publication_mode_required": "internal-only"
+}

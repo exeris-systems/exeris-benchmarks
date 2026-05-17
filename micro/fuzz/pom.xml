@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.exeris.benchmarks</groupId>
+  <artifactId>exeris-benchmarks-fuzz</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>Exeris :: Benchmarks :: Jazzer Fuzz Campaigns</name>
+  <description>
+    Jazzer + JUnit 5 fuzz campaigns against kernel HTTP/1 and HTTP/2 parsers.
+    Standalone module — NOT a parent of micro/jmh. Imports kernel snapshots
+    from GitHub Packages, same as micro/jmh.
+    Run with: mvn -s ../../.github/maven-settings-gpr.xml test
+  </description>
+
+  <properties>
+    <java.version>26</java.version>
+    <maven.compiler.source>${java.version}</maven.compiler.source>
+    <maven.compiler.target>${java.version}</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <jazzer.version>0.22.1</jazzer.version>
+    <junit.jupiter.version>5.10.2</junit.jupiter.version>
+    <surefire.version>3.2.5</surefire.version>
+
+    <!-- Exeris artifact version. Fuzz findings are only re-bisectable if the
+         kernel version is pinned; an unpinned floating snapshot (or worse,
+         a stale literal like 0.5.0) silently invalidates reproducibility.
+         The maven-enforcer rule below rejects the sentinel default. Always
+         pass -Dexeris.kernel.version=<release|timestamped-snapshot>. -->
+    <exeris.kernel.version>UNSPECIFIED-PIN-VIA-Dexeris.kernel.version</exeris.kernel.version>
+
+    <!-- Per-FuzzTest wall-clock budget. Override on CLI:
+         mvn test -Djazzer.duration=300s -->
+    <jazzer.duration>60s</jazzer.duration>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>github-exeris-kernel</id>
+      <url>https://maven.pkg.github.com/exeris-systems/exeris-kernel</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.code-intelligence</groupId>
+      <artifactId>jazzer-junit</artifactId>
+      <version>${jazzer.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <version>${junit.jupiter.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>${junit.jupiter.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-spi</artifactId>
+      <version>${exeris.kernel.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-core</artifactId>
+      <version>${exeris.kernel.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.4.1</version>
+        <executions>
+          <execution>
+            <id>require-pinned-kernel-version</id>
+            <phase>validate</phase>
+            <goals><goal>enforce</goal></goals>
+            <configuration>
+              <rules>
+                <requireProperty>
+                  <property>exeris.kernel.version</property>
+                  <regex>^(?!UNSPECIFIED-).+</regex>
+                  <regexMessage>
+exeris.kernel.version must be pinned. Pass it explicitly:
+  mvn -Dexeris.kernel.version=&lt;release&gt; ...
+  mvn -Dexeris.kernel.version=&lt;1.2.3-YYYYMMDD.HHMMSS-N&gt; ...
+A floating -SNAPSHOT is non-reproducible; a stale literal silently invalidates findings.
+                  </regexMessage>
+                </requireProperty>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.15.0</version>
+        <configuration>
+          <source>${java.version}</source>
+          <target>${java.version}</target>
+          <compilerVersion>${java.version}</compilerVersion>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire.version}</version>
+        <configuration>
+          <argLine>--enable-preview --enable-native-access=ALL-UNNAMED</argLine>
+          <systemPropertyVariables>
+            <jazzer.duration>${jazzer.duration}</jazzer.duration>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

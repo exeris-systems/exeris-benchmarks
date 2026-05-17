@@ -1,0 +1,37 @@
+{
+  "scenario_id": "fuzz-http2-parser",
+  "version": "1",
+  "benchmark_family": "micro",
+  "target_classification": "micro-parser-robustness",
+  "description": "Jazzer-driven byte[] fuzz against eu.exeris.kernel.core.http.http2.Http2FrameParser.parseHeader. Each fuzz iteration copies the mutated byte[] into a confined Arena MemorySegment and decodes the 9-byte RFC 7540 frame header. Whitelisted throwables (IndexOutOfBoundsException, IllegalArgumentException, BufferUnderflowException) are recorded but do NOT count as findings. Any other Throwable is a finding.",
+  "mode": "fuzz-campaign",
+  "tier": "community",
+  "driver": ["jazzer"],
+  "transport": ["none"],
+  "loopback": false,
+  "fuzz": {
+    "tool": "jazzer",
+    "test_class": "eu.exeris.benchmarks.micro.fuzz.Http2FrameParserFuzzTest",
+    "default_duration_seconds": 60,
+    "seed_corpus_dir": "src/test/resources/eu/exeris/benchmarks/micro/fuzz/Http2FrameParserFuzzTest",
+    "expected_throwables": [
+      "java.lang.IndexOutOfBoundsException",
+      "java.lang.IllegalArgumentException",
+      "java.nio.BufferUnderflowException"
+    ],
+    "finding_throwables": [
+      "java.lang.NullPointerException",
+      "java.lang.AssertionError",
+      "java.lang.OutOfMemoryError",
+      "java.lang.StackOverflowError",
+      "java.lang.VirtualMachineError"
+    ]
+  },
+  "tolerance": {
+    "max_unexpected_crashes": 0,
+    "max_hang_count": 0
+  },
+  "claim_scope": "exploratory",
+  "comparison_axis_note": "HTTP/2 frame header is exactly 9 bytes (length:24, type:8, flags:8, R+streamId:32). Fuzz iterations with len<9 short-circuit and are not counted toward iterations_total.",
+  "publication_mode_required": "internal-only"
+}

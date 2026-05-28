@@ -270,6 +270,18 @@ resolve_local_base_url() {
   fi
 }
 
+# Pick the e2e-shop-order-saga fixed contract for a (target, graph_track) pair,
+# mirroring run-e2e-shop-order-saga-campaign.sh's _derive_contract_id.
+derive_saga_contract() {
+  local scenario_json="$1" target="$2" track="$3" cid
+  cid="$(jq -r --arg gt "$track" --arg ta "$target" '
+    (.graph_tracks[$gt].required_contracts // []) as $cids
+    | $cids[] as $cid
+    | if .fixed_contracts[$cid].target_app == $ta then $cid else empty end' \
+    "$scenario_json" 2>/dev/null | head -1)"
+  printf '%s\n' "${cid:-exeris_community_h2c_v1}"
+}
+
 # ---------------------------------------------------------------------------
 # Discovery: scenarios, targets, env files
 # ---------------------------------------------------------------------------
@@ -396,52 +408,102 @@ scenario_id="$(select_kv "Scenario" "entity-read-by-id" "${scenario_kv[@]}")"
 
 scenario_json="$REPO_ROOT/scenarios/$scenario_id/scenario.json"
 
+is_saga="no"
+[[ "$scenario_id" == "e2e-shop-order-saga" ]] && is_saga="yes"
+
+# Saga-specific axes / options (populated only for the saga scenario).
+graph_track=""
+saga_auto_start_infra="no"
+saga_auto_start_target="no"
+saga_skip_seed_verify="no"
+saga_enable_jfr="no"
+
 # Drivers declared by the scenario, intersected with supported load drivers.
 readarray -t SCEN_DRIVERS < <(jq -r '.driver[]?' "$scenario_json" 2>/dev/null || true)
-driver_kv=()
-for d in "${SCEN_DRIVERS[@]}"; do
-  case "$d" in
-    wrk|wrk2|k6|h2load) driver_kv+=("$d" "$d") ;;
-  esac
-done
 
-driver="none"
-if [[ "${#driver_kv[@]}" -gt 0 ]]; then
-  driver_kv+=("none" "none — generate profile only (no auto-dispatch)")
-  driver="$(select_kv "Load driver (auto-dispatch for non-specialized scenarios)" "${driver_kv[0]}" "${driver_kv[@]}")"
+if [[ "$is_saga" == "yes" ]]; then
+  # Saga is k6-driven and dispatched via the dedicated saga runner; the generic
+  # load-driver menu does not apply.
+  driver="k6"
+  graph_track="$(select_kv "Graph track (saga orchestration backend)" "neo4j" \
+    neo4j      "neo4j      — Bolt graph backend (track_a)" \
+    pgq_pure   "pgq_pure   — Postgres-graph PGQ, pure mode (track_b1)" \
+    age_compat "age_compat — Postgres-graph Apache AGE, compat mode (track_b2)")"
 else
-  warn "Scenario '$scenario_id' declares no HTTP load driver (uses ${SCEN_DRIVERS[*]:-a specialized harness}); no generic dispatch available."
+  driver_kv=()
+  for d in "${SCEN_DRIVERS[@]}"; do
+    case "$d" in
+      wrk|wrk2|k6|h2load) driver_kv+=("$d" "$d") ;;
+    esac
+  done
+
+  driver="none"
+  if [[ "${#driver_kv[@]}" -gt 0 ]]; then
+    driver_kv+=("none" "none — generate profile only (no auto-dispatch)")
+    driver="$(select_kv "Load driver (auto-dispatch for non-specialized scenarios)" "${driver_kv[0]}" "${driver_kv[@]}")"
+  else
+    warn "Scenario '$scenario_id' declares no HTTP load driver (uses ${SCEN_DRIVERS[*]:-a specialized harness}); no generic dispatch available."
+  fi
 fi
 
 # ---------------------------------------------------------------------------
 # Targets
 # ---------------------------------------------------------------------------
 
+# Candidate targets: full matrix, or (for saga) the saga-supported set.
+if [[ "$is_saga" == "yes" ]]; then
+  readarray -t CANDIDATE_TARGET_IDS < <(jq -r '.target_backend_support | keys[]' "$scenario_json" 2>/dev/null | sort)
+  [[ "${#CANDIDATE_TARGET_IDS[@]}" -gt 0 ]] || CANDIDATE_TARGET_IDS=("${TARGET_IDS[@]}")
+else
+  CANDIDATE_TARGET_IDS=("${TARGET_IDS[@]}")
+fi
+
 target_kv=()
-for t in "${TARGET_IDS[@]}"; do
+for t in "${CANDIDATE_TARGET_IDS[@]}"; do
   meta="$(jq -r --arg id "$t" '.targets[] | select(.target_id == $id) | "\(.tier // "?")/\(.protocol_mode // "?")  \(.health_url // "")"' "$TARGET_MATRIX" 2>/dev/null || true)"
-  target_kv+=("$t" "$t   [$meta]")
+  if [[ -n "$meta" ]]; then
+    target_kv+=("$t" "$t   [$meta]")
+  else
+    target_kv+=("$t" "$t")
+  fi
 done
 
-target_mode="$(select_kv "Target mode" "single" \
-  single "single — one target" \
-  multi  "multi  — two targets (comparative)")"
+if [[ "$is_saga" == "yes" ]]; then
+  target_mode="$(select_kv "Target mode" "single" \
+    single "single — one target (baseline)" \
+    multi  "multi  — 2-3 targets (saga campaign)")"
+else
+  target_mode="$(select_kv "Target mode" "single" \
+    single "single — one target" \
+    multi  "multi  — two targets (comparative)")"
+fi
 
 targets=()
 if [[ "$target_mode" == "single" ]]; then
-  target_single="$(select_kv "Target app" "${TARGET_IDS[0]}" "${target_kv[@]}")"
+  target_single="$(select_kv "Target app" "${CANDIDATE_TARGET_IDS[0]}" "${target_kv[@]}")"
   targets+=("$target_single")
 else
-  target_a="$(select_kv "Target A" "${TARGET_IDS[0]}" "${target_kv[@]}")"
-  target_b="$(select_kv "Target B" "${TARGET_IDS[1]:-${TARGET_IDS[0]}}" "${target_kv[@]}")"
+  target_a="$(select_kv "Target A" "${CANDIDATE_TARGET_IDS[0]}" "${target_kv[@]}")"
+  target_b="$(select_kv "Target B" "${CANDIDATE_TARGET_IDS[1]:-${CANDIDATE_TARGET_IDS[0]}}" "${target_kv[@]}")"
   targets+=("$target_a" "$target_b")
+  if [[ "$is_saga" == "yes" && "${#CANDIDATE_TARGET_IDS[@]}" -ge 3 ]]; then
+    if [[ "$(choose_option "Add a third target (saga triad)?" "no" yes no)" == "yes" ]]; then
+      target_c="$(select_kv "Target C" "${CANDIDATE_TARGET_IDS[2]}" "${target_kv[@]}")"
+      targets+=("$target_c")
+    fi
+  fi
 fi
 
 # ---------------------------------------------------------------------------
 # Classification axes
 # ---------------------------------------------------------------------------
 
-protocol_mode="$(select_kv "Protocol mode" "h1" h1 "h1 — HTTP/1.1" h2 "h2 — HTTP/2" h3 "h3 — HTTP/3/QUIC")"
+protocol_default="h1"
+[[ "$is_saga" == "yes" ]] && protocol_default="h2"
+protocol_mode="$(select_kv "Protocol mode" "$protocol_default" \
+  h1 "h1 — HTTP/1.1" \
+  h2 "h2 — HTTP/2 (saga transport is H2C)" \
+  h3 "h3 — HTTP/3/QUIC")"
 tier="$(select_kv "Tier" "community" community "community" enterprise "enterprise")"
 target_classification="$(select_kv "Target classification" "pure" \
   pure   "pure   — pure-mode runtime" \
@@ -460,7 +522,25 @@ if [[ "${#env_kv[@]}" -gt 2 ]]; then
   env_file="$(select_kv "Runtime env file (runtime/drivers/env/)" "none" "${env_kv[@]}")"
 fi
 
-contract_id="$(prompt_text "contract_id" "fixed_contract_v1")"
+contract_default="fixed_contract_v1"
+if [[ "$is_saga" == "yes" ]]; then
+  contract_default="$(derive_saga_contract "$scenario_json" "${targets[0]}" "$graph_track")"
+fi
+contract_id="$(prompt_text "contract_id" "$contract_default")"
+
+if [[ "$is_saga" == "yes" ]]; then
+  if [[ "$topology_mode" == "network" ]]; then
+    saga_auto_start_infra="no"
+    saga_auto_start_target="no"
+    info "WAN saga: infra/target auto-start disabled (remote target is operator-managed)."
+  else
+    saga_auto_start_infra="$(choose_option "Auto-start saga infra (Postgres/Neo4j via docker compose)?" "yes" yes no)"
+    saga_auto_start_target="$(choose_option "Auto-start target app if health preflight fails?" "yes" yes no)"
+  fi
+  saga_skip_seed_verify="$(choose_option "Skip seed verification?" "no" yes no)"
+  saga_enable_jfr="$(choose_option "Enable JFR recording (raw JFR is confidentiality-sensitive)?" "no" yes no)"
+fi
+
 warmup_seconds="$(prompt_positive_int "workload.warmup_seconds" "60")"
 measurement_seconds="$(prompt_positive_int "workload.measurement_seconds" "120")"
 threads="$(prompt_positive_int "workload.threads" "4")"
@@ -582,6 +662,12 @@ jq -n \
   --arg imp_profile "$imp_profile" \
   --arg applied_to "$applied_to" \
   --arg netem_tool "tc netem" \
+  --arg is_saga "$is_saga" \
+  --arg graph_track "$graph_track" \
+  --arg saga_auto_start_infra "$saga_auto_start_infra" \
+  --arg saga_auto_start_target "$saga_auto_start_target" \
+  --arg saga_skip_seed_verify "$saga_skip_seed_verify" \
+  --arg saga_enable_jfr "$saga_enable_jfr" \
   --argjson delay_ms "${delay_ms:-0}" \
   --argjson loss_pct "${loss_pct:-0}" \
   --argjson jitter_ms "${jitter_ms:-0}" \
@@ -648,6 +734,17 @@ jq -n \
                    jitter_ms: $jitter_ms
                  }}
        else . end)
+  | (if $is_saga == "yes"
+       then . + {
+                  graph_track: $graph_track,
+                  saga: {
+                    auto_start_infra: ($saga_auto_start_infra == "yes"),
+                    auto_start_target: ($saga_auto_start_target == "yes"),
+                    skip_seed_verify: ($saga_skip_seed_verify == "yes"),
+                    enable_jfr: ($saga_enable_jfr == "yes")
+                  }
+                }
+       else . end)
   ' > "$PROFILE_OUT"
 
 info "Profile written: $PROFILE_OUT"
@@ -681,6 +778,10 @@ if [[ "$topology_mode" == "network" ]]; then
 fi
 if [[ "$impairment_enabled" == "true" ]]; then
   echo "  impairment         : profile=$imp_profile applied_to=$applied_to delay=${delay_ms}ms loss=${loss_pct}% jitter=${jitter_ms}ms apply_requested=$apply_netem"
+fi
+if [[ "$is_saga" == "yes" ]]; then
+  echo "  graph_track        : $graph_track"
+  echo "  saga               : auto_start_infra=$saga_auto_start_infra auto_start_target=$saga_auto_start_target skip_seed_verify=$saga_skip_seed_verify enable_jfr=$saga_enable_jfr"
 fi
 
 # ---------------------------------------------------------------------------
@@ -779,6 +880,48 @@ resolve_dispatch_base_url() {
   fi
 }
 
+# ---- e2e-shop-order-saga: dedicated baseline (single) / campaign (multi) ----
+if [[ "$is_saga" == "yes" ]]; then
+  if [[ "$target_mode" == "multi" ]]; then
+    if [[ "$topology_mode" == "network" ]]; then
+      warn "Saga campaign (run-e2e-shop-order-saga-campaign.sh) is local-only and auto-starts targets; it cannot drive remote WAN endpoints."
+      echo "For WAN saga, run a single-target baseline against each remote endpoint. Profile generated; multi-target WAN saga not dispatched."
+      exit 0
+    fi
+    targets_csv="$(IFS=,; echo "${targets[*]}")"
+    info "Dispatch: run-e2e-shop-order-saga-campaign.sh (targets=$targets_csv graph_track=$graph_track)"
+    cmd=(
+      "$REPO_ROOT/scripts/run-e2e-shop-order-saga-campaign.sh"
+      --targets "$targets_csv"
+      --graph-track "$graph_track"
+      --profile "$hardware_profile"
+      --output-dir "$output_dir"
+    )
+    [[ "$saga_skip_seed_verify" == "yes" ]] && cmd+=(--skip-seed-verify)
+    "${cmd[@]}"
+    exit $?
+  fi
+
+  info "Dispatch: run-e2e-shop-order-saga-baseline.sh (target=${targets[0]} graph_track=$graph_track contract=$contract_id)"
+  cmd=(
+    "$REPO_ROOT/scripts/run-e2e-shop-order-saga-baseline.sh"
+    --contract-id "$contract_id"
+    --target-app "${targets[0]}"
+    --graph-track "$graph_track"
+    --profile "$hardware_profile"
+    --output-dir "$output_dir"
+  )
+  if [[ "$topology_mode" == "network" ]]; then
+    cmd+=(--base-url "$app_endpoint")
+  fi
+  if [[ "$saga_auto_start_infra" == "yes" ]]; then cmd+=(--auto-start-infra); else cmd+=(--no-auto-start-infra); fi
+  if [[ "$saga_auto_start_target" == "yes" ]]; then cmd+=(--auto-start-target); else cmd+=(--no-auto-start-target); fi
+  [[ "$saga_skip_seed_verify" == "yes" ]] && cmd+=(--skip-seed-verify)
+  if [[ "$saga_enable_jfr" == "yes" ]]; then cmd+=(--enable-jfr); else cmd+=(--no-jfr); fi
+  "${cmd[@]}"
+  exit $?
+fi
+
 # ---- Multi-target: comparative ----
 if [[ "$target_mode" == "multi" ]]; then
   info "Dispatch: run-comparative.sh"
@@ -820,23 +963,6 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "localhost" ]
     --target-runtime "$mapped_runtime" \
     --target-build "$mapped_build" \
     --backend-mode "$mapped_backend_mode"
-  exit $?
-fi
-
-# ---- e2e-shop-order-saga: specialized baseline (supports WAN base URL) ----
-if [[ "$scenario_id" == "e2e-shop-order-saga" ]]; then
-  info "Dispatch: run-e2e-shop-order-saga-baseline.sh"
-  cmd=(
-    "$REPO_ROOT/scripts/run-e2e-shop-order-saga-baseline.sh"
-    --contract-id "$contract_id"
-    --output-dir "$output_dir"
-    --target-app "${targets[0]}"
-    --profile "$hardware_profile"
-  )
-  if [[ "$topology_mode" == "network" ]]; then
-    cmd+=(--base-url "$app_endpoint")
-  fi
-  "${cmd[@]}"
   exit $?
 fi
 

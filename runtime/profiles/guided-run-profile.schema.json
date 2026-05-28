@@ -237,6 +237,32 @@
         }
       }
     },
+    "graph_track": {
+      "type": "string",
+      "enum": [
+        "neo4j",
+        "pgq_pure",
+        "age_compat"
+      ]
+    },
+    "saga": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto_start_infra": {
+          "type": "boolean"
+        },
+        "auto_start_target": {
+          "type": "boolean"
+        },
+        "skip_seed_verify": {
+          "type": "boolean"
+        },
+        "enable_jfr": {
+          "type": "boolean"
+        }
+      }
+    },
     "targets": {
       "type": "array",
       "items": {

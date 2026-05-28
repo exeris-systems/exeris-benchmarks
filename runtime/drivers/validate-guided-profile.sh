@@ -209,6 +209,10 @@ elif path == ".connectivity":
   val = data.get("connectivity", "")
 elif path == ".driver":
   val = data.get("driver", "")
+elif path == ".scenario_id":
+  val = data.get("scenario_id", "")
+elif path == ".graph_track":
+  val = data.get("graph_track", "")
 elif path == ".network_impairment.enabled":
   val = data.get("network_impairment", {}).get("enabled", "")
 elif path == ".network_impairment.applied_to":
@@ -260,6 +264,8 @@ target_mode="$(read_scalar '.target_mode')"
 run_type="$(read_scalar '.run_type')"
 claim_scope="$(read_scalar '.claim_scope')"
 benchmark_family="$(read_scalar '.benchmark_family')"
+scenario_id="$(read_scalar '.scenario_id')"
+graph_track="$(read_scalar '.graph_track')"
 protocol_mode="$(read_scalar '.protocol_mode')"
 tier="$(read_scalar '.tier')"
 target_classification="$(read_scalar '.target_classification')"
@@ -275,8 +281,15 @@ if [[ "$target_mode" == "multi" ]]; then
   fi
   pass "Semantic check: multi-target length >= 2"
 
-  if [[ "$DISPATCH_COMPATIBLE" -eq 1 && "$targets_len" -ne 2 ]]; then
-    fail "Dispatcher compatibility failed: target_mode=multi requires exactly 2 targets"
+  if [[ "$DISPATCH_COMPATIBLE" -eq 1 ]]; then
+    if [[ "$scenario_id" == "e2e-shop-order-saga" ]]; then
+      # Saga multi dispatches to the campaign runner, which accepts 2-3 targets.
+      if [[ "$targets_len" -lt 2 || "$targets_len" -gt 3 ]]; then
+        fail "Dispatcher compatibility failed: saga campaign requires 2 or 3 targets"
+      fi
+    elif [[ "$targets_len" -ne 2 ]]; then
+      fail "Dispatcher compatibility failed: target_mode=multi requires exactly 2 targets"
+    fi
   fi
 fi
 
@@ -317,6 +330,11 @@ if [[ "$impairment_enabled" == "true" ]]; then
   [[ -n "$imp_delay" ]] || fail "Semantic check failed: network_impairment.enabled=true requires delay_ms"
   [[ -n "$imp_loss" ]] || fail "Semantic check failed: network_impairment.enabled=true requires loss_pct"
   pass "Semantic check: network impairment metadata present (profile=$imp_profile applied_to=$imp_applied_to)"
+fi
+
+if [[ "$scenario_id" == "e2e-shop-order-saga" ]]; then
+  [[ -n "$graph_track" ]] || fail "Semantic check failed: e2e-shop-order-saga requires a graph_track (neo4j|pgq_pure|age_compat)"
+  pass "Semantic check: saga graph_track present (graph_track=$graph_track)"
 fi
 
 pass "Semantic checks"

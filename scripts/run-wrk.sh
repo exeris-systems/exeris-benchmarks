@@ -18,14 +18,16 @@ shift 2
 TARGET_DIR="$ROOT/$TARGET_DIR"
 SCENARIO_DIR="$ROOT/$SCENARIO_DIR"
 
-# Load target config
+# Load target config (optional when a base URL is supplied via the environment,
+# e.g. WRK_BASE_URL_OVERRIDE from run-guided.sh for local/WAN dispatch).
 TARGET_CONFIG="$TARGET_DIR/wrk-target.env"
-if [[ ! -f "$TARGET_CONFIG" ]]; then
-  echo "ERROR: Target config not found: $TARGET_CONFIG" >&2
+if [[ -f "$TARGET_CONFIG" ]]; then
+  # shellcheck source=/dev/null
+  source "$TARGET_CONFIG"
+elif [[ -z "${WRK_BASE_URL_OVERRIDE:-}${WRK_BASE_URL:-}" ]]; then
+  echo "ERROR: Target config not found: $TARGET_CONFIG (and no WRK_BASE_URL/WRK_BASE_URL_OVERRIDE set)" >&2
   exit 1
 fi
-# shellcheck source=/dev/null
-source "$TARGET_CONFIG"
 # Expected variables: WRK_BASE_URL, WRK_PATH
 
 SCENARIO_CONFIG="$SCENARIO_DIR/wrk.env"
@@ -33,12 +35,21 @@ if [[ -f "$SCENARIO_CONFIG" ]]; then
   # shellcheck source=/dev/null
   source "$SCENARIO_CONFIG"
 fi
+
+# Overrides win over both target and scenario config (guided local/WAN dispatch).
+WRK_BASE_URL="${WRK_BASE_URL_OVERRIDE:-${WRK_BASE_URL:-}}"
+WRK_PATH="${WRK_PATH_OVERRIDE:-${WRK_PATH:-/}}"
+if [[ -z "${WRK_BASE_URL:-}" ]]; then
+  echo "ERROR: WRK_BASE_URL is empty (set it in $TARGET_CONFIG or via WRK_BASE_URL_OVERRIDE)" >&2
+  exit 1
+fi
+
 # WRK_LUA_SCRIPT may be set by scenario config
 LUA_SCRIPT="${WRK_LUA_SCRIPT:-}"
 
-THREADS="${WRK_THREADS:-4}"
-CONNECTIONS="${WRK_CONNECTIONS:-100}"
-DURATION="${WRK_DURATION:-30s}"
+THREADS="${WRK_THREADS_OVERRIDE:-${WRK_THREADS:-4}}"
+CONNECTIONS="${WRK_CONNECTIONS_OVERRIDE:-${WRK_CONNECTIONS:-100}}"
+DURATION="${WRK_DURATION_OVERRIDE:-${WRK_DURATION:-30s}}"
 URL="${WRK_BASE_URL}${WRK_PATH:-/}"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"

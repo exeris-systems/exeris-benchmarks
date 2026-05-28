@@ -18,17 +18,28 @@ shift 2
 TARGET_DIR="$ROOT/$TARGET_DIR"
 SCENARIO_DIR="$ROOT/$SCENARIO_DIR"
 
+# Target config is optional when a base URL is supplied via the environment
+# (e.g. H2LOAD_BASE_URL_OVERRIDE from run-guided.sh for local/WAN dispatch).
 TARGET_CONFIG="$TARGET_DIR/h2load-target.env"
-if [[ ! -f "$TARGET_CONFIG" ]]; then
-  echo "ERROR: Target config not found: $TARGET_CONFIG" >&2
+if [[ -f "$TARGET_CONFIG" ]]; then
+  # shellcheck source=/dev/null
+  source "$TARGET_CONFIG"
+elif [[ -z "${H2LOAD_BASE_URL_OVERRIDE:-}${H2LOAD_BASE_URL:-}" ]]; then
+  echo "ERROR: Target config not found: $TARGET_CONFIG (and no H2LOAD_BASE_URL/H2LOAD_BASE_URL_OVERRIDE set)" >&2
   exit 1
 fi
-# shellcheck source=/dev/null
-source "$TARGET_CONFIG"
 # Expected: H2LOAD_BASE_URL, H2LOAD_PATH
 
 SCENARIO_CONFIG="$SCENARIO_DIR/h2load.env"
 [[ -f "$SCENARIO_CONFIG" ]] && source "$SCENARIO_CONFIG"
+
+# Overrides win over both target and scenario config (guided local/WAN dispatch).
+H2LOAD_BASE_URL="${H2LOAD_BASE_URL_OVERRIDE:-${H2LOAD_BASE_URL:-}}"
+H2LOAD_PATH="${H2LOAD_PATH_OVERRIDE:-${H2LOAD_PATH:-/}}"
+if [[ -z "${H2LOAD_BASE_URL:-}" ]]; then
+  echo "ERROR: H2LOAD_BASE_URL is empty (set it in $TARGET_CONFIG or via H2LOAD_BASE_URL_OVERRIDE)" >&2
+  exit 1
+fi
 
 CLIENTS="${H2LOAD_CLIENTS:-100}"
 STREAMS="${H2LOAD_MAX_STREAMS:-10}"

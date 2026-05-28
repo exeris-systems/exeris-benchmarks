@@ -205,8 +205,26 @@ elif path == ".fairness_attestations.protocol_mode_equivalent":
   val = data.get("fairness_attestations", {}).get("protocol_mode_equivalent", "")
 elif path == ".fairness_attestations.target_scope_equivalent":
   val = data.get("fairness_attestations", {}).get("target_scope_equivalent", "")
+elif path == ".connectivity":
+  val = data.get("connectivity", "")
+elif path == ".driver":
+  val = data.get("driver", "")
+elif path == ".network_impairment.enabled":
+  val = data.get("network_impairment", {}).get("enabled", "")
+elif path == ".network_impairment.applied_to":
+  val = data.get("network_impairment", {}).get("applied_to", "")
+elif path == ".network_impairment.profile":
+  val = data.get("network_impairment", {}).get("profile", "")
+elif path == ".network_impairment.delay_ms":
+  val = data.get("network_impairment", {}).get("delay_ms", "")
+elif path == ".network_impairment.loss_pct":
+  val = data.get("network_impairment", {}).get("loss_pct", "")
 else:
     val = ""
+
+if isinstance(val, (int, float)) and not isinstance(val, bool):
+    print(val)
+    sys.exit(0)
 
 if isinstance(val, bool):
     print("true" if val else "false")
@@ -285,6 +303,20 @@ if [[ "$CONFIRM_COMPARISON_ELIGIBILITY" -eq 1 ]]; then
   [[ "$fairness_protocol_mode_equivalent" == "true" ]] || fail "Comparison eligibility confirmation requires fairness_attestations.protocol_mode_equivalent=true"
   [[ "$fairness_target_scope_equivalent" == "true" ]] || fail "Comparison eligibility confirmation requires fairness_attestations.target_scope_equivalent=true"
   pass "Comparison eligibility confirmation checks passed"
+fi
+
+impairment_enabled="$(read_scalar '.network_impairment.enabled')"
+if [[ "$impairment_enabled" == "true" ]]; then
+  imp_applied_to="$(read_scalar '.network_impairment.applied_to')"
+  imp_profile="$(read_scalar '.network_impairment.profile')"
+  imp_delay="$(read_scalar '.network_impairment.delay_ms')"
+  imp_loss="$(read_scalar '.network_impairment.loss_pct')"
+
+  [[ -n "$imp_applied_to" ]] || fail "Semantic check failed: network_impairment.enabled=true requires applied_to"
+  [[ -n "$imp_profile" ]] || fail "Semantic check failed: network_impairment.enabled=true requires profile"
+  [[ -n "$imp_delay" ]] || fail "Semantic check failed: network_impairment.enabled=true requires delay_ms"
+  [[ -n "$imp_loss" ]] || fail "Semantic check failed: network_impairment.enabled=true requires loss_pct"
+  pass "Semantic check: network impairment metadata present (profile=$imp_profile applied_to=$imp_applied_to)"
 fi
 
 pass "Semantic checks"

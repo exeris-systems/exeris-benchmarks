@@ -98,6 +98,97 @@
         "network"
       ]
     },
+    "connectivity": {
+      "type": "string",
+      "enum": [
+        "local",
+        "wan-remote",
+        "wan-impaired"
+      ]
+    },
+    "driver": {
+      "type": "string",
+      "enum": [
+        "wrk",
+        "wrk2",
+        "k6",
+        "h2load"
+      ]
+    },
+    "env_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "health_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "network_impairment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "apply_requested": {
+          "type": "boolean"
+        },
+        "applied_to": {
+          "type": "string",
+          "enum": [
+            "loopback",
+            "remote"
+          ]
+        },
+        "profile": {
+          "type": "string",
+          "enum": [
+            "mild",
+            "moderate",
+            "severe",
+            "custom"
+          ]
+        },
+        "tool": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delay_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "loss_pct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "jitter_ms": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "applied_to",
+              "profile",
+              "delay_ms",
+              "loss_pct"
+            ]
+          }
+        }
+      ]
+    },
     "run_type": {
       "type": "string",
       "enum": [

@@ -507,7 +507,13 @@ if [[ "$execution_class" == "constrained" ]]; then
       runtime-constrained-128m-0p5vcpu-v1 "128 MB / 0.5 vCPU")"
     cgroup_memory_limit_mb="$(jq -r --arg id "$execution_profile_id" '.profiles[] | select(.execution_profile_id == $id) | .memory_limit.limit_mb' "$EXEC_PROFILES_JSON" 2>/dev/null || true)"
     _vcpu="$(jq -r --arg id "$execution_profile_id" '.profiles[] | select(.execution_profile_id == $id) | .cpu_limit.vcpu' "$EXEC_PROFILES_JSON" 2>/dev/null || true)"
-    cgroup_cpu_quota_pct="$(awk -v v="${_vcpu:-1}" 'BEGIN { printf "%.0f", v * 100 }')"
+    # jq -r yields the string "null" for a present-but-null key; normalize it.
+    [[ "$cgroup_memory_limit_mb" == "null" ]] && cgroup_memory_limit_mb=""
+    [[ "$_vcpu" == "null" ]] && _vcpu=""
+    if [[ -z "$cgroup_memory_limit_mb" || -z "$_vcpu" ]]; then
+      fail "execution profile '$execution_profile_id' is missing memory_limit.limit_mb or cpu_limit.vcpu in $EXEC_PROFILES_JSON"
+    fi
+    cgroup_cpu_quota_pct="$(awk -v v="$_vcpu" 'BEGIN { printf "%.0f", v * 100 }')"
   else
     cgroup_memory_limit_mb="$(prompt_positive_int "cgroup memory_limit_mb" "256")"
     cgroup_cpu_quota_pct="$(prompt_positive_int "cgroup cpu_quota_pct (100 = 1.0 vCPU)" "100")"
@@ -1013,7 +1019,6 @@ resolve_dispatch_base_url() {
 
 # ---- Constrained (cgroup/affinity): local, single, exploratory-only ----
 if [[ "$execution_class" == "constrained" ]]; then
-  maybe_apply_netem
   case "$scenario_id" in
     entity-read-by-id)
       if [[ -z "$execution_profile_id" ]]; then
@@ -1026,6 +1031,7 @@ if [[ "$execution_class" == "constrained" ]]; then
         exit 3
       fi
       [[ -n "$cpu_affinity" ]] && warn "CPU affinity '$cpu_affinity' is not applied by the entity constrained runner (cgroup limits only); ignoring."
+      maybe_apply_netem
       info "Dispatch: run-entity-read-by-id-constrained.sh (profile=$execution_profile_id contract=$contract_id)"
       "$REPO_ROOT/scripts/run-entity-read-by-id-constrained.sh" \
         --execution-profile-id "$execution_profile_id" \
@@ -1036,6 +1042,10 @@ if [[ "$execution_class" == "constrained" ]]; then
       exit $?
       ;;
     e2e-shop-order-saga)
+      # run-e2e-shop-order-saga-baseline.sh does not honor BENCH_SERVER_CPU_AFFINITY
+      # (only the campaign runner does), so don't export a dead env var — warn instead.
+      [[ -n "$cpu_affinity" ]] && warn "CPU affinity '$cpu_affinity' is not applied by run-e2e-shop-order-saga-baseline.sh (server pinning is only honored by the saga campaign runner); ignoring."
+      maybe_apply_netem
       info "Dispatch: run-e2e-shop-order-saga-baseline.sh (constrained: mem=${cgroup_memory_limit_mb}MB cpu=${cgroup_cpu_quota_pct}%)"
       cmd=(
         "$REPO_ROOT/scripts/run-e2e-shop-order-saga-baseline.sh"
@@ -1051,11 +1061,7 @@ if [[ "$execution_class" == "constrained" ]]; then
       if [[ "$saga_auto_start_target" == "yes" ]]; then cmd+=(--auto-start-target); else cmd+=(--no-auto-start-target); fi
       [[ "$saga_skip_seed_verify" == "yes" ]] && cmd+=(--skip-seed-verify)
       if [[ "$saga_enable_jfr" == "yes" ]]; then cmd+=(--enable-jfr); else cmd+=(--no-jfr); fi
-      if [[ -n "$cpu_affinity" ]]; then
-        BENCH_SERVER_CPU_AFFINITY="$cpu_affinity" "${cmd[@]}"
-      else
-        "${cmd[@]}"
-      fi
+      "${cmd[@]}"
       exit $?
       ;;
     *)

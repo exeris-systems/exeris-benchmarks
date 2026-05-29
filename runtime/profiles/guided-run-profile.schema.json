@@ -499,7 +499,19 @@
           "target_mode": {
             "const": "single"
           }
-        }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "execution_profile_id"
+            ]
+          },
+          {
+            "required": [
+              "cgroup"
+            ]
+          }
+        ]
       }
     }
   ]

@@ -330,6 +330,21 @@ resolve_protocol_mode() {
   printf '%s\n' "$p"
 }
 
+# On contract-driven paths the contract — not the user — fixes the workload
+# (constrained reads it from the contract JSON; fixed_contract_v1 enforces threads
+# and rejects --duration; saga uses VUs/think-time). Read the contract's workload
+# so the recorded/displayed values match what actually runs. Prints:
+#   "<threads> <connections> <warmup_seconds> <measurement_seconds>"
+resolve_workload_from_contract() {
+  local sj="$1" cid="$2" c t cn w m
+  c="$(jq -c --arg id "$cid" '.fixed_contracts[$id] // {}' "$sj" 2>/dev/null || echo '{}')"
+  t="$(jq -r '.threads // empty' <<<"$c" 2>/dev/null)"
+  cn="$(jq -r '.connections // empty' <<<"$c" 2>/dev/null)"
+  w="$(jq -r '(.warmup_seconds // (.warmup|tostring|gsub("s$";"")|select(test("^[0-9]+$")))) // empty' <<<"$c" 2>/dev/null)"
+  m="$(jq -r '(.duration_seconds // .measurement_window_seconds // (.duration|tostring|gsub("s$";"")|select(test("^[0-9]+$")))) // empty' <<<"$c" 2>/dev/null)"
+  printf '%s %s %s %s\n' "${t:-4}" "${cn:-128}" "${w:-60}" "${m:-120}"
+}
+
 # ---------------------------------------------------------------------------
 # Discovery: scenarios, targets, env files
 # ---------------------------------------------------------------------------
@@ -681,10 +696,23 @@ if [[ "$is_saga" == "yes" ]]; then
   saga_enable_jfr="$(choose_option "Enable JFR recording (raw JFR is confidentiality-sensitive)?" "no" yes no)"
 fi
 
-warmup_seconds="$(prompt_positive_int "workload.warmup_seconds" "60")"
-measurement_seconds="$(prompt_positive_int "workload.measurement_seconds" "120")"
-threads="$(prompt_positive_int "workload.threads" "4")"
-connections="$(prompt_positive_int "workload.connections" "128")"
+# Workload is only a free choice on the generic load-driver path (run-{wrk,wrk2,
+# k6,h2load} honor it via *_OVERRIDE). On contract-driven paths (entity/saga/
+# constrained/comparative) the contract fixes it, so read & show those values
+# instead of prompting for numbers the run will ignore.
+if env_dispatch_is_generic; then
+  warmup_seconds="$(prompt_positive_int "workload.warmup_seconds" "60")"
+  measurement_seconds="$(prompt_positive_int "workload.measurement_seconds" "120")"
+  threads="$(prompt_positive_int "workload.threads" "4")"
+  connections="$(prompt_positive_int "workload.connections" "128")"
+else
+  read -r threads connections warmup_seconds measurement_seconds \
+    < <(resolve_workload_from_contract "$scenario_json" "$contract_id")
+  info "workload taken from contract '$contract_id' (not prompted): threads=$threads connections=$connections warmup=${warmup_seconds}s measurement=${measurement_seconds}s"
+  if [[ "$is_saga" == "yes" ]]; then
+    info "saga drives concurrency by virtual_users/think-time from the contract; threads/connections are not used by the saga runner."
+  fi
+fi
 hardware_profile="$(select_kv "Hardware profile" "dev-laptop" \
   linux-generic    "linux-generic" \
   aarch64-generic  "aarch64-generic" \
@@ -947,7 +975,11 @@ echo "  hardware_profile   : $hardware_profile"
 echo "  claim_scope        : $claim_scope"
 echo "  contract_id        : $contract_id"
 echo "  output_dir         : $output_dir"
-echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections"
+if env_dispatch_is_generic; then
+  echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections (driver-honored)"
+else
+  echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections (from contract $contract_id)"
+fi
 if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
   echo "  app_endpoint       : $app_endpoint"
   echo "  db_endpoint        : $db_endpoint"

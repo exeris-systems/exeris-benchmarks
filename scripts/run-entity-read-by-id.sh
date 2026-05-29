@@ -1007,7 +1007,7 @@ echo "$WRK_OUT"
 if [[ "$TARGET_APP_STARTED" -eq 1 && -n "$TARGET_APP_PID" ]] && ! kill -0 "$TARGET_APP_PID" 2>/dev/null; then
   echo "ERROR: benchmark target (pid=$TARGET_APP_PID) died during measurement — run is INVALID (not a result)."
   echo "ERROR: inspect $TARGET_APP_LOG and any hs_err_pid*.log / core dump in $REPO_ROOT."
-  [[ "$ENABLE_JFR" == "true" ]] && echo "NOTE: JFR was enabled; on some JDKs (e.g. 26-EA) JFR buffer flush can crash targets that emit custom JFR events on the hot path — retry with --no-jfr to isolate."
+  [[ "$ENABLE_JFR" == "true" ]] && echo "NOTE: JFR was enabled; the JFR buffer flush (JfrStorage::flush_regular_buffer) has SIGSEGV'd in libc on JDK 26 (GA build 26+35) when the target commits custom JFR events on the hot path — retry with --no-jfr to isolate."
   exit 1
 fi
 _WRK_COMPLETED_REQUESTS="$(printf '%s\n' "$WRK_OUT" | sed -nE 's/^[[:space:]]*([0-9]+) requests in .*/\1/p' | head -1)"

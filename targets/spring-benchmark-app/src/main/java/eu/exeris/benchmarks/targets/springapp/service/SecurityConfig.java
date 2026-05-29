@@ -8,6 +8,7 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -57,6 +58,11 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/register", "/health", "/actuator/**").permitAll()
+                        // GET /api/v1/users is unauthenticated in the reference exeris-community-app
+                        // (CommunityBenchmarkRouteHandler.handleUsers — no SecurityInterceptor) and in
+                        // quarkus-benchmark-app; permit it here so the entity-read-by-id read benchmark
+                        // is apples-to-apples across runtimes. Per-user / cart / order routes stay authenticated.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt

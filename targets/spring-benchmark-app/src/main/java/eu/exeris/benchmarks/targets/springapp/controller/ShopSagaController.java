@@ -5,6 +5,7 @@ import eu.exeris.benchmarks.targets.springapp.application.ProductCatalogService;
 import eu.exeris.benchmarks.targets.springapp.application.ShopSagaStateService;
 import eu.exeris.benchmarks.targets.springapp.application.axon.AxonOrderSagaService;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -24,18 +25,21 @@ public class ShopSagaController {
     private final AuthTokenService authTokenService;
     private final ProductCatalogService productCatalogService;
     private final ShopSagaStateService shopSagaStateService;
-    private final AxonOrderSagaService axonOrderSagaService;
+    // Resolved lazily: the Axon module is only present when exeris.axon.enabled=true
+    // (e2e-shop-order-saga). For pure-read scenarios Axon is excluded, so the order
+    // endpoints below report 503 while register/cart/product endpoints stay available.
+    private final ObjectProvider<AxonOrderSagaService> axonOrderSagaServiceProvider;
 
     public ShopSagaController(
             AuthTokenService authTokenService,
             ProductCatalogService productCatalogService,
             ShopSagaStateService shopSagaStateService,
-            AxonOrderSagaService axonOrderSagaService
+            ObjectProvider<AxonOrderSagaService> axonOrderSagaServiceProvider
     ) {
         this.authTokenService = authTokenService;
         this.productCatalogService = productCatalogService;
         this.shopSagaStateService = shopSagaStateService;
-        this.axonOrderSagaService = axonOrderSagaService;
+        this.axonOrderSagaServiceProvider = axonOrderSagaServiceProvider;
     }
 
     @PostMapping(value = "/api/v1/auth/register", produces = "application/json", consumes = "application/json")
@@ -88,6 +92,10 @@ public class ShopSagaController {
         if (request == null || isBlank(request.cartId()) || isBlank(request.paymentMethod())) {
             return ResponseEntity.badRequest().body(new ErrorResponse("invalid_order_request"));
         }
+        AxonOrderSagaService axonOrderSagaService = axonOrderSagaServiceProvider.getIfAvailable();
+        if (axonOrderSagaService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ErrorResponse("axon_disabled"));
+        }
         Optional<OrderAcceptedView> accepted = axonOrderSagaService.createOrder(
                 authentication.getName(),
                 request.cartId(),
@@ -105,6 +113,10 @@ public class ShopSagaController {
             Authentication authentication,
             @PathVariable("orderId") String orderId
     ) {
+        AxonOrderSagaService axonOrderSagaService = axonOrderSagaServiceProvider.getIfAvailable();
+        if (axonOrderSagaService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ErrorResponse("axon_disabled"));
+        }
         Optional<OrderStatusView> status = axonOrderSagaService.orderStatus(authentication.getName(), orderId);
         if (status.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse("order_not_found"));

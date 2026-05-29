@@ -306,6 +306,30 @@ derive_saga_contract() {
   printf '%s\n' "${cid:-exeris_community_h2c_v1}"
 }
 
+# Authoritatively resolve protocol_mode (h1/h2/h3) rather than asking the user:
+#   1. the chosen fixed contract's protocol_mode (contract-driven runs), else
+#   2. the load driver (generic runs): wrk/wrk2 -> h1, h2load -> h2, else
+#   3. the scenario's first declared transport.
+# Contract transport "h2c" (h2 cleartext) maps to the h2 axis (the schema enum is
+# h1/h2/h3); the precise transport stays the runner's concern.
+resolve_protocol_mode() {
+  local scenario_json="$1" contract_id="$2" driver="$3" p=""
+  p="$(jq -r --arg c "$contract_id" '.fixed_contracts[$c].protocol_mode // empty' "$scenario_json" 2>/dev/null || true)"
+  if [[ -z "$p" ]]; then
+    case "$driver" in
+      wrk|wrk2) p="h1" ;;
+      h2load)   p="h2" ;;
+      *) p="$(jq -r '(.transport // [])[0] // (.protocol_support // {} | keys[0]) // empty' "$scenario_json" 2>/dev/null || true)" ;;
+    esac
+  fi
+  case "$p" in
+    h2c) p="h2" ;;
+    h1|h2|h3) ;;
+    *) p="h1" ;;
+  esac
+  printf '%s\n' "$p"
+}
+
 # ---------------------------------------------------------------------------
 # Discovery: scenarios, targets, env files
 # ---------------------------------------------------------------------------
@@ -582,14 +606,11 @@ fi
 # Classification axes
 # ---------------------------------------------------------------------------
 
-# Public/community track only. H3 is Enterprise-only and not runnable here, so it
-# is not offered; the Enterprise track has its own tooling (enterprise/ tree).
-protocol_default="h1"
-[[ "$is_saga" == "yes" ]] && protocol_default="h2"
-protocol_mode="$(select_kv "Protocol mode" "$protocol_default" \
-  h1 "h1 — HTTP/1.1" \
-  h2 "h2 — HTTP/2 (saga transport is H2C)")"
-
+# Public/community track only (Enterprise has its own tooling). protocol_mode is
+# NOT a free choice: it is authoritatively determined by the fixed contract for
+# contract-driven runs (entity/saga/constrained/comparative) or by the load
+# driver for generic runs — so it is derived later (resolve_protocol_mode), after
+# the contract is known, to avoid a profile that claims a protocol the run won't use.
 tier="community"
 
 target_classification="$(select_kv "Target classification" "pure" \
@@ -633,6 +654,11 @@ elif [[ "$execution_class" == "constrained" && -n "$constrained_contract" ]]; th
   contract_default="$constrained_contract"
 fi
 contract_id="$(prompt_text "contract_id" "$contract_default")"
+
+# Derived from the contract (or driver), never asked — keeps protocol_mode
+# consistent with what actually runs.
+protocol_mode="$(resolve_protocol_mode "$scenario_json" "$contract_id" "$driver")"
+info "protocol_mode derived as '$protocol_mode' (from contract '$contract_id'${driver:+ / driver '$driver'})"
 
 if [[ "$is_saga" == "yes" ]]; then
   if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then

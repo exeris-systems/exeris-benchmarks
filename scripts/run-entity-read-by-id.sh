@@ -1002,6 +1002,21 @@ else
 fi
 echo "$WRK_OUT"
 
+# Fail loudly if the target died during measurement or no requests completed: a
+# crashed/unreachable target must NOT be written out as a successful result.
+if [[ "$TARGET_APP_STARTED" -eq 1 && -n "$TARGET_APP_PID" ]] && ! kill -0 "$TARGET_APP_PID" 2>/dev/null; then
+  echo "ERROR: benchmark target (pid=$TARGET_APP_PID) died during measurement — run is INVALID (not a result)."
+  echo "ERROR: inspect $TARGET_APP_LOG and any hs_err_pid*.log / core dump in $REPO_ROOT."
+  [[ "$ENABLE_JFR" == "true" ]] && echo "NOTE: JFR was enabled; on some JDKs (e.g. 26-EA) JFR buffer flush can crash targets that emit custom JFR events on the hot path — retry with --no-jfr to isolate."
+  exit 1
+fi
+_WRK_COMPLETED_REQUESTS="$(printf '%s\n' "$WRK_OUT" | sed -nE 's/^[[:space:]]*([0-9]+) requests in .*/\1/p' | head -1)"
+if [[ -n "$_WRK_COMPLETED_REQUESTS" && "$_WRK_COMPLETED_REQUESTS" -eq 0 ]]; then
+  echo "ERROR: measurement completed 0 requests (target unreachable or crashed) — run is INVALID (not a result)."
+  echo "ERROR: inspect $TARGET_APP_LOG (socket errors above indicate the target was not serving)."
+  exit 1
+fi
+
 # Dump + stop JFR while the target is still alive (before cleanup kills it).
 if [[ "$ENABLE_JFR" == "true" && -n "$JFR_FILE" ]]; then
   echo "[step 7/9] Dumping JFR recording to $JFR_FILE"

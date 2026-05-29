@@ -833,6 +833,7 @@ if ! target_reachable; then
   echo "[step 6/9] Starting benchmark target app..."
   TARGET_CMD=(env \
     EXERIS_PORT="$TARGET_PORT" \
+    EXERIS_HTTP_PORT="$TARGET_PORT" \
     EXERIS_DB_JDBC_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db" \
     EXERIS_DB_USERNAME=benchmark \
     EXERIS_DB_PASSWORD=benchmark \

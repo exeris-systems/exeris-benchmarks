@@ -44,6 +44,11 @@ LOCALITY_MODE_ENABLED="${BENCHMARK_ENABLE_LOCALITY_MODE:-0}"
 BENCHMARK_LOCALITY_STRICT="${BENCHMARK_LOCALITY_STRICT:-0}"
 SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-0}"
 ENTITY_READ_PREFLIGHT_TIMEOUT="${ENTITY_READ_PREFLIGHT_TIMEOUT:-60}"
+# /health readiness does not imply the data endpoint is warm: under constrained
+# CPU (e.g. 0.5 vCPU) the first /api/v1/users hit can transiently 500 while the
+# request/persistence path finishes warming. Poll the data endpoint until it is
+# actually serving 200, instead of aborting on a single early miss.
+ENTITY_READ_PREFLIGHT_READY_SECONDS="${ENTITY_READ_PREFLIGHT_READY_SECONDS:-30}"
 ALLOW_EXTERNAL_TARGET="${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}"
 TARGET_PORT="${BENCHMARK_TARGET_PORT:-8080}"
 DURATION_OVERRIDE=""
@@ -879,13 +884,28 @@ if ! wait_for_target; then
 fi
 
 PREFLIGHT_BODY_FILE="$OUTPUT_DIR/preflight-users-aggregate.json"
-if ! bench_run_endpoint_preflight "$BASE_URL/api/v1/users" "$PREFLIGHT_BODY_FILE" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
-  echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE"
+preflight_ok=0
+preflight_deadline=$(( SECONDS + ENTITY_READ_PREFLIGHT_READY_SECONDS ))
+preflight_attempts=0
+while :; do
+  preflight_attempts=$(( preflight_attempts + 1 ))
+  if bench_run_endpoint_preflight "$BASE_URL/api/v1/users" "$PREFLIGHT_BODY_FILE" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
+    preflight_ok=1
+    break
+  fi
+  if (( SECONDS >= preflight_deadline )); then
+    break
+  fi
+  # Endpoint reachable but not serving 200 yet (data path still warming) — retry.
+  sleep 1
+done
+if [[ "$preflight_ok" -ne 1 ]]; then
+  echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (after ${preflight_attempts} attempt(s) over ${ENTITY_READ_PREFLIGHT_READY_SECONDS}s)"
   echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/users (status=$BENCH_PREFLIGHT_HTTP_CODE)"
   echo "ERROR: preflight response body saved at $PREFLIGHT_BODY_FILE"
   exit 1
 fi
-echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE"
+echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (ready after ${preflight_attempts} attempt(s))"
 
 echo "[step 6/9] Payload preflight preview (/api/v1/users):"
 bench_print_preflight_payload_preview "$PREFLIGHT_BODY_FILE" 512

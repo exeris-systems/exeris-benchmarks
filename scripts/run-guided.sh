@@ -885,6 +885,18 @@ if [[ "$claim_scope" == "comparison_eligible" ]]; then
 fi
 "$VALIDATOR_SCRIPT" "${validate_args[@]}"
 
+# Make the dispatched run self-describing: ensure the full guided profile
+# (connectivity, network_impairment, constrained, affinity, contract, …) lands
+# in the run's output_dir, not only in the separate --profile-out path. Without
+# this, an impaired run's artifacts are indistinguishable from a clean one.
+if [[ "$(cd "$(dirname "$PROFILE_OUT")" && pwd)" != "$output_dir" ]]; then
+  if cp "$PROFILE_OUT" "$output_dir/guided-run-profile.json" 2>/dev/null; then
+    info "Guided profile copied into run dir: $output_dir/guided-run-profile.json"
+  else
+    warn "Could not copy guided profile into run dir: $output_dir"
+  fi
+fi
+
 echo
 echo "Guided profile summary:"
 echo "  run_type           : $run_type"
@@ -963,11 +975,43 @@ warn_impairment_not_applied() {
   fi
 }
 
+# Record the ACTUAL netem state next to the run's results, so an impaired run is
+# never mistaken for a clean one. The dispatched runner does not know netem was
+# applied externally — its result.json transport_mode does NOT reflect it — so
+# this file is the authoritative impairment record for the run.
+write_impairment_marker() {
+  local applied="$1"  # true|false
+  mkdir -p "$output_dir" 2>/dev/null || true
+  jq -n \
+    --arg tool "tc netem" \
+    --arg applied_to "$applied_to" \
+    --arg profile "$imp_profile" \
+    --argjson delay_ms "${delay_ms:-0}" \
+    --argjson loss_pct "${loss_pct:-0}" \
+    --argjson jitter_ms "${jitter_ms:-0}" \
+    --argjson applied "$applied" \
+    '{
+      enabled: true,
+      tool: $tool,
+      applied_to: $applied_to,
+      profile: $profile,
+      delay_ms: $delay_ms,
+      loss_pct: $loss_pct,
+      jitter_ms: $jitter_ms,
+      applied: $applied,
+      claim_scope: "exploratory",
+      note: "tc netem on lo root impairs ALL loopback traffic incl. local DB (Postgres/Neo4j); exploratory only. The dispatched runner does not know about this impairment — its result.json transport_mode does NOT reflect netem. This file is the authoritative impairment record for the run.",
+      comparability: "Do NOT compare against clean runs, nor across different netem profiles, without explicit impairment labels."
+    }' > "$output_dir/network-impairment.json" 2>/dev/null \
+    && info "Network impairment recorded: $output_dir/network-impairment.json"
+}
+
 maybe_apply_netem() {
   impairment_apply_pending || return 0
 
   if ! command -v tc >/dev/null 2>&1; then
     warn "tc not available; cannot apply netem. Run is invalid for impairment claims; metadata captured only."
+    write_impairment_marker false
     return 0
   fi
 
@@ -979,8 +1023,10 @@ maybe_apply_netem() {
   if $prefix tc qdisc add dev lo root netem delay "${delay_ms}ms" "${jitter_ms}ms" loss "${loss_pct}%"; then
     NETEM_APPLIED=1
     trap 'if [[ "${NETEM_APPLIED:-0}" == "1" ]]; then '"$prefix"' tc qdisc del dev lo root 2>/dev/null || true; fi' EXIT
+    write_impairment_marker true
   else
     warn "Failed to apply tc netem; continuing without impairment (run invalid for impairment claims)."
+    write_impairment_marker false
   fi
 }
 

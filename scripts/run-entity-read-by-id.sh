@@ -595,7 +595,9 @@ port_reachable() {
 }
 
 wait_for_target() {
-  local timeout=60
+  # Heavier targets (Spring Boot, Quarkus+Hibernate) under constrained CPU
+  # (e.g. 0.5 vCPU) can take well over 60s to become reachable; allow override.
+  local timeout="${ENTITY_READ_TARGET_READINESS_SECONDS:-60}"
   for _ in $(seq 1 "$timeout"); do
     if target_reachable; then
       return 0
@@ -872,9 +874,9 @@ if ! target_reachable; then
   TARGET_APP_STARTED=1
 fi
 
-echo "[step 6/9] Waiting for target readiness (<=60s)..."
+echo "[step 6/9] Waiting for target readiness (<=${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s)..."
 if ! wait_for_target; then
-  echo "ERROR: benchmark target app failed readiness check within 60s"
+  echo "ERROR: benchmark target app failed readiness check within ${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s"
   if [[ -f "$TARGET_APP_LOG" ]]; then
     echo "---- target-app.log (tail) ----"
     tail -n 60 "$TARGET_APP_LOG" || true

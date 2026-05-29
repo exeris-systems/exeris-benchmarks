@@ -475,7 +475,7 @@ graph_track=""
 saga_auto_start_infra="no"
 saga_auto_start_target="no"
 saga_skip_seed_verify="no"
-saga_enable_jfr="no"
+enable_jfr="no"
 
 # Drivers declared by the scenario, intersected with supported load drivers.
 readarray -t SCEN_DRIVERS < <(jq -r '.driver[]?' "$scenario_json" 2>/dev/null || true)
@@ -693,7 +693,19 @@ if [[ "$is_saga" == "yes" ]]; then
     saga_auto_start_target="$(choose_option "Auto-start target app if health preflight fails?" "yes" yes no)"
   fi
   saga_skip_seed_verify="$(choose_option "Skip seed verification?" "no" yes no)"
-  saga_enable_jfr="$(choose_option "Enable JFR recording (raw JFR is confidentiality-sensitive)?" "no" yes no)"
+fi
+
+# JFR (jcmd) recording is offered only where guided manages a local JVM target it
+# can attach to: saga and entity-read-by-id, on localhost. For generic/WAN runs
+# the target is pre-launched/remote, so guided can't attach a recorder.
+# Community track is OSS — the raw .jfr is kept as-is (no redaction).
+jfr_supported() {
+  [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]] || return 1
+  [[ "$is_saga" == "yes" || "$scenario_id" == "entity-read-by-id" ]] || return 1
+  return 0
+}
+if jfr_supported; then
+  enable_jfr="$(choose_option "Record JFR of the target during measurement (adds overhead)?" "no" yes no)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -861,7 +873,7 @@ jq -n \
   --arg saga_auto_start_infra "$saga_auto_start_infra" \
   --arg saga_auto_start_target "$saga_auto_start_target" \
   --arg saga_skip_seed_verify "$saga_skip_seed_verify" \
-  --arg saga_enable_jfr "$saga_enable_jfr" \
+  --arg enable_jfr "$enable_jfr" \
   --arg execution_class "$execution_class" \
   --arg execution_profile_id "$execution_profile_id" \
   --arg cgroup_memory_limit_mb "$cgroup_memory_limit_mb" \
@@ -942,11 +954,11 @@ jq -n \
                   saga: {
                     auto_start_infra: ($saga_auto_start_infra == "yes"),
                     auto_start_target: ($saga_auto_start_target == "yes"),
-                    skip_seed_verify: ($saga_skip_seed_verify == "yes"),
-                    enable_jfr: ($saga_enable_jfr == "yes")
+                    skip_seed_verify: ($saga_skip_seed_verify == "yes")
                   }
                 }
        else . end)
+  | (. + {enable_jfr: ($enable_jfr == "yes")})
   | (. + {execution_class: $execution_class})
   | (if $execution_class == "constrained"
        then . + (if $execution_profile_id != "" then {execution_profile_id: $execution_profile_id} else {} end)
@@ -1013,7 +1025,10 @@ if [[ "$impairment_enabled" == "true" ]]; then
 fi
 if [[ "$is_saga" == "yes" ]]; then
   echo "  graph_track        : $graph_track"
-  echo "  saga               : auto_start_infra=$saga_auto_start_infra auto_start_target=$saga_auto_start_target skip_seed_verify=$saga_skip_seed_verify enable_jfr=$saga_enable_jfr"
+  echo "  saga               : auto_start_infra=$saga_auto_start_infra auto_start_target=$saga_auto_start_target skip_seed_verify=$saga_skip_seed_verify"
+fi
+if jfr_supported; then
+  echo "  jfr                : enable_jfr=$enable_jfr (recorded into the run dir)"
 fi
 echo "  execution_class    : $execution_class"
 if [[ "$execution_class" == "constrained" ]]; then
@@ -1217,6 +1232,7 @@ if [[ "$execution_class" == "constrained" ]]; then
         --output-dir "$output_dir"
       )
       [[ -n "$cpu_affinity" ]] && erbid_constrained_cmd+=(--cpu-affinity "$cpu_affinity")
+      [[ "$enable_jfr" == "yes" ]] && erbid_constrained_cmd+=(--enable-jfr)
       "${erbid_constrained_cmd[@]}"
       exit $?
       ;;
@@ -1239,7 +1255,7 @@ if [[ "$execution_class" == "constrained" ]]; then
       if [[ "$saga_auto_start_infra" == "yes" ]]; then cmd+=(--auto-start-infra); else cmd+=(--no-auto-start-infra); fi
       if [[ "$saga_auto_start_target" == "yes" ]]; then cmd+=(--auto-start-target); else cmd+=(--no-auto-start-target); fi
       [[ "$saga_skip_seed_verify" == "yes" ]] && cmd+=(--skip-seed-verify)
-      if [[ "$saga_enable_jfr" == "yes" ]]; then cmd+=(--enable-jfr); else cmd+=(--no-jfr); fi
+      if [[ "$enable_jfr" == "yes" ]]; then cmd+=(--enable-jfr); else cmd+=(--no-jfr); fi
       "${cmd[@]}"
       exit $?
       ;;
@@ -1289,7 +1305,7 @@ if [[ "$is_saga" == "yes" ]]; then
   if [[ "$saga_auto_start_infra" == "yes" ]]; then cmd+=(--auto-start-infra); else cmd+=(--no-auto-start-infra); fi
   if [[ "$saga_auto_start_target" == "yes" ]]; then cmd+=(--auto-start-target); else cmd+=(--no-auto-start-target); fi
   [[ "$saga_skip_seed_verify" == "yes" ]] && cmd+=(--skip-seed-verify)
-  if [[ "$saga_enable_jfr" == "yes" ]]; then cmd+=(--enable-jfr); else cmd+=(--no-jfr); fi
+  if [[ "$enable_jfr" == "yes" ]]; then cmd+=(--enable-jfr); else cmd+=(--no-jfr); fi
   "${cmd[@]}"
   exit $?
 fi
@@ -1343,6 +1359,7 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
     [[ -n "$cpu_affinity" ]] && erbid_cmd+=(--cpu-affinity "$cpu_affinity")
     info "Dispatch: run-entity-read-by-id.sh (exploratory free run, no fixed contract, launch_mode=$launch_mode)"
   fi
+  [[ "$enable_jfr" == "yes" ]] && erbid_cmd+=(--enable-jfr)
   "${erbid_cmd[@]}"
   exit $?
 fi

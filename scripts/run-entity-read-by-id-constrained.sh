@@ -13,6 +13,8 @@ CONTRACT_ID="fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1"
 TARGET_RUNTIME="community"
 TARGET_BUILD="jvm"
 CPU_AFFINITY="${CPU_AFFINITY:-}"
+ENABLE_JFR="${BENCHMARK_ENABLE_JFR:-false}"
+JFR_SETTINGS="${BENCHMARK_JFR_SETTINGS:-profile}"
 BENCHMARK_SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
 UTC_STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RESULT_NAMESPACE="results/constrained/entity-read-by-id/${UTC_STAMP}-constrained-smoke"
@@ -28,6 +30,8 @@ Defaults:
   --target-runtime <community|locality|spring|quarkus> (default: community)
   --target-build <jvm|native> (default: jvm)
   --cpu-affinity <cpuset>  pin the target app to this cpuset via taskset (e.g. 0-1); empty = no pin
+  --enable-jfr             record a JFR of the target during measurement (default off)
+  --jfr-settings <name>    JFR settings preset (default: profile)
   --output-dir <repo>/results/constrained/entity-read-by-id/<utc-timestamp>-constrained-smoke
 EOF
 }
@@ -52,6 +56,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --cpu-affinity)
       CPU_AFFINITY="$2"
+      shift 2
+      ;;
+    --enable-jfr)
+      ENABLE_JFR="true"
+      shift
+      ;;
+    --no-jfr)
+      ENABLE_JFR="false"
+      shift
+      ;;
+    --jfr-settings)
+      JFR_SETTINGS="$2"
       shift 2
       ;;
     --output-dir)
@@ -155,6 +171,9 @@ ensure_constrained_scope() {
   )
   if [[ -n "$CPU_AFFINITY" ]]; then
     relaunch_args+=(--cpu-affinity "$CPU_AFFINITY")
+  fi
+  if [[ "$ENABLE_JFR" == "true" ]]; then
+    relaunch_args+=(--enable-jfr --jfr-settings "$JFR_SETTINGS")
   fi
 
   exec systemd-run --user --scope \
@@ -332,6 +351,9 @@ if [[ -n "$CPU_AFFINITY" ]]; then
   # Base runner pins the target app to this cpuset via taskset (server-side pin,
   # orthogonal to the scope CPUQuota).
   LAUNCH_COMMAND+=("--cpu-affinity" "$CPU_AFFINITY")
+fi
+if [[ "$ENABLE_JFR" == "true" ]]; then
+  LAUNCH_COMMAND+=("--enable-jfr" "--jfr-settings" "$JFR_SETTINGS")
 fi
 
 set +e

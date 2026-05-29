@@ -261,11 +261,11 @@
         },
         "skip_seed_verify": {
           "type": "boolean"
-        },
-        "enable_jfr": {
-          "type": "boolean"
         }
       }
+    },
+    "enable_jfr": {
+      "type": "boolean"
     },
     "execution_class": {
       "type": "string",

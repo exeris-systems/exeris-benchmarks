@@ -25,6 +25,10 @@ fi
 # shellcheck source=/dev/null
 source "$READINESS_LIB"
 
+JFR_LIB="${REPO_ROOT}/tools/bench/lib/jfr.sh"
+# shellcheck source=/dev/null
+[[ -f "$JFR_LIB" ]] && source "$JFR_LIB"
+
 CLAIM_SCOPE="${CLAIM_SCOPE:-exploratory}"
 PROFILE="${PROFILE:-dev-laptop}"
 OUTPUT_DIR="${OUTPUT_DIR:-results/raw/entity-read-by-id/$(date +%Y%m%d-%H%M%S)}"
@@ -49,6 +53,10 @@ ENTITY_READ_PREFLIGHT_TIMEOUT="${ENTITY_READ_PREFLIGHT_TIMEOUT:-60}"
 # request/persistence path finishes warming. Poll the data endpoint until it is
 # actually serving 200, instead of aborting on a single early miss.
 ENTITY_READ_PREFLIGHT_READY_SECONDS="${ENTITY_READ_PREFLIGHT_READY_SECONDS:-30}"
+# JFR recording of the target during measurement (opt-in; default off so existing
+# callers are unchanged). Community track is OSS, so the raw .jfr is kept as-is.
+ENABLE_JFR="${BENCHMARK_ENABLE_JFR:-false}"
+JFR_SETTINGS="${BENCHMARK_JFR_SETTINGS:-profile}"
 ALLOW_EXTERNAL_TARGET="${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}"
 TARGET_PORT="${BENCHMARK_TARGET_PORT:-8080}"
 DURATION_OVERRIDE=""
@@ -163,6 +171,9 @@ while [[ $# -gt 0 ]]; do
     --target-runtime) TARGET_RUNTIME="$2"; shift 2 ;;
     --target-build) TARGET_BUILD="$2"; shift 2 ;;
     --cpu-affinity) CPU_AFFINITY="$2"; shift 2 ;;
+    --enable-jfr) ENABLE_JFR="true"; shift ;;
+    --no-jfr) ENABLE_JFR="false"; shift ;;
+    --jfr-settings) JFR_SETTINGS="$2"; shift 2 ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -920,6 +931,25 @@ elif [[ "$TARGET_APP_STARTED" -eq 0 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; t
   exit 1
 fi
 
+# Optional JFR recording of the target during warmup+measurement (jcmd-based;
+# only meaningful when this runner manages a local JVM target).
+JFR_FILE=""
+if [[ "$ENABLE_JFR" == "true" ]]; then
+  if ! command -v bench_start_jfr_recording >/dev/null 2>&1; then
+    echo "WARN: --enable-jfr requested but jfr lib not available; skipping JFR"
+    ENABLE_JFR="false"
+  elif [[ "$TARGET_APP_STARTED" -ne 1 || -z "$TARGET_APP_PID" ]]; then
+    echo "WARN: --enable-jfr requested but no locally-managed target (external/native?); skipping JFR"
+    ENABLE_JFR="false"
+  else
+    JFR_LOGS_DIR="$OUTPUT_DIR/logs"
+    mkdir -p "$JFR_LOGS_DIR"
+    JFR_FILE="$OUTPUT_DIR/target-entity-read-by-id-$(date -u +%Y%m%dT%H%M%SZ).jfr"
+    echo "[step 6/9] Starting JFR recording (settings=$JFR_SETTINGS) on target pid=$TARGET_APP_PID"
+    bench_start_jfr_recording "$TARGET_APP_PID" "$JFR_LOGS_DIR" "entity-read-by-id" "$JFR_SETTINGS" || true
+  fi
+fi
+
 echo "[step 6/9] Warmup ($WARMUP)..."
 wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL/api/v1/users" > /dev/null || true
 
@@ -971,6 +1001,17 @@ else
   WRK_OUT=$("${WRK_CMD[@]}" 2>&1)
 fi
 echo "$WRK_OUT"
+
+# Dump + stop JFR while the target is still alive (before cleanup kills it).
+if [[ "$ENABLE_JFR" == "true" && -n "$JFR_FILE" ]]; then
+  echo "[step 7/9] Dumping JFR recording to $JFR_FILE"
+  bench_capture_jfr_metadata "$TARGET_APP_PID" "$JFR_LOGS_DIR" "$JFR_FILE" || true
+  if [[ -f "$JFR_FILE" ]]; then
+    echo "[step 7/9] JFR recording saved: $JFR_FILE ($(du -h "$JFR_FILE" 2>/dev/null | cut -f1))"
+  else
+    echo "WARN: JFR dump did not produce a file (see $JFR_LOGS_DIR/jfr-*.json)"
+  fi
+fi
 
 # Capture post-measurement pg_stat_statements snapshot
 if [[ -f "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT" ]]; then

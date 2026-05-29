@@ -337,5 +337,10 @@ if [[ "$scenario_id" == "e2e-shop-order-saga" ]]; then
   pass "Semantic check: saga graph_track present (graph_track=$graph_track)"
 fi
 
+# Tier correctness: H3 is Enterprise-only; a Community profile must not claim h3.
+if [[ "$tier" == "community" && "$protocol_mode" == "h3" ]]; then
+  fail "Semantic check failed: protocol_mode=h3 is Enterprise-only and cannot be used with tier=community"
+fi
+
 pass "Semantic checks"
 pass "Guided profile validation complete"

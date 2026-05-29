@@ -46,6 +46,10 @@ VALIDATOR_SCRIPT="${REPO_ROOT}/runtime/drivers/validate-guided-profile.sh"
 TARGET_MATRIX="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
 ENV_DIR="${REPO_ROOT}/runtime/drivers/env"
 
+# topology_mode values (mirror the guided-run-profile schema enum).
+readonly TOPOLOGY_LOCAL="localhost"
+readonly TOPOLOGY_NETWORK="network"
+
 PROFILE_OUT=""
 EXECUTE_MODE="ask"
 
@@ -115,9 +119,12 @@ select_kv() {
   shift 2
   local -a vals=()
   local -a labels=()
+  local val label
   while [[ $# -gt 0 ]]; do
-    vals+=("$1")
-    labels+=("${2:-$1}")
+    val="$1"
+    label="${2:-$1}"
+    vals+=("$val")
+    labels+=("$label")
     shift 2
   done
 
@@ -186,6 +193,21 @@ prompt_number() {
       return 0
     fi
     echo "Invalid number '$value'. Enter a non-negative number." >&2
+  done
+}
+
+prompt_nonneg_int() {
+  local prompt="$1"
+  local default="$2"
+  local value=""
+  while true; do
+    read -r -p "$prompt [$default]: " value || true
+    value="${value:-$default}"
+    if [[ "$value" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+    echo "Invalid value '$value'. Enter an integer >= 0." >&2
   done
 }
 
@@ -311,7 +333,7 @@ connectivity="$(select_kv "Connectivity / topology" "local" \
   wan-impaired "wan-impaired — tc netem delay/loss/jitter (loopback or remote)")"
 
 # Connectivity -> topology_mode (schema) + impairment intent.
-topology_mode="localhost"
+topology_mode="$TOPOLOGY_LOCAL"
 impairment_enabled="false"
 applied_to=""
 imp_profile=""
@@ -337,17 +359,18 @@ configure_impairment() {
     moderate) delay_ms=20;  loss_pct=1.0; jitter_ms=5 ;;
     severe)   delay_ms=100; loss_pct=5.0; jitter_ms=20 ;;
     custom)
-      delay_ms="$(prompt_positive_int "netem delay_ms" "20")"
+      delay_ms="$(prompt_nonneg_int "netem delay_ms" "20")"
       loss_pct="$(prompt_number "netem loss_pct" "1.0")"
-      jitter_ms="$(prompt_positive_int "netem jitter_ms" "5")"
+      jitter_ms="$(prompt_nonneg_int "netem jitter_ms" "5")"
       ;;
+    *) fail "unknown impairment profile: $imp_profile" ;;
   esac
   impairment_enabled="true"
 }
 
 case "$connectivity" in
   local)
-    topology_mode="localhost"
+    topology_mode="$TOPOLOGY_LOCAL"
     launch_mode="$(select_kv "Launch mode" "prebuild" \
       prebuild "prebuild — use a pre-built jar/binary" \
       build    "build    — build from source first" \
@@ -357,7 +380,7 @@ case "$connectivity" in
       native "native — native-image build")"
     ;;
   wan-remote)
-    topology_mode="network"
+    topology_mode="$TOPOLOGY_NETWORK"
     ;;
   wan-impaired)
     applied_to="$(select_kv "Apply impairment to" "loopback" \
@@ -365,7 +388,7 @@ case "$connectivity" in
       remote   "remote   — impairment lives on the path to a remote endpoint")"
     configure_impairment
     if [[ "$applied_to" == "loopback" ]]; then
-      topology_mode="localhost"
+      topology_mode="$TOPOLOGY_LOCAL"
       launch_mode="$(select_kv "Launch mode" "prebuild" \
         prebuild "prebuild — use a pre-built jar/binary" \
         build    "build    — build from source first" \
@@ -375,19 +398,20 @@ case "$connectivity" in
         native "native — native-image build")"
       apply_netem="$(choose_option "Apply tc netem to loopback at dispatch (requires root)?" "no" yes no)"
     else
-      topology_mode="network"
+      topology_mode="$TOPOLOGY_NETWORK"
       warn "Impairment lives on the remote network path; the guided launcher will NOT apply tc netem locally."
     fi
     ;;
+  *) fail "unknown connectivity: $connectivity" ;;
 esac
 
-if [[ "$topology_mode" == "network" ]]; then
+if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
   wan_scheme="$(select_kv "WAN scheme" "http" http "http" https "https")"
   wan_host="$(prompt_text "WAN target host" "10.0.0.10")"
   wan_port="$(prompt_positive_int "WAN target port" "8080")"
   health_path="$(prompt_text "Health path" "/health")"
   app_endpoint="${wan_scheme}://${wan_host}:${wan_port}"
-  db_endpoint="$(prompt_text "db_endpoint" "postgresql://benchmark:benchmark@${wan_host}:5432/benchmark")"
+  db_endpoint="$(prompt_text "db_endpoint (no inline credentials; use env/.pgpass)" "postgresql://${wan_host}:5432/benchmark")"
   warn "Network mode: ensure the remote target is launched with scenario-compatible configuration before execution."
 fi
 
@@ -434,6 +458,7 @@ else
   for d in "${SCEN_DRIVERS[@]}"; do
     case "$d" in
       wrk|wrk2|k6|h2load) driver_kv+=("$d" "$d") ;;
+      *) ;;  # non-HTTP-load drivers (radamsa/jazzer/slowloris) are not menu options
     esac
   done
 
@@ -486,11 +511,10 @@ else
   target_a="$(select_kv "Target A" "${CANDIDATE_TARGET_IDS[0]}" "${target_kv[@]}")"
   target_b="$(select_kv "Target B" "${CANDIDATE_TARGET_IDS[1]:-${CANDIDATE_TARGET_IDS[0]}}" "${target_kv[@]}")"
   targets+=("$target_a" "$target_b")
-  if [[ "$is_saga" == "yes" && "${#CANDIDATE_TARGET_IDS[@]}" -ge 3 ]]; then
-    if [[ "$(choose_option "Add a third target (saga triad)?" "no" yes no)" == "yes" ]]; then
-      target_c="$(select_kv "Target C" "${CANDIDATE_TARGET_IDS[2]}" "${target_kv[@]}")"
-      targets+=("$target_c")
-    fi
+  if [[ "$is_saga" == "yes" && "${#CANDIDATE_TARGET_IDS[@]}" -ge 3 ]] \
+     && [[ "$(choose_option "Add a third target (saga triad)?" "no" yes no)" == "yes" ]]; then
+    target_c="$(select_kv "Target C" "${CANDIDATE_TARGET_IDS[2]}" "${target_kv[@]}")"
+    targets+=("$target_c")
   fi
 fi
 
@@ -505,6 +529,12 @@ protocol_mode="$(select_kv "Protocol mode" "$protocol_default" \
   h2 "h2 — HTTP/2 (saga transport is H2C)" \
   h3 "h3 — HTTP/3/QUIC")"
 tier="$(select_kv "Tier" "community" community "community" enterprise "enterprise")"
+
+# H3 is Enterprise-only; fail fast rather than after the whole form is filled.
+if [[ "$protocol_mode" == "h3" && "$tier" == "community" ]]; then
+  fail "protocol_mode=h3 is Enterprise-only and cannot be combined with tier=community. Choose tier=enterprise or a different protocol."
+fi
+
 target_classification="$(select_kv "Target classification" "pure" \
   pure   "pure   — pure-mode runtime" \
   compat "compat — compatibility mode")"
@@ -529,7 +559,7 @@ fi
 contract_id="$(prompt_text "contract_id" "$contract_default")"
 
 if [[ "$is_saga" == "yes" ]]; then
-  if [[ "$topology_mode" == "network" ]]; then
+  if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
     saga_auto_start_infra="no"
     saga_auto_start_target="no"
     info "WAN saga: infra/target auto-start disabled (remote target is operator-managed)."
@@ -731,7 +761,10 @@ jq -n \
                    tool: $netem_tool,
                    delay_ms: $delay_ms,
                    loss_pct: $loss_pct,
-                   jitter_ms: $jitter_ms
+                   jitter_ms: $jitter_ms,
+                   note: (if $applied_to == "loopback"
+                          then "tc netem on lo root impairs ALL loopback traffic, including local DB (Postgres/Neo4j) connections — not just client->target. Scenarios with a local DB are confounded; exploratory only."
+                          else "Impairment lives on the remote network path; the guided launcher does not apply or verify it." end)
                  }}
        else . end)
   | (if $is_saga == "yes"
@@ -771,13 +804,16 @@ echo "  claim_scope        : $claim_scope"
 echo "  contract_id        : $contract_id"
 echo "  output_dir         : $output_dir"
 echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections"
-if [[ "$topology_mode" == "network" ]]; then
+if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
   echo "  app_endpoint       : $app_endpoint"
   echo "  db_endpoint        : $db_endpoint"
   echo "  health_path        : $health_path"
 fi
 if [[ "$impairment_enabled" == "true" ]]; then
   echo "  impairment         : profile=$imp_profile applied_to=$applied_to delay=${delay_ms}ms loss=${loss_pct}% jitter=${jitter_ms}ms apply_requested=$apply_netem"
+  if [[ "$applied_to" == "loopback" ]]; then
+    echo "  impairment caveat  : tc netem on lo root impairs ALL loopback traffic incl. local DB (Postgres/Neo4j) — local-DB scenarios are confounded; exploratory only."
+  fi
 fi
 if [[ "$is_saga" == "yes" ]]; then
   echo "  graph_track        : $graph_track"
@@ -810,8 +846,23 @@ fi
 # ---------------------------------------------------------------------------
 
 NETEM_APPLIED=0
+
+# True when the user asked the guided launcher to apply loopback netem.
+impairment_apply_pending() {
+  [[ "$impairment_enabled" == "true" && "$apply_netem" == "yes" && "$applied_to" == "loopback" ]]
+}
+
+# Loud, honest warning for dispatch paths that do NOT apply guided netem, so the
+# recorded apply_requested=true never silently diverges from what actually ran.
+warn_impairment_not_applied() {
+  local path_label="$1"
+  if impairment_apply_pending; then
+    warn "network_impairment.apply_requested=true, but dispatch path '${path_label}' does not apply tc netem via the guided launcher — netem was NOT applied. This run is INVALID for impairment claims; apply netem manually before the run, or use generic single-target driver dispatch."
+  fi
+}
+
 maybe_apply_netem() {
-  [[ "$impairment_enabled" == "true" && "$apply_netem" == "yes" && "$applied_to" == "loopback" ]] || return 0
+  impairment_apply_pending || return 0
 
   if ! command -v tc >/dev/null 2>&1; then
     warn "tc not available; cannot apply netem. Run is invalid for impairment claims; metadata captured only."
@@ -822,6 +873,7 @@ maybe_apply_netem() {
   [[ "${EUID:-$(id -u)}" -ne 0 ]] && prefix="sudo"
 
   info "Applying tc netem to loopback: delay=${delay_ms}ms jitter=${jitter_ms}ms loss=${loss_pct}%"
+  warn "tc netem on lo root impairs ALL loopback traffic, including local DB (Postgres/Neo4j) — local-DB scenarios are confounded by this. Exploratory only."
   if $prefix tc qdisc add dev lo root netem delay "${delay_ms}ms" "${jitter_ms}ms" loss "${loss_pct}%"; then
     NETEM_APPLIED=1
     trap 'if [[ "${NETEM_APPLIED:-0}" == "1" ]]; then '"$prefix"' tc qdisc del dev lo root 2>/dev/null || true; fi' EXIT
@@ -873,7 +925,7 @@ dispatch_generic_driver() {
 }
 
 resolve_dispatch_base_url() {
-  if [[ "$topology_mode" == "network" ]]; then
+  if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
     printf '%s\n' "$app_endpoint"
   else
     resolve_local_base_url "${targets[0]}"
@@ -882,8 +934,9 @@ resolve_dispatch_base_url() {
 
 # ---- e2e-shop-order-saga: dedicated baseline (single) / campaign (multi) ----
 if [[ "$is_saga" == "yes" ]]; then
+  warn_impairment_not_applied "e2e-shop-order-saga"
   if [[ "$target_mode" == "multi" ]]; then
-    if [[ "$topology_mode" == "network" ]]; then
+    if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
       warn "Saga campaign (run-e2e-shop-order-saga-campaign.sh) is local-only and auto-starts targets; it cannot drive remote WAN endpoints."
       echo "For WAN saga, run a single-target baseline against each remote endpoint. Profile generated; multi-target WAN saga not dispatched."
       exit 0
@@ -911,7 +964,7 @@ if [[ "$is_saga" == "yes" ]]; then
     --profile "$hardware_profile"
     --output-dir "$output_dir"
   )
-  if [[ "$topology_mode" == "network" ]]; then
+  if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
     cmd+=(--base-url "$app_endpoint")
   fi
   if [[ "$saga_auto_start_infra" == "yes" ]]; then cmd+=(--auto-start-infra); else cmd+=(--no-auto-start-infra); fi
@@ -924,6 +977,7 @@ fi
 
 # ---- Multi-target: comparative ----
 if [[ "$target_mode" == "multi" ]]; then
+  warn_impairment_not_applied "run-comparative.sh (multi-target)"
   info "Dispatch: run-comparative.sh"
   "$REPO_ROOT/scripts/run-comparative.sh" \
     --target-a "${targets[0]}" \
@@ -939,7 +993,8 @@ if [[ "$target_mode" == "multi" ]]; then
 fi
 
 # ---- entity-read-by-id (local): specialized runner ----
-if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "localhost" ]]; then
+if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LOCAL" ]]; then
+  warn_impairment_not_applied "run-entity-read-by-id.sh"
   mapped_runtime="$(map_entity_runtime "${targets[0]}")"
   mapped_build="$(map_entity_build "${targets[0]}")"
   mapped_backend_mode="$(map_entity_backend_mode "${targets[0]}")"
@@ -968,7 +1023,7 @@ fi
 
 # ---- Generic driver dispatch (local or WAN) ----
 if [[ "$driver" != "none" && -n "$driver" ]]; then
-  if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "network" ]]; then
+  if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
     warn "WAN entity-read-by-id: skipping specialized seeding/preflight/gates — ensure the remote target is seeded and ready."
   fi
   base_url="$(resolve_dispatch_base_url)"
@@ -977,6 +1032,7 @@ if [[ "$driver" != "none" && -n "$driver" ]]; then
   exit $?
 fi
 
+warn_impairment_not_applied "no auto-dispatch for scenario=$scenario_id"
 echo "Dispatch is not implemented for scenario=$scenario_id with driver=$driver (target_mode=$target_mode)."
 echo "This scenario uses a specialized harness (e.g. radamsa/jazzer/slowloris); use the dedicated run-*.sh script."
 exit 0

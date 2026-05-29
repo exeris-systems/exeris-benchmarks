@@ -167,6 +167,10 @@
         "jitter_ms": {
           "type": "number",
           "minimum": 0
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "allOf": [

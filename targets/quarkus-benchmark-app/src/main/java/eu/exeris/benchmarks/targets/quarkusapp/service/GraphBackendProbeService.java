@@ -14,6 +14,7 @@ import java.sql.ResultSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 @ApplicationScoped
 public class GraphBackendProbeService {
@@ -27,14 +28,17 @@ public class GraphBackendProbeService {
     @ConfigProperty(name = "exeris.graph.backend.type", defaultValue = BACKEND_PGQ)
     String backendType;
 
-    @ConfigProperty(name = "exeris.graph.neo4j.uri", defaultValue = "")
-    String neo4jUri;
+    // Optional (not String + defaultValue=""): in non-neo4j tracks these are absent
+    // and an empty-string defaultValue is not honored as "unconfigured" here, which
+    // forced an eager required-config load failure. Optional mirrors GraphShopService.
+    @ConfigProperty(name = "exeris.graph.neo4j.uri")
+    Optional<String> neo4jUri;
 
-    @ConfigProperty(name = "exeris.graph.neo4j.user", defaultValue = "")
-    String neo4jUser;
+    @ConfigProperty(name = "exeris.graph.neo4j.user")
+    Optional<String> neo4jUser;
 
-    @ConfigProperty(name = "exeris.graph.neo4j.password", defaultValue = "")
-    String neo4jPassword;
+    @ConfigProperty(name = "exeris.graph.neo4j.password")
+    Optional<String> neo4jPassword;
 
     @ConfigProperty(name = "exeris.graph.neo4j.database", defaultValue = "neo4j")
     String neo4jDatabase;
@@ -66,10 +70,13 @@ public class GraphBackendProbeService {
     }
 
     private boolean probeNeo4j() {
-        if (isBlank(neo4jUri) || isBlank(neo4jUser) || isBlank(neo4jPassword)) {
+        String uri = neo4jUri.filter(s -> !s.isBlank()).orElse(null);
+        String user = neo4jUser.filter(s -> !s.isBlank()).orElse(null);
+        String pass = neo4jPassword.filter(s -> !s.isBlank()).orElse(null);
+        if (uri == null || user == null || pass == null) {
             return false;
         }
-        try (var driver = GraphDatabase.driver(neo4jUri, AuthTokens.basic(neo4jUser, neo4jPassword));
+        try (var driver = GraphDatabase.driver(uri, AuthTokens.basic(user, pass));
              var session = driver.session(SessionConfig.forDatabase(defaultIfBlank(neo4jDatabase, "neo4j")))) {
             Integer ok = session
                     .run("RETURN 1 AS ok")

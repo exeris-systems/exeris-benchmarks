@@ -696,11 +696,55 @@ if [[ "$is_saga" == "yes" ]]; then
   saga_enable_jfr="$(choose_option "Enable JFR recording (raw JFR is confidentiality-sensitive)?" "no" yes no)"
 fi
 
-# Workload is only a free choice on the generic load-driver path (run-{wrk,wrk2,
-# k6,h2load} honor it via *_OVERRIDE). On contract-driven paths (entity/saga/
-# constrained/comparative) the contract fixes it, so read & show those values
-# instead of prompting for numbers the run will ignore.
-if env_dispatch_is_generic; then
+# ---------------------------------------------------------------------------
+# Claim scope + fairness attestations (resolved before workload because the
+# entity-read-by-id dispatch mode depends on it: exploratory => free run, no
+# fixed contract; comparison_eligible => strict fixed contract).
+# ---------------------------------------------------------------------------
+
+claim_scope="descriptive_only"
+if [[ "$execution_class" == "constrained" ]]; then
+  info "Constrained: claim_scope forced to descriptive_only (constrained profiles are exploratory; comparison is forbidden)."
+elif [[ "$run_type" != "exploratory" ]]; then
+  claim_scope="$(select_kv "Claim scope" "descriptive_only" \
+    descriptive_only    "descriptive_only    — describe results only" \
+    comparison_eligible "comparison_eligible — eligible for cross-target claims")"
+fi
+
+fairness_payload_equivalent="false"
+fairness_concurrency_equivalent="false"
+fairness_protocol_mode_equivalent="false"
+fairness_target_scope_equivalent="false"
+
+if [[ "$claim_scope" == "comparison_eligible" ]]; then
+  [[ "$(choose_option "fairness_attest_payload" "yes" yes no)" == "yes" ]] && fairness_payload_equivalent="true"
+  [[ "$(choose_option "fairness_attest_concurrency" "yes" yes no)" == "yes" ]] && fairness_concurrency_equivalent="true"
+  [[ "$(choose_option "fairness_attest_protocol_mode" "yes" yes no)" == "yes" ]] && fairness_protocol_mode_equivalent="true"
+  [[ "$(choose_option "fairness_attest_target_scope" "yes" yes no)" == "yes" ]] && fairness_target_scope_equivalent="true"
+fi
+
+# entity-read-by-id local runs in two modes that mirror the base runner:
+#   - exploratory (no fixed contract): free workload, honored by the runner;
+#   - comparison_eligible: strict fixed contract that fixes workload and rejects
+#     --duration / asserts threads/warmup/claim-scope/profile.
+entity_local_contract_mode() {
+  [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LOCAL" \
+     && "$claim_scope" == "comparison_eligible" ]]
+}
+
+# Workload is a free (honored) choice on the generic load-driver path and on
+# entity-read-by-id local in exploratory free mode; otherwise the contract fixes
+# it (constrained/saga/comparative/entity comparison-eligible), so read & show
+# those values instead of prompting for numbers the run would ignore.
+workload_is_free() {
+  env_dispatch_is_generic && return 0
+  [[ "$execution_class" != "constrained" \
+     && "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LOCAL" ]] \
+    && ! entity_local_contract_mode && return 0
+  return 1
+}
+
+if workload_is_free; then
   warmup_seconds="$(prompt_positive_int "workload.warmup_seconds" "60")"
   measurement_seconds="$(prompt_positive_int "workload.measurement_seconds" "120")"
   threads="$(prompt_positive_int "workload.threads" "4")"
@@ -749,30 +793,6 @@ if [[ -n "${jvm_flags_raw//[[:space:]]/}" ]]; then
   done
 fi
 
-# ---------------------------------------------------------------------------
-# Claim scope + fairness attestations
-# ---------------------------------------------------------------------------
-
-claim_scope="descriptive_only"
-if [[ "$execution_class" == "constrained" ]]; then
-  info "Constrained: claim_scope forced to descriptive_only (constrained profiles are exploratory; comparison is forbidden)."
-elif [[ "$run_type" != "exploratory" ]]; then
-  claim_scope="$(select_kv "Claim scope" "descriptive_only" \
-    descriptive_only    "descriptive_only    — describe results only" \
-    comparison_eligible "comparison_eligible — eligible for cross-target claims")"
-fi
-
-fairness_payload_equivalent="false"
-fairness_concurrency_equivalent="false"
-fairness_protocol_mode_equivalent="false"
-fairness_target_scope_equivalent="false"
-
-if [[ "$claim_scope" == "comparison_eligible" ]]; then
-  [[ "$(choose_option "fairness_attest_payload" "yes" yes no)" == "yes" ]] && fairness_payload_equivalent="true"
-  [[ "$(choose_option "fairness_attest_concurrency" "yes" yes no)" == "yes" ]] && fairness_concurrency_equivalent="true"
-  [[ "$(choose_option "fairness_attest_protocol_mode" "yes" yes no)" == "yes" ]] && fairness_protocol_mode_equivalent="true"
-  [[ "$(choose_option "fairness_attest_target_scope" "yes" yes no)" == "yes" ]] && fairness_target_scope_equivalent="true"
-fi
 
 # ---------------------------------------------------------------------------
 # Write profile
@@ -975,8 +995,8 @@ echo "  hardware_profile   : $hardware_profile"
 echo "  claim_scope        : $claim_scope"
 echo "  contract_id        : $contract_id"
 echo "  output_dir         : $output_dir"
-if env_dispatch_is_generic; then
-  echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections (driver-honored)"
+if workload_is_free; then
+  echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections (your values — honored)"
 else
   echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections (from contract $contract_id)"
 fi
@@ -1298,26 +1318,32 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
   mapped_build="$(map_entity_build "${targets[0]}")"
   mapped_backend_mode="$(map_entity_backend_mode "${targets[0]}")"
 
-  if [[ "$claim_scope" == "comparison_eligible" ]]; then
-    mapped_claim_scope="comparison-eligible"
-  else
-    mapped_claim_scope="exploratory"
-  fi
-
-  info "Dispatch: run-entity-read-by-id.sh (launch_mode=$launch_mode)"
-  env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build" \
-    "$REPO_ROOT/scripts/run-entity-read-by-id.sh" \
-    --contract "$contract_id" \
-    --claim-scope "$mapped_claim_scope" \
-    --profile "$hardware_profile" \
-    --output-dir "$output_dir" \
-    --threads "$threads" \
-    --connections "$connections" \
-    --warmup "${warmup_seconds}s" \
-    --duration "${measurement_seconds}s" \
-    --target-runtime "$mapped_runtime" \
-    --target-build "$mapped_build" \
+  erbid_cmd=(
+    env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build"
+    "$REPO_ROOT/scripts/run-entity-read-by-id.sh"
+    --profile "$hardware_profile"
+    --output-dir "$output_dir"
+    --threads "$threads"
+    --connections "$connections"
+    --warmup "${warmup_seconds}s"
+    --target-runtime "$mapped_runtime"
+    --target-build "$mapped_build"
     --backend-mode "$mapped_backend_mode"
+  )
+  if entity_local_contract_mode; then
+    # Strict fixed contract: workload/claim-scope/profile are contract-fixed and
+    # --duration is rejected; the runner enforces its requirements (perf-box,
+    # cpu-affinity). Workload was read from the contract above.
+    erbid_cmd+=(--contract "$contract_id" --claim-scope comparison-eligible)
+    [[ -n "$cpu_affinity" ]] && erbid_cmd+=(--cpu-affinity "$cpu_affinity")
+    info "Dispatch: run-entity-read-by-id.sh (contract=$contract_id, comparison-eligible, launch_mode=$launch_mode)"
+  else
+    # Free exploratory mode: no fixed contract, workload (incl. duration) honored.
+    erbid_cmd+=(--claim-scope exploratory --duration "${measurement_seconds}s")
+    [[ -n "$cpu_affinity" ]] && erbid_cmd+=(--cpu-affinity "$cpu_affinity")
+    info "Dispatch: run-entity-read-by-id.sh (exploratory free run, no fixed contract, launch_mode=$launch_mode)"
+  fi
+  "${erbid_cmd[@]}"
   exit $?
 fi
 

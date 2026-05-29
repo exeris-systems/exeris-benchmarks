@@ -123,6 +123,34 @@ assert_validator fail "community-h3" \
 assert_validator pass "enterprise-h3" \
   "$(base_profile | jq '.protocol_mode = "h3" | .tier = "enterprise"')"
 
+# 10) Constrained named-profile, local single -> pass.
+assert_validator pass "constrained-named-profile" \
+  "$(base_profile | jq '.scenario_id = "entity-read-by-id"
+        | .execution_class = "constrained"
+        | .execution_profile_id = "runtime-constrained-256m-1vcpu-v1"
+        | .cgroup = { memory_limit_mb: 256, cpu_quota_pct: 100 }')"
+
+# 11) Constrained with no profile and no cgroup limit -> fail.
+assert_validator fail "constrained-missing-limits" \
+  "$(base_profile | jq '.execution_class = "constrained"')"
+
+# 12) Constrained + multi target -> fail (comparative forbidden).
+assert_validator fail "constrained-multi" \
+  "$(base_profile | jq '.execution_class = "constrained"
+        | .execution_profile_id = "runtime-constrained-256m-1vcpu-v1"
+        | .target_mode = "multi"
+        | .targets = ["exeris-community-app","spring-jvm-vt-tuned"]')" \
+  --dispatch-compatible
+
+# 13) Constrained + WAN (network) -> fail (local-only).
+assert_validator fail "constrained-network" \
+  "$(base_profile | jq '.execution_class = "constrained"
+        | .execution_profile_id = "runtime-constrained-256m-1vcpu-v1"
+        | .topology_mode = "network" | .connectivity = "wan-remote"
+        | .app_endpoint = "http://10.0.0.10:8080"
+        | .db_endpoint = "postgresql://10.0.0.10:5432/benchmark"
+        | del(.launch_mode) | del(.runtime_mode)')"
+
 echo ""
 if [[ "$FAILURES" -eq 0 ]]; then
   echo "PASS: all guided-profile validator fixtures behaved as expected"

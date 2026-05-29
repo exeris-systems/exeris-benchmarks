@@ -267,6 +267,35 @@
         }
       }
     },
+    "execution_class": {
+      "type": "string",
+      "enum": [
+        "unconstrained",
+        "constrained"
+      ]
+    },
+    "execution_profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cgroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "memory_limit_mb": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cpu_quota_pct": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "cpu_affinity": {
+      "type": "string",
+      "minLength": 1
+    },
     "targets": {
       "type": "array",
       "items": {
@@ -447,6 +476,28 @@
                 "const": true
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "execution_class"
+        ],
+        "properties": {
+          "execution_class": {
+            "const": "constrained"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "topology_mode": {
+            "const": "localhost"
+          },
+          "target_mode": {
+            "const": "single"
           }
         }
       }

@@ -213,6 +213,14 @@ elif path == ".scenario_id":
   val = data.get("scenario_id", "")
 elif path == ".graph_track":
   val = data.get("graph_track", "")
+elif path == ".topology_mode":
+  val = data.get("topology_mode", "")
+elif path == ".execution_class":
+  val = data.get("execution_class", "")
+elif path == ".execution_profile_id":
+  val = data.get("execution_profile_id", "")
+elif path == ".cgroup.memory_limit_mb":
+  val = data.get("cgroup", {}).get("memory_limit_mb", "")
 elif path == ".network_impairment.enabled":
   val = data.get("network_impairment", {}).get("enabled", "")
 elif path == ".network_impairment.applied_to":
@@ -266,6 +274,10 @@ claim_scope="$(read_scalar '.claim_scope')"
 benchmark_family="$(read_scalar '.benchmark_family')"
 scenario_id="$(read_scalar '.scenario_id')"
 graph_track="$(read_scalar '.graph_track')"
+topology_mode="$(read_scalar '.topology_mode')"
+execution_class="$(read_scalar '.execution_class')"
+execution_profile_id="$(read_scalar '.execution_profile_id')"
+cgroup_memory_limit_mb="$(read_scalar '.cgroup.memory_limit_mb')"
 protocol_mode="$(read_scalar '.protocol_mode')"
 tier="$(read_scalar '.tier')"
 target_classification="$(read_scalar '.target_classification')"
@@ -340,6 +352,16 @@ fi
 # Tier correctness: H3 is Enterprise-only; a Community profile must not claim h3.
 if [[ "$tier" == "community" && "$protocol_mode" == "h3" ]]; then
   fail "Semantic check failed: protocol_mode=h3 is Enterprise-only and cannot be used with tier=community"
+fi
+
+# Constrained runs are exploratory-only: local, single-target, never comparative,
+# and must carry an execution profile or explicit cgroup memory limit.
+if [[ "$execution_class" == "constrained" ]]; then
+  [[ "$topology_mode" == "localhost" ]] || fail "Semantic check failed: execution_class=constrained requires topology_mode=localhost"
+  [[ "$target_mode" == "single" ]] || fail "Semantic check failed: execution_class=constrained requires target_mode=single (comparative is forbidden)"
+  [[ "$claim_scope" != "comparison_eligible" ]] || fail "Semantic check failed: execution_class=constrained cannot be comparison_eligible"
+  [[ -n "$execution_profile_id" || -n "$cgroup_memory_limit_mb" ]] || fail "Semantic check failed: execution_class=constrained requires execution_profile_id or cgroup.memory_limit_mb"
+  pass "Semantic check: constrained run (profile=${execution_profile_id:-<custom>})"
 fi
 
 pass "Semantic checks"

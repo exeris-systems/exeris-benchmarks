@@ -46,6 +46,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VALIDATOR_SCRIPT="${REPO_ROOT}/runtime/drivers/validate-guided-profile.sh"
 TARGET_MATRIX="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
 ENV_DIR="${REPO_ROOT}/runtime/drivers/env"
+EXEC_PROFILES_JSON="${REPO_ROOT}/runtime/profiles/runtime-execution-profiles.json"
 
 # topology_mode values (mirror the guided-run-profile schema enum).
 readonly TOPOLOGY_LOCAL="localhost"
@@ -473,6 +474,55 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Execution class: unconstrained vs constrained (cgroup/affinity)
+# Constrained is local-only, exploratory-only, single-target, never comparative.
+# ---------------------------------------------------------------------------
+
+execution_class="unconstrained"
+execution_profile_id=""
+cgroup_memory_limit_mb=""
+cgroup_cpu_quota_pct=""
+cpu_affinity=""
+constrained_contract=""
+
+if [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]]; then
+  execution_class="$(select_kv "Execution class" "unconstrained" \
+    unconstrained "unconstrained — no cgroup/affinity caps" \
+    constrained   "constrained   — cgroup memory/CPU caps (exploratory-only, single-target, never comparative)")"
+fi
+
+if [[ "$execution_class" == "constrained" ]]; then
+  case "$scenario_id" in
+    entity-read-by-id|e2e-shop-order-saga) : ;;
+    *) warn "Constrained execution is auto-dispatched only for entity-read-by-id and e2e-shop-order-saga; '$scenario_id' will generate a profile but not auto-run (generic drivers have no cgroup enforcement)." ;;
+  esac
+
+  constrained_mode="$(select_kv "Constrained spec" "named-profile" \
+    named-profile "named-profile — 128m/0.5vCPU or 256m/1vCPU (cgroup-enforced)" \
+    custom        "custom        — enter memory_limit_mb + cpu_quota_pct")"
+
+  if [[ "$constrained_mode" == "named-profile" ]]; then
+    execution_profile_id="$(select_kv "Execution profile" "runtime-constrained-256m-1vcpu-v1" \
+      runtime-constrained-256m-1vcpu-v1   "256 MB / 1.0 vCPU" \
+      runtime-constrained-128m-0p5vcpu-v1 "128 MB / 0.5 vCPU")"
+    cgroup_memory_limit_mb="$(jq -r --arg id "$execution_profile_id" '.profiles[] | select(.execution_profile_id == $id) | .memory_limit.limit_mb' "$EXEC_PROFILES_JSON" 2>/dev/null || true)"
+    _vcpu="$(jq -r --arg id "$execution_profile_id" '.profiles[] | select(.execution_profile_id == $id) | .cpu_limit.vcpu' "$EXEC_PROFILES_JSON" 2>/dev/null || true)"
+    cgroup_cpu_quota_pct="$(awk -v v="${_vcpu:-1}" 'BEGIN { printf "%.0f", v * 100 }')"
+  else
+    cgroup_memory_limit_mb="$(prompt_positive_int "cgroup memory_limit_mb" "256")"
+    cgroup_cpu_quota_pct="$(prompt_positive_int "cgroup cpu_quota_pct (100 = 1.0 vCPU)" "100")"
+  fi
+
+  cpu_affinity="$(prompt_text "CPU affinity cpuset (e.g. 0-3, empty = none)" "")"
+
+  # entity-read-by-id constrained runs are driven by a named execution profile +
+  # its matching fixed contract; derive it so the recorded contract is honest.
+  if [[ "$scenario_id" == "entity-read-by-id" && -n "$execution_profile_id" ]]; then
+    constrained_contract="$(jq -r --arg id "$execution_profile_id" '.fixed_contracts | to_entries[] | select(.value.execution_profile_id == $id) | .key' "$scenario_json" 2>/dev/null | head -1)"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Targets
 # ---------------------------------------------------------------------------
 
@@ -494,7 +544,10 @@ for t in "${CANDIDATE_TARGET_IDS[@]}"; do
   fi
 done
 
-if [[ "$is_saga" == "yes" ]]; then
+if [[ "$execution_class" == "constrained" ]]; then
+  target_mode="single"
+  info "Constrained: target_mode forced to single (comparative is forbidden for constrained runs)."
+elif [[ "$is_saga" == "yes" ]]; then
   target_mode="$(select_kv "Target mode" "single" \
     single "single — one target (baseline)" \
     multi  "multi  — 2-3 targets (saga campaign)")"
@@ -553,6 +606,8 @@ fi
 contract_default="fixed_contract_v1"
 if [[ "$is_saga" == "yes" ]]; then
   contract_default="$(derive_saga_contract "$scenario_json" "${targets[0]}" "$graph_track")"
+elif [[ "$execution_class" == "constrained" && -n "$constrained_contract" ]]; then
+  contract_default="$constrained_contract"
 fi
 contract_id="$(prompt_text "contract_id" "$contract_default")"
 
@@ -614,7 +669,9 @@ fi
 # ---------------------------------------------------------------------------
 
 claim_scope="descriptive_only"
-if [[ "$run_type" != "exploratory" ]]; then
+if [[ "$execution_class" == "constrained" ]]; then
+  info "Constrained: claim_scope forced to descriptive_only (constrained profiles are exploratory; comparison is forbidden)."
+elif [[ "$run_type" != "exploratory" ]]; then
   claim_scope="$(select_kv "Claim scope" "descriptive_only" \
     descriptive_only    "descriptive_only    — describe results only" \
     comparison_eligible "comparison_eligible — eligible for cross-target claims")"
@@ -643,6 +700,10 @@ fi
 mkdir -p "$(dirname "$PROFILE_OUT")"
 profile_dir="$(cd "$(dirname "$PROFILE_OUT")" && pwd)"
 output_dir="$profile_dir"
+# Constrained results live under the dedicated namespace (comparison-forbidden).
+if [[ "$execution_class" == "constrained" ]]; then
+  output_dir="$REPO_ROOT/results/constrained/${scenario_id}/${timestamp}-guided"
+fi
 mkdir -p "$output_dir"
 
 targets_json="$(jq -n '$ARGS.positional' --args "${targets[@]}")"
@@ -696,6 +757,11 @@ jq -n \
   --arg saga_auto_start_target "$saga_auto_start_target" \
   --arg saga_skip_seed_verify "$saga_skip_seed_verify" \
   --arg saga_enable_jfr "$saga_enable_jfr" \
+  --arg execution_class "$execution_class" \
+  --arg execution_profile_id "$execution_profile_id" \
+  --arg cgroup_memory_limit_mb "$cgroup_memory_limit_mb" \
+  --arg cgroup_cpu_quota_pct "$cgroup_cpu_quota_pct" \
+  --arg cpu_affinity "$cpu_affinity" \
   --argjson delay_ms "${delay_ms:-0}" \
   --argjson loss_pct "${loss_pct:-0}" \
   --argjson jitter_ms "${jitter_ms:-0}" \
@@ -776,6 +842,17 @@ jq -n \
                   }
                 }
        else . end)
+  | (. + {execution_class: $execution_class})
+  | (if $execution_class == "constrained"
+       then . + (if $execution_profile_id != "" then {execution_profile_id: $execution_profile_id} else {} end)
+              + (if ($cgroup_memory_limit_mb != "" or $cgroup_cpu_quota_pct != "")
+                   then {cgroup: (
+                          (if $cgroup_memory_limit_mb != "" then {memory_limit_mb: ($cgroup_memory_limit_mb | tonumber)} else {} end)
+                        + (if $cgroup_cpu_quota_pct != "" then {cpu_quota_pct: ($cgroup_cpu_quota_pct | tonumber)} else {} end)
+                        )}
+                   else {} end)
+              + (if $cpu_affinity != "" then {cpu_affinity: $cpu_affinity} else {} end)
+       else . end)
   ' > "$PROFILE_OUT"
 
 info "Profile written: $PROFILE_OUT"
@@ -816,6 +893,10 @@ fi
 if [[ "$is_saga" == "yes" ]]; then
   echo "  graph_track        : $graph_track"
   echo "  saga               : auto_start_infra=$saga_auto_start_infra auto_start_target=$saga_auto_start_target skip_seed_verify=$saga_skip_seed_verify enable_jfr=$saga_enable_jfr"
+fi
+echo "  execution_class    : $execution_class"
+if [[ "$execution_class" == "constrained" ]]; then
+  echo "  constrained        : profile=${execution_profile_id:-<custom>} mem=${cgroup_memory_limit_mb:-?}MB cpu=${cgroup_cpu_quota_pct:-?}% affinity=${cpu_affinity:-none}"
 fi
 
 # ---------------------------------------------------------------------------
@@ -929,6 +1010,61 @@ resolve_dispatch_base_url() {
     resolve_local_base_url "${targets[0]}"
   fi
 }
+
+# ---- Constrained (cgroup/affinity): local, single, exploratory-only ----
+if [[ "$execution_class" == "constrained" ]]; then
+  maybe_apply_netem
+  case "$scenario_id" in
+    entity-read-by-id)
+      if [[ -z "$execution_profile_id" ]]; then
+        echo "Constrained entity-read-by-id requires a named execution profile (the constrained runner is profile-driven; custom cgroup is not supported here)."
+        echo "Re-run and pick a named profile, or use saga for custom cgroup limits. Profile generated; not dispatched."
+        exit 0
+      fi
+      if [[ -z "$constrained_contract" ]]; then
+        echo "No fixed contract maps to execution_profile_id='$execution_profile_id'. Profile generated; not dispatched." >&2
+        exit 3
+      fi
+      [[ -n "$cpu_affinity" ]] && warn "CPU affinity '$cpu_affinity' is not applied by the entity constrained runner (cgroup limits only); ignoring."
+      info "Dispatch: run-entity-read-by-id-constrained.sh (profile=$execution_profile_id contract=$contract_id)"
+      "$REPO_ROOT/scripts/run-entity-read-by-id-constrained.sh" \
+        --execution-profile-id "$execution_profile_id" \
+        --contract-id "$contract_id" \
+        --target-runtime "$(map_entity_runtime "${targets[0]}")" \
+        --target-build "$(map_entity_build "${targets[0]}")" \
+        --output-dir "$output_dir"
+      exit $?
+      ;;
+    e2e-shop-order-saga)
+      info "Dispatch: run-e2e-shop-order-saga-baseline.sh (constrained: mem=${cgroup_memory_limit_mb}MB cpu=${cgroup_cpu_quota_pct}%)"
+      cmd=(
+        "$REPO_ROOT/scripts/run-e2e-shop-order-saga-baseline.sh"
+        --contract-id "$contract_id"
+        --target-app "${targets[0]}"
+        --graph-track "$graph_track"
+        --profile "$hardware_profile"
+        --output-dir "$output_dir"
+      )
+      [[ -n "$cgroup_memory_limit_mb" ]] && cmd+=(--cgroup-memory-limit-mb "$cgroup_memory_limit_mb")
+      [[ -n "$cgroup_cpu_quota_pct" ]] && cmd+=(--cgroup-cpu-quota-pct "$cgroup_cpu_quota_pct")
+      if [[ "$saga_auto_start_infra" == "yes" ]]; then cmd+=(--auto-start-infra); else cmd+=(--no-auto-start-infra); fi
+      if [[ "$saga_auto_start_target" == "yes" ]]; then cmd+=(--auto-start-target); else cmd+=(--no-auto-start-target); fi
+      [[ "$saga_skip_seed_verify" == "yes" ]] && cmd+=(--skip-seed-verify)
+      if [[ "$saga_enable_jfr" == "yes" ]]; then cmd+=(--enable-jfr); else cmd+=(--no-jfr); fi
+      if [[ -n "$cpu_affinity" ]]; then
+        BENCH_SERVER_CPU_AFFINITY="$cpu_affinity" "${cmd[@]}"
+      else
+        "${cmd[@]}"
+      fi
+      exit $?
+      ;;
+    *)
+      echo "Constrained execution is not auto-dispatched for scenario '$scenario_id' (generic wrk/k6/h2load drivers have no cgroup enforcement)."
+      echo "Profile generated under results/constrained; not dispatched."
+      exit 0
+      ;;
+  esac
+fi
 
 # ---- e2e-shop-order-saga: dedicated baseline (single) / campaign (multi) ----
 if [[ "$is_saga" == "yes" ]]; then

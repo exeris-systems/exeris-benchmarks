@@ -6,10 +6,11 @@ usage() {
 Usage: run-guided.sh [--profile-out <path>] [--execute] [--no-execute]
 
 Interactive guided launcher for local and WAN benchmark runs.
+Community track only (H1/H2); H3 and the Enterprise tier have separate tooling.
 
   - menu-driven selection of: connectivity (local / WAN-remote / WAN-impaired),
     scenario, load driver, target app(s), runtime env file, hardware profile,
-    protocol/tier/classification, workload and fairness intent
+    protocol (H1/H2), pure/compat classification, workload and fairness intent
   - captures benchmark metadata and run intent into guided-run-profile.json
   - validates the profile via runtime/drivers/validate-guided-profile.sh
   - optionally dispatches the matching run script:
@@ -522,18 +523,15 @@ fi
 # Classification axes
 # ---------------------------------------------------------------------------
 
+# Public/community track only. H3 is Enterprise-only and not runnable here, so it
+# is not offered; the Enterprise track has its own tooling (enterprise/ tree).
 protocol_default="h1"
 [[ "$is_saga" == "yes" ]] && protocol_default="h2"
 protocol_mode="$(select_kv "Protocol mode" "$protocol_default" \
   h1 "h1 — HTTP/1.1" \
-  h2 "h2 — HTTP/2 (saga transport is H2C)" \
-  h3 "h3 — HTTP/3/QUIC")"
-tier="$(select_kv "Tier" "community" community "community" enterprise "enterprise")"
+  h2 "h2 — HTTP/2 (saga transport is H2C)")"
 
-# H3 is Enterprise-only; fail fast rather than after the whole form is filled.
-if [[ "$protocol_mode" == "h3" && "$tier" == "community" ]]; then
-  fail "protocol_mode=h3 is Enterprise-only and cannot be combined with tier=community. Choose tier=enterprise or a different protocol."
-fi
+tier="community"
 
 target_classification="$(select_kv "Target classification" "pure" \
   pure   "pure   — pure-mode runtime" \

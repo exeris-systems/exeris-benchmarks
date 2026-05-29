@@ -398,12 +398,9 @@ case "$connectivity" in
   local)
     topology_mode="$TOPOLOGY_LOCAL"
     launch_mode="$(select_kv "Launch mode" "prebuild" \
-      prebuild "prebuild — use a pre-built jar/binary" \
-      build    "build    — build from source first" \
-      docker   "docker   — launch via docker compose")"
-    runtime_mode="$(select_kv "Runtime mode" "jvm" \
-      jvm    "jvm    — JVM build" \
-      native "native — native-image build")"
+      prebuild "prebuild — use the pre-built jar/binary" \
+      build    "build    — build the target from source (mvn) first")"
+    # runtime_mode (jvm/native) is derived from the chosen target, not asked.
     ;;
   wan-remote)
     topology_mode="$TOPOLOGY_NETWORK"
@@ -416,12 +413,9 @@ case "$connectivity" in
     if [[ "$applied_to" == "loopback" ]]; then
       topology_mode="$TOPOLOGY_LOCAL"
       launch_mode="$(select_kv "Launch mode" "prebuild" \
-        prebuild "prebuild — use a pre-built jar/binary" \
-        build    "build    — build from source first" \
-        docker   "docker   — launch via docker compose")"
-      runtime_mode="$(select_kv "Runtime mode" "jvm" \
-        jvm    "jvm    — JVM build" \
-        native "native — native-image build")"
+        prebuild "prebuild — use the pre-built jar/binary" \
+        build    "build    — build the target from source (mvn) first")"
+      # runtime_mode (jvm/native) is derived from the chosen target, not asked.
       apply_netem="$(choose_option "Apply tc netem to loopback at dispatch (requires root)?" "no" yes no)"
     else
       topology_mode="$TOPOLOGY_NETWORK"
@@ -659,6 +653,20 @@ contract_id="$(prompt_text "contract_id" "$contract_default")"
 # consistent with what actually runs.
 protocol_mode="$(resolve_protocol_mode "$scenario_json" "$contract_id" "$driver")"
 info "protocol_mode derived as '$protocol_mode' (from contract '$contract_id'${driver:+ / driver '$driver'})"
+
+# runtime_mode (jvm/native) follows the chosen target, not a separate prompt, so
+# the recorded value matches the runner's actual --target-build.
+if [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]]; then
+  runtime_mode="$(map_entity_build "${targets[0]}")"
+fi
+
+# launch_mode maps to the runner build toggle: build -> compile from source,
+# prebuild -> use prebuilt artifacts (BENCHMARK_SKIP_TARGET_BUILD=1).
+if [[ "$launch_mode" == "build" ]]; then
+  skip_target_build=0
+else
+  skip_target_build=1
+fi
 
 if [[ "$is_saga" == "yes" ]]; then
   if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
@@ -1146,8 +1154,9 @@ if [[ "$execution_class" == "constrained" ]]; then
         exit 3
       fi
       maybe_apply_netem
-      info "Dispatch: run-entity-read-by-id-constrained.sh (profile=$execution_profile_id contract=$contract_id affinity=${cpu_affinity:-none})"
+      info "Dispatch: run-entity-read-by-id-constrained.sh (profile=$execution_profile_id contract=$contract_id affinity=${cpu_affinity:-none} launch_mode=$launch_mode)"
       erbid_constrained_cmd=(
+        env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build"
         "$REPO_ROOT/scripts/run-entity-read-by-id-constrained.sh"
         --execution-profile-id "$execution_profile_id"
         --contract-id "$contract_id"
@@ -1263,8 +1272,9 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
     mapped_claim_scope="exploratory"
   fi
 
-  info "Dispatch: run-entity-read-by-id.sh"
-  "$REPO_ROOT/scripts/run-entity-read-by-id.sh" \
+  info "Dispatch: run-entity-read-by-id.sh (launch_mode=$launch_mode)"
+  env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build" \
+    "$REPO_ROOT/scripts/run-entity-read-by-id.sh" \
     --contract "$contract_id" \
     --claim-scope "$mapped_claim_scope" \
     --profile "$hardware_profile" \

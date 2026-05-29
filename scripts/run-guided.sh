@@ -1073,15 +1073,18 @@ if [[ "$execution_class" == "constrained" ]]; then
         echo "No fixed contract maps to execution_profile_id='$execution_profile_id'. Profile generated; not dispatched." >&2
         exit 3
       fi
-      [[ -n "$cpu_affinity" ]] && warn "CPU affinity '$cpu_affinity' is not applied by the entity constrained runner (cgroup limits only); ignoring."
       maybe_apply_netem
-      info "Dispatch: run-entity-read-by-id-constrained.sh (profile=$execution_profile_id contract=$contract_id)"
-      "$REPO_ROOT/scripts/run-entity-read-by-id-constrained.sh" \
-        --execution-profile-id "$execution_profile_id" \
-        --contract-id "$contract_id" \
-        --target-runtime "$(map_entity_runtime "${targets[0]}")" \
-        --target-build "$(map_entity_build "${targets[0]}")" \
+      info "Dispatch: run-entity-read-by-id-constrained.sh (profile=$execution_profile_id contract=$contract_id affinity=${cpu_affinity:-none})"
+      erbid_constrained_cmd=(
+        "$REPO_ROOT/scripts/run-entity-read-by-id-constrained.sh"
+        --execution-profile-id "$execution_profile_id"
+        --contract-id "$contract_id"
+        --target-runtime "$(map_entity_runtime "${targets[0]}")"
+        --target-build "$(map_entity_build "${targets[0]}")"
         --output-dir "$output_dir"
+      )
+      [[ -n "$cpu_affinity" ]] && erbid_constrained_cmd+=(--cpu-affinity "$cpu_affinity")
+      "${erbid_constrained_cmd[@]}"
       exit $?
       ;;
     e2e-shop-order-saga)

@@ -12,6 +12,7 @@ EXECUTION_PROFILE_ID="runtime-constrained-256m-1vcpu-v1"
 CONTRACT_ID="fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1"
 TARGET_RUNTIME="community"
 TARGET_BUILD="jvm"
+CPU_AFFINITY="${CPU_AFFINITY:-}"
 BENCHMARK_SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
 UTC_STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RESULT_NAMESPACE="results/constrained/entity-read-by-id/${UTC_STAMP}-constrained-smoke"
@@ -19,13 +20,14 @@ OUTPUT_DIR="${REPO_ROOT}/${RESULT_NAMESPACE}"
 
 usage() {
   cat <<EOF
-Usage: scripts/run-entity-read-by-id-constrained.sh [--execution-profile-id ID] [--contract-id ID] [--target-runtime <community|locality|spring|quarkus>] [--target-build <jvm|native>] [--output-dir PATH]
+Usage: scripts/run-entity-read-by-id-constrained.sh [--execution-profile-id ID] [--contract-id ID] [--target-runtime <community|locality|spring|quarkus>] [--target-build <jvm|native>] [--cpu-affinity <cpuset>] [--output-dir PATH]
 
 Defaults:
   --execution-profile-id runtime-constrained-256m-1vcpu-v1
   --contract-id fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1
   --target-runtime <community|locality|spring|quarkus> (default: community)
   --target-build <jvm|native> (default: jvm)
+  --cpu-affinity <cpuset>  pin the target app to this cpuset via taskset (e.g. 0-1); empty = no pin
   --output-dir <repo>/results/constrained/entity-read-by-id/<utc-timestamp>-constrained-smoke
 EOF
 }
@@ -46,6 +48,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --target-build)
       TARGET_BUILD="$2"
+      shift 2
+      ;;
+    --cpu-affinity)
+      CPU_AFFINITY="$2"
       shift 2
       ;;
     --output-dir)
@@ -140,6 +146,17 @@ ensure_constrained_scope() {
   echo "[info] ${reason}"
   echo "[info] Relaunching constrained run in user scope with MemoryMax=${LIMIT_MB}M CPUQuota=${cpu_quota_pct}%"
 
+  local relaunch_args=(
+    --execution-profile-id "$EXECUTION_PROFILE_ID"
+    --contract-id "$CONTRACT_ID"
+    --target-runtime "$TARGET_RUNTIME"
+    --target-build "$TARGET_BUILD"
+    --output-dir "$OUTPUT_DIR"
+  )
+  if [[ -n "$CPU_AFFINITY" ]]; then
+    relaunch_args+=(--cpu-affinity "$CPU_AFFINITY")
+  fi
+
   exec systemd-run --user --scope \
     -p "MemoryMax=${LIMIT_MB}M" \
     -p "MemorySwapMax=0" \
@@ -148,11 +165,7 @@ ensure_constrained_scope() {
       BENCHMARK_CONSTRAINED_SCOPE_ACTIVE=1 \
       BENCHMARK_SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD}" \
       "$0" \
-      --execution-profile-id "$EXECUTION_PROFILE_ID" \
-      --contract-id "$CONTRACT_ID" \
-      --target-runtime "$TARGET_RUNTIME" \
-      --target-build "$TARGET_BUILD" \
-      --output-dir "$OUTPUT_DIR"
+      "${relaunch_args[@]}"
 }
 
 CONTRACT_JSON="$(jq -ce --arg id "$CONTRACT_ID" '.fixed_contracts[$id] // empty' "$SCENARIO_JSON")" \
@@ -315,6 +328,11 @@ LAUNCH_COMMAND=(
   "--warmup" "${WARMUP_SECONDS}s"
   "--duration" "${DURATION_SECONDS}s"
 )
+if [[ -n "$CPU_AFFINITY" ]]; then
+  # Base runner pins the target app to this cpuset via taskset (server-side pin,
+  # orthogonal to the scope CPUQuota).
+  LAUNCH_COMMAND+=("--cpu-affinity" "$CPU_AFFINITY")
+fi
 
 set +e
 (

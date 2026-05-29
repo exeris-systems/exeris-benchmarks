@@ -151,6 +151,27 @@ assert_validator fail "constrained-network" \
         | .db_endpoint = "postgresql://10.0.0.10:5432/benchmark"
         | del(.launch_mode) | del(.runtime_mode)')"
 
+# 14) env_file on a generic-dispatch profile (json-1kb + wrk, single) -> pass.
+assert_validator pass "env-file-generic" \
+  "$(base_profile | jq '.scenario_id = "json-1kb" | .driver = "wrk" | .env_file = "exeris-community-runtime.env"')"
+
+# 15) env_file on a constrained profile -> fail (managed DB/target).
+assert_validator fail "env-file-constrained" \
+  "$(base_profile | jq '.scenario_id = "entity-read-by-id"
+        | .execution_class = "constrained"
+        | .execution_profile_id = "runtime-constrained-256m-1vcpu-v1"
+        | .env_file = "exeris-community-runtime.env"')"
+
+# 16) env_file on the saga scenario -> fail (managed DB/target).
+assert_validator fail "env-file-saga" \
+  "$(base_profile | jq '.scenario_id = "e2e-shop-order-saga" | .protocol_mode = "h2"
+        | .graph_track = "neo4j" | .env_file = "exeris-community-runtime.env"')"
+
+# 17) env_file on local entity-read-by-id -> fail (managed DB/target).
+assert_validator fail "env-file-entity-local" \
+  "$(base_profile | jq '.scenario_id = "entity-read-by-id" | .driver = "wrk"
+        | .env_file = "exeris-community-runtime.env"')"
+
 echo ""
 if [[ "$FAILURES" -eq 0 ]]; then
   echo "PASS: all guided-profile validator fixtures behaved as expected"

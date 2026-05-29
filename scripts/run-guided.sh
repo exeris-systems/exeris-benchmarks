@@ -600,13 +600,30 @@ target_classification="$(select_kv "Target classification" "pure" \
 # Env file + workload + reproducibility metadata
 # ---------------------------------------------------------------------------
 
+# The runtime/drivers/env/*.env files are TARGET LAUNCH / ENDPOINT CONTRACTS
+# (START_MODE / HEALTH_URL / WRK_BASE_URL / EXTERNAL_START_CMD). They are only
+# coherent on the generic load-driver dispatch path, where the harness drives a
+# tool against a (pre-)launched target the env describes. The managed runners
+# (entity-read-by-id local, saga, comparative/multi, constrained) provision and
+# seed their OWN DB+target; an external-launch env contract would point the app
+# at a different, unseeded DB and break the run — so env_file is NOT offered
+# there (rather than recorded-but-ignored).
+env_dispatch_is_generic() {
+  [[ "$execution_class" != "constrained" ]] || return 1
+  [[ "$is_saga" != "yes" ]] || return 1
+  [[ "$target_mode" == "single" ]] || return 1
+  [[ "$driver" != "none" && -n "$driver" ]] || return 1
+  [[ ! ( "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LOCAL" ) ]] || return 1
+  return 0
+}
+
 env_file="none"
-env_kv=("none" "none — no runtime env file")
-for e in "${ENV_FILE_NAMES[@]}"; do
-  env_kv+=("$e" "$e")
-done
-if [[ "${#env_kv[@]}" -gt 2 ]]; then
-  env_file="$(select_kv "Runtime env file (runtime/drivers/env/)" "none" "${env_kv[@]}")"
+if env_dispatch_is_generic && [[ "${#ENV_FILE_NAMES[@]}" -gt 0 ]]; then
+  env_kv=("none" "none — no runtime env file")
+  for e in "${ENV_FILE_NAMES[@]}"; do
+    env_kv+=("$e" "$e")
+  done
+  env_file="$(select_kv "Runtime env file (runtime/drivers/env/ — target launch/endpoint contract)" "none" "${env_kv[@]}")"
 fi
 
 contract_default="fixed_contract_v1"
@@ -1009,9 +1026,35 @@ dispatch_generic_driver() {
   esac
 }
 
+# Source the selected env contract into the dispatch environment for real, so
+# its vars (WRK_BASE_URL / H2LOAD_BASE_URL / HEALTH_URL / driver knobs) actually
+# take effect in the run-{wrk,wrk2,k6,h2load}.sh child. Only called on the
+# generic path (the only place env_file is offered).
+apply_env_file_for_generic() {
+  [[ "$env_file" != "none" && -n "$env_file" ]] || return 0
+  local path="$ENV_DIR/$env_file"
+  if [[ ! -f "$path" ]]; then
+    warn "env_file not found: $path (skipping)"
+    return 0
+  fi
+  info "Forwarding runtime env contract into dispatch (sourced + exported): $path"
+  set -a
+  # shellcheck source=/dev/null
+  source "$path"
+  set +a
+  if [[ -n "${START_MODE:-}" && "$START_MODE" != "none" ]]; then
+    warn "env_file declares START_MODE=$START_MODE (its own launch contract). The guided generic path does NOT auto-launch the target — ensure the target is already running and reachable at the env's endpoint."
+  fi
+}
+
 resolve_dispatch_base_url() {
   if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
     printf '%s\n' "$app_endpoint"
+  elif [[ -n "${WRK_BASE_URL:-}" ]]; then
+    # honored from the sourced env contract
+    printf '%s\n' "$WRK_BASE_URL"
+  elif [[ -n "${HEALTH_URL:-}" ]]; then
+    printf '%s\n' "$HEALTH_URL" | sed -E 's#(https?://[^/]+).*#\1#'
   else
     resolve_local_base_url "${targets[0]}"
   fi
@@ -1166,6 +1209,7 @@ if [[ "$driver" != "none" && -n "$driver" ]]; then
   if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
     warn "WAN entity-read-by-id: skipping specialized seeding/preflight/gates — ensure the remote target is seeded and ready."
   fi
+  apply_env_file_for_generic
   base_url="$(resolve_dispatch_base_url)"
   maybe_apply_netem
   dispatch_generic_driver "$base_url"

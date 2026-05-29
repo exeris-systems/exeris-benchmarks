@@ -221,6 +221,8 @@ elif path == ".execution_profile_id":
   val = data.get("execution_profile_id", "")
 elif path == ".cgroup.memory_limit_mb":
   val = data.get("cgroup", {}).get("memory_limit_mb", "")
+elif path == ".env_file":
+  val = data.get("env_file", "")
 elif path == ".network_impairment.enabled":
   val = data.get("network_impairment", {}).get("enabled", "")
 elif path == ".network_impairment.applied_to":
@@ -278,6 +280,7 @@ topology_mode="$(read_scalar '.topology_mode')"
 execution_class="$(read_scalar '.execution_class')"
 execution_profile_id="$(read_scalar '.execution_profile_id')"
 cgroup_memory_limit_mb="$(read_scalar '.cgroup.memory_limit_mb')"
+env_file="$(read_scalar '.env_file')"
 protocol_mode="$(read_scalar '.protocol_mode')"
 tier="$(read_scalar '.tier')"
 target_classification="$(read_scalar '.target_classification')"
@@ -362,6 +365,19 @@ if [[ "$execution_class" == "constrained" ]]; then
   [[ "$claim_scope" != "comparison_eligible" ]] || fail "Semantic check failed: execution_class=constrained cannot be comparison_eligible"
   [[ -n "$execution_profile_id" || -n "$cgroup_memory_limit_mb" ]] || fail "Semantic check failed: execution_class=constrained requires execution_profile_id or cgroup.memory_limit_mb"
   pass "Semantic check: constrained run (profile=${execution_profile_id:-<custom>})"
+fi
+
+# env_file is a target launch/endpoint contract, applicable only on the generic
+# load-driver dispatch path. It must not appear on managed-runner paths (saga,
+# constrained, multi/comparative, or local entity-read-by-id) which provision
+# their own DB+target and would be broken by an external-launch env contract.
+if [[ -n "$env_file" ]]; then
+  [[ "$execution_class" != "constrained" ]] || fail "Semantic check failed: env_file is not applicable to constrained runs (managed DB/target)"
+  [[ "$scenario_id" != "e2e-shop-order-saga" ]] || fail "Semantic check failed: env_file is not applicable to the saga scenario (managed DB/target)"
+  [[ "$target_mode" == "single" ]] || fail "Semantic check failed: env_file is not applicable to multi-target/comparative runs"
+  [[ ! ( "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "localhost" ) ]] \
+    || fail "Semantic check failed: env_file is not applicable to local entity-read-by-id (managed DB/target)"
+  pass "Semantic check: env_file scoped to generic dispatch (env_file=$env_file)"
 fi
 
 pass "Semantic checks"

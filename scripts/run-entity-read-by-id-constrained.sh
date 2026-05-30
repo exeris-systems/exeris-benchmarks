@@ -204,8 +204,16 @@ THREADS="$(jq -r '.threads' <<<"$CONTRACT_JSON")"
 CONNECTIONS="$(jq -r '.connections' <<<"$CONTRACT_JSON")"
 WARMUP_SECONDS="$(jq -r '.warmup_seconds' <<<"$CONTRACT_JSON")"
 DURATION_SECONDS="$(jq -r '.duration_seconds' <<<"$CONTRACT_JSON")"
-CONSTRAINED_DB_POOL_MIN_SIZE="${EXERIS_DB_POOL_MIN_SIZE:-2}"
-CONSTRAINED_DB_POOL_MAX_SIZE="${EXERIS_DB_POOL_MAX_SIZE:-8}"
+# Force a small pool for the constrained smoke. Do NOT defer to an ambient
+# EXERIS_DB_POOL_* (a sourced runtime env file, e.g. exeris-community-runtime.env,
+# sets EXERIS_DB_POOL_MAX_SIZE=256): inheriting 256 into a 128M/1vCPU cgroup
+# collapses connection establishment (acquire timeout 250ms fail-fast). Use a
+# dedicated override var so only an explicit choice can change it.
+CONSTRAINED_DB_POOL_MIN_SIZE="${BENCHMARK_CONSTRAINED_DB_POOL_MIN_SIZE:-2}"
+CONSTRAINED_DB_POOL_MAX_SIZE="${BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE:-8}"
+if [[ -n "${EXERIS_DB_POOL_MAX_SIZE:-}" && "${EXERIS_DB_POOL_MAX_SIZE}" != "$CONSTRAINED_DB_POOL_MAX_SIZE" ]]; then
+  echo "[info] Ignoring ambient EXERIS_DB_POOL_MAX_SIZE=${EXERIS_DB_POOL_MAX_SIZE}; constrained smoke forces max=${CONSTRAINED_DB_POOL_MAX_SIZE} (override with BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE)"
+fi
 
 if ! [[ "$CONSTRAINED_DB_POOL_MIN_SIZE" =~ ^[0-9]+$ && "$CONSTRAINED_DB_POOL_MAX_SIZE" =~ ^[0-9]+$ ]]; then
   echo "ERROR: constrained DB pool sizes must be numeric" >&2

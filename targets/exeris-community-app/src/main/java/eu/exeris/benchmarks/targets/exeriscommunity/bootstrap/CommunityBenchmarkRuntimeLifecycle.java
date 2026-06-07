@@ -71,12 +71,24 @@ public final class CommunityBenchmarkRuntimeLifecycle {
             graphEngine.registerEdges(allEdges);
         }
 
-        FlowEngine flowEngine = KernelProviders.flowEngine();
-        EventEngine eventEngine = KernelProviders.eventEngine();
-        DomainEventPublisher domainEventPublisher = new DomainEventPublisher(eventEngine);
-        OrderSagaOrchestrator orderSagaOrchestrator =
-            new OrderSagaOrchestrator(flowEngine, orderRepository, domainEventPublisher, transactionalExecutor);
-        orderSagaOrchestrator.initialize();
+        // Flow / Events are optional subsystems (see EXERIS_SUBSYSTEMS in ExerisCommunityApplication).
+        // When the scenario did not bootstrap them, the saga wiring is left null and the order
+        // endpoints reject requests — every other route works without them.
+        EventEngine eventEngine = KernelProviders.EVENT_ENGINE.isBound()
+                ? KernelProviders.EVENT_ENGINE.get()
+                : null;
+        DomainEventPublisher domainEventPublisher = eventEngine != null
+                ? new DomainEventPublisher(eventEngine)
+                : null;
+        FlowEngine flowEngine = KernelProviders.FLOW_ENGINE.isBound()
+                ? KernelProviders.FLOW_ENGINE.get()
+                : null;
+        OrderSagaOrchestrator orderSagaOrchestrator = flowEngine != null
+                ? new OrderSagaOrchestrator(flowEngine, orderRepository, domainEventPublisher, transactionalExecutor)
+                : null;
+        if (orderSagaOrchestrator != null) {
+            orderSagaOrchestrator.initialize();
+        }
 
         BenchmarkTokenIssuer tokenIssuer = new BenchmarkTokenIssuer();
         CommunitySecurityProvider securityProvider = new CommunitySecurityProvider(

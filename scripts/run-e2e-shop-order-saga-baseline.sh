@@ -291,6 +291,12 @@ _apply_process_cgroup_limits() {
 configure_target_runtime_overrides() {
   local declared_protocol_mode
 
+  # shop-order-saga is the only scenario that needs Flow (saga orchestration),
+  # Graph (product recommendations) and Events. The Exeris community target boots a lean
+  # http,persistence,crypto set by default; opt the full set in here. (Ignored by the
+  # Spring/Quarkus targets, which read this env var not at all.)
+  export EXERIS_SUBSYSTEMS="http,persistence,graph,flow,events,crypto"
+
   if [[ "$GRAPH_TRACK" == "neo4j" ]]; then
     export EXERIS_GRAPH_BACKEND_TYPE="neo4j"
     : "${EXERIS_GRAPH_NEO4J_URI:=bolt://localhost:7687}"

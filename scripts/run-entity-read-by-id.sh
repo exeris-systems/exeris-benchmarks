@@ -29,6 +29,10 @@ JFR_LIB="${REPO_ROOT}/tools/bench/lib/jfr.sh"
 # shellcheck source=/dev/null
 [[ -f "$JFR_LIB" ]] && source "$JFR_LIB"
 
+RESOURCE_SAMPLER_LIB="${REPO_ROOT}/tools/bench/lib/resource-sampler.sh"
+# shellcheck source=/dev/null
+[[ -f "$RESOURCE_SAMPLER_LIB" ]] && source "$RESOURCE_SAMPLER_LIB"
+
 CLAIM_SCOPE="${CLAIM_SCOPE:-exploratory}"
 PROFILE="${PROFILE:-dev-laptop}"
 OUTPUT_DIR="${OUTPUT_DIR:-results/raw/entity-read-by-id/$(date +%Y%m%d-%H%M%S)}"
@@ -36,6 +40,10 @@ THREADS="${THREADS:-4}"
 CONNECTIONS="${CONNECTIONS:-128}"
 EXERIS_DB_POOL_MIN_SIZE="${EXERIS_DB_POOL_MIN_SIZE:-16}"
 EXERIS_DB_POOL_MAX_SIZE="${EXERIS_DB_POOL_MAX_SIZE:-256}"
+# Optional DB connection-acquisition timeout (ms). Empty = leave the framework /
+# kernel default (Hikari's aggressive constrained fail-fast). Only the constrained
+# wrapper sets this, to tolerate transient pool queuing under CPU throttling.
+EXERIS_DB_CONNECTION_TIMEOUT_MS="${EXERIS_DB_CONNECTION_TIMEOUT_MS:-}"
 WARMUP="${WARMUP:-60s}"
 BACKEND_MODE="${BACKEND_MODE:-default-vt}"
 TARGET_RUNTIME="${TARGET_RUNTIME:-auto}"
@@ -103,6 +111,60 @@ CONTRACT_FIXED_WARMUP_SECONDS=60
 CONTRACT_FIXED_DURATION_SECONDS=120
 CONTRACT_FIXED_PROFILE="perf-box-amd64"
 CONTRACT_FIXED_CLAIM_SCOPE="comparison-eligible"
+
+# --- GraalVM auto-resolution for native builds ----------------------------
+# A native build (mvn -Pnative) needs a GraalVM whose JDK MAJOR matches the
+# target's required Java version — preview features (this app uses
+# --enable-preview) only compile on the exact same major. The ambient JAVA_HOME
+# is often a plain JDK, so resolve a matching GraalVM and scope it to the build.
+graalvm_major() {
+  local home="$1" v=""
+  if [[ -r "$home/release" ]]; then
+    v="$(awk -F'"' '/^JAVA_VERSION=/{print $2; exit}' "$home/release" 2>/dev/null)"
+  fi
+  if [[ -z "$v" && -x "$home/bin/java" ]]; then
+    v="$("$home/bin/java" -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/')"
+  fi
+  v="${v%%.*}"
+  printf '%s\n' "$v"
+}
+
+# resolve_graalvm_home <want_major> -> prints a GraalVM home with native-image and
+# (if want_major non-empty) matching JDK major. Precedence: BENCHMARK_GRAALVM_HOME,
+# GRAALVM_HOME, sdkman candidates, native-image on PATH.
+resolve_graalvm_home() {
+  local want="$1" cand best=""
+  for cand in "${BENCHMARK_GRAALVM_HOME:-}" "${GRAALVM_HOME:-}"; do
+    [[ -n "$cand" && -x "$cand/bin/native-image" ]] || continue
+    if [[ -z "$want" || "$(graalvm_major "$cand")" == "$want" ]]; then
+      printf '%s\n' "$cand"; return 0
+    fi
+  done
+  for cand in "$HOME"/.sdkman/candidates/java/*/; do
+    cand="${cand%/}"
+    [[ -x "$cand/bin/native-image" ]] || continue
+    if [[ -z "$want" || "$(graalvm_major "$cand")" == "$want" ]]; then
+      best="$cand"
+    fi
+  done
+  if [[ -n "$best" ]]; then printf '%s\n' "$best"; return 0; fi
+  if command -v native-image >/dev/null 2>&1; then
+    cand="$(dirname "$(dirname "$(command -v native-image)")")"
+    if [[ -z "$want" || "$(graalvm_major "$cand")" == "$want" ]]; then
+      printf '%s\n' "$cand"; return 0
+    fi
+  fi
+  return 1
+}
+
+# List GraalVM homes + majors found, for diagnostics on failure.
+list_graalvm_candidates() {
+  local cand
+  for cand in "$HOME"/.sdkman/candidates/java/*/; do
+    cand="${cand%/}"
+    [[ -x "$cand/bin/native-image" ]] && printf '    %s (Java %s)\n' "$cand" "$(graalvm_major "$cand")"
+  done
+}
 
 require_positive_int() {
   local name="$1"
@@ -687,6 +749,11 @@ verify_backend_mode_evidence() {
 
 cleanup() {
   local exit_code=$?
+  # Stop the target resource sampler first so an interrupted run never leaks an
+  # orphaned sampler subshell polling a now-dead /proc/<pid>.
+  if command -v bench_stop_resource_sampler >/dev/null 2>&1; then
+    bench_stop_resource_sampler || true
+  fi
   if [[ "$TARGET_APP_STARTED" -eq 1 ]] && [[ -n "$TARGET_APP_PID" ]] && kill -0 "$TARGET_APP_PID" >/dev/null 2>&1; then
     echo "[cleanup] Stopping benchmark target app (pid=$TARGET_APP_PID)..."
     kill "$TARGET_APP_PID" >/dev/null 2>&1 || true
@@ -702,7 +769,7 @@ cleanup() {
 resolve_db_launcher
 trap cleanup EXIT
 
-echo "[entity-read-by-id] claim_scope=$CLAIM_SCOPE profile=$PROFILE duration=$DURATION warmup=$WARMUP threads=$THREADS connections=$CONNECTIONS target_runtime=$TARGET_RUNTIME target_build=$TARGET_BUILD effective_runtime=$TARGET_RUNTIME_EFFECTIVE target_app=$TARGET_APP_NAME skip_target_build=$SKIP_TARGET_BUILD db_pool_min=$EXERIS_DB_POOL_MIN_SIZE db_pool_max=$EXERIS_DB_POOL_MAX_SIZE output=$OUTPUT_DIR"
+echo "[entity-read-by-id] claim_scope=$CLAIM_SCOPE profile=$PROFILE duration=$DURATION warmup=$WARMUP threads=$THREADS connections=$CONNECTIONS target_runtime=$TARGET_RUNTIME target_build=$TARGET_BUILD effective_runtime=$TARGET_RUNTIME_EFFECTIVE target_app=$TARGET_APP_NAME skip_target_build=$SKIP_TARGET_BUILD db_pool_min=$EXERIS_DB_POOL_MIN_SIZE db_pool_max=$EXERIS_DB_POOL_MAX_SIZE db_conn_timeout_ms=${EXERIS_DB_CONNECTION_TIMEOUT_MS:-<default>} output=$OUTPUT_DIR"
 
 # Step 2: Start DB
 echo "[step 2/9] Starting benchmark DB..."
@@ -810,15 +877,42 @@ if ! target_reachable; then
     if [[ "$TARGET_BUILD" == "jvm" ]]; then
       mvn -f "$TARGET_MODULE_POM" -DskipTests package
     else
+      # native-image needs multiple GB — it cannot build inside the constrained
+      # cgroup scope. Refuse fast with the prebuild path instead of OOMing.
+      if [[ "${BENCHMARK_CONSTRAINED_SCOPE_ACTIVE:-0}" == "1" ]]; then
+        echo "ERROR: cannot build a native image inside the constrained cgroup scope (native-image needs GBs)." >&2
+        echo "  Prebuild ONCE unconstrained, then re-run constrained (which will use the prebuilt binary):" >&2
+        echo "    scripts/run-entity-read-by-id.sh --target-runtime $TARGET_RUNTIME_EFFECTIVE --target-build native --claim-scope exploratory --duration 1s   # builds + smoke" >&2
+        echo "  or: GRAALVM auto-selected — mvn -f $TARGET_MODULE_POM -Pnative -DskipTests native:compile (with JAVA_HOME=a Java-matching GraalVM)." >&2
+        exit 1
+      fi
+      # Required Java major for this target (drives GraalVM selection; preview
+      # features need an exact-major GraalVM). Fall back to empty = accept any.
+      APP_JAVA_MAJOR="$(grep -oE '<java\.version>[0-9]+' "$TARGET_MODULE_POM" 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+      if [[ -z "$APP_JAVA_MAJOR" ]]; then
+        APP_JAVA_MAJOR="$(grep -oE '<maven\.compiler\.release>[0-9]+' "$TARGET_MODULE_POM" 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+      fi
+      GRAALVM_BUILD_HOME="$(resolve_graalvm_home "$APP_JAVA_MAJOR" || true)"
+      if [[ -z "$GRAALVM_BUILD_HOME" ]]; then
+        echo "ERROR: --target-build native requires a GraalVM with native-image${APP_JAVA_MAJOR:+ for Java $APP_JAVA_MAJOR}, but none was found." >&2
+        echo "  Checked: BENCHMARK_GRAALVM_HOME, GRAALVM_HOME, ~/.sdkman/candidates/java/*, native-image on PATH." >&2
+        echo "  GraalVM installs detected:" >&2
+        list_graalvm_candidates >&2 || true
+        echo "  Fix: 'sdk install java <ver>-graal' matching Java ${APP_JAVA_MAJOR:-N}, or set BENCHMARK_GRAALVM_HOME=/path/to/graalvm." >&2
+        exit 1
+      fi
+      echo "[step 6/9] native build using GraalVM: $GRAALVM_BUILD_HOME (Java $(graalvm_major "$GRAALVM_BUILD_HOME"))"
+      # Scope GraalVM to the build only; clear JAVA_TOOL_OPTIONS so a constrained
+      # run's -Xmx/-XX heap flags don't cripple the (memory-hungry) native-image
+      # compile. The produced binary is self-contained and needs no JDK to run.
       case "$TARGET_RUNTIME_EFFECTIVE" in
-        community)
-          mvn -f "$TARGET_MODULE_POM" -Pnative -DskipTests native:compile
-          ;;
-        spring)
-          mvn -f "$TARGET_MODULE_POM" -Pnative -DskipTests native:compile
+        community|spring)
+          env GRAALVM_HOME="$GRAALVM_BUILD_HOME" JAVA_HOME="$GRAALVM_BUILD_HOME" JAVA_TOOL_OPTIONS= \
+            mvn -f "$TARGET_MODULE_POM" -Pnative -DskipTests native:compile
           ;;
         quarkus)
-          mvn -f "$TARGET_MODULE_POM" -Pnative -Dquarkus.native.enabled=true -DskipTests package
+          env GRAALVM_HOME="$GRAALVM_BUILD_HOME" JAVA_HOME="$GRAALVM_BUILD_HOME" JAVA_TOOL_OPTIONS= \
+            mvn -f "$TARGET_MODULE_POM" -Pnative -Dquarkus.native.enabled=true -DskipTests package
           ;;
         locality)
           echo "ERROR: --target-build native is not supported for effective runtime locality"
@@ -857,6 +951,20 @@ if ! target_reachable; then
     SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE="$EXERIS_DB_POOL_MAX_SIZE" \
     QUARKUS_DATASOURCE_JDBC_MIN_SIZE="$EXERIS_DB_POOL_MIN_SIZE" \
     QUARKUS_DATASOURCE_JDBC_MAX_SIZE="$EXERIS_DB_POOL_MAX_SIZE")
+
+  # Optional connection-acquisition timeout. Mapped per target family in the
+  # native unit each expects: Exeris/Hikari take milliseconds; Quarkus Agroal
+  # takes a Duration, so convert ms -> ISO-8601 (e.g. 5000 -> PT5S). Only appended
+  # when explicitly set, so unconstrained runs keep framework defaults.
+  if [[ -n "${EXERIS_DB_CONNECTION_TIMEOUT_MS:-}" ]]; then
+    # LC_ALL=C so the decimal separator is a dot, not a locale comma (PT2.5S, not PT2,5S).
+    QUARKUS_ACQ_TIMEOUT="$(LC_ALL=C awk -v ms="$EXERIS_DB_CONNECTION_TIMEOUT_MS" 'BEGIN { printf "PT%gS", ms / 1000 }')"
+    TARGET_CMD+=(
+      "EXERIS_DB_CONNECTION_TIMEOUT_MS=$EXERIS_DB_CONNECTION_TIMEOUT_MS"
+      "SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=$EXERIS_DB_CONNECTION_TIMEOUT_MS"
+      "QUARKUS_DATASOURCE_JDBC_ACQUISITION_TIMEOUT=$QUARKUS_ACQ_TIMEOUT"
+    )
+  fi
 
   if [[ "$TARGET_BUILD" == "jvm" ]]; then
     TARGET_CMD+=(java)
@@ -961,6 +1069,30 @@ if [[ -f "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT" ]]; then
   pg_stat_statements_reset || true
 fi
 
+# Step 6.6: Start target resource sampler (target-side CPU/RSS/threads + JVM heap/
+# NMT breakdown). Started here — after warmup, immediately before measurement — so
+# the summarized cpu_time/RSS reflect the measurement window only, not warmup. This
+# is what lets unconstrained runs express results per resource (rps/effective-core,
+# rps/MB-RSS) and be compared across stacks (community/spring/quarkus).
+RESOURCE_SAMPLES_CSV="$OUTPUT_DIR/resource-samples.csv"
+RESOURCE_METRICS_JSON="$OUTPUT_DIR/resource-metrics.json"
+RESOURCE_TARGET_PID=""
+if command -v bench_start_resource_sampler >/dev/null 2>&1; then
+  if [[ "$TARGET_APP_STARTED" -eq 1 && -n "$TARGET_APP_PID" ]]; then
+    RESOURCE_TARGET_PID="$TARGET_APP_PID"
+  else
+    # External/reused target: no managed PID, so resolve it from the listening port.
+    RESOURCE_TARGET_PID="$(bench_detect_pid_for_port "$TARGET_PORT" 2>/dev/null || true)"
+  fi
+  if [[ -n "$RESOURCE_TARGET_PID" && -d "/proc/$RESOURCE_TARGET_PID" ]]; then
+    echo "[step 6.6/9] Starting target resource sampler for pid=$RESOURCE_TARGET_PID"
+    bench_start_resource_sampler "$RESOURCE_TARGET_PID" "$RESOURCE_SAMPLES_CSV"
+  else
+    echo "[step 6.6/9] WARN: target pid not resolved (external/native?); resource-metrics.json will record pid-undetected"
+    RESOURCE_TARGET_PID=""
+  fi
+fi
+
 # Step 7: Measure
 echo "[step 7/9] Measuring ($DURATION)..."
 PERF_STAT_FILE="$OUTPUT_DIR/perf-stat.csv"
@@ -1002,6 +1134,13 @@ else
 fi
 echo "$WRK_OUT"
 
+# Stop the resource sampler the moment measurement ends, so the sampled window is
+# exactly the measurement window (summarize/augment happen below while the target
+# is still alive, before cleanup tears it down).
+if command -v bench_stop_resource_sampler >/dev/null 2>&1; then
+  bench_stop_resource_sampler || true
+fi
+
 # Fail loudly if the target died during measurement or no requests completed: a
 # crashed/unreachable target must NOT be written out as a successful result.
 if [[ "$TARGET_APP_STARTED" -eq 1 && -n "$TARGET_APP_PID" ]] && ! kill -0 "$TARGET_APP_PID" 2>/dev/null; then
@@ -1015,6 +1154,29 @@ if [[ -n "$_WRK_COMPLETED_REQUESTS" && "$_WRK_COMPLETED_REQUESTS" -eq 0 ]]; then
   echo "ERROR: measurement completed 0 requests (target unreachable or crashed) — run is INVALID (not a result)."
   echo "ERROR: inspect $TARGET_APP_LOG (socket errors above indicate the target was not serving)."
   exit 1
+fi
+
+# Summarize target resource samples (and, for a live JVM, augment with heap/NMT
+# breakdown via jcmd) while the target is still alive — cleanup kills it on exit.
+if command -v bench_summarize_resource_samples >/dev/null 2>&1 && [[ -f "$RESOURCE_SAMPLES_CSV" ]]; then
+  echo "[step 7.5/9] Summarizing target resource usage -> $RESOURCE_METRICS_JSON"
+  bench_summarize_resource_samples "$RESOURCE_SAMPLES_CSV" "$RESOURCE_METRICS_JSON" || true
+  if [[ -f "$RESOURCE_METRICS_JSON" ]]; then
+    if [[ -n "$RESOURCE_TARGET_PID" && -d "/proc/$RESOURCE_TARGET_PID" ]] \
+       && command -v bench_augment_resource_metrics_with_jvm_breakdown >/dev/null 2>&1; then
+      bench_augment_resource_metrics_with_jvm_breakdown "$RESOURCE_TARGET_PID" "$RESOURCE_METRICS_JSON" || true
+    elif command -v jq >/dev/null 2>&1; then
+      # Native image / external target / undetected pid: no jcmd surface for a heap
+      # breakdown — record the reason so the sidecar is unambiguous, not silently bare.
+      tmp_rm="$(mktemp)"
+      if jq '. + {jvm_breakdown_note: "jcmd heap/NMT breakdown unavailable (native image, external target, or pid undetected)"}' \
+           "$RESOURCE_METRICS_JSON" > "$tmp_rm" 2>/dev/null; then
+        mv "$tmp_rm" "$RESOURCE_METRICS_JSON"
+      else
+        rm -f "$tmp_rm"
+      fi
+    fi
+  fi
 fi
 
 # Dump + stop JFR while the target is still alive (before cleanup kills it).
@@ -1346,5 +1508,8 @@ else
   exit 1
 fi
 
+if [[ -f "$RESOURCE_METRICS_JSON" ]]; then
+  echo "Target resource usage (measurement window): $RESOURCE_METRICS_JSON"
+fi
 echo "Done. claim_scope=$CLAIM_SCOPE -> $RESULT_CLAIM_SCOPE | results in $OUTPUT_DIR"
 echo "Done. claim_scope=$CLAIM_SCOPE -- results in $OUTPUT_DIR"

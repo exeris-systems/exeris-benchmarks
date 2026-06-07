@@ -23,8 +23,13 @@
       "jvm": {
         "gc": "serial",
         "active_processor_count": 1,
-        "max_ram_mb": 128
+        "max_ram_mb": 128,
+        "reserved_code_cache_mb": 32,
+        "max_metaspace_mb": 64,
+        "xms_mb": 16,
+        "xmx_mb": 16
       },
+      "jit_representativeness": "representative",
       "required_evidence": [
         "effective-cgroup-limits",
         "jvm-flags",
@@ -38,7 +43,7 @@
         "limit_mismatch",
         "startup_failed"
       ],
-      "note": "Exploratory constrained runtime smoke profile only. Not eligible for comparative, baseline, or historical regression workflows."
+      "note": "Exploratory min-footprint smoke profile. JIT runs C1-only (TieredStopAtLevel=1) with capped code-cache/metaspace and a 64MB heap so the JVM fits under the 128MB cgroup ceiling (full-tier C2 warmup OOM-kills at this limit). Because C2 is disabled, throughput is NOT perf-representative — use only as a 'does it fit and stay up in 128MB' probe, never for cross-target throughput claims. Not eligible for comparative, baseline, or historical regression workflows."
     },
     {
       "execution_profile_id": "runtime-constrained-256m-1vcpu-v1",

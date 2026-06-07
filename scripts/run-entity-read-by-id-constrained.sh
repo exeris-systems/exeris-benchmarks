@@ -183,6 +183,9 @@ ensure_constrained_scope() {
     env \
       BENCHMARK_CONSTRAINED_SCOPE_ACTIVE=1 \
       BENCHMARK_SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD}" \
+      BENCHMARK_CONSTRAINED_DB_POOL_MIN_SIZE="${CONSTRAINED_DB_POOL_MIN_SIZE}" \
+      BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE="${CONSTRAINED_DB_POOL_MAX_SIZE}" \
+      BENCHMARK_CONSTRAINED_DB_CONNECTION_TIMEOUT_MS="${CONSTRAINED_DB_CONNECTION_TIMEOUT_MS}" \
       "$0" \
       "${relaunch_args[@]}"
 }
@@ -204,19 +207,38 @@ THREADS="$(jq -r '.threads' <<<"$CONTRACT_JSON")"
 CONNECTIONS="$(jq -r '.connections' <<<"$CONTRACT_JSON")"
 WARMUP_SECONDS="$(jq -r '.warmup_seconds' <<<"$CONTRACT_JSON")"
 DURATION_SECONDS="$(jq -r '.duration_seconds' <<<"$CONTRACT_JSON")"
-# Force a small pool for the constrained smoke. Do NOT defer to an ambient
+# Size the pool to the contract's offered concurrency. Do NOT defer to an ambient
 # EXERIS_DB_POOL_* (a sourced runtime env file, e.g. exeris-community-runtime.env,
-# sets EXERIS_DB_POOL_MAX_SIZE=256): inheriting 256 into a 128M/1vCPU cgroup
-# collapses connection establishment (acquire timeout 250ms fail-fast). Use a
-# dedicated override var so only an explicit choice can change it.
+# sets EXERIS_DB_POOL_MAX_SIZE=256): inheriting 256 into a 128M/0.5vCPU cgroup
+# overwhelms connection establishment. But a too-SMALL pool is just as fatal: with
+# max=8 and the contract offering 16 client connections, half the in-flight reads
+# can never acquire a connection and the run drowns in connectionExhausted. So the
+# floor is the contract's `connections` (every concurrent request gets one
+# connection, no queuing). Pair this with a generous connection-acquisition timeout
+# (below) so transient queuing under CPU throttling does not fail-fast.
 CONSTRAINED_DB_POOL_MIN_SIZE="${BENCHMARK_CONSTRAINED_DB_POOL_MIN_SIZE:-2}"
-CONSTRAINED_DB_POOL_MAX_SIZE="${BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE:-8}"
+if [[ "$CONNECTIONS" =~ ^[0-9]+$ ]] && (( CONNECTIONS >= 1 )); then
+  CONSTRAINED_DB_POOL_MAX_DEFAULT="$CONNECTIONS"
+else
+  CONSTRAINED_DB_POOL_MAX_DEFAULT=16
+fi
+CONSTRAINED_DB_POOL_MAX_SIZE="${BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE:-$CONSTRAINED_DB_POOL_MAX_DEFAULT}"
+# Connection-acquisition timeout (ms). The kernel's constrained fail-fast (~250ms)
+# trips on any momentary queuing under 0.5 vCPU; give it real headroom.
+CONSTRAINED_DB_CONNECTION_TIMEOUT_MS="${BENCHMARK_CONSTRAINED_DB_CONNECTION_TIMEOUT_MS:-5000}"
 if [[ -n "${EXERIS_DB_POOL_MAX_SIZE:-}" && "${EXERIS_DB_POOL_MAX_SIZE}" != "$CONSTRAINED_DB_POOL_MAX_SIZE" ]]; then
-  echo "[info] Ignoring ambient EXERIS_DB_POOL_MAX_SIZE=${EXERIS_DB_POOL_MAX_SIZE}; constrained smoke forces max=${CONSTRAINED_DB_POOL_MAX_SIZE} (override with BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE)"
+  echo "[info] Ignoring ambient EXERIS_DB_POOL_MAX_SIZE=${EXERIS_DB_POOL_MAX_SIZE}; constrained smoke forces max=${CONSTRAINED_DB_POOL_MAX_SIZE} (=contract connections; override with BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE)"
+fi
+if (( CONSTRAINED_DB_POOL_MAX_SIZE < CONNECTIONS )); then
+  echo "[warn] Constrained DB pool max=${CONSTRAINED_DB_POOL_MAX_SIZE} is below the contract's connections=${CONNECTIONS}; expect connectionExhausted under load."
 fi
 
 if ! [[ "$CONSTRAINED_DB_POOL_MIN_SIZE" =~ ^[0-9]+$ && "$CONSTRAINED_DB_POOL_MAX_SIZE" =~ ^[0-9]+$ ]]; then
   echo "ERROR: constrained DB pool sizes must be numeric" >&2
+  exit 1
+fi
+if ! [[ "$CONSTRAINED_DB_CONNECTION_TIMEOUT_MS" =~ ^[0-9]+$ ]] || (( CONSTRAINED_DB_CONNECTION_TIMEOUT_MS < 1 )); then
+  echo "ERROR: constrained DB connection timeout must be a positive integer (ms)" >&2
   exit 1
 fi
 if (( CONSTRAINED_DB_POOL_MIN_SIZE < 1 )); then
@@ -235,6 +257,15 @@ REQUIRED_TRACK_ID="$(jq -r '.required_track_id // empty' <<<"$PROFILE_JSON")"
 JVM_GC="$(jq -r '.jvm.gc // empty' <<<"$PROFILE_JSON")"
 JVM_ACTIVE_PROCESSOR_COUNT="$(jq -r '.jvm.active_processor_count // empty' <<<"$PROFILE_JSON")"
 JVM_MAX_RAM_MB="$(jq -r '.jvm.max_ram_mb // empty' <<<"$PROFILE_JSON")"
+# Optional min-footprint overlay (e.g. the 128MB profile): C1-only JIT plus
+# capped code-cache/metaspace/heap so the JVM fits below a tight cgroup ceiling.
+# Absent on roomier profiles, which keep the default tiered-JIT heap ergonomics.
+JVM_TIERED_STOP_AT_LEVEL="$(jq -r '.jvm.tiered_stop_at_level // empty' <<<"$PROFILE_JSON")"
+JVM_RESERVED_CODE_CACHE_MB="$(jq -r '.jvm.reserved_code_cache_mb // empty' <<<"$PROFILE_JSON")"
+JVM_MAX_METASPACE_MB="$(jq -r '.jvm.max_metaspace_mb // empty' <<<"$PROFILE_JSON")"
+JVM_XMS_MB_OVERRIDE="$(jq -r '.jvm.xms_mb // empty' <<<"$PROFILE_JSON")"
+JVM_XMX_MB_OVERRIDE="$(jq -r '.jvm.xmx_mb // empty' <<<"$PROFILE_JSON")"
+JIT_REPRESENTATIVENESS="$(jq -r '.jit_representativeness // "representative"' <<<"$PROFILE_JSON")"
 
 if [[ -z "$LIMIT_MB" || -z "$VCPU" || -z "$REQUIRED_TRACK_ID" || -z "$JVM_GC" || -z "$JVM_ACTIVE_PROCESSOR_COUNT" || -z "$JVM_MAX_RAM_MB" ]]; then
   echo "ERROR: Execution profile '$EXECUTION_PROFILE_ID' is missing required constrained fields" >&2
@@ -315,6 +346,15 @@ JVM_XMX_MB="$(awk -v max_ram="$JVM_MAX_RAM_MB" 'BEGIN {
   if (x < 64) x = 64
   print x
 }')"
+# Explicit heap overrides win over the max_ram-derived ergonomics. The 128MB
+# profile pins a 64MB heap so heap + non-heap (metaspace/code-cache/stacks)
+# stays under the cgroup ceiling instead of being OOM-killed mid-warmup.
+if [[ -n "$JVM_XMX_MB_OVERRIDE" ]]; then
+  JVM_XMX_MB="$JVM_XMX_MB_OVERRIDE"
+fi
+if [[ -n "$JVM_XMS_MB_OVERRIDE" ]]; then
+  JVM_XMS_MB="$JVM_XMS_MB_OVERRIDE"
+fi
 if (( JVM_XMS_MB > JVM_XMX_MB )); then
   JVM_XMS_MB="$JVM_XMX_MB"
 fi
@@ -323,6 +363,20 @@ JVM_OVERLAY_FLAGS+=("-XX:ActiveProcessorCount=${JVM_ACTIVE_PROCESSOR_COUNT}")
 JVM_OVERLAY_FLAGS+=("-XX:MaxRAM=${JVM_MAX_RAM_MB}m")
 JVM_OVERLAY_FLAGS+=("-Xms${JVM_XMS_MB}m")
 JVM_OVERLAY_FLAGS+=("-Xmx${JVM_XMX_MB}m")
+# Min-footprint caps (optional, profile-driven). TieredStopAtLevel=1 disables the
+# C2 compiler whose arena allocation OOM-kills the target at 128MB; the code-cache
+# and metaspace caps bound the largest non-heap consumers. These make throughput
+# non-perf-representative (see jit_representativeness), which is recorded in the
+# evidence artifact and the run README.
+if [[ -n "$JVM_TIERED_STOP_AT_LEVEL" ]]; then
+  JVM_OVERLAY_FLAGS+=("-XX:TieredStopAtLevel=${JVM_TIERED_STOP_AT_LEVEL}")
+fi
+if [[ -n "$JVM_RESERVED_CODE_CACHE_MB" ]]; then
+  JVM_OVERLAY_FLAGS+=("-XX:ReservedCodeCacheSize=${JVM_RESERVED_CODE_CACHE_MB}m")
+fi
+if [[ -n "$JVM_MAX_METASPACE_MB" ]]; then
+  JVM_OVERLAY_FLAGS+=("-XX:MaxMetaspaceSize=${JVM_MAX_METASPACE_MB}m")
+fi
 
 OVERLAY_JOINED="${JVM_OVERLAY_FLAGS[*]}"
 if [[ -n "${JAVA_TOOL_OPTIONS:-}" ]]; then
@@ -336,12 +390,17 @@ export BENCHMARK_TRACK_ID="track-c"
 export BENCHMARK_SKIP_TARGET_BUILD
 export EXERIS_DB_POOL_MIN_SIZE="$CONSTRAINED_DB_POOL_MIN_SIZE"
 export EXERIS_DB_POOL_MAX_SIZE="$CONSTRAINED_DB_POOL_MAX_SIZE"
+export EXERIS_DB_CONNECTION_TIMEOUT_MS="$CONSTRAINED_DB_CONNECTION_TIMEOUT_MS"
 
 if [[ "$BENCHMARK_SKIP_TARGET_BUILD" == "1" ]]; then
   echo "[info] BENCHMARK_SKIP_TARGET_BUILD=1 active: constrained mode will use prebuilt target artifacts only"
 fi
 
-echo "[info] Constrained DB pool sizing: min=${EXERIS_DB_POOL_MIN_SIZE} max=${EXERIS_DB_POOL_MAX_SIZE}"
+echo "[info] Constrained DB pool sizing: min=${EXERIS_DB_POOL_MIN_SIZE} max=${EXERIS_DB_POOL_MAX_SIZE} (contract connections=${CONNECTIONS}) connection_timeout_ms=${EXERIS_DB_CONNECTION_TIMEOUT_MS}"
+if [[ "$JIT_REPRESENTATIVENESS" != "representative" ]]; then
+  echo "[warn] Profile '${EXECUTION_PROFILE_ID}' runs a min-footprint JVM (jit_representativeness=${JIT_REPRESENTATIVENESS}): ${JVM_OVERLAY_FLAGS[*]}"
+  echo "[warn] This is a 'does it fit in ${LIMIT_MB}MB and stay up' probe only — throughput is NOT comparable to full-tier (C2) runs. Do not use for cross-target throughput claims."
+fi
 
 LAUNCH_COMMAND=(
   "./scripts/run-entity-read-by-id.sh"
@@ -431,9 +490,11 @@ jq -n \
   --argjson launch_command "$LAUNCH_COMMAND_JSON" \
   --argjson benchmark_exit_code "$BENCHMARK_RC" \
   --arg outcome "$OUTCOME" \
+  --arg jit_representativeness "$JIT_REPRESENTATIVENESS" \
   --arg generated_at_utc "$GENERATED_AT_UTC" \
   '{
     execution_profile_id: $execution_profile_id,
+    jit_representativeness: $jit_representativeness,
     contract_id: $contract_id,
     target_runtime: $target_runtime,
     target_build: $target_build,
@@ -465,6 +526,7 @@ jq -n \
   printf 'export BENCHMARK_TRACK_ID=%q\n' "$BENCHMARK_TRACK_ID"
   printf 'export EXERIS_DB_POOL_MIN_SIZE=%q\n' "$EXERIS_DB_POOL_MIN_SIZE"
   printf 'export EXERIS_DB_POOL_MAX_SIZE=%q\n' "$EXERIS_DB_POOL_MAX_SIZE"
+  printf 'export EXERIS_DB_CONNECTION_TIMEOUT_MS=%q\n' "$EXERIS_DB_CONNECTION_TIMEOUT_MS"
 } > "$LAUNCH_OVERLAY_FILE"
 
 RESULT_FILE="${OUTPUT_DIR}/result.json"
@@ -475,11 +537,13 @@ if [[ -f "$RESULT_FILE" ]]; then
     --arg contract_id "$CONTRACT_ID" \
     --arg track_id "track-c" \
     --arg result_namespace "$RESULT_NAMESPACE" \
+    --arg jit_representativeness "$JIT_REPRESENTATIVENESS" \
     '.run_config = ((.run_config // {}) + {
       execution_profile_id: $execution_profile_id,
       contract_id: $contract_id,
       track_id: $track_id,
-      result_namespace: $result_namespace
+      result_namespace: $result_namespace,
+      jit_representativeness: $jit_representativeness
     })' "$RESULT_FILE" > "$TMP_RESULT"
   mv "$TMP_RESULT" "$RESULT_FILE"
 
@@ -496,9 +560,11 @@ if [[ -f "$REPRO_FILE" ]]; then
   TMP_REPRO="$(mktemp)"
   jq \
     --arg contract_id "$CONTRACT_ID" \
+    --arg jit_representativeness "$JIT_REPRESENTATIVENESS" \
     '.axis_labels = ((.axis_labels // {}) + {
       claim_scope: "descriptive_only",
-      execution_class: "exploratory"
+      execution_class: "exploratory",
+      jit_representativeness: $jit_representativeness
     })
     | .contract = $contract_id' "$REPRO_FILE" > "$TMP_REPRO"
   mv "$TMP_REPRO" "$REPRO_FILE"

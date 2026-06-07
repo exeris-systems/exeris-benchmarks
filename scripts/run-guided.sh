@@ -669,10 +669,29 @@ contract_id="$(prompt_text "contract_id" "$contract_default")"
 protocol_mode="$(resolve_protocol_mode "$scenario_json" "$contract_id" "$driver")"
 info "protocol_mode derived as '$protocol_mode' (from contract '$contract_id'${driver:+ / driver '$driver'})"
 
-# runtime_mode (jvm/native) follows the chosen target, not a separate prompt, so
-# the recorded value matches the runner's actual --target-build.
+# Target build (jvm/native) for local runs. The default follows the chosen
+# target's name, EXCEPT the 128m constrained profile defaults to native: the JVM
+# build's irreducible ~120MB native floor (off-heap memory subsystem + native
+# transport + FFM) does not fit a 128MB cgroup and OOMs, whereas native fits
+# comfortably. The recorded runtime_mode is what the runner's --target-build uses.
 if [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]]; then
-  runtime_mode="$(map_entity_build "${targets[0]}")"
+  build_default="$(map_entity_build "${targets[0]}")"
+  if [[ "$execution_class" == "constrained" && "$execution_profile_id" == "runtime-constrained-128m-0p5vcpu-v1" ]]; then
+    build_default="native"
+  fi
+  # Only entity-read-by-id dispatch actually drives --target-build (saga uses
+  # --target-app; generic drivers hit a pre-launched target). Elsewhere keep the
+  # target-name-derived value for the recorded profile without a misleading prompt.
+  if [[ "$scenario_id" == "entity-read-by-id" ]]; then
+    runtime_mode="$(select_kv "Target build" "$build_default" \
+      jvm    "jvm    — HotSpot JVM (larger footprint; community target needs >=192M/256M, OOMs at 128M)" \
+      native "native — GraalVM native-image (small footprint; required to fit the 128M constrained profile)")"
+    if [[ "$runtime_mode" == "native" && "$launch_mode" != "build" ]]; then
+      warn "native build selected with launch_mode=$launch_mode: a prebuilt native binary must already exist (mvn -Pnative), otherwise the run fails. Pick launch_mode=build to compile it."
+    fi
+  else
+    runtime_mode="$build_default"
+  fi
 fi
 
 # launch_mode maps to the runner build toggle: build -> compile from source,
@@ -697,11 +716,13 @@ fi
 
 # JFR (jcmd) recording is offered only where guided manages a local JVM target it
 # can attach to: saga and entity-read-by-id, on localhost. For generic/WAN runs
-# the target is pre-launched/remote, so guided can't attach a recorder.
+# the target is pre-launched/remote, so guided can't attach a recorder. A native
+# image has no jcmd attach surface, so JFR is offered for the jvm build only.
 # Community track is OSS — the raw .jfr is kept as-is (no redaction).
 jfr_supported() {
   [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]] || return 1
   [[ "$is_saga" == "yes" || "$scenario_id" == "entity-read-by-id" ]] || return 1
+  [[ "$runtime_mode" != "native" ]] || return 1
   return 0
 }
 if jfr_supported; then
@@ -1002,6 +1023,7 @@ echo "  tier               : $tier"
 echo "  target_classification: $target_classification"
 echo "  target_mode        : $target_mode"
 echo "  targets            : ${targets[*]}"
+[[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]] && echo "  target_build       : ${runtime_mode:-n/a}"
 echo "  env_file           : $env_file"
 echo "  hardware_profile   : $hardware_profile"
 echo "  claim_scope        : $claim_scope"
@@ -1228,7 +1250,7 @@ if [[ "$execution_class" == "constrained" ]]; then
         --execution-profile-id "$execution_profile_id"
         --contract-id "$contract_id"
         --target-runtime "$(map_entity_runtime "${targets[0]}")"
-        --target-build "$(map_entity_build "${targets[0]}")"
+        --target-build "$runtime_mode"
         --output-dir "$output_dir"
       )
       [[ -n "$cpu_affinity" ]] && erbid_constrained_cmd+=(--cpu-affinity "$cpu_affinity")
@@ -1331,7 +1353,9 @@ fi
 if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LOCAL" ]]; then
   warn_impairment_not_applied "run-entity-read-by-id.sh"
   mapped_runtime="$(map_entity_runtime "${targets[0]}")"
-  mapped_build="$(map_entity_build "${targets[0]}")"
+  # Honor the build chosen above (runtime_mode), not the target-name heuristic, so
+  # a jvm-named community target can still be run as native and vice versa.
+  mapped_build="$runtime_mode"
   mapped_backend_mode="$(map_entity_backend_mode "${targets[0]}")"
 
   erbid_cmd=(

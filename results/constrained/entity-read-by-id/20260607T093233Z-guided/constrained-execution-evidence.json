@@ -1,0 +1,55 @@
+{
+  "execution_profile_id": "runtime-constrained-256m-1vcpu-v1",
+  "jit_representativeness": "representative",
+  "contract_id": "fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1",
+  "target_runtime": "community",
+  "target_build": "jvm",
+  "benchmark_skip_target_build": 1,
+  "required_track_id": "track-c",
+  "track_id": "track-c",
+  "result_namespace": "results/constrained/entity-read-by-id/20260607T093233Z-guided",
+  "cgroup_effective": {
+    "memory_max_bytes": 268435456,
+    "cpu_quota_us": 100000,
+    "cpu_period_us": 100000,
+    "memory_peak_bytes": 179703808,
+    "cpu_stat": {
+      "nr_periods": 539,
+      "nr_throttled": 458,
+      "throttled_usec": 6647519
+    }
+  },
+  "jvm_overlay_flags": [
+    "-XX:+UseSerialGC",
+    "-XX:ActiveProcessorCount=1",
+    "-XX:MaxRAM=256m",
+    "-Xms64m",
+    "-Xmx192m"
+  ],
+  "launch_command": [
+    "./scripts/run-entity-read-by-id.sh",
+    "--claim-scope",
+    "exploratory",
+    "--profile",
+    "dev-laptop",
+    "--output-dir",
+    "/home/arkstack/exeris-benchmarks/results/constrained/entity-read-by-id/20260607T093233Z-guided",
+    "--target-runtime",
+    "community",
+    "--target-build",
+    "jvm",
+    "--threads",
+    "2",
+    "--connections",
+    "16",
+    "--warmup",
+    "15s",
+    "--duration",
+    "30s",
+    "--cpu-affinity",
+    "1"
+  ],
+  "benchmark_exit_code": 0,
+  "outcome": "ok",
+  "generated_at_utc": "2026-06-07T09:33:36Z"
+}

@@ -1,0 +1,62 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260607-113335-f03a62f",
+  "timestamp": "2026-06-07T09:33:35Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/home/arkstack/exeris-benchmarks/results/constrained/entity-read-by-id/20260607T093233Z-guided/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h1",
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "exeris-community-app",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "commit_sha": "f03a62f6ca49f930fe7dab0ec9d7b88607de7ea9"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+    "duration_seconds": 30,
+    "warmup_seconds": 15,
+    "threads": 2,
+    "connections": 16,
+    "execution_profile_id": "runtime-constrained-256m-1vcpu-v1",
+    "contract_id": "fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1",
+    "track_id": "track-c",
+    "result_namespace": "results/constrained/entity-read-by-id/20260607T093233Z-guided",
+    "jit_representativeness": "representative"
+  },
+  "metrics": {
+    "throughput_rps": 3432.45,
+    "latency_mean_us": 5610.000000,
+    "latency_stdev_us": 5720.000000,
+    "latency_max_us": 152860.000000,
+    "latency_p50_us": 3860.000000,
+    "latency_p75_us": 4430.000000,
+    "latency_p90_us": 10050.000000,
+    "latency_p99_us": 33190.000000,
+    "total_requests": 103099,
+    "total_errors": 0,
+    "error_rate_pct": 0.000000
+  },
+  "notes": "backendMode=default-vt targetRuntimeEffective=community targetBuild=jvm cpuAffinity=1",
+  "tags": [
+    "backend-mode:default-vt",
+    "target-runtime-effective:community",
+    "target-build:jvm"
+  ],
+  "raw_output": "Running 30s test @ http://localhost:8080/api/v1/users\n  2 threads and 16 connections\n  Thread Stats   Avg      Stdev     Max   +/- Stdev\n    Latency     5.61ms    5.72ms 152.86ms   91.33%\n    Req/Sec     1.73k   246.45     2.45k    82.17%\n  Latency Distribution\n     50%    3.86ms\n     75%    4.43ms\n     90%   10.05ms\n     99%   33.19ms\n  103099 requests in 30.04s, 0.88GB read\nRequests/sec:   3432.45\nTransfer/sec:     30.12MB\n",
+  "run_track": "constrained"
+}

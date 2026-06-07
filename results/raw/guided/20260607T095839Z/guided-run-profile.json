@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "benchmark_family": "runtime",
+  "benchmark_commit_sha": "04c8676837bb44fa5e626fbd9203b24cf19db13f",
+  "jdk_version": "java version 26 2026-03-17",
+  "tool_versions": {
+    "jq": "jq-1.8.1",
+    "k6": "unknown",
+    "wrk": "wrk debian/4.1.0-4build3 [epoll] Copyright (C) 2012 Will Glozer",
+    "h2load": "h2load nghttp2/1.68.0",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu4.1"
+  },
+  "jvm_flags": [],
+  "hardware_profile": "dev-laptop",
+  "scenario_id": "entity-read-by-id",
+  "target_classification": "pure",
+  "protocol_mode": "h1",
+  "tier": "community",
+  "topology_mode": "localhost",
+  "connectivity": "local",
+  "run_type": "exploratory",
+  "target_mode": "single",
+  "claim_scope": "descriptive_only",
+  "targets": [
+    "spring-jvm-vt-tuned"
+  ],
+  "contract_id": "fixed_contract_v1",
+  "output_dir": "/home/arkstack/exeris-benchmarks/results/raw/guided/20260607T095839Z",
+  "fairness_attestations": {
+    "payload_equivalent": false,
+    "concurrency_equivalent": false,
+    "protocol_mode_equivalent": false,
+    "target_scope_equivalent": false
+  },
+  "workload": {
+    "warmup_seconds": 60,
+    "measurement_seconds": 120,
+    "threads": 4,
+    "connections": 128
+  },
+  "driver": "h2load",
+  "launch_mode": "prebuild",
+  "runtime_mode": "jvm",
+  "enable_jfr": false,
+  "execution_class": "unconstrained"
+}

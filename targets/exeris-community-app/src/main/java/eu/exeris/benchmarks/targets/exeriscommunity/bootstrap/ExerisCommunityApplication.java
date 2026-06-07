@@ -8,7 +8,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class ExerisCommunityApplication {
 
-    private static final String BASE_SUBSYSTEMS = "http,persistence,graph,flow,events,crypto";
+    // Lean default: only HTTP, persistence and crypto bootstrap unless a scenario opts in.
+    // Scenarios that need saga orchestration (Flow), graph queries, or the event bus export
+    // EXERIS_SUBSYSTEMS with the extra subsystems — e.g. shop-order-saga sets
+    // "http,persistence,graph,flow,events,crypto". Only Flow/Graph/Events are gated this way;
+    // http/persistence/crypto are always required by the community target.
+    private static final String DEFAULT_SUBSYSTEMS = "http,persistence,crypto";
+    private static final String SUBSYSTEMS_ENV = "EXERIS_SUBSYSTEMS";
     private static final String LEGACY_ENABLE_TELEMETRY_ENV = "EXERIS_ENABLE_TELEMETRY_SUBSYSTEM";
     private static final String TELEMETRY_JFR_ENABLED_ENV = "EXERIS_TELEMETRY_JFR_ENABLED";
     private static final String HTTP_MAX_VERSION_ENV = "EXERIS_HTTP_MAX_VERSION";
@@ -32,7 +38,8 @@ public final class ExerisCommunityApplication {
     }
 
     private static void boot(AppConfig appConfig) throws KernelBootstrap.BootstrapException {
-        applyBootstrapSystemProperties(appConfig);
+        String subsystems = resolveSubsystems();
+        applyBootstrapSystemProperties(appConfig, subsystems);
         AtomicReference<HttpHandler> handlerSlot = new AtomicReference<>();
         HttpHandler forwardingHandler = exchange -> {
             HttpHandler h = handlerSlot.get();
@@ -44,7 +51,7 @@ public final class ExerisCommunityApplication {
             ScopedValue.where(HttpKernelProviders.HTTP_SERVER_HANDLER, forwardingHandler)
                 .call(() -> {
                     KernelBootstrap.builder()
-                        .selector(BootstrapSelector.forNames(BASE_SUBSYSTEMS.split(",")))
+                        .selector(BootstrapSelector.forNames(subsystems.split(",")))
                         .build()
                         .boot(() -> new CommunityBenchmarkRuntimeLifecycle(handlerSlot).run());
                     return null;
@@ -56,8 +63,29 @@ public final class ExerisCommunityApplication {
         }
     }
 
-    private static void applyBootstrapSystemProperties(AppConfig appConfig) {
-        System.setProperty("exeris.launcher.subsystems", BASE_SUBSYSTEMS);
+    /**
+     * Resolves the kernel subsystem set to bootstrap from {@code EXERIS_SUBSYSTEMS},
+     * falling back to the lean {@link #DEFAULT_SUBSYSTEMS} set. Returned value is a
+     * normalized, comma-separated, de-duplicated, lower-cased list.
+     */
+    private static String resolveSubsystems() {
+        String configured = System.getenv(SUBSYSTEMS_ENV);
+        if (configured == null || configured.isBlank()) {
+            return DEFAULT_SUBSYSTEMS;
+        }
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+        for (String token : configured.split(",")) {
+            String name = token.trim().toLowerCase();
+            if (!name.isEmpty()) {
+                names.add(name);
+            }
+        }
+        return names.isEmpty() ? DEFAULT_SUBSYSTEMS : String.join(",", names);
+    }
+
+    private static void applyBootstrapSystemProperties(AppConfig appConfig, String subsystems) {
+        java.util.Set<String> enabled = java.util.Set.of(subsystems.split(","));
+        System.setProperty("exeris.launcher.subsystems", subsystems);
         System.setProperty("exeris.telemetry.jfrEnabled", Boolean.toString(resolveTelemetryJfrEnabled()));
         System.setProperty("exeris.http.bindHost", "0.0.0.0");
         System.setProperty("exeris.http.port", Integer.toString(appConfig.port()));
@@ -70,13 +98,24 @@ public final class ExerisCommunityApplication {
         System.setProperty("exeris.persistence.password", appConfig.password());
         System.setProperty("exeris.persistence.pool.minSize", Integer.toString(appConfig.poolMinSize()));
         System.setProperty("exeris.persistence.pool.maxSize", Integer.toString(appConfig.poolMaxSize()));
-        System.setProperty("exeris.flow.persistenceEnabled", "true");
-        System.setProperty("exeris.graph.backendType", appConfig.backendType());
-        System.setProperty("exeris.graph.graphName", appConfig.graphName());
-        setOptionalSystemProperty("exeris.graph.neo4j.uri", appConfig.neo4jUri());
-        setOptionalSystemProperty("exeris.graph.neo4j.user", appConfig.neo4jUser());
-        setOptionalSystemProperty("exeris.graph.neo4j.password", appConfig.neo4jPassword());
-        setOptionalSystemProperty("exeris.graph.neo4j.database", appConfig.neo4jDatabase());
+        // Optional connection-acquisition timeout (ms). Only override when explicitly
+        // provided so unconstrained runs keep the kernel's default; the constrained
+        // smoke raises it to tolerate transient pool queuing under CPU throttling.
+        setOptionalSystemProperty("exeris.persistence.connectionTimeoutMs",
+                System.getenv("EXERIS_DB_CONNECTION_TIMEOUT_MS"));
+        // Only configure Flow/Graph when those subsystems are part of the bootstrap set,
+        // so a lean scenario does not imply saga/graph wiring it never bootstraps.
+        if (enabled.contains("flow")) {
+            System.setProperty("exeris.flow.persistenceEnabled", "true");
+        }
+        if (enabled.contains("graph")) {
+            System.setProperty("exeris.graph.backendType", appConfig.backendType());
+            System.setProperty("exeris.graph.graphName", appConfig.graphName());
+            setOptionalSystemProperty("exeris.graph.neo4j.uri", appConfig.neo4jUri());
+            setOptionalSystemProperty("exeris.graph.neo4j.user", appConfig.neo4jUser());
+            setOptionalSystemProperty("exeris.graph.neo4j.password", appConfig.neo4jPassword());
+            setOptionalSystemProperty("exeris.graph.neo4j.database", appConfig.neo4jDatabase());
+        }
         setOptionalSystemProperty("exeris.transport.certPath", System.getenv(TRANSPORT_CERT_PATH_ENV));
         setOptionalSystemProperty("exeris.transport.keyPath", System.getenv(TRANSPORT_KEY_PATH_ENV));
     }

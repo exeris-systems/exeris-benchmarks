@@ -205,8 +205,40 @@ elif path == ".fairness_attestations.protocol_mode_equivalent":
   val = data.get("fairness_attestations", {}).get("protocol_mode_equivalent", "")
 elif path == ".fairness_attestations.target_scope_equivalent":
   val = data.get("fairness_attestations", {}).get("target_scope_equivalent", "")
+elif path == ".connectivity":
+  val = data.get("connectivity", "")
+elif path == ".driver":
+  val = data.get("driver", "")
+elif path == ".scenario_id":
+  val = data.get("scenario_id", "")
+elif path == ".graph_track":
+  val = data.get("graph_track", "")
+elif path == ".topology_mode":
+  val = data.get("topology_mode", "")
+elif path == ".execution_class":
+  val = data.get("execution_class", "")
+elif path == ".execution_profile_id":
+  val = data.get("execution_profile_id", "")
+elif path == ".cgroup.memory_limit_mb":
+  val = data.get("cgroup", {}).get("memory_limit_mb", "")
+elif path == ".env_file":
+  val = data.get("env_file", "")
+elif path == ".network_impairment.enabled":
+  val = data.get("network_impairment", {}).get("enabled", "")
+elif path == ".network_impairment.applied_to":
+  val = data.get("network_impairment", {}).get("applied_to", "")
+elif path == ".network_impairment.profile":
+  val = data.get("network_impairment", {}).get("profile", "")
+elif path == ".network_impairment.delay_ms":
+  val = data.get("network_impairment", {}).get("delay_ms", "")
+elif path == ".network_impairment.loss_pct":
+  val = data.get("network_impairment", {}).get("loss_pct", "")
 else:
     val = ""
+
+if isinstance(val, (int, float)) and not isinstance(val, bool):
+    print(val)
+    sys.exit(0)
 
 if isinstance(val, bool):
     print("true" if val else "false")
@@ -242,6 +274,13 @@ target_mode="$(read_scalar '.target_mode')"
 run_type="$(read_scalar '.run_type')"
 claim_scope="$(read_scalar '.claim_scope')"
 benchmark_family="$(read_scalar '.benchmark_family')"
+scenario_id="$(read_scalar '.scenario_id')"
+graph_track="$(read_scalar '.graph_track')"
+topology_mode="$(read_scalar '.topology_mode')"
+execution_class="$(read_scalar '.execution_class')"
+execution_profile_id="$(read_scalar '.execution_profile_id')"
+cgroup_memory_limit_mb="$(read_scalar '.cgroup.memory_limit_mb')"
+env_file="$(read_scalar '.env_file')"
 protocol_mode="$(read_scalar '.protocol_mode')"
 tier="$(read_scalar '.tier')"
 target_classification="$(read_scalar '.target_classification')"
@@ -257,8 +296,15 @@ if [[ "$target_mode" == "multi" ]]; then
   fi
   pass "Semantic check: multi-target length >= 2"
 
-  if [[ "$DISPATCH_COMPATIBLE" -eq 1 && "$targets_len" -ne 2 ]]; then
-    fail "Dispatcher compatibility failed: target_mode=multi requires exactly 2 targets"
+  if [[ "$DISPATCH_COMPATIBLE" -eq 1 ]]; then
+    if [[ "$scenario_id" == "e2e-shop-order-saga" ]]; then
+      # Saga multi dispatches to the campaign runner, which accepts 2-3 targets.
+      if [[ "$targets_len" -lt 2 || "$targets_len" -gt 3 ]]; then
+        fail "Dispatcher compatibility failed: saga campaign requires 2 or 3 targets"
+      fi
+    elif [[ "$targets_len" -ne 2 ]]; then
+      fail "Dispatcher compatibility failed: target_mode=multi requires exactly 2 targets"
+    fi
   fi
 fi
 
@@ -285,6 +331,53 @@ if [[ "$CONFIRM_COMPARISON_ELIGIBILITY" -eq 1 ]]; then
   [[ "$fairness_protocol_mode_equivalent" == "true" ]] || fail "Comparison eligibility confirmation requires fairness_attestations.protocol_mode_equivalent=true"
   [[ "$fairness_target_scope_equivalent" == "true" ]] || fail "Comparison eligibility confirmation requires fairness_attestations.target_scope_equivalent=true"
   pass "Comparison eligibility confirmation checks passed"
+fi
+
+impairment_enabled="$(read_scalar '.network_impairment.enabled')"
+if [[ "$impairment_enabled" == "true" ]]; then
+  imp_applied_to="$(read_scalar '.network_impairment.applied_to')"
+  imp_profile="$(read_scalar '.network_impairment.profile')"
+  imp_delay="$(read_scalar '.network_impairment.delay_ms')"
+  imp_loss="$(read_scalar '.network_impairment.loss_pct')"
+
+  [[ -n "$imp_applied_to" ]] || fail "Semantic check failed: network_impairment.enabled=true requires applied_to"
+  [[ -n "$imp_profile" ]] || fail "Semantic check failed: network_impairment.enabled=true requires profile"
+  [[ -n "$imp_delay" ]] || fail "Semantic check failed: network_impairment.enabled=true requires delay_ms"
+  [[ -n "$imp_loss" ]] || fail "Semantic check failed: network_impairment.enabled=true requires loss_pct"
+  pass "Semantic check: network impairment metadata present (profile=$imp_profile applied_to=$imp_applied_to)"
+fi
+
+if [[ "$scenario_id" == "e2e-shop-order-saga" ]]; then
+  [[ -n "$graph_track" ]] || fail "Semantic check failed: e2e-shop-order-saga requires a graph_track (neo4j|pgq_pure|age_compat)"
+  pass "Semantic check: saga graph_track present (graph_track=$graph_track)"
+fi
+
+# Tier correctness: H3 is Enterprise-only; a Community profile must not claim h3.
+if [[ "$tier" == "community" && "$protocol_mode" == "h3" ]]; then
+  fail "Semantic check failed: protocol_mode=h3 is Enterprise-only and cannot be used with tier=community"
+fi
+
+# Constrained runs are exploratory-only: local, single-target, never comparative,
+# and must carry an execution profile or explicit cgroup memory limit.
+if [[ "$execution_class" == "constrained" ]]; then
+  [[ "$topology_mode" == "localhost" ]] || fail "Semantic check failed: execution_class=constrained requires topology_mode=localhost"
+  [[ "$target_mode" == "single" ]] || fail "Semantic check failed: execution_class=constrained requires target_mode=single (comparative is forbidden)"
+  [[ "$claim_scope" != "comparison_eligible" ]] || fail "Semantic check failed: execution_class=constrained cannot be comparison_eligible"
+  [[ -n "$execution_profile_id" || -n "$cgroup_memory_limit_mb" ]] || fail "Semantic check failed: execution_class=constrained requires execution_profile_id or cgroup.memory_limit_mb"
+  pass "Semantic check: constrained run (profile=${execution_profile_id:-<custom>})"
+fi
+
+# env_file is a target launch/endpoint contract, applicable only on the generic
+# load-driver dispatch path. It must not appear on managed-runner paths (saga,
+# constrained, multi/comparative, or local entity-read-by-id) which provision
+# their own DB+target and would be broken by an external-launch env contract.
+if [[ -n "$env_file" ]]; then
+  [[ "$execution_class" != "constrained" ]] || fail "Semantic check failed: env_file is not applicable to constrained runs (managed DB/target)"
+  [[ "$scenario_id" != "e2e-shop-order-saga" ]] || fail "Semantic check failed: env_file is not applicable to the saga scenario (managed DB/target)"
+  [[ "$target_mode" == "single" ]] || fail "Semantic check failed: env_file is not applicable to multi-target/comparative runs"
+  [[ ! ( "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "localhost" ) ]] \
+    || fail "Semantic check failed: env_file is not applicable to local entity-read-by-id (managed DB/target)"
+  pass "Semantic check: env_file scoped to generic dispatch (env_file=$env_file)"
 fi
 
 pass "Semantic checks"

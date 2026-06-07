@@ -131,6 +131,7 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
 
     @Override
     public OrderResponse placeOrder(long userId, long cartId, String paymentMethod) {
+        requireSaga();
         CartView cart = cartRepository.getCart(userId);
         if (cart.items().isEmpty()) {
             throw new IllegalStateException("cart is empty");
@@ -146,6 +147,7 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
 
     @Override
     public OrderStatusResponse getOrderStatus(long orderId) {
+        requireSaga();
         String dbStatus = orderRepository.getOrderStatus(orderId);
         if (dbStatus == null) {
             throw new IllegalArgumentException("order not found");
@@ -175,5 +177,12 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private void requireSaga() {
+        if (orderSagaOrchestrator == null) {
+            throw new IllegalStateException(
+                "order saga subsystem not enabled; export EXERIS_SUBSYSTEMS including 'flow' (and 'events') to run the shop-order-saga scenario");
+        }
     }
 }

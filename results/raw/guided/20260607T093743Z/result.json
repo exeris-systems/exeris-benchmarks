@@ -1,0 +1,52 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260607-114058-04c8676",
+  "timestamp": "2026-06-07T09:40:58Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/home/arkstack/exeris-benchmarks/results/raw/guided/20260607T093743Z/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h1",
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "exeris-community-app",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "commit_sha": "04c8676837bb44fa5e626fbd9203b24cf19db13f"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+  "duration_seconds": 120,
+  "warmup_seconds": 60,
+  "threads": 4,
+  "connections": 128
+},
+  "metrics": {
+  "throughput_rps": 7521.18,
+  "latency_mean_us": 17020.000000,
+  "latency_stdev_us": 5340.000000,
+  "latency_max_us": 86580.000000,
+  "latency_p50_us": 16230.000000,
+  "latency_p75_us": 19520.000000,
+  "latency_p90_us": 23600.000000,
+  "latency_p99_us": 34780.000000,
+  "total_requests": 903058,
+  "total_errors": 0,
+  "error_rate_pct": 0.000000
+},
+  "notes": "backendMode=default-vt targetRuntimeEffective=community targetBuild=jvm cpuAffinity=none",
+  "tags": ["backend-mode:default-vt", "target-runtime-effective:community", "target-build:jvm"],
+  "raw_output": "Running 2m test @ http://localhost:8080/api/v1/users\n  4 threads and 128 connections\n  Thread Stats   Avg      Stdev     Max   +/- Stdev\n    Latency    17.02ms    5.34ms  86.58ms   74.76%\n    Req/Sec     1.89k    96.19     2.33k    72.87%\n  Latency Distribution\n     50%   16.23ms\n     75%   19.52ms\n     90%   23.60ms\n     99%   34.78ms\n  903058 requests in 2.00m, 7.74GB read\nRequests/sec:   7521.18\nTransfer/sec:     66.00MB\n"
+}

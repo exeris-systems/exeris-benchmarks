@@ -66,6 +66,31 @@ Baselines are **never** updated silently to hide regressions.
 
 ---
 
+## Runtime-version boundary
+
+A regression comparison is only meaningful **within a single runtime version**.
+Bumping a measured runtime (e.g. `exeris.kernel.version` in a target's
+`pom.xml`) is a **version boundary**: results produced after the bump are on a
+different runtime than any baseline/history captured before it, so the delta
+across that boundary is *not* a regression signal — it is a version change.
+
+Rules:
+
+- A runtime-version bump is **not** a silent baseline update. It does not
+  "hide" a regression; it *invalidates the comparison* until a fresh baseline is
+  captured on the new version.
+- Every result already records the runtime version (see the reproducibility
+  metadata requirement). When a bump lands, **label the boundary explicitly** in
+  the PR/commit and treat pre-bump baselines as a different series.
+- Do not diff post-bump results against pre-bump baselines and report the
+  difference as throughput/latency regression or improvement. Re-baseline on the
+  new version first, then compare like-for-like.
+- The benchmark lab tracks the **latest available runtime** by default; choosing
+  to measure the newest version is expected. The obligation is *labeling the
+  boundary*, not justifying the bump itself.
+
+---
+
 ## CI regression jobs
 
 | Workflow | Trigger | Scope |

@@ -25,6 +25,14 @@ fi
 # shellcheck source=/dev/null
 source "$READINESS_LIB"
 
+JFR_LIB="${REPO_ROOT}/tools/bench/lib/jfr.sh"
+# shellcheck source=/dev/null
+[[ -f "$JFR_LIB" ]] && source "$JFR_LIB"
+
+RESOURCE_SAMPLER_LIB="${REPO_ROOT}/tools/bench/lib/resource-sampler.sh"
+# shellcheck source=/dev/null
+[[ -f "$RESOURCE_SAMPLER_LIB" ]] && source "$RESOURCE_SAMPLER_LIB"
+
 CLAIM_SCOPE="${CLAIM_SCOPE:-exploratory}"
 PROFILE="${PROFILE:-dev-laptop}"
 OUTPUT_DIR="${OUTPUT_DIR:-results/raw/entity-read-by-id/$(date +%Y%m%d-%H%M%S)}"
@@ -32,6 +40,10 @@ THREADS="${THREADS:-4}"
 CONNECTIONS="${CONNECTIONS:-128}"
 EXERIS_DB_POOL_MIN_SIZE="${EXERIS_DB_POOL_MIN_SIZE:-16}"
 EXERIS_DB_POOL_MAX_SIZE="${EXERIS_DB_POOL_MAX_SIZE:-256}"
+# Optional DB connection-acquisition timeout (ms). Empty = leave the framework /
+# kernel default (Hikari's aggressive constrained fail-fast). Only the constrained
+# wrapper sets this, to tolerate transient pool queuing under CPU throttling.
+EXERIS_DB_CONNECTION_TIMEOUT_MS="${EXERIS_DB_CONNECTION_TIMEOUT_MS:-}"
 WARMUP="${WARMUP:-60s}"
 BACKEND_MODE="${BACKEND_MODE:-default-vt}"
 TARGET_RUNTIME="${TARGET_RUNTIME:-auto}"
@@ -44,6 +56,15 @@ LOCALITY_MODE_ENABLED="${BENCHMARK_ENABLE_LOCALITY_MODE:-0}"
 BENCHMARK_LOCALITY_STRICT="${BENCHMARK_LOCALITY_STRICT:-0}"
 SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-0}"
 ENTITY_READ_PREFLIGHT_TIMEOUT="${ENTITY_READ_PREFLIGHT_TIMEOUT:-60}"
+# /health readiness does not imply the data endpoint is warm: under constrained
+# CPU (e.g. 0.5 vCPU) the first /api/v1/users hit can transiently 500 while the
+# request/persistence path finishes warming. Poll the data endpoint until it is
+# actually serving 200, instead of aborting on a single early miss.
+ENTITY_READ_PREFLIGHT_READY_SECONDS="${ENTITY_READ_PREFLIGHT_READY_SECONDS:-30}"
+# JFR recording of the target during measurement (opt-in; default off so existing
+# callers are unchanged). Community track is OSS, so the raw .jfr is kept as-is.
+ENABLE_JFR="${BENCHMARK_ENABLE_JFR:-false}"
+JFR_SETTINGS="${BENCHMARK_JFR_SETTINGS:-profile}"
 ALLOW_EXTERNAL_TARGET="${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}"
 TARGET_PORT="${BENCHMARK_TARGET_PORT:-8080}"
 DURATION_OVERRIDE=""
@@ -90,6 +111,60 @@ CONTRACT_FIXED_WARMUP_SECONDS=60
 CONTRACT_FIXED_DURATION_SECONDS=120
 CONTRACT_FIXED_PROFILE="perf-box-amd64"
 CONTRACT_FIXED_CLAIM_SCOPE="comparison-eligible"
+
+# --- GraalVM auto-resolution for native builds ----------------------------
+# A native build (mvn -Pnative) needs a GraalVM whose JDK MAJOR matches the
+# target's required Java version — preview features (this app uses
+# --enable-preview) only compile on the exact same major. The ambient JAVA_HOME
+# is often a plain JDK, so resolve a matching GraalVM and scope it to the build.
+graalvm_major() {
+  local home="$1" v=""
+  if [[ -r "$home/release" ]]; then
+    v="$(awk -F'"' '/^JAVA_VERSION=/{print $2; exit}' "$home/release" 2>/dev/null)"
+  fi
+  if [[ -z "$v" && -x "$home/bin/java" ]]; then
+    v="$("$home/bin/java" -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/')"
+  fi
+  v="${v%%.*}"
+  printf '%s\n' "$v"
+}
+
+# resolve_graalvm_home <want_major> -> prints a GraalVM home with native-image and
+# (if want_major non-empty) matching JDK major. Precedence: BENCHMARK_GRAALVM_HOME,
+# GRAALVM_HOME, sdkman candidates, native-image on PATH.
+resolve_graalvm_home() {
+  local want="$1" cand best=""
+  for cand in "${BENCHMARK_GRAALVM_HOME:-}" "${GRAALVM_HOME:-}"; do
+    [[ -n "$cand" && -x "$cand/bin/native-image" ]] || continue
+    if [[ -z "$want" || "$(graalvm_major "$cand")" == "$want" ]]; then
+      printf '%s\n' "$cand"; return 0
+    fi
+  done
+  for cand in "$HOME"/.sdkman/candidates/java/*/; do
+    cand="${cand%/}"
+    [[ -x "$cand/bin/native-image" ]] || continue
+    if [[ -z "$want" || "$(graalvm_major "$cand")" == "$want" ]]; then
+      best="$cand"
+    fi
+  done
+  if [[ -n "$best" ]]; then printf '%s\n' "$best"; return 0; fi
+  if command -v native-image >/dev/null 2>&1; then
+    cand="$(dirname "$(dirname "$(command -v native-image)")")"
+    if [[ -z "$want" || "$(graalvm_major "$cand")" == "$want" ]]; then
+      printf '%s\n' "$cand"; return 0
+    fi
+  fi
+  return 1
+}
+
+# List GraalVM homes + majors found, for diagnostics on failure.
+list_graalvm_candidates() {
+  local cand
+  for cand in "$HOME"/.sdkman/candidates/java/*/; do
+    cand="${cand%/}"
+    [[ -x "$cand/bin/native-image" ]] && printf '    %s (Java %s)\n' "$cand" "$(graalvm_major "$cand")"
+  done
+}
 
 require_positive_int() {
   local name="$1"
@@ -158,6 +233,9 @@ while [[ $# -gt 0 ]]; do
     --target-runtime) TARGET_RUNTIME="$2"; shift 2 ;;
     --target-build) TARGET_BUILD="$2"; shift 2 ;;
     --cpu-affinity) CPU_AFFINITY="$2"; shift 2 ;;
+    --enable-jfr) ENABLE_JFR="true"; shift ;;
+    --no-jfr) ENABLE_JFR="false"; shift ;;
+    --jfr-settings) JFR_SETTINGS="$2"; shift 2 ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -590,7 +668,9 @@ port_reachable() {
 }
 
 wait_for_target() {
-  local timeout=60
+  # Heavier targets (Spring Boot, Quarkus+Hibernate) under constrained CPU
+  # (e.g. 0.5 vCPU) can take well over 60s to become reachable; allow override.
+  local timeout="${ENTITY_READ_TARGET_READINESS_SECONDS:-60}"
   for _ in $(seq 1 "$timeout"); do
     if target_reachable; then
       return 0
@@ -669,6 +749,11 @@ verify_backend_mode_evidence() {
 
 cleanup() {
   local exit_code=$?
+  # Stop the target resource sampler first so an interrupted run never leaks an
+  # orphaned sampler subshell polling a now-dead /proc/<pid>.
+  if command -v bench_stop_resource_sampler >/dev/null 2>&1; then
+    bench_stop_resource_sampler || true
+  fi
   if [[ "$TARGET_APP_STARTED" -eq 1 ]] && [[ -n "$TARGET_APP_PID" ]] && kill -0 "$TARGET_APP_PID" >/dev/null 2>&1; then
     echo "[cleanup] Stopping benchmark target app (pid=$TARGET_APP_PID)..."
     kill "$TARGET_APP_PID" >/dev/null 2>&1 || true
@@ -684,7 +769,7 @@ cleanup() {
 resolve_db_launcher
 trap cleanup EXIT
 
-echo "[entity-read-by-id] claim_scope=$CLAIM_SCOPE profile=$PROFILE duration=$DURATION warmup=$WARMUP threads=$THREADS connections=$CONNECTIONS target_runtime=$TARGET_RUNTIME target_build=$TARGET_BUILD effective_runtime=$TARGET_RUNTIME_EFFECTIVE target_app=$TARGET_APP_NAME skip_target_build=$SKIP_TARGET_BUILD output=$OUTPUT_DIR"
+echo "[entity-read-by-id] claim_scope=$CLAIM_SCOPE profile=$PROFILE duration=$DURATION warmup=$WARMUP threads=$THREADS connections=$CONNECTIONS target_runtime=$TARGET_RUNTIME target_build=$TARGET_BUILD effective_runtime=$TARGET_RUNTIME_EFFECTIVE target_app=$TARGET_APP_NAME skip_target_build=$SKIP_TARGET_BUILD db_pool_min=$EXERIS_DB_POOL_MIN_SIZE db_pool_max=$EXERIS_DB_POOL_MAX_SIZE db_conn_timeout_ms=${EXERIS_DB_CONNECTION_TIMEOUT_MS:-<default>} output=$OUTPUT_DIR"
 
 # Step 2: Start DB
 echo "[step 2/9] Starting benchmark DB..."
@@ -792,15 +877,42 @@ if ! target_reachable; then
     if [[ "$TARGET_BUILD" == "jvm" ]]; then
       mvn -f "$TARGET_MODULE_POM" -DskipTests package
     else
+      # native-image needs multiple GB — it cannot build inside the constrained
+      # cgroup scope. Refuse fast with the prebuild path instead of OOMing.
+      if [[ "${BENCHMARK_CONSTRAINED_SCOPE_ACTIVE:-0}" == "1" ]]; then
+        echo "ERROR: cannot build a native image inside the constrained cgroup scope (native-image needs GBs)." >&2
+        echo "  Prebuild ONCE unconstrained, then re-run constrained (which will use the prebuilt binary):" >&2
+        echo "    scripts/run-entity-read-by-id.sh --target-runtime $TARGET_RUNTIME_EFFECTIVE --target-build native --claim-scope exploratory --duration 1s   # builds + smoke" >&2
+        echo "  or: GRAALVM auto-selected — mvn -f $TARGET_MODULE_POM -Pnative -DskipTests native:compile (with JAVA_HOME=a Java-matching GraalVM)." >&2
+        exit 1
+      fi
+      # Required Java major for this target (drives GraalVM selection; preview
+      # features need an exact-major GraalVM). Fall back to empty = accept any.
+      APP_JAVA_MAJOR="$(grep -oE '<java\.version>[0-9]+' "$TARGET_MODULE_POM" 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+      if [[ -z "$APP_JAVA_MAJOR" ]]; then
+        APP_JAVA_MAJOR="$(grep -oE '<maven\.compiler\.release>[0-9]+' "$TARGET_MODULE_POM" 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+      fi
+      GRAALVM_BUILD_HOME="$(resolve_graalvm_home "$APP_JAVA_MAJOR" || true)"
+      if [[ -z "$GRAALVM_BUILD_HOME" ]]; then
+        echo "ERROR: --target-build native requires a GraalVM with native-image${APP_JAVA_MAJOR:+ for Java $APP_JAVA_MAJOR}, but none was found." >&2
+        echo "  Checked: BENCHMARK_GRAALVM_HOME, GRAALVM_HOME, ~/.sdkman/candidates/java/*, native-image on PATH." >&2
+        echo "  GraalVM installs detected:" >&2
+        list_graalvm_candidates >&2 || true
+        echo "  Fix: 'sdk install java <ver>-graal' matching Java ${APP_JAVA_MAJOR:-N}, or set BENCHMARK_GRAALVM_HOME=/path/to/graalvm." >&2
+        exit 1
+      fi
+      echo "[step 6/9] native build using GraalVM: $GRAALVM_BUILD_HOME (Java $(graalvm_major "$GRAALVM_BUILD_HOME"))"
+      # Scope GraalVM to the build only; clear JAVA_TOOL_OPTIONS so a constrained
+      # run's -Xmx/-XX heap flags don't cripple the (memory-hungry) native-image
+      # compile. The produced binary is self-contained and needs no JDK to run.
       case "$TARGET_RUNTIME_EFFECTIVE" in
-        community)
-          mvn -f "$TARGET_MODULE_POM" -Pnative -DskipTests native:compile
-          ;;
-        spring)
-          mvn -f "$TARGET_MODULE_POM" -Pnative -DskipTests native:compile
+        community|spring)
+          env GRAALVM_HOME="$GRAALVM_BUILD_HOME" JAVA_HOME="$GRAALVM_BUILD_HOME" JAVA_TOOL_OPTIONS= \
+            mvn -f "$TARGET_MODULE_POM" -Pnative -DskipTests native:compile
           ;;
         quarkus)
-          mvn -f "$TARGET_MODULE_POM" -Pnative -Dquarkus.native.enabled=true -DskipTests package
+          env GRAALVM_HOME="$GRAALVM_BUILD_HOME" JAVA_HOME="$GRAALVM_BUILD_HOME" JAVA_TOOL_OPTIONS= \
+            mvn -f "$TARGET_MODULE_POM" -Pnative -Dquarkus.native.enabled=true -DskipTests package
           ;;
         locality)
           echo "ERROR: --target-build native is not supported for effective runtime locality"
@@ -840,6 +952,20 @@ if ! target_reachable; then
     QUARKUS_DATASOURCE_JDBC_MIN_SIZE="$EXERIS_DB_POOL_MIN_SIZE" \
     QUARKUS_DATASOURCE_JDBC_MAX_SIZE="$EXERIS_DB_POOL_MAX_SIZE")
 
+  # Optional connection-acquisition timeout. Mapped per target family in the
+  # native unit each expects: Exeris/Hikari take milliseconds; Quarkus Agroal
+  # takes a Duration, so convert ms -> ISO-8601 (e.g. 5000 -> PT5S). Only appended
+  # when explicitly set, so unconstrained runs keep framework defaults.
+  if [[ -n "${EXERIS_DB_CONNECTION_TIMEOUT_MS:-}" ]]; then
+    # LC_ALL=C so the decimal separator is a dot, not a locale comma (PT2.5S, not PT2,5S).
+    QUARKUS_ACQ_TIMEOUT="$(LC_ALL=C awk -v ms="$EXERIS_DB_CONNECTION_TIMEOUT_MS" 'BEGIN { printf "PT%gS", ms / 1000 }')"
+    TARGET_CMD+=(
+      "EXERIS_DB_CONNECTION_TIMEOUT_MS=$EXERIS_DB_CONNECTION_TIMEOUT_MS"
+      "SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=$EXERIS_DB_CONNECTION_TIMEOUT_MS"
+      "QUARKUS_DATASOURCE_JDBC_ACQUISITION_TIMEOUT=$QUARKUS_ACQ_TIMEOUT"
+    )
+  fi
+
   if [[ "$TARGET_BUILD" == "jvm" ]]; then
     TARGET_CMD+=(java)
     if [[ "$TARGET_RUNTIME_EFFECTIVE" == "community" || "$TARGET_RUNTIME_EFFECTIVE" == "locality" ]]; then
@@ -868,9 +994,9 @@ if ! target_reachable; then
   TARGET_APP_STARTED=1
 fi
 
-echo "[step 6/9] Waiting for target readiness (<=60s)..."
+echo "[step 6/9] Waiting for target readiness (<=${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s)..."
 if ! wait_for_target; then
-  echo "ERROR: benchmark target app failed readiness check within 60s"
+  echo "ERROR: benchmark target app failed readiness check within ${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s"
   if [[ -f "$TARGET_APP_LOG" ]]; then
     echo "---- target-app.log (tail) ----"
     tail -n 60 "$TARGET_APP_LOG" || true
@@ -880,13 +1006,28 @@ if ! wait_for_target; then
 fi
 
 PREFLIGHT_BODY_FILE="$OUTPUT_DIR/preflight-users-aggregate.json"
-if ! bench_run_endpoint_preflight "$BASE_URL/api/v1/users" "$PREFLIGHT_BODY_FILE" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
-  echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE"
+preflight_ok=0
+preflight_deadline=$(( SECONDS + ENTITY_READ_PREFLIGHT_READY_SECONDS ))
+preflight_attempts=0
+while :; do
+  preflight_attempts=$(( preflight_attempts + 1 ))
+  if bench_run_endpoint_preflight "$BASE_URL/api/v1/users" "$PREFLIGHT_BODY_FILE" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
+    preflight_ok=1
+    break
+  fi
+  if (( SECONDS >= preflight_deadline )); then
+    break
+  fi
+  # Endpoint reachable but not serving 200 yet (data path still warming) — retry.
+  sleep 1
+done
+if [[ "$preflight_ok" -ne 1 ]]; then
+  echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (after ${preflight_attempts} attempt(s) over ${ENTITY_READ_PREFLIGHT_READY_SECONDS}s)"
   echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/users (status=$BENCH_PREFLIGHT_HTTP_CODE)"
   echo "ERROR: preflight response body saved at $PREFLIGHT_BODY_FILE"
   exit 1
 fi
-echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE"
+echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (ready after ${preflight_attempts} attempt(s))"
 
 echo "[step 6/9] Payload preflight preview (/api/v1/users):"
 bench_print_preflight_payload_preview "$PREFLIGHT_BODY_FILE" 512
@@ -898,6 +1039,25 @@ elif [[ "$TARGET_APP_STARTED" -eq 0 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; t
   exit 1
 fi
 
+# Optional JFR recording of the target during warmup+measurement (jcmd-based;
+# only meaningful when this runner manages a local JVM target).
+JFR_FILE=""
+if [[ "$ENABLE_JFR" == "true" ]]; then
+  if ! command -v bench_start_jfr_recording >/dev/null 2>&1; then
+    echo "WARN: --enable-jfr requested but jfr lib not available; skipping JFR"
+    ENABLE_JFR="false"
+  elif [[ "$TARGET_APP_STARTED" -ne 1 || -z "$TARGET_APP_PID" ]]; then
+    echo "WARN: --enable-jfr requested but no locally-managed target (external/native?); skipping JFR"
+    ENABLE_JFR="false"
+  else
+    JFR_LOGS_DIR="$OUTPUT_DIR/logs"
+    mkdir -p "$JFR_LOGS_DIR"
+    JFR_FILE="$OUTPUT_DIR/target-entity-read-by-id-$(date -u +%Y%m%dT%H%M%SZ).jfr"
+    echo "[step 6/9] Starting JFR recording (settings=$JFR_SETTINGS) on target pid=$TARGET_APP_PID"
+    bench_start_jfr_recording "$TARGET_APP_PID" "$JFR_LOGS_DIR" "entity-read-by-id" "$JFR_SETTINGS" || true
+  fi
+fi
+
 echo "[step 6/9] Warmup ($WARMUP)..."
 wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL/api/v1/users" > /dev/null || true
 
@@ -907,6 +1067,30 @@ if [[ -f "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT" ]]; then
   source "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT"
   echo "[step 6.5/9] Resetting pg_stat_statements counters before measurement..."
   pg_stat_statements_reset || true
+fi
+
+# Step 6.6: Start target resource sampler (target-side CPU/RSS/threads + JVM heap/
+# NMT breakdown). Started here — after warmup, immediately before measurement — so
+# the summarized cpu_time/RSS reflect the measurement window only, not warmup. This
+# is what lets unconstrained runs express results per resource (rps/effective-core,
+# rps/MB-RSS) and be compared across stacks (community/spring/quarkus).
+RESOURCE_SAMPLES_CSV="$OUTPUT_DIR/resource-samples.csv"
+RESOURCE_METRICS_JSON="$OUTPUT_DIR/resource-metrics.json"
+RESOURCE_TARGET_PID=""
+if command -v bench_start_resource_sampler >/dev/null 2>&1; then
+  if [[ "$TARGET_APP_STARTED" -eq 1 && -n "$TARGET_APP_PID" ]]; then
+    RESOURCE_TARGET_PID="$TARGET_APP_PID"
+  else
+    # External/reused target: no managed PID, so resolve it from the listening port.
+    RESOURCE_TARGET_PID="$(bench_detect_pid_for_port "$TARGET_PORT" 2>/dev/null || true)"
+  fi
+  if [[ -n "$RESOURCE_TARGET_PID" && -d "/proc/$RESOURCE_TARGET_PID" ]]; then
+    echo "[step 6.6/9] Starting target resource sampler for pid=$RESOURCE_TARGET_PID"
+    bench_start_resource_sampler "$RESOURCE_TARGET_PID" "$RESOURCE_SAMPLES_CSV"
+  else
+    echo "[step 6.6/9] WARN: target pid not resolved (external/native?); resource-metrics.json will record pid-undetected"
+    RESOURCE_TARGET_PID=""
+  fi
 fi
 
 # Step 7: Measure
@@ -949,6 +1133,62 @@ else
   WRK_OUT=$("${WRK_CMD[@]}" 2>&1)
 fi
 echo "$WRK_OUT"
+
+# Stop the resource sampler the moment measurement ends, so the sampled window is
+# exactly the measurement window (summarize/augment happen below while the target
+# is still alive, before cleanup tears it down).
+if command -v bench_stop_resource_sampler >/dev/null 2>&1; then
+  bench_stop_resource_sampler || true
+fi
+
+# Fail loudly if the target died during measurement or no requests completed: a
+# crashed/unreachable target must NOT be written out as a successful result.
+if [[ "$TARGET_APP_STARTED" -eq 1 && -n "$TARGET_APP_PID" ]] && ! kill -0 "$TARGET_APP_PID" 2>/dev/null; then
+  echo "ERROR: benchmark target (pid=$TARGET_APP_PID) died during measurement — run is INVALID (not a result)."
+  echo "ERROR: inspect $TARGET_APP_LOG and any hs_err_pid*.log / core dump in $REPO_ROOT."
+  [[ "$ENABLE_JFR" == "true" ]] && echo "NOTE: JFR was enabled. A SIGSEGV in JfrStorage::flush_regular_buffer from a virtual-thread frame is NOT a JDK flake — it means a custom JFR event was held (begin -> blocking op -> commit) across a virtual-thread unmount, flushing a stale carrier-bound buffer (reproducible on JDK 26 GA 26+35). --no-jfr is only a workaround to keep the run going, NOT a diagnosis. Fix is kernel-side: emit such events single-phase, after the blocking op. Check the target frame in hs_err_pid*.log (e.g. fixed for ConnectionAcquireEvent)."
+  exit 1
+fi
+_WRK_COMPLETED_REQUESTS="$(printf '%s\n' "$WRK_OUT" | sed -nE 's/^[[:space:]]*([0-9]+) requests in .*/\1/p' | head -1)"
+if [[ -n "$_WRK_COMPLETED_REQUESTS" && "$_WRK_COMPLETED_REQUESTS" -eq 0 ]]; then
+  echo "ERROR: measurement completed 0 requests (target unreachable or crashed) — run is INVALID (not a result)."
+  echo "ERROR: inspect $TARGET_APP_LOG (socket errors above indicate the target was not serving)."
+  exit 1
+fi
+
+# Summarize target resource samples (and, for a live JVM, augment with heap/NMT
+# breakdown via jcmd) while the target is still alive — cleanup kills it on exit.
+if command -v bench_summarize_resource_samples >/dev/null 2>&1 && [[ -f "$RESOURCE_SAMPLES_CSV" ]]; then
+  echo "[step 7.5/9] Summarizing target resource usage -> $RESOURCE_METRICS_JSON"
+  bench_summarize_resource_samples "$RESOURCE_SAMPLES_CSV" "$RESOURCE_METRICS_JSON" || true
+  if [[ -f "$RESOURCE_METRICS_JSON" ]]; then
+    if [[ -n "$RESOURCE_TARGET_PID" && -d "/proc/$RESOURCE_TARGET_PID" ]] \
+       && command -v bench_augment_resource_metrics_with_jvm_breakdown >/dev/null 2>&1; then
+      bench_augment_resource_metrics_with_jvm_breakdown "$RESOURCE_TARGET_PID" "$RESOURCE_METRICS_JSON" || true
+    elif command -v jq >/dev/null 2>&1; then
+      # Native image / external target / undetected pid: no jcmd surface for a heap
+      # breakdown — record the reason so the sidecar is unambiguous, not silently bare.
+      tmp_rm="$(mktemp)"
+      if jq '. + {jvm_breakdown_note: "jcmd heap/NMT breakdown unavailable (native image, external target, or pid undetected)"}' \
+           "$RESOURCE_METRICS_JSON" > "$tmp_rm" 2>/dev/null; then
+        mv "$tmp_rm" "$RESOURCE_METRICS_JSON"
+      else
+        rm -f "$tmp_rm"
+      fi
+    fi
+  fi
+fi
+
+# Dump + stop JFR while the target is still alive (before cleanup kills it).
+if [[ "$ENABLE_JFR" == "true" && -n "$JFR_FILE" ]]; then
+  echo "[step 7/9] Dumping JFR recording to $JFR_FILE"
+  bench_capture_jfr_metadata "$TARGET_APP_PID" "$JFR_LOGS_DIR" "$JFR_FILE" || true
+  if [[ -f "$JFR_FILE" ]]; then
+    echo "[step 7/9] JFR recording saved: $JFR_FILE ($(du -h "$JFR_FILE" 2>/dev/null | cut -f1))"
+  else
+    echo "WARN: JFR dump did not produce a file (see $JFR_LOGS_DIR/jfr-*.json)"
+  fi
+fi
 
 # Capture post-measurement pg_stat_statements snapshot
 if [[ -f "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT" ]]; then
@@ -1268,5 +1508,8 @@ else
   exit 1
 fi
 
+if [[ -f "$RESOURCE_METRICS_JSON" ]]; then
+  echo "Target resource usage (measurement window): $RESOURCE_METRICS_JSON"
+fi
 echo "Done. claim_scope=$CLAIM_SCOPE -> $RESULT_CLAIM_SCOPE | results in $OUTPUT_DIR"
 echo "Done. claim_scope=$CLAIM_SCOPE -- results in $OUTPUT_DIR"

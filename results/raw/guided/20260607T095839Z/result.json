@@ -1,0 +1,52 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260607-120158-04c8676",
+  "timestamp": "2026-06-07T10:01:58Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/home/arkstack/exeris-benchmarks/results/raw/guided/20260607T095839Z/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h1",
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "spring-benchmark-app",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "commit_sha": "04c8676837bb44fa5e626fbd9203b24cf19db13f"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+  "duration_seconds": 120,
+  "warmup_seconds": 60,
+  "threads": 4,
+  "connections": 128
+},
+  "metrics": {
+  "throughput_rps": 4875.70,
+  "latency_mean_us": 26210.000000,
+  "latency_stdev_us": 6990.000000,
+  "latency_max_us": 119090.000000,
+  "latency_p50_us": 25670.000000,
+  "latency_p75_us": 30410.000000,
+  "latency_p90_us": 35200.000000,
+  "latency_p99_us": 45420.000000,
+  "total_requests": 585493,
+  "total_errors": 0,
+  "error_rate_pct": 0.000000
+},
+  "notes": "backendMode=default-vt targetRuntimeEffective=spring targetBuild=jvm cpuAffinity=none",
+  "tags": ["backend-mode:default-vt", "target-runtime-effective:spring", "target-build:jvm"],
+  "raw_output": "Running 2m test @ http://localhost:8080/api/v1/users\n  4 threads and 128 connections\n  Thread Stats   Avg      Stdev     Max   +/- Stdev\n    Latency    26.21ms    6.99ms 119.09ms   69.99%\n    Req/Sec     1.23k    69.67     2.09k    70.69%\n  Latency Distribution\n     50%   25.67ms\n     75%   30.41ms\n     90%   35.20ms\n     99%   45.42ms\n  585493 requests in 2.00m, 5.13GB read\nRequests/sec:   4875.70\nTransfer/sec:     43.75MB\n"
+}

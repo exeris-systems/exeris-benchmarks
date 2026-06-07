@@ -98,6 +98,101 @@
         "network"
       ]
     },
+    "connectivity": {
+      "type": "string",
+      "enum": [
+        "local",
+        "wan-remote",
+        "wan-impaired"
+      ]
+    },
+    "driver": {
+      "type": "string",
+      "enum": [
+        "wrk",
+        "wrk2",
+        "k6",
+        "h2load"
+      ]
+    },
+    "env_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "health_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "network_impairment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "apply_requested": {
+          "type": "boolean"
+        },
+        "applied_to": {
+          "type": "string",
+          "enum": [
+            "loopback",
+            "remote"
+          ]
+        },
+        "profile": {
+          "type": "string",
+          "enum": [
+            "mild",
+            "moderate",
+            "severe",
+            "custom"
+          ]
+        },
+        "tool": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delay_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "loss_pct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "jitter_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "applied_to",
+              "profile",
+              "delay_ms",
+              "loss_pct"
+            ]
+          }
+        }
+      ]
+    },
     "run_type": {
       "type": "string",
       "enum": [
@@ -145,6 +240,61 @@
           "type": "boolean"
         }
       }
+    },
+    "graph_track": {
+      "type": "string",
+      "enum": [
+        "neo4j",
+        "pgq_pure",
+        "age_compat"
+      ]
+    },
+    "saga": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto_start_infra": {
+          "type": "boolean"
+        },
+        "auto_start_target": {
+          "type": "boolean"
+        },
+        "skip_seed_verify": {
+          "type": "boolean"
+        }
+      }
+    },
+    "enable_jfr": {
+      "type": "boolean"
+    },
+    "execution_class": {
+      "type": "string",
+      "enum": [
+        "unconstrained",
+        "constrained"
+      ]
+    },
+    "execution_profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cgroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "memory_limit_mb": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cpu_quota_pct": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "cpu_affinity": {
+      "type": "string",
+      "minLength": 1
     },
     "targets": {
       "type": "array",
@@ -328,6 +478,40 @@
             }
           }
         }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "execution_class"
+        ],
+        "properties": {
+          "execution_class": {
+            "const": "constrained"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "topology_mode": {
+            "const": "localhost"
+          },
+          "target_mode": {
+            "const": "single"
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "execution_profile_id"
+            ]
+          },
+          {
+            "required": [
+              "cgroup"
+            ]
+          }
+        ]
       }
     }
   ]

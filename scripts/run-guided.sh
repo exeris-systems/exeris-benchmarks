@@ -777,11 +777,23 @@ workload_is_free() {
   return 1
 }
 
+# k6 generic dispatch derives its actual load (VUs / arrival-rate / duration)
+# from the scenario's k6.js — run-k6.sh receives only the scenario dir, no
+# wrk-style threads/connections/duration. So the workload numbers here are
+# recorded as operator-intent metadata but are NOT applied by k6; we must not
+# claim them as "honored". (run-wrk/wrk2/h2load DO honor them via overrides.)
+k6_workload_from_script() {
+  env_dispatch_is_generic && [[ "$driver" == "k6" ]]
+}
+
 if workload_is_free; then
   warmup_seconds="$(prompt_positive_int "workload.warmup_seconds" "60")"
   measurement_seconds="$(prompt_positive_int "workload.measurement_seconds" "120")"
   threads="$(prompt_positive_int "workload.threads" "4")"
   connections="$(prompt_positive_int "workload.connections" "128")"
+  if k6_workload_from_script; then
+    warn "k6 derives actual load (VUs/arrival-rate/duration) from the scenario's k6.js; the workload numbers above are recorded as metadata/intent only and are NOT applied by the k6 run. To change k6 load, edit the scenario k6.js."
+  fi
 else
   read -r threads connections warmup_seconds measurement_seconds \
     < <(resolve_workload_from_contract "$scenario_json" "$contract_id")
@@ -1029,7 +1041,10 @@ echo "  hardware_profile   : $hardware_profile"
 echo "  claim_scope        : $claim_scope"
 echo "  contract_id        : $contract_id"
 echo "  output_dir         : $output_dir"
-if workload_is_free; then
+if k6_workload_from_script; then
+  echo "  workload           : VUs/arrival-rate/duration defined by scenario k6.js — threads/connections/measurement below are metadata only, NOT applied by k6"
+  echo "  workload (metadata): warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections"
+elif workload_is_free; then
   echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections (your values — honored)"
 else
   echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections (from contract $contract_id)"

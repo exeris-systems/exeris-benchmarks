@@ -95,8 +95,17 @@ public final class CommunityBenchmarkRouteHandler {
     }
 
     public void handleUsers(HttpExchange exchange) {
-        List<UserView> users = useCaseService.findTopUsersWithDetails(USERS_LIMIT, FRIENDS_LIMIT, INTERESTS_LIMIT);
-        exchange.respond(HttpStatus.OK, users);
+        try {
+            List<UserView> users = useCaseService.findTopUsersWithDetails(USERS_LIMIT, FRIENDS_LIMIT, INTERESTS_LIMIT);
+            exchange.respond(HttpStatus.OK, users);
+        } catch (RuntimeException exception) {
+            // Map backend/pool failures (e.g. PersistenceProviderException on
+            // cold-start pool exhaustion) to 503, consistent with the sibling
+            // handlers. Without this the exception escapes uncaught to the
+            // PaqsScheduler virtual-thread root and the JVM default handler
+            // prints a full stack on every failure (the log "storm").
+            exchange.respond(HttpStatus.SERVICE_UNAVAILABLE);
+        }
     }
 
     public void handleFriendsOfFriendsWithoutInterests(HttpExchange exchange) {

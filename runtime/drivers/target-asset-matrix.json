@@ -175,6 +175,21 @@
         "runtime/drivers/docker-compose/quarkus-native.yml"
       ],
       "non_runnable_reason": "No Quarkus native launcher assets are provisioned in runtime/drivers for this profile."
+    },
+    {
+      "target_id": "spring-runtime-on-exeris-flow",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/spring-runtime-on-exeris.env",
+      "profile_id": "spring-runtime-on-exeris-flow",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9001/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": ""
     }
   ]
 }

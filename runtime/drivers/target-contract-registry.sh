@@ -28,6 +28,7 @@ normalize_target_alias() {
     enterprise) echo "exeris-kernel-enterprise" ;;
     spring-benchmark-app|spring-runtime) echo "spring-jvm-vt-tuned" ;;
     spring-app-axon) echo "spring-app-axon" ;;
+    spring-runtime-on-exeris-flow|spring-on-exeris-flow|exeris-spring-runtime-app-comp) echo "spring-runtime-on-exeris-flow" ;;
     quarkus-benchmark-app|quarkus-runtime) echo "quarkus-jvm-vt-tuned" ;;
     quarkus-app-axon) echo "quarkus-app-axon" ;;
     exeris-community-app|exeris-e2e-community-h2c) echo "exeris-community-app" ;;

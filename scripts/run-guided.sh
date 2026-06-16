@@ -242,6 +242,9 @@ tool_version_or_unknown() {
 map_entity_runtime() {
   local target="$1"
   case "$target" in
+    # Spring-on-Exeris (Compat Mode) must be matched BEFORE the generic *spring*
+    # rule, otherwise it collapses onto the Tomcat/Axon spring-benchmark-app.
+    *spring-runtime-on-exeris*|*spring-on-exeris*) printf '%s\n' "spring-runtime-on-exeris" ;;
     *spring*) printf '%s\n' "spring" ;;
     *quarkus*) printf '%s\n' "quarkus" ;;
     *locality*) printf '%s\n' "locality" ;;
@@ -266,12 +269,32 @@ map_entity_backend_mode() {
   esac
 }
 
+# Pure vs Compatibility is an Exeris-runtime axis that is authoritatively implied
+# by the target — NOT a free choice. Deriving it (instead of asking) mirrors how
+# protocol_mode is handled: it stops the profile from claiming a classification
+# the target does not have (e.g. the menu default "pure" was stamping the plain
+# Spring/Tomcat and Quarkus baselines as "pure-mode Exeris", which is false).
+#   - spring-runtime-on-exeris → compat  (Exeris compatibility mode)
+#   - community / locality     → pure    (Exeris pure mode, kernel-native API)
+#   - spring (Tomcat) / quarkus → baseline (not an Exeris runtime at all)
+derive_target_classification() {
+  case "$(map_entity_runtime "$1")" in
+    spring-runtime-on-exeris) printf '%s\n' "compat" ;;
+    community|locality)       printf '%s\n' "pure" ;;
+    spring|quarkus)           printf '%s\n' "baseline" ;;
+    *)                        printf '%s\n' "pure" ;;
+  esac
+}
+
 # Best-effort target directory (used only to locate optional per-target driver
 # config; base URL is supplied via *_BASE_URL_OVERRIDE for guided dispatch).
 map_target_dir() {
   local tid="$1"
   local dir
   case "$tid" in
+    # Spring-on-Exeris (Compat Mode) lives in its own module; match it before the
+    # generic spring* rule so it is not mapped onto the Tomcat/Axon spring app.
+    spring-runtime-on-exeris*|spring-on-exeris*) dir="targets/exeris-spring-runtime-app-comp" ;;
     spring*)  dir="targets/spring-benchmark-app" ;;
     quarkus*) dir="targets/quarkus-benchmark-app" ;;
     *)        dir="targets/exeris-community-app" ;;
@@ -291,6 +314,83 @@ resolve_local_base_url() {
     printf '%s\n' "$hu" | sed -E 's#(https?://[^/]+).*#\1#'
   else
     printf '%s\n' "http://localhost:8080"
+  fi
+}
+
+# --- TLS / transport-security helpers -------------------------------------
+# TLS is ORTHOGONAL to protocol_mode (the H1/H2 axis). The toggle composes the
+# two into the runner's BENCH_PROTOCOL_MODE_OVERRIDE space (h1/https-h1/h2/h2c).
+# 'auto' keeps the target's matrix-declared scheme and does NOT override anything
+# (byte-identical to the pre-toggle behavior); on/off take control of both the
+# launched target's transport and the load client's scheme.
+
+# scheme (http|https) a target declares via its health_url in the asset matrix.
+resolve_target_declared_scheme() {
+  local tid="$1" hu
+  hu="$(jq -r --arg id "$tid" '.targets[] | select(.target_id == $id) | .health_url // empty' "$TARGET_MATRIX" 2>/dev/null || true)"
+  case "$hu" in
+    https://*) printf 'https\n' ;;
+    *)         printf 'http\n' ;;
+  esac
+}
+
+# Rewrite the scheme of a base URL (http<->https), leaving host:port intact.
+apply_url_scheme() {
+  local url="$1" scheme="$2"
+  printf '%s\n' "$url" | sed -E "s#^https?://#${scheme}://#"
+}
+
+# Compose protocol_mode (h1/h2/h3) + TLS on/off into the runner transport label.
+# h2 cleartext is h2c; h2 over TLS is h2; h1 plain is h1; h1 over TLS is https-h1.
+# h3 always implies TLS and is left as-is (Enterprise-only; not reachable here).
+derive_effective_transport() {
+  local pm="$1" tls="$2"
+  case "$pm" in
+    h3) printf 'h3\n' ;;
+    h2) [[ "$tls" == "true" ]] && printf 'h2\n' || printf 'h2c\n' ;;
+    *)  [[ "$tls" == "true" ]] && printf 'https-h1\n' || printf 'h1\n' ;;
+  esac
+}
+
+# Wire the chosen transport into the dispatch environment. No-op in 'auto' mode
+# (so the pre-toggle code path is untouched). When on/off, export the kernel TLS
+# switches (inherited by guided-launched targets via their `env … java` exec) and
+# the canonical BENCH_PROTOCOL_MODE_OVERRIDE that the protocol lib honors first;
+# provision a self-signed smoke cert for HTTPS unless the caller supplied one.
+tls_cert_source=""
+setup_tls_runtime_env() {
+  [[ "$tls_mode" != "auto" ]] || return 0
+  export BENCH_PROTOCOL_MODE_OVERRIDE="$effective_transport"
+  if [[ "$tls_enabled" == "true" ]]; then
+    export EXERIS_SSL_ENABLED="true"
+    export EXERIS_INSECURE_REQUESTS="disabled"
+    export BENCHMARK_TLS_ENABLED="1"
+    if [[ -n "${EXERIS_TRANSPORT_CERT_PATH:-}" && -f "${EXERIS_TRANSPORT_CERT_PATH}" \
+        && -n "${EXERIS_TRANSPORT_KEY_PATH:-}" && -f "${EXERIS_TRANSPORT_KEY_PATH}" ]]; then
+      tls_cert_source="caller-provided"
+      info "[TLS] using caller-provided cert: $EXERIS_TRANSPORT_CERT_PATH"
+    else
+      local certs_lib="$REPO_ROOT/tools/bench/lib/certs.sh"
+      local cert="/tmp/exeris-bench-certs/smoke-cert.pem" key="/tmp/exeris-bench-certs/smoke-key.pem"
+      if [[ -f "$certs_lib" ]] && command -v openssl >/dev/null 2>&1; then
+        # shellcheck source=/dev/null
+        source "$certs_lib"
+        if ensure_smoke_cert_key "$cert" "$key"; then
+          export EXERIS_TRANSPORT_CERT_PATH="$cert"
+          export EXERIS_TRANSPORT_KEY_PATH="$key"
+          tls_cert_source="auto-smoke"
+          info "[TLS] smoke cert provisioned: $cert"
+        else
+          warn "[TLS] smoke cert provisioning failed; HTTPS target launch may fail. Set EXERIS_TRANSPORT_CERT_PATH/KEY_PATH manually."
+        fi
+      else
+        warn "[TLS] openssl/certs.sh unavailable; set EXERIS_TRANSPORT_CERT_PATH/KEY_PATH manually for HTTPS."
+      fi
+    fi
+  else
+    export EXERIS_SSL_ENABLED="false"
+    export EXERIS_INSECURE_REQUESTS="enabled"
+    export BENCHMARK_TLS_ENABLED="0"
   fi
 }
 
@@ -622,9 +722,19 @@ fi
 # the contract is known, to avoid a profile that claims a protocol the run won't use.
 tier="community"
 
-target_classification="$(select_kv "Target classification" "pure" \
-  pure   "pure   — pure-mode runtime" \
-  compat "compat — compatibility mode")"
+# Derived from the selected target(s), never asked — see derive_target_classification.
+# For a multi-target comparative run that mixes modes (the point of a pure-vs-compat
+# comparison), the run-level field is "mixed"; per-target truth stays in `targets`.
+if [[ "${#targets[@]}" -gt 1 ]]; then
+  _cls_first="$(derive_target_classification "${targets[0]}")"
+  target_classification="$_cls_first"
+  for _t in "${targets[@]:1}"; do
+    [[ "$(derive_target_classification "$_t")" == "$_cls_first" ]] || { target_classification="mixed"; break; }
+  done
+else
+  target_classification="$(derive_target_classification "${targets[0]}")"
+fi
+info "target_classification derived as '$target_classification' (from target '${targets[0]}'${targets[1]:+ + ${#targets[@]} targets})"
 
 # ---------------------------------------------------------------------------
 # Env file + workload + reproducibility metadata
@@ -668,6 +778,41 @@ contract_id="$(prompt_text "contract_id" "$contract_default")"
 # consistent with what actually runs.
 protocol_mode="$(resolve_protocol_mode "$scenario_json" "$contract_id" "$driver")"
 info "protocol_mode derived as '$protocol_mode' (from contract '$contract_id'${driver:+ / driver '$driver'})"
+
+# TLS / transport security — orthogonal to the H1/H2 protocol_mode above.
+#   auto -> follow the target's matrix-declared scheme (no override; current behavior)
+#   off  -> plain HTTP (no TLS);   on -> HTTPS / TLS
+# The choice composes with protocol_mode into effective_transport (h1/https-h1/h2/h2c)
+# which drives BENCH_PROTOCOL_MODE_OVERRIDE + EXERIS_SSL_* and the client scheme.
+if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
+  tls_target_declared_scheme="${app_endpoint%%://*}"
+else
+  tls_target_declared_scheme="$(resolve_target_declared_scheme "${targets[0]}")"
+fi
+[[ "$tls_target_declared_scheme" == "https" ]] || tls_target_declared_scheme="http"
+tls_mode="$(select_kv "TLS / transport security" "auto" \
+  auto "auto — follow the target's declared scheme (${tls_target_declared_scheme}); no override" \
+  off  "off  — plain HTTP (no TLS)" \
+  on   "on   — HTTPS / TLS (self-signed smoke cert auto-provisioned)")"
+case "$tls_mode" in
+  on)   tls_enabled="true" ;;
+  off)  tls_enabled="false" ;;
+  auto) [[ "$tls_target_declared_scheme" == "https" ]] && tls_enabled="true" || tls_enabled="false" ;;
+esac
+# h3 always implies TLS; community track never reaches h3, but stay consistent.
+[[ "$protocol_mode" == "h3" ]] && tls_enabled="true"
+tls_scheme="http"; [[ "$tls_enabled" == "true" ]] && tls_scheme="https"
+effective_transport="$(derive_effective_transport "$protocol_mode" "$tls_enabled")"
+tls_overrides="false"
+if [[ "$tls_mode" != "auto" && "$tls_scheme" != "$tls_target_declared_scheme" ]]; then
+  tls_overrides="true"
+  warn "TLS override: you chose tls=$tls_mode ($tls_scheme) but target '${targets[0]}' is declared '$tls_target_declared_scheme' in the asset matrix. Guided will force guided-launched targets and the load client to '$tls_scheme'; for pre-launched/WAN/comparative targets the operator must ensure the server already serves '$tls_scheme'. Do NOT compare a TLS-overridden run against the target's declared-scheme baseline without labeling the transport difference."
+fi
+# Reconcile the WAN endpoint scheme with an explicit TLS choice.
+if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" && "$tls_mode" != "auto" ]]; then
+  app_endpoint="$(apply_url_scheme "$app_endpoint" "$tls_scheme")"
+fi
+info "tls derived: mode=$tls_mode enabled=$tls_enabled scheme=$tls_scheme effective_transport=$effective_transport (target declares $tls_target_declared_scheme)"
 
 # Target build (jvm/native) for local runs. The default follows the chosen
 # target's name, EXCEPT the 128m constrained profile defaults to native: the JVM
@@ -872,6 +1017,12 @@ jq -n \
   --arg scenario_id "$scenario_id" \
   --arg target_classification "$target_classification" \
   --arg protocol_mode "$protocol_mode" \
+  --arg tls_mode "$tls_mode" \
+  --arg tls_enabled "$tls_enabled" \
+  --arg tls_scheme "$tls_scheme" \
+  --arg effective_transport "$effective_transport" \
+  --arg tls_declared_scheme "$tls_target_declared_scheme" \
+  --arg tls_overrides "$tls_overrides" \
   --arg tier "$tier" \
   --arg topology_mode "$topology_mode" \
   --arg connectivity "$connectivity" \
@@ -939,6 +1090,14 @@ jq -n \
     scenario_id: $scenario_id,
     target_classification: $target_classification,
     protocol_mode: $protocol_mode,
+    transport_security: {
+      mode: $tls_mode,
+      tls_enabled: ($tls_enabled == "true"),
+      scheme: $tls_scheme,
+      effective_transport: $effective_transport,
+      target_declared_scheme: $tls_declared_scheme,
+      overrides_target_declared: ($tls_overrides == "true")
+    },
     tier: $tier,
     topology_mode: $topology_mode,
     connectivity: $connectivity,
@@ -1031,6 +1190,11 @@ echo "  connectivity       : $connectivity (topology_mode=$topology_mode)"
 echo "  scenario_id        : $scenario_id"
 echo "  driver             : $driver"
 echo "  protocol_mode      : $protocol_mode"
+if [[ "$tls_overrides" == "true" ]]; then
+  echo "  tls                : mode=$tls_mode enabled=$tls_enabled scheme=$tls_scheme transport=$effective_transport [OVERRIDE: target declares $tls_target_declared_scheme]"
+else
+  echo "  tls                : mode=$tls_mode enabled=$tls_enabled scheme=$tls_scheme transport=$effective_transport"
+fi
 echo "  tier               : $tier"
 echo "  target_classification: $target_classification"
 echo "  target_mode        : $target_mode"
@@ -1092,6 +1256,12 @@ if [[ "$should_execute" != "yes" ]]; then
   info "Generate+validate complete (execution skipped)."
   exit 0
 fi
+
+# Wire the chosen transport (TLS on/off) into the dispatch environment + cert.
+# No-op in 'auto' mode. Exports BENCH_PROTOCOL_MODE_OVERRIDE / EXERIS_SSL_* /
+# BENCHMARK_TLS_ENABLED, inherited by guided-launched targets and honored by the
+# protocol lib; the client scheme is forced per dispatch path below.
+setup_tls_runtime_env
 
 # ---------------------------------------------------------------------------
 # tc netem application (loopback only, when requested)
@@ -1287,6 +1457,9 @@ if [[ "$execution_class" == "constrained" ]]; then
         --profile "$hardware_profile"
         --output-dir "$output_dir"
       )
+      if [[ "$tls_mode" != "auto" ]]; then
+        cmd+=(--base-url "$(apply_url_scheme "$(resolve_local_base_url "${targets[0]}")" "$tls_scheme")")
+      fi
       [[ -n "$cgroup_memory_limit_mb" ]] && cmd+=(--cgroup-memory-limit-mb "$cgroup_memory_limit_mb")
       [[ -n "$cgroup_cpu_quota_pct" ]] && cmd+=(--cgroup-cpu-quota-pct "$cgroup_cpu_quota_pct")
       if [[ "$saga_auto_start_infra" == "yes" ]]; then cmd+=(--auto-start-infra); else cmd+=(--no-auto-start-infra); fi
@@ -1313,6 +1486,9 @@ if [[ "$is_saga" == "yes" ]]; then
       echo "For WAN saga, run a single-target baseline against each remote endpoint. Profile generated; multi-target WAN saga not dispatched."
       exit 0
     fi
+    if [[ "$tls_mode" != "auto" ]]; then
+      warn "TLS toggle (tls=$tls_mode) on a saga campaign: BENCH_PROTOCOL_MODE_OVERRIDE/EXERIS_SSL_* are exported and apply to campaign-launched targets, but the campaign derives each target's health-check scheme from the asset matrix (no per-target --base-url). If a target's matrix scheme differs from '$tls_scheme', its readiness probe may not match the forced transport. For a clean TLS sweep run single-target baselines, or align the targets' matrix health_url scheme first."
+    fi
     targets_csv="$(IFS=,; echo "${targets[*]}")"
     info "Dispatch: run-e2e-shop-order-saga-campaign.sh (targets=$targets_csv graph_track=$graph_track)"
     cmd=(
@@ -1338,6 +1514,8 @@ if [[ "$is_saga" == "yes" ]]; then
   )
   if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
     cmd+=(--base-url "$app_endpoint")
+  elif [[ "$tls_mode" != "auto" ]]; then
+    cmd+=(--base-url "$(apply_url_scheme "$(resolve_local_base_url "${targets[0]}")" "$tls_scheme")")
   fi
   if [[ "$saga_auto_start_infra" == "yes" ]]; then cmd+=(--auto-start-infra); else cmd+=(--no-auto-start-infra); fi
   if [[ "$saga_auto_start_target" == "yes" ]]; then cmd+=(--auto-start-target); else cmd+=(--no-auto-start-target); fi
@@ -1350,6 +1528,9 @@ fi
 # ---- Multi-target: comparative ----
 if [[ "$target_mode" == "multi" ]]; then
   warn_impairment_not_applied "run-comparative.sh (multi-target)"
+  if [[ "$tls_mode" != "auto" ]]; then
+    warn "TLS toggle (tls=$tls_mode) on a comparative run: run-comparative.sh drives pre-launched (launcher_mode=external) targets and derives each scheme from its asset-matrix health_url — the guided launcher cannot force TLS on externally-launched targets. Launch both targets with '$tls_scheme'/'$effective_transport' (or align their matrix health_url scheme) before this run, or the comparison is INVALID."
+  fi
   info "Dispatch: run-comparative.sh"
   "$REPO_ROOT/scripts/run-comparative.sh" \
     --target-a "${targets[0]}" \
@@ -1373,6 +1554,23 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
   mapped_build="$runtime_mode"
   mapped_backend_mode="$(map_entity_backend_mode "${targets[0]}")"
 
+  # Forward the chosen load driver so the runner actually drives it (the runner
+  # supports wrk + h2load; wrk2/k6 have dedicated runners and the runner will
+  # reject them with guidance rather than silently running wrk). Profile-only /
+  # no-driver selections fall back to the runner's historical wrk default.
+  entity_driver="$driver"
+  case "$entity_driver" in
+    ""|none) entity_driver="wrk" ;;
+  esac
+  # The fixed contract is wrk-defined and comparison-eligible; h2load (and any
+  # non-wrk driver) is exploratory-only and not comparable to wrk H1. Reject the
+  # mismatch up front instead of minting a misleading comparison-eligible run.
+  if [[ "$entity_driver" != "wrk" ]] && entity_local_contract_mode; then
+    warn "Driver '$entity_driver' is exploratory-only for entity-read-by-id (fixed contract '$contract_id' is wrk-defined and comparison-eligible)."
+    echo "Re-run without the fixed contract (exploratory) to use driver '$entity_driver'. Profile generated; not dispatched." >&2
+    exit 3
+  fi
+
   erbid_cmd=(
     env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build"
     "$REPO_ROOT/scripts/run-entity-read-by-id.sh"
@@ -1381,6 +1579,7 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
     --threads "$threads"
     --connections "$connections"
     --warmup "${warmup_seconds}s"
+    --driver "$entity_driver"
     --target-runtime "$mapped_runtime"
     --target-build "$mapped_build"
     --backend-mode "$mapped_backend_mode"
@@ -1410,6 +1609,10 @@ if [[ "$driver" != "none" && -n "$driver" ]]; then
   fi
   apply_env_file_for_generic
   base_url="$(resolve_dispatch_base_url)"
+  if [[ "$tls_mode" != "auto" ]]; then
+    base_url="$(apply_url_scheme "$base_url" "$tls_scheme")"
+    warn "TLS toggle (tls=$tls_mode): the load client targets '$base_url', but the generic driver path does NOT launch the target — ensure the pre-launched target is already serving '$tls_scheme' ($effective_transport)."
+  fi
   maybe_apply_netem
   dispatch_generic_driver "$base_url"
   exit $?

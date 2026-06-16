@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s] [--backend-mode default-vt|locality-aware] [--target-runtime auto|community|locality|spring|quarkus] [--target-build jvm|native] [--cpu-affinity <cpuset>]
+# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s] [--driver wrk|h2load] [--h2load-axis h1|h2c] [--backend-mode default-vt|locality-aware] [--target-runtime auto|community|locality|spring|spring-runtime-on-exeris|quarkus] [--target-build jvm|native] [--cpu-affinity <cpuset>]
+#   --driver h2load is exploratory-only (h2load H1 vs wrk H1 is not directly comparable; h2load emits no latency percentiles). --h2load-axis h2c selects HTTP/2 cleartext (loopback-h2).
 #
 # Orchestrates the entity-read-by-id E2E benchmark run:
 #   1. Validate claim-scope
@@ -40,10 +41,15 @@ THREADS="${THREADS:-4}"
 CONNECTIONS="${CONNECTIONS:-128}"
 EXERIS_DB_POOL_MIN_SIZE="${EXERIS_DB_POOL_MIN_SIZE:-16}"
 EXERIS_DB_POOL_MAX_SIZE="${EXERIS_DB_POOL_MAX_SIZE:-256}"
-# Optional DB connection-acquisition timeout (ms). Empty = leave the framework /
-# kernel default (Hikari's aggressive constrained fail-fast). Only the constrained
-# wrapper sets this, to tolerate transient pool queuing under CPU throttling.
-EXERIS_DB_CONNECTION_TIMEOUT_MS="${EXERIS_DB_CONNECTION_TIMEOUT_MS:-}"
+# DB connection-acquisition timeout (ms). Defaults to 30000 to match Spring
+# Hikari (~30 s) and Quarkus Agroal, so cold-start / latency-spike pool
+# contention surfaces as latency on ALL targets instead of fail-fast
+# connectionExhausted → HTTP 500 only on the kernel-backed targets (community /
+# spring-on-exeris). This is a fairness leveler: without it the Exeris targets
+# are handicapped at the harness layer, not the runtime layer. The constrained
+# wrapper overrides this (it sets a short timeout on purpose, to tolerate
+# transient queuing under CPU throttling) and that explicit value wins via :-.
+EXERIS_DB_CONNECTION_TIMEOUT_MS="${EXERIS_DB_CONNECTION_TIMEOUT_MS:-30000}"
 WARMUP="${WARMUP:-60s}"
 BACKEND_MODE="${BACKEND_MODE:-default-vt}"
 TARGET_RUNTIME="${TARGET_RUNTIME:-auto}"
@@ -69,7 +75,25 @@ ALLOW_EXTERNAL_TARGET="${BENCHMARK_ALLOW_EXTERNAL_TARGET:-0}"
 TARGET_PORT="${BENCHMARK_TARGET_PORT:-8080}"
 DURATION_OVERRIDE=""
 CONTRACT_NAME=""
-BASE_URL="${BASE_URL:-http://localhost:${TARGET_PORT}}"
+# Load driver. wrk (default) drives H1 over wrk.lua and yields a full latency
+# distribution (p50/p75/p90/p99). h2load drives H1 (--h1 -m 1, mirrors the wrk
+# contract) or H2c (-m N) and yields throughput + min/max/mean/sd only — h2load
+# has NO percentile output, so p50/p75/p90/p99 are recorded as null (honest, not
+# faked). wrk2/k6 are handled by their own runners (run-wrk2.sh / run-k6.sh).
+DRIVER="${DRIVER:-wrk}"
+# Transport axis when DRIVER=h2load. h1 = cleartext HTTP/1.1 (loopback-h1),
+# h2c = HTTP/2 cleartext prior-knowledge (loopback-h2). h2c is exploratory-only
+# per scenarios/entity-read-by-id/h2load.flags (not comparable to H1 or wrk).
+H2LOAD_AXIS="${ENTITY_READ_H2LOAD_AXIS:-h1}"
+H2LOAD_H2C_MAX_CONCURRENT_STREAMS="${H2LOAD_H2C_MAX_CONCURRENT_STREAMS:-10}"
+# TLS toggle. When the guided launcher (or any caller) sets BENCHMARK_TLS_ENABLED=1
+# the managed target is launched with TLS (it inherits EXERIS_SSL_ENABLED /
+# EXERIS_TRANSPORT_CERT_PATH from the environment), so the client must speak https
+# and tolerate the self-signed smoke cert. Default (unset/0) is plain HTTP — byte
+# identical to the pre-toggle behavior.
+TLS_ENABLED="${BENCHMARK_TLS_ENABLED:-0}"
+if [[ "$TLS_ENABLED" == "1" ]]; then TARGET_SCHEME="https"; CURL_INSECURE_OPT="-k"; else TARGET_SCHEME="http"; CURL_INSECURE_OPT=""; fi
+BASE_URL="${BASE_URL:-${TARGET_SCHEME}://localhost:${TARGET_PORT}}"
 SCENARIO_DIR="scenarios/entity-read-by-id"
 DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
 DB_INIT_SQL_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql"
@@ -85,6 +109,13 @@ TARGET_MODULE_POM_SPRING="targets/spring-benchmark-app/pom.xml"
 TARGET_JAR_GLOB_SPRING="targets/spring-benchmark-app/target/spring-benchmark-app-*.jar"
 TARGET_NATIVE_BIN_GLOB_SPRING="targets/spring-benchmark-app/target/spring-benchmark-app"
 TARGET_APP_NAME_SPRING="spring-benchmark-app"
+# Spring MVC hosted on exeris-spring-runtime (Compat Mode) — distinct module from the
+# Tomcat/Axon spring-benchmark-app. The jar shares the spring-benchmark-app artifact name
+# but lives under a different module path, so the glob below is unambiguous.
+TARGET_MODULE_POM_SPRING_ON_EXERIS="targets/exeris-spring-runtime-app-comp/pom.xml"
+TARGET_JAR_GLOB_SPRING_ON_EXERIS="targets/exeris-spring-runtime-app-comp/target/spring-benchmark-app-*.jar"
+TARGET_NATIVE_BIN_GLOB_SPRING_ON_EXERIS="targets/exeris-spring-runtime-app-comp/target/spring-benchmark-app"
+TARGET_APP_NAME_SPRING_ON_EXERIS="exeris-spring-runtime-app-comp"
 TARGET_MODULE_POM_QUARKUS="targets/quarkus-benchmark-app/pom.xml"
 TARGET_JAR_GLOB_QUARKUS="targets/quarkus-benchmark-app/target/quarkus-benchmark-app-*-runner.jar"
 TARGET_NATIVE_BIN_GLOB_QUARKUS="targets/quarkus-benchmark-app/target/quarkus-benchmark-app-*-runner"
@@ -230,6 +261,8 @@ while [[ $# -gt 0 ]]; do
     --duration) DURATION_OVERRIDE="$2"; shift 2 ;;
     --warmup) WARMUP="$2"; shift 2 ;;
     --backend-mode) BACKEND_MODE="$2"; shift 2 ;;
+    --driver) DRIVER="$2"; shift 2 ;;
+    --h2load-axis) H2LOAD_AXIS="$2"; shift 2 ;;
     --target-runtime) TARGET_RUNTIME="$2"; shift 2 ;;
     --target-build) TARGET_BUILD="$2"; shift 2 ;;
     --cpu-affinity) CPU_AFFINITY="$2"; shift 2 ;;
@@ -250,10 +283,10 @@ case "$BACKEND_MODE" in
 esac
 
 case "$TARGET_RUNTIME" in
-  auto|community|locality|spring|quarkus)
+  auto|community|locality|spring|spring-runtime-on-exeris|quarkus)
     ;;
   *)
-    echo "ERROR: --target-runtime must be auto, community, locality, spring, or quarkus (got: $TARGET_RUNTIME)"
+    echo "ERROR: --target-runtime must be auto, community, locality, spring, spring-runtime-on-exeris, or quarkus (got: $TARGET_RUNTIME)"
     exit 1
     ;;
 esac
@@ -267,7 +300,68 @@ case "$TARGET_BUILD" in
     ;;
 esac
 
-if [[ "$BACKEND_MODE" == "locality-aware" ]] && [[ "$TARGET_RUNTIME" == "spring" || "$TARGET_RUNTIME" == "quarkus" ]]; then
+# --- Load-driver resolution ------------------------------------------------
+# Derive the tool/transport/protocol labels up front so env capture and every
+# result artifact stamp the driver that ACTUALLY ran. This runner is wrk- and
+# h2load-capable only; wrk2/k6 have dedicated runners (they parse different
+# output and, for wrk2, enforce CO-free p99 semantics this script does not).
+case "$DRIVER" in
+  wrk)
+    TOOL_NAME="wrk"
+    TRANSPORT_MODE="loopback-h1"
+    PROTOCOL="h1"
+    BENCHMARK_FAMILY="runtime-wrk"
+    ;;
+  h2load)
+    if ! command -v h2load >/dev/null 2>&1; then
+      echo "ERROR: --driver h2load requires the h2load command (nghttp2)"
+      exit 1
+    fi
+    case "$H2LOAD_AXIS" in
+      h1)
+        TRANSPORT_MODE="loopback-h1"
+        PROTOCOL="h1"
+        ;;
+      h2c)
+        # H2c is exploratory-only and NOT comparable to H1 or to wrk results
+        # (scenarios/entity-read-by-id/h2load.flags). Refuse to mint a
+        # comparison-eligible artifact over it.
+        if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
+          echo "ERROR: --driver h2load --h2load-axis h2c is exploratory-only (not comparable to H1/wrk); use --claim-scope exploratory."
+          exit 1
+        fi
+        TRANSPORT_MODE="loopback-h2"
+        PROTOCOL="h2"
+        ;;
+      *)
+        echo "ERROR: --h2load-axis must be h1 or h2c (got: $H2LOAD_AXIS)"
+        exit 1
+        ;;
+    esac
+    # h2load H1 vs wrk H1 are NOT directly comparable without a cross-driver
+    # caveat; the comparison-eligible contract is wrk-defined, so block the mix.
+    if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
+      echo "ERROR: --driver h2load is not comparison-eligible (the fixed contract is wrk-defined; h2load H1 vs wrk H1 needs a cross-driver caveat). Use --claim-scope exploratory."
+      exit 1
+    fi
+    TOOL_NAME="h2load"
+    BENCHMARK_FAMILY="runtime-h2load"
+    ;;
+  wrk2)
+    echo "ERROR: --driver wrk2 is not supported by this runner (it enforces CO-free p99 semantics and a different parser). Use scripts/run-wrk2.sh."
+    exit 1
+    ;;
+  k6)
+    echo "ERROR: --driver k6 is not supported by this runner. Use scripts/run-k6.sh."
+    exit 1
+    ;;
+  *)
+    echo "ERROR: --driver must be wrk or h2load (got: $DRIVER)"
+    exit 1
+    ;;
+esac
+
+if [[ "$BACKEND_MODE" == "locality-aware" ]] && [[ "$TARGET_RUNTIME" == "spring" || "$TARGET_RUNTIME" == "spring-runtime-on-exeris" || "$TARGET_RUNTIME" == "quarkus" ]]; then
   echo "ERROR: --backend-mode locality-aware is Exeris-only and cannot be combined with --target-runtime $TARGET_RUNTIME"
   exit 1
 fi
@@ -446,6 +540,13 @@ else
       TARGET_APP_NAME="$TARGET_APP_NAME_SPRING"
       TARGET_RUNTIME_EFFECTIVE="spring"
       ;;
+    spring-runtime-on-exeris)
+      TARGET_MODULE_POM="$TARGET_MODULE_POM_SPRING_ON_EXERIS"
+      TARGET_JAR_GLOB="$TARGET_JAR_GLOB_SPRING_ON_EXERIS"
+      TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_SPRING_ON_EXERIS"
+      TARGET_APP_NAME="$TARGET_APP_NAME_SPRING_ON_EXERIS"
+      TARGET_RUNTIME_EFFECTIVE="spring-runtime-on-exeris"
+      ;;
     quarkus)
       TARGET_MODULE_POM="$TARGET_MODULE_POM_QUARKUS"
       TARGET_JAR_GLOB="$TARGET_JAR_GLOB_QUARKUS"
@@ -458,6 +559,10 @@ fi
 
 if [[ "$TARGET_BUILD" == "native" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "locality" ]]; then
   echo "ERROR: --target-build native is not supported for effective runtime locality (targets/exeris-community-app-locality)"
+  exit 1
+fi
+if [[ "$TARGET_BUILD" == "native" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "spring-runtime-on-exeris" ]]; then
+  echo "ERROR: --target-build native is not supported for effective runtime spring-runtime-on-exeris (targets/exeris-spring-runtime-app-comp is JVM-only for entity-read-by-id)"
   exit 1
 fi
 TARGET_PID_FILE="/tmp/${TARGET_APP_NAME}-benchmark.pid"
@@ -647,10 +752,10 @@ stop_db() {
 }
 
 target_reachable() {
-  if curl -sf "$BASE_URL/health" >/dev/null 2>&1; then
+  if curl -sf $CURL_INSECURE_OPT "$BASE_URL/health" >/dev/null 2>&1; then
     return 0
   fi
-  if curl -sf "$BASE_URL/health/ready" >/dev/null 2>&1; then
+  if curl -sf $CURL_INSECURE_OPT "$BASE_URL/health/ready" >/dev/null 2>&1; then
     return 0
   fi
   if bench_port_reachable "$TARGET_PORT"; then
@@ -769,7 +874,7 @@ cleanup() {
 resolve_db_launcher
 trap cleanup EXIT
 
-echo "[entity-read-by-id] claim_scope=$CLAIM_SCOPE profile=$PROFILE duration=$DURATION warmup=$WARMUP threads=$THREADS connections=$CONNECTIONS target_runtime=$TARGET_RUNTIME target_build=$TARGET_BUILD effective_runtime=$TARGET_RUNTIME_EFFECTIVE target_app=$TARGET_APP_NAME skip_target_build=$SKIP_TARGET_BUILD db_pool_min=$EXERIS_DB_POOL_MIN_SIZE db_pool_max=$EXERIS_DB_POOL_MAX_SIZE db_conn_timeout_ms=${EXERIS_DB_CONNECTION_TIMEOUT_MS:-<default>} output=$OUTPUT_DIR"
+echo "[entity-read-by-id] claim_scope=$CLAIM_SCOPE profile=$PROFILE driver=$DRIVER transport=$TRANSPORT_MODE duration=$DURATION warmup=$WARMUP threads=$THREADS connections=$CONNECTIONS target_runtime=$TARGET_RUNTIME target_build=$TARGET_BUILD effective_runtime=$TARGET_RUNTIME_EFFECTIVE target_app=$TARGET_APP_NAME skip_target_build=$SKIP_TARGET_BUILD db_pool_min=$EXERIS_DB_POOL_MIN_SIZE db_pool_max=$EXERIS_DB_POOL_MAX_SIZE db_conn_timeout_ms=${EXERIS_DB_CONNECTION_TIMEOUT_MS:-<default>} output=$OUTPUT_DIR"
 
 # Step 2: Start DB
 echo "[step 2/9] Starting benchmark DB..."
@@ -813,7 +918,7 @@ bash "$CAPTURE_DB_DIAGNOSTICS_SCRIPT"
 
 # Step 5: Capture env
 echo "[step 5/9] Capturing environment..."
-./scripts/capture-env.sh --profile "$PROFILE" --tool wrk > "$OUTPUT_DIR/env.json"
+./scripts/capture-env.sh --profile "$PROFILE" --tool "$TOOL_NAME" > "$OUTPUT_DIR/env.json"
 
 # Step 6: Warmup
 echo "[step 6/9] Ensuring benchmark target app is available..."
@@ -822,7 +927,7 @@ if [[ "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
   if bench_port_reachable "$TARGET_PORT"; then
     requested_target_port="$TARGET_PORT"
     TARGET_PORT="$(bench_find_available_local_port "$TARGET_PORT")"
-    BASE_URL="http://localhost:${TARGET_PORT}"
+    BASE_URL="${TARGET_SCHEME}://localhost:${TARGET_PORT}"
     echo "[step 6/9] WARN: localhost:$requested_target_port is occupied and external target reuse is disabled; using managed target on localhost:$TARGET_PORT"
   fi
 fi
@@ -952,6 +1057,20 @@ if ! target_reachable; then
     QUARKUS_DATASOURCE_JDBC_MIN_SIZE="$EXERIS_DB_POOL_MIN_SIZE" \
     QUARKUS_DATASOURCE_JDBC_MAX_SIZE="$EXERIS_DB_POOL_MAX_SIZE")
 
+  # TLS: when enabled, force the kernel/Spring TLS switches on the launched target.
+  # The cert/key paths (EXERIS_TRANSPORT_CERT_PATH/KEY_PATH) are inherited from the
+  # environment (the guided launcher provisions a smoke cert); warn if absent.
+  if [[ "$TLS_ENABLED" == "1" ]]; then
+    TARGET_CMD+=(
+      EXERIS_SSL_ENABLED=true
+      EXERIS_INSECURE_REQUESTS=disabled
+      SERVER_SSL_ENABLED=true
+    )
+    if [[ -z "${EXERIS_TRANSPORT_CERT_PATH:-}" || ! -f "${EXERIS_TRANSPORT_CERT_PATH:-/nonexistent}" ]]; then
+      echo "[step 6/9] WARN: BENCHMARK_TLS_ENABLED=1 but EXERIS_TRANSPORT_CERT_PATH is unset/missing; the HTTPS target may fail to start. Set EXERIS_TRANSPORT_CERT_PATH/KEY_PATH (or launch via run-guided.sh, which auto-provisions a smoke cert)."
+    fi
+  fi
+
   # Optional connection-acquisition timeout. Mapped per target family in the
   # native unit each expects: Exeris/Hikari take milliseconds; Quarkus Agroal
   # takes a Duration, so convert ms -> ISO-8601 (e.g. 5000 -> PT5S). Only appended
@@ -968,9 +1087,18 @@ if ! target_reachable; then
 
   if [[ "$TARGET_BUILD" == "jvm" ]]; then
     TARGET_CMD+=(java)
-    if [[ "$TARGET_RUNTIME_EFFECTIVE" == "community" || "$TARGET_RUNTIME_EFFECTIVE" == "locality" ]]; then
+    # exeris-spring-runtime-app-comp embeds the Exeris kernel in-process (web/tx/
+    # data/flow), whose classes are compiled with preview features and need native
+    # access + module opens — exactly like the standalone community/locality targets.
+    # Without these the JVM refuses to load the kernel ("Preview features are not
+    # enabled"). The plain Tomcat "spring" runtime does NOT need them. Same flag set
+    # as community here (entity-read defaults to the pgq graph backend, so the
+    # Neo4j-only jdk.internal.module open used on the saga path is not required).
+    if [[ "$TARGET_RUNTIME_EFFECTIVE" == "community" || "$TARGET_RUNTIME_EFFECTIVE" == "locality" || "$TARGET_RUNTIME_EFFECTIVE" == "spring-runtime-on-exeris" ]]; then
       TARGET_CMD+=(--add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED)
       TARGET_CMD+=(--enable-preview)
+    fi
+    if [[ "$TARGET_RUNTIME_EFFECTIVE" == "community" || "$TARGET_RUNTIME_EFFECTIVE" == "locality" ]]; then
       TARGET_CMD+=(-Dexeris.backend.mode="$BACKEND_MODE")
       TARGET_CMD+=(-Dexeris.backend.mode.strict="$BENCHMARK_LOCALITY_STRICT")
     fi
@@ -1058,8 +1186,24 @@ if [[ "$ENABLE_JFR" == "true" ]]; then
   fi
 fi
 
-echo "[step 6/9] Warmup ($WARMUP)..."
-wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL/api/v1/users" > /dev/null || true
+# h2load transport flags for the resolved axis (empty for wrk). --h1 forces
+# cleartext HTTP/1.1 with one request per connection (-m 1) to mirror wrk H1;
+# h2c uses HTTP/2 prior-knowledge with -m <streams>.
+H2LOAD_FLAGS=()
+if [[ "$DRIVER" == "h2load" ]]; then
+  if [[ "$H2LOAD_AXIS" == "h1" ]]; then
+    H2LOAD_FLAGS=(--h1 -m 1)
+  else
+    H2LOAD_FLAGS=(-m "$H2LOAD_H2C_MAX_CONCURRENT_STREAMS")
+  fi
+fi
+
+echo "[step 6/9] Warmup ($WARMUP, driver=$DRIVER)..."
+if [[ "$DRIVER" == "h2load" ]]; then
+  h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$WARMUP_SECONDS" "$BASE_URL/api/v1/users" > /dev/null 2>&1 || true
+else
+  wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL/api/v1/users" > /dev/null || true
+fi
 
 # Step 6.5: Reset pg_stat_statements counters before measurement
 PG_STAT_STATEMENTS_WRAPPER_SCRIPT="$SCENARIO_DIR/pg_stat_statements-wrapper.sh"
@@ -1096,7 +1240,11 @@ fi
 # Step 7: Measure
 echo "[step 7/9] Measuring ($DURATION)..."
 PERF_STAT_FILE="$OUTPUT_DIR/perf-stat.csv"
-WRK_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
+if [[ "$DRIVER" == "h2load" ]]; then
+  LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" "$BASE_URL/api/v1/users")
+else
+  LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
+fi
 
 if [[ "$PERF_STAT_REQUIRED" == "1" || "${BENCHMARK_CAPTURE_PERF_STAT:-0}" == "1" ]]; then
   if ! command -v perf >/dev/null 2>&1; then
@@ -1118,21 +1266,21 @@ if [[ "$PERF_STAT_REQUIRED" == "1" || "${BENCHMARK_CAPTURE_PERF_STAT:-0}" == "1"
   fi
   echo "[step 7/9] Capturing perf stat to $PERF_STAT_FILE"
   set +e
-  WRK_OUT=$(perf stat "${PERF_ARGS[@]}" -- "${WRK_CMD[@]}" 2>&1)
+  LOAD_OUT=$(perf stat "${PERF_ARGS[@]}" -- "${LOAD_CMD[@]}" 2>&1)
   PERF_EXIT_CODE=$?
   set -e
   if [[ "$PERF_EXIT_CODE" -ne 0 ]]; then
     PERF_ERROR_LOG="$OUTPUT_DIR/perf-error.log"
-    printf '%s\n' "$WRK_OUT" > "$PERF_ERROR_LOG"
+    printf '%s\n' "$LOAD_OUT" > "$PERF_ERROR_LOG"
     echo "ERROR: perf stat execution failed (exit_code=$PERF_EXIT_CODE)"
     echo "ERROR: perf diagnostics saved to $PERF_ERROR_LOG"
-    echo "$WRK_OUT"
+    echo "$LOAD_OUT"
     exit "$PERF_EXIT_CODE"
   fi
 else
-  WRK_OUT=$("${WRK_CMD[@]}" 2>&1)
+  LOAD_OUT=$("${LOAD_CMD[@]}" 2>&1)
 fi
-echo "$WRK_OUT"
+echo "$LOAD_OUT"
 
 # Stop the resource sampler the moment measurement ends, so the sampled window is
 # exactly the measurement window (summarize/augment happen below while the target
@@ -1149,8 +1297,14 @@ if [[ "$TARGET_APP_STARTED" -eq 1 && -n "$TARGET_APP_PID" ]] && ! kill -0 "$TARG
   [[ "$ENABLE_JFR" == "true" ]] && echo "NOTE: JFR was enabled. A SIGSEGV in JfrStorage::flush_regular_buffer from a virtual-thread frame is NOT a JDK flake — it means a custom JFR event was held (begin -> blocking op -> commit) across a virtual-thread unmount, flushing a stale carrier-bound buffer (reproducible on JDK 26 GA 26+35). --no-jfr is only a workaround to keep the run going, NOT a diagnosis. Fix is kernel-side: emit such events single-phase, after the blocking op. Check the target frame in hs_err_pid*.log (e.g. fixed for ConnectionAcquireEvent)."
   exit 1
 fi
-_WRK_COMPLETED_REQUESTS="$(printf '%s\n' "$WRK_OUT" | sed -nE 's/^[[:space:]]*([0-9]+) requests in .*/\1/p' | head -1)"
-if [[ -n "$_WRK_COMPLETED_REQUESTS" && "$_WRK_COMPLETED_REQUESTS" -eq 0 ]]; then
+if [[ "$DRIVER" == "h2load" ]]; then
+  # h2load: "requests: N total, N started, N done, ..."
+  _LOAD_COMPLETED_REQUESTS="$(printf '%s\n' "$LOAD_OUT" | sed -nE 's/^requests:[[:space:]]*[0-9]+ total,[[:space:]]*[0-9]+ started,[[:space:]]*([0-9]+) done.*/\1/p' | head -1)"
+else
+  # wrk: "N requests in 2.00m, ..."
+  _LOAD_COMPLETED_REQUESTS="$(printf '%s\n' "$LOAD_OUT" | sed -nE 's/^[[:space:]]*([0-9]+) requests in .*/\1/p' | head -1)"
+fi
+if [[ -n "$_LOAD_COMPLETED_REQUESTS" && "$_LOAD_COMPLETED_REQUESTS" -eq 0 ]]; then
   echo "ERROR: measurement completed 0 requests (target unreachable or crashed) — run is INVALID (not a result)."
   echo "ERROR: inspect $TARGET_APP_LOG (socket errors above indicate the target was not serving)."
   exit 1
@@ -1197,27 +1351,60 @@ if [[ -f "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT" ]]; then
   pg_stat_statements_snapshot "$PG_STAT_STATEMENTS_POST_FILE" "measurement" || true
 fi
 
-THROUGHPUT_RPS=$(awk '/Requests\/sec:/ {print $2; exit}' <<<"$WRK_OUT")
-LATENCY_STATS_LINE=$(printf '%s\n' "$WRK_OUT" | awk '/Thread Stats/{in_stats=1;next} in_stats && /^[[:space:]]*Latency[[:space:]]/ {print; exit}')
-LATENCY_MEAN_US=$(to_us "$(awk '{print $2}' <<<"$LATENCY_STATS_LINE")")
-LATENCY_STDEV_US=$(to_us "$(awk '{print $3}' <<<"$LATENCY_STATS_LINE")")
-LATENCY_MAX_US=$(to_us "$(awk '{print $4}' <<<"$LATENCY_STATS_LINE")")
-LATENCY_P50_US=$(to_us "$(awk '$1 == "50%" {print $2; exit}' <<<"$WRK_OUT")")
-LATENCY_P75_US=$(to_us "$(awk '$1 == "75%" {print $2; exit}' <<<"$WRK_OUT")")
-LATENCY_P90_US=$(to_us "$(awk '$1 == "90%" {print $2; exit}' <<<"$WRK_OUT")")
-LATENCY_P99_US=$(to_us "$(awk '$1 == "99%" {print $2; exit}' <<<"$WRK_OUT")")
-TOTAL_REQUESTS=$(awk '/requests in/ {gsub(/,/, "", $1); print $1; exit}' <<<"$WRK_OUT")
-NON2XX_ERRORS=$(awk '/Non-2xx or 3xx responses:/ {print $5; exit}' <<<"$WRK_OUT")
-SOCKET_ERRORS=$(awk -F'[:, ]+' '/Socket errors:/ {print ($4 + $6 + $8 + $10); exit}' <<<"$WRK_OUT")
+if [[ "$DRIVER" == "h2load" ]]; then
+  # h2load summary:
+  #   finished in 120.05s, 3328.80 req/s, 29.21MB/s
+  #   requests: N total, N started, N done, N succeeded, N failed, N errored, N timeout
+  #   status codes: N 2xx, N 3xx, N 4xx, N 5xx
+  #   <hdr> min max mean sd +/- sd
+  #   time for request:  <min> <max> <mean> <sd> <+/-sd>
+  # h2load emits NO latency percentiles — p50/p75/p90/p99 stay null (not faked).
+  THROUGHPUT_RPS=$(sed -nE 's/.*finished in [0-9.]+(m|ms|s|us|h), ([0-9.]+) req\/s,.*/\2/p' <<<"$LOAD_OUT" | head -1)
+  H2_TFR_LINE=$(printf '%s\n' "$LOAD_OUT" | awk '/time for request:/ {print; exit}')
+  LATENCY_MEAN_US=$(to_us "$(awk '{print $6}' <<<"$H2_TFR_LINE")")
+  LATENCY_MAX_US=$(to_us "$(awk '{print $5}' <<<"$H2_TFR_LINE")")
+  LATENCY_STDEV_US=$(to_us "$(awk '{print $7}' <<<"$H2_TFR_LINE")")
+  LATENCY_P50_US=""
+  LATENCY_P75_US=""
+  LATENCY_P90_US=""
+  LATENCY_P99_US=""
+  H2_REQ_LINE=$(printf '%s\n' "$LOAD_OUT" | awk '/^requests:/ {print; exit}')
+  TOTAL_REQUESTS=$(sed -nE 's/^requests:[[:space:]]*([0-9]+) total.*/\1/p' <<<"$H2_REQ_LINE")
+  H2_FAILED=$(sed -nE 's/.*[, ]([0-9]+) failed,.*/\1/p' <<<"$H2_REQ_LINE")
+  H2_ERRORED=$(sed -nE 's/.*[, ]([0-9]+) errored,.*/\1/p' <<<"$H2_REQ_LINE")
+  H2_TIMEOUT=$(sed -nE 's/.*[, ]([0-9]+) timeout.*/\1/p' <<<"$H2_REQ_LINE")
+  H2_STATUS_LINE=$(printf '%s\n' "$LOAD_OUT" | awk '/^status codes:/ {print; exit}')
+  H2_4XX=$(sed -nE 's/.*[, ]([0-9]+) 4xx.*/\1/p' <<<"$H2_STATUS_LINE")
+  H2_5XX=$(sed -nE 's/.*[, ]([0-9]+) 5xx.*/\1/p' <<<"$H2_STATUS_LINE")
+  for _v in H2_FAILED H2_ERRORED H2_TIMEOUT H2_4XX H2_5XX; do
+    [[ -z "${!_v}" ]] && printf -v "$_v" '%s' 0
+  done
+  # Transport/protocol failures plus non-success status codes, mirroring wrk's
+  # Non-2xx + socket-error accounting.
+  TOTAL_ERRORS=$((H2_FAILED + H2_ERRORED + H2_TIMEOUT + H2_4XX + H2_5XX))
+else
+  THROUGHPUT_RPS=$(awk '/Requests\/sec:/ {print $2; exit}' <<<"$LOAD_OUT")
+  LATENCY_STATS_LINE=$(printf '%s\n' "$LOAD_OUT" | awk '/Thread Stats/{in_stats=1;next} in_stats && /^[[:space:]]*Latency[[:space:]]/ {print; exit}')
+  LATENCY_MEAN_US=$(to_us "$(awk '{print $2}' <<<"$LATENCY_STATS_LINE")")
+  LATENCY_STDEV_US=$(to_us "$(awk '{print $3}' <<<"$LATENCY_STATS_LINE")")
+  LATENCY_MAX_US=$(to_us "$(awk '{print $4}' <<<"$LATENCY_STATS_LINE")")
+  LATENCY_P50_US=$(to_us "$(awk '$1 == "50%" {print $2; exit}' <<<"$LOAD_OUT")")
+  LATENCY_P75_US=$(to_us "$(awk '$1 == "75%" {print $2; exit}' <<<"$LOAD_OUT")")
+  LATENCY_P90_US=$(to_us "$(awk '$1 == "90%" {print $2; exit}' <<<"$LOAD_OUT")")
+  LATENCY_P99_US=$(to_us "$(awk '$1 == "99%" {print $2; exit}' <<<"$LOAD_OUT")")
+  TOTAL_REQUESTS=$(awk '/requests in/ {gsub(/,/, "", $1); print $1; exit}' <<<"$LOAD_OUT")
+  NON2XX_ERRORS=$(awk '/Non-2xx or 3xx responses:/ {print $5; exit}' <<<"$LOAD_OUT")
+  SOCKET_ERRORS=$(awk -F'[:, ]+' '/Socket errors:/ {print ($4 + $6 + $8 + $10); exit}' <<<"$LOAD_OUT")
 
-if [[ -z "$NON2XX_ERRORS" ]]; then
-  NON2XX_ERRORS=0
-fi
-if [[ -z "$SOCKET_ERRORS" ]]; then
-  SOCKET_ERRORS=0
-fi
+  if [[ -z "$NON2XX_ERRORS" ]]; then
+    NON2XX_ERRORS=0
+  fi
+  if [[ -z "$SOCKET_ERRORS" ]]; then
+    SOCKET_ERRORS=0
+  fi
 
-TOTAL_ERRORS=$((NON2XX_ERRORS + SOCKET_ERRORS))
+  TOTAL_ERRORS=$((NON2XX_ERRORS + SOCKET_ERRORS))
+fi
 ERROR_RATE_PCT=$(LC_ALL=C awk -v errors="$TOTAL_ERRORS" -v total="${TOTAL_REQUESTS:-0}" 'BEGIN {
   if (total > 0) {
     printf "%.6f", (errors * 100.0) / total
@@ -1269,7 +1456,11 @@ METRICS_JSON=$(jq -n \
     total_requests: num_or_null($total_requests),
     total_errors: num_or_null($total_errors),
     error_rate_pct: num_or_null($error_rate_pct)
-  }')
+  }
+  # Drop unmeasured metrics (e.g. h2load has no latency percentiles) rather than
+  # emitting null: the schema types these as number, so null would fail and a
+  # faked 0 would lie. Absent = honestly not measured by this driver.
+  | with_entries(select(.value != null))')
 
 # Step 8: Write result artifact
 echo "[step 8/9] Writing result artifact..."
@@ -1298,7 +1489,7 @@ cat > "$RESULT_FILE" <<EOF
   "run_id": "$RUN_ID",
   "timestamp": "$TIMESTAMP",
   "scenario": "entity-read-by-id",
-  "tool": "wrk",
+  "tool": "$TOOL_NAME",
   "env_ref": "$OUTPUT_DIR/env.json",
   "claim_scope": "$RESULT_CLAIM_SCOPE",
   "execution_class": "$EXECUTION_CLASS",
@@ -1306,13 +1497,13 @@ cat > "$RESULT_FILE" <<EOF
   "runner_status": "success",
   "reproducibility_status": "complete",
   "final_reason": "ok",
-  "transport_mode": "loopback-h1",
+  "transport_mode": "$TRANSPORT_MODE",
   "target": {
     "repo": "exeris-benchmarks",
     "version": "$TARGET_APP_NAME",
     "tier": "community",
     "mode": "baseline-db",
-    "protocol": "h1",
+    "protocol": "$PROTOCOL",
     "commit_sha": "$COMMIT_SHA"
   },
   "seed_ref": {
@@ -1326,15 +1517,15 @@ cat > "$RESULT_FILE" <<EOF
   "metrics": $METRICS_JSON,
   "notes": "backendMode=$BACKEND_MODE targetRuntimeEffective=$TARGET_RUNTIME_EFFECTIVE targetBuild=$TARGET_BUILD cpuAffinity=${CPU_AFFINITY:-none}",
   "tags": ["backend-mode:$BACKEND_MODE", "target-runtime-effective:$TARGET_RUNTIME_EFFECTIVE", "target-build:$TARGET_BUILD"],
-  "raw_output": $(echo "$WRK_OUT" | jq -Rs .)
+  "raw_output": $(echo "$LOAD_OUT" | jq -Rs .)
 }
 EOF
 
 REPRO_FILE="$OUTPUT_DIR/reproducibility-metadata.json"
 STEADY_STATE_FILE="$OUTPUT_DIR/steady-state-evidence.json"
-WRK_VERSION_LINE="$(wrk --version 2>&1 | head -1 || true)"
-if [[ -z "$WRK_VERSION_LINE" ]]; then
-  WRK_VERSION_LINE="unknown"
+TOOL_VERSION_LINE="$("$TOOL_NAME" --version 2>&1 | head -1 || true)"
+if [[ -z "$TOOL_VERSION_LINE" ]]; then
+  TOOL_VERSION_LINE="unknown"
 fi
 
 if [[ -f "$OUTPUT_DIR/env.json" ]]; then
@@ -1358,12 +1549,12 @@ jq -n \
   --arg jdk_vendor "$JDK_VENDOR" \
   --arg jdk_version "$JDK_VERSION" \
   --arg hardware_profile_ref "$HARDWARE_PROFILE_REF" \
-  --arg tool "wrk" \
-  --arg tool_version "$WRK_VERSION_LINE" \
+  --arg tool "$TOOL_NAME" \
+  --arg tool_version "$TOOL_VERSION_LINE" \
   --arg tier "community" \
-  --arg protocol_mode "h1" \
-  --arg benchmark_family "runtime-wrk" \
-  --arg transport_mode "loopback-h1" \
+  --arg protocol_mode "$PROTOCOL" \
+  --arg benchmark_family "$BENCHMARK_FAMILY" \
+  --arg transport_mode "$TRANSPORT_MODE" \
   --arg execution_class "$EXECUTION_CLASS" \
   --arg comparison_axis "within-tier" \
   --arg claim_scope "$RESULT_CLAIM_SCOPE" \

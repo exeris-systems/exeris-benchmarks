@@ -22,12 +22,12 @@ OUTPUT_DIR="${REPO_ROOT}/${RESULT_NAMESPACE}"
 
 usage() {
   cat <<EOF
-Usage: scripts/run-entity-read-by-id-constrained.sh [--execution-profile-id ID] [--contract-id ID] [--target-runtime <community|locality|spring|quarkus>] [--target-build <jvm|native>] [--cpu-affinity <cpuset>] [--output-dir PATH]
+Usage: scripts/run-entity-read-by-id-constrained.sh [--execution-profile-id ID] [--contract-id ID] [--target-runtime <community|locality|spring|spring-runtime-on-exeris|quarkus>] [--target-build <jvm|native>] [--cpu-affinity <cpuset>] [--output-dir PATH]
 
 Defaults:
   --execution-profile-id runtime-constrained-256m-1vcpu-v1
   --contract-id fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1
-  --target-runtime <community|locality|spring|quarkus> (default: community)
+  --target-runtime <community|locality|spring|spring-runtime-on-exeris|quarkus> (default: community)
   --target-build <jvm|native> (default: jvm)
   --cpu-affinity <cpuset>  pin the target app to this cpuset via taskset (e.g. 0-1); empty = no pin
   --enable-jfr             record a JFR of the target during measurement (default off)
@@ -88,10 +88,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$TARGET_RUNTIME" in
-  community|locality|spring|quarkus)
+  community|locality|spring|spring-runtime-on-exeris|quarkus)
     ;;
   *)
-    echo "ERROR: Invalid --target-runtime '$TARGET_RUNTIME' (allowed: community|locality|spring|quarkus)" >&2
+    echo "ERROR: Invalid --target-runtime '$TARGET_RUNTIME' (allowed: community|locality|spring|spring-runtime-on-exeris|quarkus)" >&2
     exit 1
     ;;
 esac

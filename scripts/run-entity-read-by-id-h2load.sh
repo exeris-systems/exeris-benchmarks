@@ -191,6 +191,14 @@ case "$TARGET_RUNTIME" in
     TARGET_APP_NAME="$TARGET_APP_NAME_QUARKUS"
     TARGET_RUNTIME_EFFECTIVE="quarkus"
     ;;
+  spring-runtime-on-exeris)
+    # targets/exeris-spring-runtime-app-comp (Spring MVC on exeris-spring-runtime,
+    # Compat Mode) serves HTTP/1.1 only (asset-matrix protocol_mode=h1). Driving it
+    # with the h2load (HTTP/2) path would be a protocol-mismatched, apples-to-oranges
+    # run — rejected per the mandatory H1-vs-H2 separation axis.
+    echo "ERROR: --target-runtime spring-runtime-on-exeris is HTTP/1.1-only and is not eligible for the h2load (HTTP/2) entity-read path. Use scripts/run-entity-read-by-id.sh (wrk/H1) instead." >&2
+    exit 1
+    ;;
   *)
     echo "ERROR: --target-runtime must be community|spring|quarkus (got: $TARGET_RUNTIME)" >&2
     exit 1

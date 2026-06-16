@@ -189,7 +189,8 @@
       "asset_state": "runnable",
       "eligibility_class": "baseline-candidate",
       "missing_assets": [],
-      "non_runnable_reason": ""
+      "non_runnable_reason": "",
+      "eligibility_note": "Baseline-candidate for request-path endpoints only. The compat request-scope bug was resolved by exeris-spring-runtime-web #48 (request-path DB access serves 2xx; verified in results/raw/guided/20260610T160359Z). Saga terminal-state metrics are NOT eligible: flow steps run on kernel worker VTs outside the request-scoped compat provider binding, so the saga never resolves (saga_success_rate=0, threshold_failure). This target is excluded from scenarios/e2e-shop-order-saga/comparative-pair-manifest.json and flagged baseline-only in tools/verify-target-asset-matrix.sh. See targets/exeris-spring-runtime-app-comp/README.md section 'Runtime eligibility'."
     }
   ]
 }

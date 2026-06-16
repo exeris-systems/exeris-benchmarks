@@ -11,6 +11,7 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -61,8 +62,18 @@ public class AuthTokenService {
             conn.commit();
             String token = issueToken(principalId);
             return Optional.of(new RegisteredUser(Long.toString(userId), username, email, token));
-        } catch (Exception e) {
-            return Optional.empty();
+        } catch (SQLException e) {
+            // 23xxx = SQL integrity-constraint violation (23505 = unique_violation on
+            // username/email). That — and only that — is a legitimate duplicate-user
+            // case the controller renders as 409 user_exists. Any OTHER failure (pool
+            // exhaustion, lost connectivity, etc.) must NOT be masked as a 409: it
+            // propagates so the request surfaces a 5xx. Masking infra failures as a
+            // conflict would let a degraded DB read as a "green" run, which this
+            // benchmark's honest-measurement mission forbids.
+            if (e.getSQLState() != null && e.getSQLState().startsWith("23")) {
+                return Optional.empty();
+            }
+            throw new RuntimeException("register failed (non-duplicate)", e);
         }
     }
 

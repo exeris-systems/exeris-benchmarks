@@ -26,11 +26,11 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": true
+      "const": "1"
     },
     "benchmark_family": {
       "type": "string",
-      "const": true
+      "const": "runtime"
     },
     "benchmark_commit_sha": {
       "type": "string",

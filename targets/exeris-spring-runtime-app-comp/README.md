@@ -284,32 +284,70 @@ runners that still set them are silently ignored:
   (`SAGA_INITIATED`, `INVENTORY_RESERVED`, `PAYMENT_PROCESSING`,
   `CONFIRMED`, `COMPLETED`, `PAYMENT_REFUNDED`, `CANCELLED`).
 
-## Known runtime limitation — compat-datasource request scope (blocking)
+## Runtime eligibility — request-path resolved, saga-async still blocked
 
-Verified 2026-06-07 against `exeris-kernel 0.8.0-SNAPSHOT` + `exeris-spring-runtime
-0.5.0-SNAPSHOT`: the app **boots fully** on the Exeris runtime (all 8 kernel
-subsystems start, kernel persistence connects to Postgres via its own HikariCP
-pool, `/health` returns 200, no Tomcat), **but JPA-backed endpoints fail at
-request time**:
+Two distinct compat-seam scope defects have been observed on this target. They
+are **separate issues** and have diverged in status; do not collapse them.
 
-```
-WARN  ExerisServerResponse compatibility fallback: MEMORY_ALLOCATOR is not bound
-ERROR Exeris PersistenceEngine is not bound in the current scope. Ensure this
-      method is called from a kernel-owned Virtual Thread after
-      ExerisRuntimeLifecycle.start() has completed.
-```
+### 1. Request-path compat scope — RESOLVED (`exeris-spring-runtime-web` PR #48, 2026-06-09)
 
-The compat web dispatch (`web.mode=compatibility`) invokes the `@RestController`
-handler on a kernel carrier thread (`Barrier/NORMAL/N`) **without** establishing
-the kernel `ScopedValue` scope (`PersistenceEngine`, `MEMORY_ALLOCATOR`). The
-`compat-datasource` "Level 2 deferral" gap is therefore not only a boot-order
-issue (worked around via the Hibernate metadata-probe properties) but extends to
-**every request**. This is a host-runtime (`exeris-spring-runtime`) compat-seam
-defect — it must be fixed upstream (bind the kernel scope around compat dispatch)
-or run against a snapshot where it already is. Do **not** work around it in the
-benchmark harness: queries would error out, producing invalid, unfair data.
-Until resolved, this target is **not benchmark-eligible for JPA endpoints**
-(`/api/v1/users`, the saga JPA writes) on this snapshot.
+Originally (verified 2026-06-07 against `exeris-kernel 0.8.0-SNAPSHOT` +
+`exeris-spring-runtime 0.5.0-SNAPSHOT`) the app **booted fully** but JPA-backed
+endpoints failed at request time with `PersistenceEngine is not bound in the
+current scope` — the compat dispatch invoked the `@RestController` handler (and
+the security filter's per-request DB lookup) **without** establishing the kernel
+`ScopedValue` scope.
+
+PR #48 moves `populateContext`/`clearContext` and handler dispatch **inside**
+`KernelProviderBinder.bind(...)`, so every request-path DB access now has
+`PERSISTENCE_ENGINE` bound. Verified resolved by guided runs
+`results/raw/guided/20260610T140300Z` and `…T160359Z` (commit `cfc1655`,
+snapshot `0.5.0-SNAPSHOT`): `http_reqs_total ≈ 19.5k`, `error_rate_pct = 0`,
+`orders_initiated = 460` — i.e. `/api/v1/users`, the authed cart/product reads,
+**and the synchronous `orders` + `order_items` insert on `POST /api/v1/orders`
+all serve 2xx with real DB data**. The request path is benchmark-eligible.
+
+### 2. Saga-async (flow-worker VT) scope — STILL BLOCKED (host-runtime defect)
+
+The kernel Flow engine schedules saga steps on its **own** worker virtual threads
+(`CoreFlowRuntime.launch` → `Thread.ofVirtual().start()`). `ScopedValue` bindings
+do **not** propagate across that boundary and `exeris-spring-runtime-flow` does
+not re-establish the compat kernel-provider scope on the worker VT. The step
+bodies in `ShopOrderSqlSteps` acquire connections through the request-scoped
+compat `ExerisDataSource`, whose strict `PERSISTENCE_ENGINE.get()` throws on the
+worker VT — and the throw is logged via `System.Logger` (no SLF4J bridge), so it
+is **silent** in `target-runtime.log`.
+
+Observable effect (same guided runs above): `POST /orders` returns 202 and the
+HTTP error rate is 0, **but the saga never resolves** — `saga_success_rate = 0`,
+`saga_compensated_rate = 0`, `runner_status = threshold_failure`. DB confirmation:
+`orders.status` frozen at `SAGA_INITIATED` (step 0's `recordStatus` never reached);
+`exeris_saga_state` rows at `current_step=0, state=FAILED_ROLLEDBACK`. The kernel's
+own `FLOW_SNAPSHOT_STORE` works on the worker VT (wired directly into the engine);
+only the app's request-scoped compat adapter is unavailable there.
+
+This is a host-runtime (`exeris-spring-runtime-flow`) defect in the same family as
+#48 — the rule generalizes: *any* DB access on *any* execution path (handler,
+security filter, **or flow-worker step body**) must run inside
+`KernelProviderBinder.bind`. It must be fixed upstream (decorate `FlowStepAction`s
+to run inside the compat provider scope, or have `ExerisDataSource` resolve the
+engine via a flow-VT-available fallback). Do **not** work around it in the
+benchmark harness — synthesizing saga completion would produce invalid, unfair
+data. Community is unaffected because its saga step bodies use the kernel-native
+`TransactionalExecutor`, not the compat `ExerisDataSource`.
+
+### Eligibility consequence
+
+- **Request-path / read + synchronous-insert endpoints**: benchmark-eligible
+  (descriptive; see the cross-track fairness caveats above).
+- **Saga terminal-state metrics** (`saga_success_rate`, compensation rate,
+  end-to-end order completion): **not** benchmark-eligible until the flow-worker
+  VT scope fix lands. This is precisely why `spring-runtime-on-exeris-flow` is
+  **excluded from `scenarios/e2e-shop-order-saga/comparative-pair-manifest.json`**
+  (compatible targets are the community-app + the Axon spring/quarkus targets) and
+  is flagged baseline-only in `tools/verify-target-asset-matrix.sh`. Saga runs
+  against this target are emitted as `claim_scope: descriptive_only` /
+  `exploratory`, never `comparison_eligible`.
 
 ## Reporting checklist (post-migration)
 

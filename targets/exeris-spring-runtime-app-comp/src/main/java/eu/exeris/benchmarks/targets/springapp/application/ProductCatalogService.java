@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,11 @@ import java.util.Map;
 @Service
 public class ProductCatalogService {
 
+    // Last-resort catalog used ONLY when the DB query SUCCEEDS but returns no rows
+    // for a product (e.g. a referenced-but-not-seeded id). It is NOT a failure
+    // mask: the fetch* helpers below let SQLExceptions propagate, so a down/degraded
+    // DB surfaces as a 5xx rather than silently serving these placeholders as a
+    // "green" run (honest-measurement rule for this benchmark).
     private static final List<ProductView> FALLBACK_PRODUCTS = List.of(
             new ProductView("1", "Product_1", new BigDecimal("19.99"), "Electronics"),
             new ProductView("2", "Product_2", new BigDecimal("29.99"), "Books"),
@@ -92,8 +98,8 @@ public class ProductCatalogService {
                     ));
                 }
             }
-        } catch (Exception ignored) {
-            return List.of();
+        } catch (SQLException e) {
+            throw new RuntimeException("products query failed", e);
         }
         return products;
     }
@@ -118,8 +124,8 @@ public class ProductCatalogService {
                     ));
                 }
             }
-        } catch (Exception ignored) {
-            return List.of();
+        } catch (SQLException e) {
+            throw new RuntimeException("products-by-ids query failed", e);
         }
         return products;
     }
@@ -145,8 +151,8 @@ public class ProductCatalogService {
                     products.put(product.id(), product);
                 }
             }
-        } catch (Exception ignored) {
-            return Map.of();
+        } catch (SQLException e) {
+            throw new RuntimeException("products-by-id query failed", e);
         }
         return products;
     }

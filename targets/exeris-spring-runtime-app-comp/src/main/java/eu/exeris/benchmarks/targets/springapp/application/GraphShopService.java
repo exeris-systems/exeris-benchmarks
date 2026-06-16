@@ -29,6 +29,19 @@ import java.util.UUID;
  *   See runtime/db/seed/v4_pgq_graph.sql for DDL.
  *
  * Mirrors Exeris Community GraphShopAdapter structurally for benchmark equivalence.
+ *
+ * <h2>Error handling — deliberately swallow-to-degrade</h2>
+ * <p>Graph backend faults are caught and degrade to an empty/no-op result rather
+ * than propagating. This is <em>intentional</em>: it preserves structural
+ * equivalence with the Community {@code GraphShopAdapter} (the comparison target),
+ * which degrades the same way, and it keeps the graph layer a non-fatal
+ * recommendation/secondary signal (a graph outage falls back to the direct-DB
+ * product fetch in {@link ProductCatalogService#recommendedProducts}). The
+ * trade-off is a measurement caveat: a silently-degraded graph backend will not
+ * surface as request errors, so any report must verify graph-backend health
+ * out-of-band before attributing graph-path numbers. Do not "fix" this to
+ * propagate without also changing the Community adapter, or the two targets stop
+ * being apples-to-apples on this axis.
  */
 @Component
 public class GraphShopService {
@@ -104,6 +117,11 @@ public class GraphShopService {
                 return List.of();
             }
         }
+        // Load-only probe: the PGQ path runs the cart-read query for its DB cost but
+        // discards the rows and always returns List.of(). NOTE the observable result
+        // therefore DIVERGES from the Neo4j path above (which returns the actual cart
+        // product ids). Callers use this only to exercise the read; cross-backend
+        // (Neo4j vs PGQ) comparisons must not treat the returned list as equivalent.
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(PGQ_CART_READ_SQL)) {
             ps.setObject(1, userNodeId(userId));

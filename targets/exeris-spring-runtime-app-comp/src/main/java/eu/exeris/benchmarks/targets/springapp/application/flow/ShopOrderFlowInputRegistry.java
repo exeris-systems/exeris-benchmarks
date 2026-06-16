@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentMap;
  * <p>Maps an idempotency key ({@code userId + ':' + cartId}) to the
  * {@link OrderAcceptedView} originally returned. Retried POSTs after a flow has
  * already completed must still return the same accepted view; the per-instance
- * entry is dropped on terminal outcome by the controller path, so the
+ * entry is dropped on terminal outcome by the flow's terminal step, so the
  * idempotency map is the only durable surface within a single JVM. This
  * survives only as long as the process; cross-restart idempotency relies on the
  * {@code orders.saga_id} column and {@code carts.status} (a completed cart
@@ -48,9 +48,15 @@ public class ShopOrderFlowInputRegistry {
     /**
      * Per-flow-instance input payload. One entry is added in
      * {@link ShopOrderFlowService#createOrder} immediately before
-     * {@code flowTemplate.schedule(...)} and removed by the controller's
-     * terminal-status read once the flow reaches {@code COMPLETED} or
-     * {@code CANCELLED}.
+     * {@code flowTemplate.schedule(...)} and removed by the flow's terminal step
+     * (the {@code complete-order} success step or the {@code restore-inventory}
+     * terminal compensation) via {@link #drop(InstanceKey)} once the flow reaches
+     * {@code COMPLETED} or {@code CANCELLED}. This bounds {@link #byInstance} to
+     * the set of in-flight instances. Note that {@link #idempotencyMap} and
+     * {@link #statusByOrderId} are deliberately <em>not</em> dropped on terminal
+     * outcome — post-completion idempotent retries and status reads must still
+     * resolve, so they persist for the JVM lifetime (bounded by the distinct
+     * orders in a run).
      */
     public record Input(
             String orderId,
@@ -145,9 +151,13 @@ public class ShopOrderFlowInputRegistry {
 
     /**
      * Removes the per-instance binding once the flow has reached a terminal
-     * state. Called by the controller path on {@code COMPLETED} or
-     * {@code CANCELLED} status reads — see
-     * {@link ShopOrderFlowService#orderStatus}.
+     * state. Called from the flow's terminal step lambdas — the
+     * {@code complete-order} success step and the {@code restore-inventory}
+     * terminal compensation in {@code ShopOrderFlowDefinition} — after the last
+     * {@link #require(FlowContext)} for that instance. Dropping here (rather than
+     * on the controller status read, which only has the API-level {@code orderId}
+     * and not the {@link InstanceKey}) keeps {@link #byInstance} bounded to
+     * in-flight instances without an extra {@code orderId -> InstanceKey} index.
      */
     public void drop(InstanceKey key) {
         byInstance.remove(key);

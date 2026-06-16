@@ -81,6 +81,10 @@ public class ShopOrderFlowDefinition implements ExerisFlowDefinition {
                             ShopOrderFlowInputRegistry.Input in = inputRegistry.require(ctx);
                             sqlSteps.restoreInventory(in.dbOrderId(), in.sagaId());
                             inputRegistry.recordStatus(in.orderId(), in.userId(), "CANCELLED", in.sagaId());
+                            // Terminal compensation (runs last, in reverse order): the
+                            // per-instance input binding is no longer needed once the saga
+                            // has rolled all the way back. Drop it here to bound byInstance.
+                            inputRegistry.drop(ShopOrderFlowInputRegistry.InstanceKey.of(ctx));
                             return FlowOutcome.CONTINUE;
                         })
                 .step(
@@ -115,6 +119,11 @@ public class ShopOrderFlowDefinition implements ExerisFlowDefinition {
                             ShopOrderFlowInputRegistry.Input in = inputRegistry.require(ctx);
                             sqlSteps.completeOrder(in.dbOrderId(), in.sagaId());
                             inputRegistry.recordStatus(in.orderId(), in.userId(), "COMPLETED", in.sagaId());
+                            // Terminal success step: the per-instance input binding has served
+                            // its last require() and is no longer needed. Drop it here to bound
+                            // byInstance (the status/idempotency projections intentionally
+                            // outlive the flow — see ShopOrderFlowInputRegistry).
+                            inputRegistry.drop(ShopOrderFlowInputRegistry.InstanceKey.of(ctx));
                             return FlowOutcome.COMPLETE;
                         },
                         null)

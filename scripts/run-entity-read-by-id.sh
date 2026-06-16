@@ -49,6 +49,15 @@ EXERIS_DB_POOL_MAX_SIZE="${EXERIS_DB_POOL_MAX_SIZE:-256}"
 # are handicapped at the harness layer, not the runtime layer. The constrained
 # wrapper overrides this (it sets a short timeout on purpose, to tolerate
 # transient queuing under CPU throttling) and that explicit value wins via :-.
+#
+# REGRESSION/BASELINE CALLOUT (docs/regression-policy.md): this default changed
+# from "unset" (framework default) to 30000 and applies to ALL targets
+# (community / spring / spring-on-exeris / quarkus), not just the kernel-backed
+# ones. Any baseline captured BEFORE this default was introduced predates a
+# harness-config change, so old-vs-new comparisons cross that change and are NOT
+# directly comparable — re-capture the affected baselines rather than diffing
+# across the boundary. Export an explicit EXERIS_DB_CONNECTION_TIMEOUT_MS to pin
+# the prior behavior for a controlled before/after.
 EXERIS_DB_CONNECTION_TIMEOUT_MS="${EXERIS_DB_CONNECTION_TIMEOUT_MS:-30000}"
 WARMUP="${WARMUP:-60s}"
 BACKEND_MODE="${BACKEND_MODE:-default-vt}"
@@ -563,6 +572,15 @@ if [[ "$TARGET_BUILD" == "native" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "local
 fi
 if [[ "$TARGET_BUILD" == "native" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "spring-runtime-on-exeris" ]]; then
   echo "ERROR: --target-build native is not supported for effective runtime spring-runtime-on-exeris (targets/exeris-spring-runtime-app-comp is JVM-only for entity-read-by-id)"
+  exit 1
+fi
+if [[ "$TLS_ENABLED" == "1" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "spring-runtime-on-exeris" ]]; then
+  # The compat target is H1-plaintext only: it does NOT honor EXERIS_SSL_ENABLED /
+  # EXERIS_TRANSPORT_CERT_PATH (see targets/exeris-spring-runtime-app-comp/README.md
+  # "Removed (no longer honored)"). With TLS on we would point an https client at an
+  # http-only server and get connection failures that look like a target fault. Fail
+  # closed rather than emit a confusing/invalid run.
+  echo "ERROR: BENCHMARK_TLS_ENABLED=1 is not supported for spring-runtime-on-exeris (H1-plaintext only; the target ignores the TLS env). Unset BENCHMARK_TLS_ENABLED for this target."
   exit 1
 fi
 TARGET_PID_FILE="/tmp/${TARGET_APP_NAME}-benchmark.pid"

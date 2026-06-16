@@ -61,9 +61,15 @@ public class ShopSagaStateService {
             BigDecimal price = getProductPrice(conn, pid);
             long cartId = getOrCreateCartId(conn, uid);
             upsertCartItem(conn, cartId, pid, quantity, price);
+            // Read the cart view inside the SAME write tx (it sees the just-written
+            // item on this connection), THEN commit. Previously buildCartView ran
+            // AFTER commit() — on the compat autoCommit=false connection that opened a
+            // fresh implicit tx which was never committed (rolled back on close);
+            // harmless for a SELECT but sloppy. Reading-before-commit is correct.
+            CartView view = buildCartView(conn, uid);
             conn.commit();
             graphShopService.upsertCartEdge(uid, pid, quantity);
-            return buildCartView(conn, uid);
+            return view;
         } catch (Exception e) {
             throw new RuntimeException("addToCart failed", e);
         }
@@ -74,9 +80,11 @@ public class ShopSagaStateService {
         try (Connection conn = dataSource.getConnection()) {
             conn.setAutoCommit(false);
             getOrCreateCartId(conn, uid);
+            // Read inside the same tx, before commit (see addToCart for why).
+            CartView view = buildCartView(conn, uid);
             conn.commit();
             graphShopService.cartProductIds(uid);
-            return buildCartView(conn, uid);
+            return view;
         } catch (Exception e) {
             throw new RuntimeException("getCart failed", e);
         }

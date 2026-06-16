@@ -294,6 +294,33 @@ CREATE INDEX IF NOT EXISTS idx_exeris_outbox_dlq_stream
   ON exeris_outbox_dlq (stream_id);
 
 -- ============================================================================
+-- EXERIS FLOW DURABLE SAGA STATE (used by exeris-spring-runtime-flow targets)
+-- Durable JdbcFlowSnapshotStore backing table (ADR-013 / FLOW-103). Lifted
+-- verbatim from exeris-kernel-community db/migration/V0.7.0__create_saga_state.sql
+-- so the flow engine's snapshot store matches the runtime's own schema exactly.
+-- Required when exeris.runtime.flow.persistence-enabled=true (ADR-022); without
+-- it the flow engine's "load flow snapshot" SELECT fails with
+-- relation "exeris_saga_state" does not exist → POST /orders 500.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS exeris_saga_state (
+    instance_id_most    BIGINT       NOT NULL,
+    instance_id_least   BIGINT       NOT NULL,
+    definition_name     TEXT         NOT NULL,
+    current_step        INT          NOT NULL,
+    state               TEXT         NOT NULL,
+    last_update         TIMESTAMP WITH TIME ZONE NOT NULL,
+    timeout_at          TIMESTAMP WITH TIME ZONE,
+    compensation_stack  BYTEA        NOT NULL,
+    stack_pointer       INT          NOT NULL,
+    opaque_state        BYTEA,
+    schema_version      BIGINT       NOT NULL DEFAULT 1,
+    PRIMARY KEY (instance_id_most, instance_id_least)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exeris_saga_state_parked
+    ON exeris_saga_state (state, last_update);
+
+-- ============================================================================
 -- AXON FRAMEWORK JPA EVENT STORE (used by spring-app-axon and quarkus-app-axon)
 -- Tables match Axon Framework 4.x JPA schema for PostgreSQL / Hibernate 6
 -- ============================================================================

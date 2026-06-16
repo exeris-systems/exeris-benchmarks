@@ -49,7 +49,8 @@
       "required_contracts": [
         "exeris_community_h2c_v1",
         "quarkus_axon_neo4j_v1",
-        "spring_boot_axon_neo4j_v1"
+        "spring_boot_axon_neo4j_v1",
+        "spring_runtime_on_exeris_flow_neo4j_h1_v1"
       ],
       "claim_scope": "coverage_limited_saga_engine_not_equivalent",
       "comparison_class": "platform-natural-stack",
@@ -125,6 +126,10 @@
     "spring-app-axon": [
       "neo4j",
       "postgres-graph"
+    ],
+    "spring-runtime-on-exeris-flow": [
+      "neo4j",
+      "postgres-graph"
     ]
   },
   "target_backend_support_status": {
@@ -145,6 +150,12 @@
       "postgres-graph": "planned",
       "pgq-pure": "planned",
       "age-compat": "eligible"
+    },
+    "spring-runtime-on-exeris-flow": {
+      "neo4j": "eligible",
+      "postgres-graph": "planned",
+      "pgq-pure": "planned",
+      "age-compat": "planned"
     }
   },
   "claim_guardrails": {
@@ -310,6 +321,57 @@
         "cart_get_latency_ms": "comparison_eligible",
         "order_create_latency_ms": "coverage_limited_saga_engine_not_equivalent",
         "order_poll_latency_ms": "coverage_limited_saga_engine_not_equivalent"
+      }
+    },
+    "spring_runtime_on_exeris_flow_neo4j_h1_v1": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "transport_mode": "loopback-h1",
+      "target_app": "spring-runtime-on-exeris-flow",
+      "framework": "spring-boot",
+      "framework_version": "3.5.14",
+      "host_runtime": "exeris-spring-runtime",
+      "host_runtime_mode": "compatibility",
+      "saga_framework": "exeris-spring-runtime-flow",
+      "graph_backend": "neo4j-bolt",
+      "event_backend": "exeris-flow-jdbc-snapshot",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "claim_scope": "exploratory",
+      "claim_scope_note": "Compatibility-mode hosting: Spring MVC @RestController dispatch is overlaid on the Exeris ingress via ExerisCompatAutoConfiguration (ADR-011). Saga orchestration is exeris-spring-runtime-flow (4 forward steps: reserve-inventory, charge-payment, confirm-order, complete-order; 2 compensations: refund-payment, restore-inventory) — algorithmically the same Flow engine that exeris-community-app uses, NOT Axon Framework. Synchronous-insert variant: orders + order_items rows are persisted on the request thread before 202 ACCEPTED returns (idempotent under userId + ':' + cartId), so order_create_latency_ms includes JPA-path INSERT cost (unlike the Axon contract, whose request path was DB-write-free). Status poll reads from the JdbcFlowSnapshotStore-backed projection. JPA telemetry bypass disclosure (ADR-017 §6.4): every JPA Connection acquisition flows through the ExerisDataSource compat seam emitting JpaConnectionAcquired + JpaConnectionBound JFR events; cross-target JPA latency / allocation deltas vs kernel-native (exeris-community-app) or Hikari-pooled (spring-app-axon, quarkus-app-axon) targets must split 'compatibility seam overhead' from 'engine cost'. Protocol-mode mismatch with sibling contracts (this contract H1 plaintext; exeris_community_h2c_v1 and spring_boot_axon_neo4j_v1 are H2C) — direct latency comparison across protocol modes is NOT eligible at strict gate. event_backend = exeris-flow-jdbc-snapshot reflects that there is no external event store: Flow lifecycle state is durably checkpointed by JdbcFlowSnapshotStore (ADR-022), and the workload's outbox writes (in confirm step) target the existing exeris_outbox table directly via JDBC. Spring Boot 3.5.14 line pinned to host-runtime artifact (exeris-spring-runtime:0.5.0-SNAPSHOT) rather than blueprint's SB4 — bench-implementer divergence justified by host-runtime artifact reality (see target README §'Spring Boot matrix alignment').",
+      "workload_note": "saga_engine_identical_to_exeris_community: exeris-spring-runtime-flow uses the same Flow engine class as exeris-community-app. Hosting axes differ: web ingress = Spring MVC compat overlay on Exeris ingress (this contract) vs Exeris-native ExerisRequestHandler (exeris-community-app); JPA = ExerisDataSource compat seam (this contract) vs kernel-native QueryExecutor (exeris-community-app). order_id is a DB BIGSERIAL row id (synchronously persisted), matching exeris-community-app semantics and differing from the Axon contracts' AtomicLong saga correlation id. status_poll reads from JdbcFlowSnapshotStore projection.",
+      "comparison_class": "algorithmic-isomorph-different-hosting",
+      "equivalence_note": "Saga engine identical to exeris_community_h2c_v1 (both run exeris-spring-runtime-flow / Exeris FlowEngine). Differs on hosting axes only: web ingress (Spring MVC compat vs Exeris-native) and persistence path (ExerisDataSource compat seam vs kernel-native QueryExecutor). Against spring_boot_axon_neo4j_v1: same web framework family (Spring MVC), different saga engine (Flow vs Axon) and different host runtime (exeris-spring-runtime compat vs Spring-Boot-on-Tomcat). Both cross-contract comparisons are exploratory; protocol-mode mismatch (H1 here vs H2C on both peers) is the dominant disqualifier for strict-gate latency claims.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "exploratory",
+        "recommend_latency_ms": "exploratory",
+        "cart_add_latency_ms": "exploratory",
+        "cart_get_latency_ms": "exploratory",
+        "order_create_latency_ms": "exploratory",
+        "order_poll_latency_ms": "exploratory"
       }
     },
     "exeris_community_h2c_pgq_v2": {

@@ -67,6 +67,11 @@
       "type": "string",
       "description": "kernel uname -r output."
     },
+    "os_scheduler": {
+      "type": "string",
+      "enum": ["cfs", "eevdf", "bore", "unknown"],
+      "description": "Linux CPU scheduler in effect. EEVDF is the default since kernel 6.6; CFS before. The CFS→EEVDF switch alone can shift worst-case throughput materially, so two runs on the same hardware_profile but different schedulers are NOT directly comparable. Best-effort/advisory detection (see scripts/capture-env.sh)."
+    },
     "jdk": {
       "type": "object",
       "required": ["vendor", "version"],

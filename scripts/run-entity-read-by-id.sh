@@ -339,6 +339,17 @@ case "$DRIVER" in
           echo "ERROR: --driver h2load --h2load-axis h2c is exploratory-only (not comparable to H1/wrk); use --claim-scope exploratory."
           exit 1
         fi
+        # h2c is HTTP/2 *cleartext* prior-knowledge: it requires an http:// endpoint
+        # and must never run over TLS. Over TLS h2load negotiates the version via
+        # ALPN instead and SILENTLY falls back to HTTP/1.1 when the server omits h2
+        # (e.g. an H1-only target like Quarkus), which would record an H1 result
+        # under an H2 label. This runner has no h2-over-TLS axis, so reject the combo.
+        if [[ "$TLS_ENABLED" == "1" ]]; then
+          echo "ERROR: --h2load-axis h2c is HTTP/2 cleartext and cannot run over TLS (TLS_ENABLED=1; client scheme would be https)."
+          echo "ERROR: over TLS h2load relies on ALPN and silently degrades to HTTP/1.1 if the server omits h2, mislabeling an H1 run as H2."
+          echo "ERROR: disable TLS for h2c (cleartext HTTP/2), or use --h2load-axis h1 for HTTP/1.1-over-TLS."
+          exit 1
+        fi
         TRANSPORT_MODE="loopback-h2"
         PROTOCOL="h2"
         ;;
@@ -1314,6 +1325,20 @@ if [[ -n "${OUTPUT_DIR:-}" ]]; then
   } > "$DRIVER_LOG" 2>/dev/null \
     && echo "[entity-read-by-id] driver raw output saved: $DRIVER_LOG" \
     || echo "WARN: could not write driver log to $DRIVER_LOG" >&2
+fi
+
+# Honesty guard (defense in depth): when h2load runs over TLS it negotiates the
+# HTTP version via ALPN and SILENTLY falls back to HTTP/1.1 if the server omits
+# h2. If we asked for HTTP/2 but the driver reported an ALPN fallback, the measured
+# traffic was H1 — fail rather than record an H1 run under an H2 (PROTOCOL=h2)
+# label. (The early h2c+TLS guard already blocks the common cause; this also covers
+# a reused/external https target whose TLS posture the launcher did not set.)
+if [[ "$DRIVER" == "h2load" && "$PROTOCOL" == "h2" ]] \
+   && printf '%s\n' "$LOAD_OUT" | grep -Eq 'Server does not support ALPN|Falling back to HTTP/1\.1|No protocol negotiated'; then
+  echo "ERROR: h2load requested HTTP/2 but the server did not negotiate h2 (ALPN fallback to HTTP/1.1 detected in the driver output)." >&2
+  echo "ERROR: the measured traffic ran HTTP/1.1, so it cannot be labeled HTTP/2 ('$BASE_URL' served TLS without advertising h2 via ALPN)." >&2
+  echo "ERROR: this target does not speak HTTP/2 over TLS; use a cleartext h2c endpoint (TLS off) against an h2c-capable target. Raw driver output: ${DRIVER_LOG:-<unsaved>}" >&2
+  exit 1
 fi
 
 # Stop the resource sampler the moment measurement ends, so the sampled window is

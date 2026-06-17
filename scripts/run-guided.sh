@@ -936,6 +936,16 @@ if [[ "$protocol_mode" == "h2" && "$driver" == "k6" && "$tls_enabled" != "true" 
 fi
 info "tls derived: mode=$tls_mode enabled=$tls_enabled scheme=$tls_scheme effective_transport=$effective_transport (target declares $tls_target_declared_scheme)"
 
+# entity-read-by-id maps protocol h2 onto the h2load h2c axis = HTTP/2 *cleartext*
+# prior-knowledge, which requires an http:// endpoint. It has no h2-over-TLS axis:
+# over TLS h2load negotiates via ALPN and silently degrades to HTTP/1.1 when the
+# server omits h2 (e.g. the H1-only Quarkus target), recording an H1 run as H2.
+# Reject the contradiction here rather than after a full mislabeled measurement.
+# Note tls_enabled can be true via tls=on OR tls=auto when the target declares https.
+if [[ "$scenario_id" == "entity-read-by-id" && "$protocol_mode" == "h2" && "$tls_enabled" == "true" ]]; then
+  fail "entity-read-by-id protocol 'h2' uses the h2load h2c axis (HTTP/2 cleartext) and cannot run over TLS (tls=$tls_mode -> scheme=$tls_scheme; target '${targets[0]}' declares $tls_target_declared_scheme). h2c needs an http:// endpoint, and over TLS h2load silently falls back to HTTP/1.1 when the target lacks h2 ALPN (e.g. Quarkus is declared H1-only). Re-run with tls=off for cleartext h2c, or pick protocol h1 for HTTP/1.1-over-TLS."
+fi
+
 # Target build (jvm/native) for local runs. The default follows the chosen
 # target's name, EXCEPT the 128m constrained profile defaults to native: the JVM
 # build's irreducible ~120MB native floor (off-heap memory subsystem + native

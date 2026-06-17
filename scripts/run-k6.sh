@@ -36,17 +36,23 @@ RESULT_JSON="$RESULTS_DIR/k6-${TIMESTAMP}.json"
 # k6 reported — thresholds/checks/protocol — kept for honest reproducibility).
 # pipefail (set above) preserves k6's exit status through the tee.
 K6_CONSOLE_LOG="$RESULTS_DIR/k6-console-${TIMESTAMP}.log"
+# Per-sample CSV stream (timestamped, with a `scenario` column) so the per-second
+# throughput series — and thus the warmup curve — can be reconstructed instead of
+# trusting a single window-averaged number. See tools/aggregate-k6-throughput.sh.
+K6_TIMESERIES_CSV="$RESULTS_DIR/k6-timeseries-${TIMESTAMP}.csv"
 
 echo "=== k6 scenario ==="
-echo "  Script : $K6_SCRIPT"
-echo "  Output : $RESULT_JSON"
-echo "  Console: $K6_CONSOLE_LOG"
+echo "  Script    : $K6_SCRIPT"
+echo "  Output    : $RESULT_JSON"
+echo "  Timeseries: $K6_TIMESERIES_CSV"
+echo "  Console   : $K6_CONSOLE_LOG"
 echo ""
 
 bench_k6_assert_arrival_rate_executor "$K6_SCRIPT" || exit 1
 
 k6 run \
   --out json="$RESULT_JSON" \
+  --out csv="$K6_TIMESERIES_CSV" \
   --summary-export="$RESULTS_DIR/k6-summary-${TIMESTAMP}.json" \
   "$@" \
   "$K6_SCRIPT" 2>&1 | tee "$K6_CONSOLE_LOG"
@@ -55,6 +61,14 @@ if [[ -f "$RESULT_JSON" ]]; then
   if ! jq -e '.metrics.http_req_duration.values["p(99)"]' "$RESULT_JSON" >/dev/null 2>&1; then
     echo "WARN: p(99) not found in k6 output — check that enough samples were collected." >&2
   fi
+fi
+
+# Reconstruct the per-second throughput series from the CSV stream (warmup curve +
+# steady-state from the measurement window only). Never fatal; emits valid JSON.
+K6_THROUGHPUT_SERIES_JSON="$RESULTS_DIR/k6-throughput-series-${TIMESTAMP}.json"
+if [[ -f "$K6_TIMESERIES_CSV" ]]; then
+  "$ROOT/tools/aggregate-k6-throughput.sh" "$K6_TIMESERIES_CSV" "$K6_THROUGHPUT_SERIES_JSON" || true
+  echo "Throughput series: $K6_THROUGHPUT_SERIES_JSON"
 fi
 
 # Honesty guard (symmetric to the h2load ALPN-fallback detector in

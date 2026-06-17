@@ -58,15 +58,20 @@ bench_read_k6_defaults() {
   done < "$env_file"
 }
 
-# bench_run_k6(k6_script, output_json, summary_json, stage_spec, docker_image)
+# bench_run_k6(k6_script, output_json, summary_json, stage_spec, docker_image, out_csv)
 # Env vars consumed from caller environment by k6 script: BASE_URL and all K6_* vars.
 # REPO_ROOT must be exported by caller for docker volume mount fallback.
+# out_csv (optional): when set, also stream the per-sample CSV (timestamped, with a
+# `scenario` column = warmup/measurement/cooldown) so a per-second throughput series
+# can be reconstructed. Without it only the window-averaged summary survives, and the
+# warmup curve cannot be rebuilt. See tools/aggregate-k6-throughput.sh.
 bench_run_k6() {
   local k6_script="$1"
   local output_json="$2"
   local summary_json="$3"
   local stage_spec="${4:-}"
   local docker_image="${5:-grafana/k6:latest}"
+  local out_csv="${6:-}"
 
   bench_k6_assert_arrival_rate_executor "$k6_script" || return 1
 
@@ -76,6 +81,11 @@ bench_run_k6() {
     for _k6_s in "${_k6_stages[@]}"; do
       stage_args+=( --stage "$_k6_s" )
     done
+  fi
+
+  local csv_out_args=()
+  if [[ -n "$out_csv" ]]; then
+    csv_out_args=( --out "csv=$out_csv" )
   fi
 
   if command -v k6 >/dev/null 2>&1; then
@@ -93,6 +103,7 @@ bench_run_k6() {
     done < <(env | grep -E '^(K6_|EXERIS_)')
     k6 run \
       --out "json=$output_json" \
+      "${csv_out_args[@]}" \
       --summary-export="$summary_json" \
       "${_local_env_args[@]}" \
       "${stage_args[@]}" \
@@ -125,6 +136,7 @@ bench_run_k6() {
       --user "$(id -u):$(id -g)" \
       "$docker_image" run \
       --out "json=${output_json}" \
+      "${csv_out_args[@]}" \
       --summary-export="${summary_json}" \
       "${_k6_env_args[@]}" \
       "${stage_args[@]}" \

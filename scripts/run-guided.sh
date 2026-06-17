@@ -922,10 +922,14 @@ if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" && "$tls_mode" != "auto" ]]; then
   app_endpoint="$(apply_url_scheme "$app_endpoint" "$tls_scheme")"
 fi
 # k6 negotiates HTTP/2 only over TLS (ALPN); there is no cleartext h2c in k6.
-# When the protocol toggle landed on h2 + k6 without TLS, couple them honestly
-# rather than silently running H1: force TLS on and re-derive the transport.
+# h2 + k6 therefore REQUIRES TLS. If the user explicitly chose tls=off, the two
+# toggles conflict — fail closed rather than silently override an explicit choice.
+# If tls is auto-resolving to off, couple them: force TLS on and re-derive transport.
 if [[ "$protocol_mode" == "h2" && "$driver" == "k6" && "$tls_enabled" != "true" ]]; then
-  warn "Protocol h2 with the k6 driver requires TLS (k6 negotiates HTTP/2 only via ALPN; no cleartext h2c). Forcing tls=on for this run."
+  if [[ "$tls_mode" == "off" ]]; then
+    fail "Incompatible toggles: protocol h2 with the k6 driver requires TLS (k6 negotiates HTTP/2 only via ALPN; no cleartext h2c), but you set tls=off. Choose protocol h1, switch the driver to h2load (which does cleartext h2c), or set tls=on/auto."
+  fi
+  warn "Protocol h2 with the k6 driver requires TLS (k6 negotiates HTTP/2 only via ALPN; no cleartext h2c). Forcing tls=on for this run (tls was auto)."
   tls_mode="on"; tls_enabled="true"; tls_scheme="https"
   effective_transport="$(derive_effective_transport "$protocol_mode" "$tls_enabled")"
   tls_overrides="false"
@@ -1506,7 +1510,10 @@ dispatch_generic_driver() {
         "$REPO_ROOT/scripts/run-wrk2.sh" "$target_rel" "$scenario_rel"
       ;;
     k6)
+      # Forward the requested protocol so run-k6.sh fails closed if k6 silently
+      # fell back to HTTP/1.1 on an h2 run (k6 does h2 only over TLS via ALPN).
       BASE_URL="$base_url" K6_BASE_URL="$base_url" \
+      BENCH_EXPECTED_PROTOCOL_MODE="$protocol_mode" \
         "$REPO_ROOT/scripts/run-k6.sh" "$scenario_rel"
       ;;
     h2load)

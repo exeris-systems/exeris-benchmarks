@@ -1348,17 +1348,27 @@ if [[ -n "${OUTPUT_DIR:-}" ]]; then
 fi
 
 # Honesty guard (defense in depth): when h2load runs over TLS it negotiates the
-# HTTP version via ALPN and SILENTLY falls back to HTTP/1.1 if the server omits
-# h2. If we asked for HTTP/2 but the driver reported an ALPN fallback, the measured
-# traffic was H1 — fail rather than record an H1 run under an H2 (PROTOCOL=h2)
-# label. (The early h2c+TLS guard already blocks the common cause; this also covers
-# a reused/external https target whose TLS posture the launcher did not set.)
-if [[ "$DRIVER" == "h2load" && "$PROTOCOL" == "h2" ]] \
-   && printf '%s\n' "$LOAD_OUT" | grep -Eq 'Server does not support ALPN|Falling back to HTTP/1\.1|No protocol negotiated'; then
-  echo "ERROR: h2load requested HTTP/2 but the server did not negotiate h2 (ALPN fallback to HTTP/1.1 detected in the driver output)." >&2
-  echo "ERROR: the measured traffic ran HTTP/1.1, so it cannot be labeled HTTP/2 ('$BASE_URL' served TLS without advertising h2 via ALPN)." >&2
-  echo "ERROR: this target does not speak HTTP/2 over TLS; use a cleartext h2c endpoint (TLS off) against an h2c-capable target. Raw driver output: ${DRIVER_LOG:-<unsaved>}" >&2
-  exit 1
+# HTTP version via ALPN and SILENTLY falls back to HTTP/1.1 if the server omits h2.
+# If we asked for HTTP/2 but h2 did not negotiate, the measured traffic was H1 —
+# fail rather than record an H1 run under an H2 (PROTOCOL=h2) label.
+if [[ "$DRIVER" == "h2load" && "$PROTOCOL" == "h2" ]]; then
+  # (1) Negative signal: an explicit ALPN fallback to HTTP/1.1 (covers the TLS path).
+  if printf '%s\n' "$LOAD_OUT" | grep -Eq 'Server does not support ALPN|Falling back to HTTP/1\.1|No protocol negotiated'; then
+    echo "ERROR: h2load requested HTTP/2 but the server did not negotiate h2 (ALPN fallback to HTTP/1.1 detected in the driver output)." >&2
+    echo "ERROR: the measured traffic ran HTTP/1.1, so it cannot be labeled HTTP/2 ('$BASE_URL' served TLS without advertising h2 via ALPN)." >&2
+    echo "ERROR: this target does not speak HTTP/2 over TLS; use a cleartext h2c endpoint (TLS off) against an h2c-capable target. Raw driver output: ${DRIVER_LOG:-<unsaved>}" >&2
+    exit 1
+  fi
+  # (2) Positive signal (TLS only): require h2load to report it negotiated h2 via
+  # ALPN. This fails closed even if a future nghttp2 reworded the fallback notice
+  # above — absence of the positive marker is treated as not-h2. Cleartext h2c uses
+  # prior-knowledge (no ALPN, no "Application protocol" line), so assert under TLS only.
+  if [[ "$TLS_ENABLED" == "1" ]] \
+     && ! printf '%s\n' "$LOAD_OUT" | grep -Eiq 'Application protocol:[[:space:]]*h2([[:space:]]|$)'; then
+    echo "ERROR: h2load requested HTTP/2 over TLS but did not report 'Application protocol: h2' (ALPN did not confirm h2)." >&2
+    echo "ERROR: refusing to label the run HTTP/2 without positive h2 negotiation evidence. Raw driver output: ${DRIVER_LOG:-<unsaved>}" >&2
+    exit 1
+  fi
 fi
 
 # Stop the resource sampler the moment measurement ends, so the sampled window is

@@ -430,6 +430,91 @@ resolve_protocol_mode() {
   printf '%s\n' "$p"
 }
 
+# --- HTTP protocol-version toggle (auto/h1/h2) ----------------------------
+# ORTHOGONAL to TLS. Unlike TLS (scheme lives in the URL and every client
+# honors it), the HTTP version is decided by the load-client BINARY, not the
+# URL — so an honest toggle must map h1/h2 onto a driver/axis the binary can
+# actually speak, never a label-only override. Capability of this repo's
+# drivers (verified): wrk/wrk2 are H1-only; h2load does H1 (--h1) and H2
+# (h2c cleartext, or h2-over-TLS); k6 does H1 (http://) and H2 only over TLS
+# (ALPN — no cleartext h2c).
+driver_supports_protocol() {
+  local d="$1" p="$2"
+  case "$p" in
+    h1) case "$d" in wrk|wrk2|h2load|k6) return 0 ;; *) return 1 ;; esac ;;
+    h2) case "$d" in h2load|k6) return 0 ;; *) return 1 ;; esac ;;
+    *)  return 1 ;;
+  esac
+}
+
+# First scenario-declared driver that can speak $1, in a stable preference order
+# (h2: h2load before k6 — h2load needs no TLS; h1: wrk before the rest). Empty if
+# the scenario declares no capable driver. Reads the SCEN_DRIVERS global.
+pick_driver_for_protocol() {
+  local p="$1" pref cand d
+  case "$p" in
+    h2) pref="h2load k6" ;;
+    *)  pref="wrk k6 h2load wrk2" ;;
+  esac
+  for cand in $pref; do
+    for d in "${SCEN_DRIVERS[@]}"; do
+      if [[ "$d" == "$cand" ]] && driver_supports_protocol "$cand" "$p"; then
+        printf '%s\n' "$cand"; return 0
+      fi
+    done
+  done
+  return 1
+}
+
+# Is protocol $1 offerable for the current scenario? Honors a declared
+# protocol_support[$1].status gate (runnable only), then requires at least one
+# scenario-declared driver capable of it. Reads scenario_json + SCEN_DRIVERS.
+protocol_choice_available() {
+  local p="$1" st d
+  st="$(jq -r --arg p "$p" '.protocol_support[$p].status // empty' "$scenario_json" 2>/dev/null || true)"
+  [[ -z "$st" || "$st" == "runnable" ]] || return 1
+  for d in "${SCEN_DRIVERS[@]}"; do
+    driver_supports_protocol "$d" "$p" && return 0
+  done
+  return 1
+}
+
+# Apply a forced protocol choice (proto_mode != auto). Mutates the globals
+# protocol_mode and (if needed) driver; fails closed on an impossible combo.
+# Reads: proto_mode, scenario_json, scenario_id, driver, target_mode, SCEN_DRIVERS.
+validate_and_apply_protocol() {
+  local proto="$proto_mode" st reason backlog new_driver
+
+  # Comparative is H1-only by construction: run-comparative.sh hits a hardcoded
+  # http:// endpoint and validates a shared protocol_mode. Forcing h2 there would
+  # be a label-only claim — reject it rather than mint a false comparison.
+  if [[ "$target_mode" == "multi" && "$proto" == "h2" ]]; then
+    fail "Protocol override 'h2' is not available for comparative (multi-target) runs: run-comparative.sh drives both targets over cleartext HTTP/1.1 and validates a shared protocol_mode, so h2 would be a label-only claim. Run single-target h2 baselines instead."
+  fi
+
+  # Scenario-declared protocol_support gate (when present): not-runnable /
+  # not-applicable protocols carry a reason + backlog ref — surface them.
+  st="$(jq -r --arg p "$proto" '.protocol_support[$p].status // empty' "$scenario_json" 2>/dev/null || true)"
+  if [[ -n "$st" && "$st" != "runnable" ]]; then
+    reason="$(jq -r --arg p "$proto" '.protocol_support[$p].reason // "not declared runnable"' "$scenario_json" 2>/dev/null || true)"
+    backlog="$(jq -r --arg p "$proto" '.protocol_support[$p].backlog_ref // empty' "$scenario_json" 2>/dev/null || true)"
+    fail "Scenario '$scenario_id' declares protocol '$proto' as '$st': ${reason}${backlog:+ (backlog: $backlog)}. Pick a runnable protocol or a different scenario."
+  fi
+
+  # Map the protocol onto a capable driver. If the selected driver can't speak it,
+  # switch to the scenario's declared capable driver (or fail if none exists).
+  if ! driver_supports_protocol "$driver" "$proto"; then
+    new_driver="$(pick_driver_for_protocol "$proto" || true)"
+    if [[ -z "$new_driver" ]]; then
+      fail "No load driver can speak '$proto' for scenario '$scenario_id' (declared drivers: ${SCEN_DRIVERS[*]:-none}; selected '$driver' is ${proto}-incapable)."
+    fi
+    warn "Driver '$driver' cannot speak $proto; switching to '$new_driver' (the scenario's $proto-capable driver)."
+    driver="$new_driver"
+  fi
+
+  protocol_mode="$proto"
+}
+
 # On contract-driven paths the contract — not the user — fixes the workload
 # (constrained reads it from the contract JSON; fixed_contract_v1 enforces threads
 # and rejects --duration; saga uses VUs/think-time). Read the contract's workload
@@ -774,10 +859,34 @@ elif [[ "$execution_class" == "constrained" && -n "$constrained_contract" ]]; th
 fi
 contract_id="$(prompt_text "contract_id" "$contract_default")"
 
-# Derived from the contract (or driver), never asked — keeps protocol_mode
-# consistent with what actually runs.
-protocol_mode="$(resolve_protocol_mode "$scenario_json" "$contract_id" "$driver")"
-info "protocol_mode derived as '$protocol_mode' (from contract '$contract_id'${driver:+ / driver '$driver'})"
+# HTTP protocol version (H1/H2), orthogonal to the TLS toggle below.
+#   auto -> follow the scenario/contract (contract -> driver -> scenario transport),
+#           byte-identical to the pre-toggle derivation.
+#   h1/h2 -> force the version: validated against the scenario's protocol_support
+#           and mapped onto a capable driver/axis (never a label-only override).
+# protocol_scenario_implied is what 'auto' would resolve to with the chosen driver.
+protocol_scenario_implied="$(resolve_protocol_mode "$scenario_json" "$contract_id" "$driver")"
+proto_mode="auto"
+protocol_overrides_scenario="false"
+# Saga is contract-fixed to h2c (k6-driven); the toggle does not apply there.
+if [[ "$is_saga" != "yes" ]]; then
+  proto_kv=(auto "auto — follow the scenario/contract (${protocol_scenario_implied})")
+  protocol_choice_available "h1" && proto_kv+=(h1 "h1   — force HTTP/1.1")
+  protocol_choice_available "h2" && proto_kv+=(h2 "h2   — force HTTP/2 (h2c cleartext via h2load, or h2-over-TLS via k6)")
+  if [[ "${#proto_kv[@]}" -gt 2 ]]; then
+    proto_mode="$(select_kv "HTTP protocol version (orthogonal to TLS)" "auto" "${proto_kv[@]}")"
+  fi
+fi
+if [[ "$proto_mode" == "auto" ]]; then
+  protocol_mode="$protocol_scenario_implied"
+else
+  validate_and_apply_protocol   # sets protocol_mode, may switch driver, may fail closed
+  [[ "$protocol_mode" != "$protocol_scenario_implied" ]] && protocol_overrides_scenario="true"
+fi
+info "protocol_mode='$protocol_mode' (toggle=$proto_mode; scenario-implied=$protocol_scenario_implied; driver=${driver:-none})"
+if [[ "$protocol_overrides_scenario" == "true" ]]; then
+  warn "Protocol override: forced '$protocol_mode' but the scenario/contract implies '$protocol_scenario_implied'. H1 vs H2 is a mandatory separation axis — do NOT compare this run against a '$protocol_scenario_implied' baseline without an explicit protocol-axis caveat."
+fi
 
 # TLS / transport security — orthogonal to the H1/H2 protocol_mode above.
 #   auto -> follow the target's matrix-declared scheme (no override; current behavior)
@@ -811,6 +920,19 @@ fi
 # Reconcile the WAN endpoint scheme with an explicit TLS choice.
 if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" && "$tls_mode" != "auto" ]]; then
   app_endpoint="$(apply_url_scheme "$app_endpoint" "$tls_scheme")"
+fi
+# k6 negotiates HTTP/2 only over TLS (ALPN); there is no cleartext h2c in k6.
+# When the protocol toggle landed on h2 + k6 without TLS, couple them honestly
+# rather than silently running H1: force TLS on and re-derive the transport.
+if [[ "$protocol_mode" == "h2" && "$driver" == "k6" && "$tls_enabled" != "true" ]]; then
+  warn "Protocol h2 with the k6 driver requires TLS (k6 negotiates HTTP/2 only via ALPN; no cleartext h2c). Forcing tls=on for this run."
+  tls_mode="on"; tls_enabled="true"; tls_scheme="https"
+  effective_transport="$(derive_effective_transport "$protocol_mode" "$tls_enabled")"
+  tls_overrides="false"
+  [[ "$tls_scheme" != "$tls_target_declared_scheme" ]] && tls_overrides="true"
+  if [[ "$topology_mode" == "$TOPOLOGY_NETWORK" ]]; then
+    app_endpoint="$(apply_url_scheme "$app_endpoint" "$tls_scheme")"
+  fi
 fi
 info "tls derived: mode=$tls_mode enabled=$tls_enabled scheme=$tls_scheme effective_transport=$effective_transport (target declares $tls_target_declared_scheme)"
 
@@ -1017,6 +1139,9 @@ jq -n \
   --arg scenario_id "$scenario_id" \
   --arg target_classification "$target_classification" \
   --arg protocol_mode "$protocol_mode" \
+  --arg proto_mode "$proto_mode" \
+  --arg protocol_scenario_implied "$protocol_scenario_implied" \
+  --arg protocol_overrides_scenario "$protocol_overrides_scenario" \
   --arg tls_mode "$tls_mode" \
   --arg tls_enabled "$tls_enabled" \
   --arg tls_scheme "$tls_scheme" \
@@ -1090,6 +1215,12 @@ jq -n \
     scenario_id: $scenario_id,
     target_classification: $target_classification,
     protocol_mode: $protocol_mode,
+    protocol_selection: {
+      mode: $proto_mode,
+      resolved: $protocol_mode,
+      scenario_implied: $protocol_scenario_implied,
+      overrides_scenario: ($protocol_overrides_scenario == "true")
+    },
     transport_security: {
       mode: $tls_mode,
       tls_enabled: ($tls_enabled == "true"),
@@ -1189,7 +1320,11 @@ echo "  run_type           : $run_type"
 echo "  connectivity       : $connectivity (topology_mode=$topology_mode)"
 echo "  scenario_id        : $scenario_id"
 echo "  driver             : $driver"
-echo "  protocol_mode      : $protocol_mode"
+if [[ "$protocol_overrides_scenario" == "true" ]]; then
+  echo "  protocol_mode      : $protocol_mode (toggle=$proto_mode) [OVERRIDE: scenario implies $protocol_scenario_implied]"
+else
+  echo "  protocol_mode      : $protocol_mode (toggle=$proto_mode)"
+fi
 if [[ "$tls_overrides" == "true" ]]; then
   echo "  tls                : mode=$tls_mode enabled=$tls_enabled scheme=$tls_scheme transport=$effective_transport [OVERRIDE: target declares $tls_target_declared_scheme]"
 else
@@ -1584,6 +1719,15 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
     --target-build "$mapped_build"
     --backend-mode "$mapped_backend_mode"
   )
+  # Map the resolved protocol onto the h2load axis so the run's HTTP version
+  # matches the recorded protocol_mode (h2 = h2c cleartext prior-knowledge,
+  # exploratory-only; h1 = loopback-h1). wrk is H1-only and takes no axis.
+  if [[ "$entity_driver" == "h2load" ]]; then
+    case "$protocol_mode" in
+      h2) erbid_cmd+=(--h2load-axis h2c) ;;
+      *)  erbid_cmd+=(--h2load-axis h1) ;;
+    esac
+  fi
   if entity_local_contract_mode; then
     # Strict fixed contract: workload/claim-scope/profile are contract-fixed and
     # --duration is rejected; the runner enforces its requirements (perf-box,

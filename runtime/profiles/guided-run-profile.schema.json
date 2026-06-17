@@ -87,6 +87,46 @@
         "h3"
       ]
     },
+    "protocol_selection": {
+      "type": "object",
+      "description": "Provenance of protocol_mode (the HTTP version axis). 'mode'=auto follows the scenario/contract derivation (zero behavior change); h1/h2 force the version, validated against the scenario's protocol_support and mapped onto a capable driver/axis (never label-only). 'resolved' mirrors protocol_mode; 'scenario_implied' is what auto would have derived. When 'overrides_scenario' is true the forced version diverges from the scenario/contract and MUST be labeled before any comparison (H1 vs H2 is a mandatory separation axis).",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "resolved",
+        "scenario_implied",
+        "overrides_scenario"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "h1",
+            "h2"
+          ]
+        },
+        "resolved": {
+          "type": "string",
+          "enum": [
+            "h1",
+            "h2",
+            "h3"
+          ]
+        },
+        "scenario_implied": {
+          "type": "string",
+          "enum": [
+            "h1",
+            "h2",
+            "h3"
+          ]
+        },
+        "overrides_scenario": {
+          "type": "boolean"
+        }
+      }
+    },
     "transport_security": {
       "type": "object",
       "description": "TLS posture, ORTHOGONAL to protocol_mode (which is the HTTP version axis only). 'mode'=auto follows the target's matrix-declared scheme (no override; zero behavior change); on/off force the launched target's transport AND the client scheme. 'effective_transport' composes the HTTP version with TLS into the runner's BENCH_PROTOCOL_MODE_OVERRIDE space (h1/https-h1/h2/h2c/h3). When 'overrides_target_declared' is true the run's transport diverges from the target's asset-matrix declaration and MUST be labeled as such before any comparison.",

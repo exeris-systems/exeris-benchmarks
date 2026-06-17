@@ -70,6 +70,11 @@
     "exeris_outbox_dlq": {
       "row_count": 0,
       "columns": ["id", "outbox_id", "aggregate_id", "event_type", "payload_json", "error_message", "failed_at"]
+    },
+    "exeris_saga_state": {
+      "row_count": 0,
+      "columns": ["instance_id_most", "instance_id_least", "definition_name", "current_step", "state", "last_update", "timeout_at", "compensation_stack", "stack_pointer", "opaque_state", "schema_version"],
+      "description": "Durable JdbcFlowSnapshotStore backing table (ADR-013/FLOW-103); required when exeris.runtime.flow.persistence-enabled=true. DDL lifted verbatim from exeris-kernel-community V0.7.0__create_saga_state.sql."
     }
   },
   "neo4j_graph": {
@@ -107,6 +112,7 @@
     "user_principals table exists",
     "exeris_outbox table exists",
     "exeris_outbox_dlq table exists",
+    "exeris_saga_state table exists",
     "Neo4j connect test",
     "Neo4j Product node count >= 500"
   ]

@@ -20,6 +20,7 @@ MIGRATIONS=(
   "${SCRIPT_DIR}/v1_core.sql"
   "${SCRIPT_DIR}/v2_shop.sql"
   "${SCRIPT_DIR}/v3_outbox_axon.sql"
+  "${SCRIPT_DIR}/v5_flow_saga_state.sql"
 )
 
 run_sql_file() {

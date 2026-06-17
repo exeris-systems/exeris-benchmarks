@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.exeris.benchmarks</groupId>
+  <artifactId>spring-benchmark-app</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>Exeris :: Benchmarks :: Spring Benchmark App</name>
+  <description>
+    Spring-on-Exeris benchmark target (compatibility mode). Hosts the
+    e2e-shop-order-saga workload on exeris-spring-runtime (web + tx + data + flow)
+    instead of Spring-Boot-on-Tomcat + Axon Framework. See README.md for the
+    track classification, SB4 matrix line (ADR-028), and the baseline-supersession
+    note covering the runtime swap.
+  </description>
+
+  <properties>
+    <java.version>26</java.version>
+    <maven.compiler.release>${java.version}</maven.compiler.release>
+    <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
+    <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
+    <!--
+      Spring Boot 3.5.14 is the line the host-runtime artifacts at
+      exeris-spring-runtime:0.5.0-SNAPSHOT were compiled against (see
+      exeris-spring-runtime/pom.xml). The architect's blueprint cited
+      ADR-028 matrix-sb4 (Spring Boot 4.0.x); the actual published
+      artifacts do not yet support that line, so this target pins the
+      line the host-runtime really supports. Switch this to 4.0.x once
+      a 4.0-line of exeris-spring-runtime is published — README's
+      "SB4 matrix alignment" section also needs updating at that point.
+    -->
+    <spring-boot.version>3.5.14</spring-boot.version>
+    <exeris-spring-runtime.version>0.5.0-SNAPSHOT</exeris-spring-runtime.version>
+    <graalvm.buildtools.native.version>0.10.4</graalvm.buildtools.native.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!--
+        Pin neo4j-bolt-connection to the version paired with neo4j-java-driver:5.28.8 (bolt 6.0.2 API).
+        Spring Boot 4.0.4 imports neo4j-bolt-connection-bom:10.1.1 via its BOM chain
+        (spring-boot-dependencies → neo4j-java-driver-bom:6.0.3 → neo4j-bolt-connection-bom:10.1.1).
+        MetricsListener was removed between 6.0.2 and 10.1.1, causing NoClassDefFoundError.
+        First BOM declaration wins in Maven resolution — this entry must stay FIRST.
+      -->
+      <dependency>
+        <groupId>org.neo4j.bolt</groupId>
+        <artifactId>neo4j-bolt-connection-bom</artifactId>
+        <version>6.0.2</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>eu.exeris</groupId>
+        <artifactId>exeris-spring-runtime-bom</artifactId>
+        <version>${exeris-spring-runtime.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- Exeris Spring runtime: host the app on the Exeris ingress + flow engine
+         in compatibility mode (Spring MVC dispatch overlay). Pure-mode requires
+         rewriting controllers to ExerisRequestHandler — out of scope for this
+         target. See README.md "Pure-vs-Compat axis position". -->
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-boot-autoconfigure</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-tx</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-data</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-flow</artifactId>
+    </dependency>
+
+    <!-- JPA + JDBC + DB drivers — unchanged across the swap.
+         JPA still acquires connections through DataSource; with the
+         compat-datasource opt-in (application.properties) this is the
+         exeris-spring-runtime-data ExerisDataSource adapter, which emits
+         JpaConnectionAcquired / JpaConnectionBound JFR events on the
+         compatibility seam. See README.md "JPA telemetry bypass disclosure". -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+      <exclusions>
+        <!--
+          Pool ownership moves to ExerisDataSource under the
+          compat-datasource opt-in (exeris.runtime.data.compat-datasource.enabled=true).
+          spring-boot-starter-jdbc still pulls JdbcTemplate / DataSourceUtils,
+          which we use directly in SpringBenchmarkController.dbPing — but
+          HikariCP would otherwise be the default pool and conflict with the
+          kernel-owned persistence engine. The enforcer rule below also bans
+          it, so this exclusion is the place to keep the contract honest.
+        -->
+        <exclusion>
+          <groupId>com.zaxxer</groupId>
+          <artifactId>HikariCP</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.neo4j.driver</groupId>
+      <artifactId>neo4j-java-driver</artifactId>
+      <version>5.28.8</version>
+    </dependency>
+
+    <!-- Servlet API — required by Spring Security's WebSecurityConfiguration
+         at autoconfig reflection time, even though no servlet container runs
+         (the Exeris ingress owns HTTP). Without this on classpath,
+         spring-security-web fails with ClassNotFoundException on
+         jakarta.servlet.Filter while Spring Boot introspects bean methods.
+         exeris-spring-runtime-web excludes jakarta.servlet-api from its
+         spring-web transitive (to keep Pure Mode clean), so Compat Mode
+         consumers using Spring Security must add it back. -->
+    <dependency>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+    </dependency>
+
+    <!-- Security stack unchanged. The compat web bridge surfaces Spring
+         SecurityContext via ExerisSecurityContextFilter, so existing
+         @RestController + Authentication injection keeps working. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${maven.compiler.plugin.version}</version>
+        <configuration>
+          <release>${maven.compiler.release}</release>
+          <parameters>true</parameters>
+          <enablePreview>false</enablePreview>
+        </configuration>
+      </plugin>
+
+      <!--
+        Enforcer rule: forbid runtime-classpath leaks of the legacy stack.
+
+        - org.axonframework:*       — Axon dropped entirely; saga is on
+                                       exeris-spring-runtime-flow now.
+        - com.zaxxer:HikariCP       — pool ownership moves to ExerisDataSource
+                                       under the compat-datasource opt-in
+                                       (excluded locally from spring-boot-starter-jdbc above).
+        - org.apache.tomcat.embed:* — web ingress is the Exeris HTTP server,
+                                       not Tomcat (spring-boot-starter-web removed).
+
+        Netty and Reactor are NOT in the ban list. They reach the classpath
+        as load-bearing transitives of neo4j-java-driver (Bolt is implemented
+        on top of Netty; the async driver surface uses Reactor). Excluding
+        them would break the Neo4j graph backend, which is one of the two
+        first-class graph backends for the saga benchmark (the other being
+        PG-graph). The architect's "no Netty / Reactor as Community capability"
+        directive is about publication claims, not about a JDBC-class driver
+        transitive — a Neo4j driver requiring Netty does not promote Netty
+        into the Community surface any more than a JDBC driver requiring
+        unsafe.misc does. The README's "Reporting checklist" already requires
+        running `mvn dependency:tree` and disclosing the transitive set when
+        relevant.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>${maven.enforcer.plugin.version}</version>
+        <executions>
+          <execution>
+            <id>ban-legacy-runtime-deps</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>org.axonframework:*</exclude>
+                    <exclude>org.apache.tomcat.embed:*</exclude>
+                  </excludes>
+                  <message>
+                    This target hosts the saga benchmark on exeris-spring-runtime
+                    (compatibility mode). Tomcat (servlet container) and Axon
+                    (replaced by exeris-spring-runtime-flow) must not leak into the
+                    runtime classpath — they would contradict the runtime swap. If
+                    a dependency drags one of these in, exclude it locally rather
+                    than relaxing the rule.
+
+                    NOTE: HikariCP is intentionally NOT banned. The Exeris kernel
+                    persistence subsystem (exeris-kernel-community) owns a HikariCP
+                    pool sized by exeris.runtime.persistence.max-pool-size and hard-
+                    references HikariPool at init — identical to exeris-community-app,
+                    which provides HikariCP at runtime scope. The compat-datasource
+                    seam (ExerisDataSource) still owns the JPA/Hibernate DataSource
+                    surface; Hikari is the kernel's own pool, not the Spring app pool.
+                    The spring-boot-starter-jdbc Hikari exclusion above keeps Spring
+                    Boot from defaulting its auto-DataSource to Hikari.
+                  </message>
+                </bannedDependencies>
+              </rules>
+              <fail>true</fail>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <version>${spring-boot.version}</version>
+        <configuration>
+          <mainClass>eu.exeris.benchmarks.targets.springapp.SpringBenchmarkApplication</mainClass>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <useModulePath>false</useModulePath>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>native</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.graalvm.buildtools</groupId>
+            <artifactId>native-maven-plugin</artifactId>
+            <version>${graalvm.buildtools.native.version}</version>
+            <extensions>true</extensions>
+            <executions>
+              <execution>
+                <id>build-native</id>
+                <goals>
+                  <goal>compile-no-fork</goal>
+                </goals>
+                <phase>package</phase>
+              </execution>
+            </executions>
+            <configuration>
+              <imageName>spring-benchmark-app</imageName>
+              <mainClass>eu.exeris.benchmarks.targets.springapp.SpringBenchmarkApplication</mainClass>
+              <buildArgs>
+                <buildArg>--enable-monitoring=jfr</buildArg>
+              </buildArgs>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+            <version>${spring-boot.version}</version>
+            <executions>
+              <execution>
+                <id>process-aot</id>
+                <goals>
+                  <goal>process-aot</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

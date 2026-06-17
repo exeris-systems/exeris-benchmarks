@@ -71,9 +71,12 @@
     },
     "target_classification": {
       "type": "string",
+      "description": "Exeris-runtime mode, derived from the selected target(s) (not asked): 'pure' = pure-mode Exeris (community/locality, kernel-native API); 'compat' = compatibility-mode Exeris (spring-runtime-on-exeris); 'baseline' = a non-Exeris comparison target (plain Spring/Tomcat, Quarkus) which is neither pure- nor compat-mode; 'mixed' = a multi-target profile spanning more than one of these (e.g. a pure-vs-compat comparison).",
       "enum": [
         "pure",
-        "compat"
+        "compat",
+        "baseline",
+        "mixed"
       ]
     },
     "protocol_mode": {
@@ -83,6 +86,61 @@
         "h2",
         "h3"
       ]
+    },
+    "transport_security": {
+      "type": "object",
+      "description": "TLS posture, ORTHOGONAL to protocol_mode (which is the HTTP version axis only). 'mode'=auto follows the target's matrix-declared scheme (no override; zero behavior change); on/off force the launched target's transport AND the client scheme. 'effective_transport' composes the HTTP version with TLS into the runner's BENCH_PROTOCOL_MODE_OVERRIDE space (h1/https-h1/h2/h2c/h3). When 'overrides_target_declared' is true the run's transport diverges from the target's asset-matrix declaration and MUST be labeled as such before any comparison.",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "tls_enabled",
+        "scheme",
+        "effective_transport"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ]
+        },
+        "tls_enabled": {
+          "type": "boolean"
+        },
+        "scheme": {
+          "type": "string",
+          "enum": [
+            "http",
+            "https"
+          ]
+        },
+        "effective_transport": {
+          "type": "string",
+          "enum": [
+            "h1",
+            "https-h1",
+            "h2",
+            "h2c",
+            "h3"
+          ]
+        },
+        "target_declared_scheme": {
+          "type": "string",
+          "enum": [
+            "http",
+            "https"
+          ]
+        },
+        "overrides_target_declared": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     },
     "tier": {
       "type": "string",

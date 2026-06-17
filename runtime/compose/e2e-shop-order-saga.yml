@@ -45,6 +45,7 @@ services:
       - ../db/seed/v1_core.sql:/docker-entrypoint-initdb.d/01-v1-core.sql:ro
       - ../db/seed/v2_shop.sql:/docker-entrypoint-initdb.d/02-v2-shop.sql:ro
       - ../db/seed/v3_outbox_axon.sql:/docker-entrypoint-initdb.d/03-v3-outbox-axon.sql:ro
+      - ../db/seed/v5_flow_saga_state.sql:/docker-entrypoint-initdb.d/05-v5-flow-saga-state.sql:ro
       - e2e-saga-pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
@@ -69,6 +70,7 @@ services:
       - ../db/seed/v1_core.sql:/seed/v1_core.sql:ro
       - ../db/seed/v2_shop.sql:/seed/v2_shop.sql:ro
       - ../db/seed/v3_outbox_axon.sql:/seed/v3_outbox_axon.sql:ro
+      - ../db/seed/v5_flow_saga_state.sql:/seed/v5_flow_saga_state.sql:ro
     command: >
       bash -c "
         echo '[seed] Cleaning existing data (v0_clean)...' &&
@@ -79,6 +81,8 @@ services:
         psql -f /seed/v2_shop.sql &&
         echo '[seed] Applying v3_outbox_axon...' &&
         psql -f /seed/v3_outbox_axon.sql &&
+        echo '[seed] Applying v5_flow_saga_state...' &&
+        psql -f /seed/v5_flow_saga_state.sql &&
         echo '[seed] All migrations applied.'
       "
     restart: "no"

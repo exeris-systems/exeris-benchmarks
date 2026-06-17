@@ -59,13 +59,22 @@ bench_wait_for_http_200_with_metrics() {
   return 1
 }
 
+# HTTPS endpoints in the bench harness use self-signed smoke certs (see
+# tools/bench/lib/certs.sh); accept them with -k, matching the convention in
+# run-e2e-shop-order-saga-baseline.sh (CURL_INSECURE_OPT) and start-target.sh
+# (curl -sfk). Plain-http URLs are unaffected.
+_bench_preflight_insecure_opt() {
+  [[ "${1:-}" == https://* ]] && printf -- '-k' || printf ''
+}
+
 bench_run_endpoint_preflight() {
   local url=$1
   local output_file=$2
   local timeout_seconds=${3:-60}
+  local insecure; insecure="$(_bench_preflight_insecure_opt "$url")"
 
   BENCH_PREFLIGHT_HTTP_CODE=""
-  BENCH_PREFLIGHT_HTTP_CODE=$(curl -sS -o "$output_file" -w "%{http_code}" --max-time "$timeout_seconds" "$url" || true)
+  BENCH_PREFLIGHT_HTTP_CODE=$(curl -sS $insecure -o "$output_file" -w "%{http_code}" --max-time "$timeout_seconds" "$url" || true)
 
   [[ "$BENCH_PREFLIGHT_HTTP_CODE" == "200" ]]
 }
@@ -74,9 +83,10 @@ bench_run_endpoint_preflight_with_headers() {
   local url=$1
   local output_file=$2
   local timeout_seconds=${3:-60}
+  local insecure; insecure="$(_bench_preflight_insecure_opt "$url")"
 
   BENCH_PREFLIGHT_HTTP_CODE=""
-  BENCH_PREFLIGHT_HTTP_CODE=$(curl -sS -i -o "$output_file" -w "%{http_code}" --max-time "$timeout_seconds" "$url" || true)
+  BENCH_PREFLIGHT_HTTP_CODE=$(curl -sS $insecure -i -o "$output_file" -w "%{http_code}" --max-time "$timeout_seconds" "$url" || true)
 
   [[ "$BENCH_PREFLIGHT_HTTP_CODE" == "200" ]]
 }

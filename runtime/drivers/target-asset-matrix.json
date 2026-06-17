@@ -175,6 +175,22 @@
         "runtime/drivers/docker-compose/quarkus-native.yml"
       ],
       "non_runnable_reason": "No Quarkus native launcher assets are provisioned in runtime/drivers for this profile."
+    },
+    {
+      "target_id": "spring-runtime-on-exeris-flow",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/spring-runtime-on-exeris.env",
+      "profile_id": "spring-runtime-on-exeris-flow",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9001/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "eligibility_note": "Baseline-candidate for request-path endpoints only. The compat request-scope bug was resolved by exeris-spring-runtime-web #48 (request-path DB access serves 2xx; verified in results/raw/guided/20260610T160359Z). Saga terminal-state metrics are NOT eligible: flow steps run on kernel worker VTs outside the request-scoped compat provider binding, so the saga never resolves (saga_success_rate=0, threshold_failure). This target is excluded from scenarios/e2e-shop-order-saga/comparative-pair-manifest.json and flagged baseline-only in tools/verify-target-asset-matrix.sh. See targets/exeris-spring-runtime-app-comp/README.md section 'Runtime eligibility'."
     }
   ]
 }

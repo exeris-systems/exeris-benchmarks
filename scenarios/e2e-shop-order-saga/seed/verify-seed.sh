@@ -178,7 +178,7 @@ else
 fi
 
 # Check new e2e saga tables (existence + non-negative counts)
-for TABLE_NAME in carts cart_items user_principals exeris_outbox exeris_outbox_dlq; do
+for TABLE_NAME in carts cart_items user_principals exeris_outbox exeris_outbox_dlq exeris_saga_state; do
   echo -e "${YELLOW}Checking ${TABLE_NAME} table...${NC}"
   TABLE_EXISTS=$(pg_scalar "SELECT COUNT(*) FROM information_schema.tables WHERE table_name='${TABLE_NAME}'")
   if [[ "$TABLE_EXISTS" -ge 1 ]]; then

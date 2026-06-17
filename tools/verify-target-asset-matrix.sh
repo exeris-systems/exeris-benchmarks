@@ -9,6 +9,7 @@ MATRIX_PATH="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
 # of any scenario comparative manifest.
 JUSTIFIED_UNUSED_RUNNABLE_TARGETS=(
   "exeris-e2e-community-h2"
+  "spring-runtime-on-exeris-flow"
 )
 
 fail_count=0

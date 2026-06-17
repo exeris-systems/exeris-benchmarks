@@ -339,6 +339,12 @@ case "$DRIVER" in
           echo "ERROR: --driver h2load --h2load-axis h2c is exploratory-only (not comparable to H1/wrk); use --claim-scope exploratory."
           exit 1
         fi
+        # The h2load "h2c" axis means "HTTP/2, no --h1": over cleartext http it is
+        # true h2c (prior-knowledge); over TLS h2load negotiates h2 via ALPN. Both
+        # are valid HTTP/2 now that the target enables http2 for h2 runs (see the
+        # HTTP/2 env block at target launch). The post-load ALPN-fallback guard below
+        # still fails the run if the server did NOT actually negotiate h2, so an
+        # H1-only target can never be mislabeled H2.
         TRANSPORT_MODE="loopback-h2"
         PROTOCOL="h2"
         ;;
@@ -1089,6 +1095,31 @@ if ! target_reachable; then
     fi
   fi
 
+  # HTTP/2 posture for the launched target — set ONLY for an h2 run. The Quarkus
+  # and Spring targets default http2 OFF (quarkus.http.http2 / server.http2.enabled
+  # = ${EXERIS_HTTP2_ENABLED:false}), so the HARNESS must enable h2 for an h2 run,
+  # exactly as run-e2e-shop-order-saga-baseline.sh does — without it an h2 run
+  # launches an H1-only server (over TLS it omits h2 from ALPN -> silent fallback;
+  # over cleartext it rejects the h2c preface).
+  #
+  # For h1 we deliberately set NOTHING here and let every target keep its defaults:
+  # Quarkus/Spring default http2 off (pure H1), and the Exeris kernel defaults
+  # maxVersion=HTTP_2 / h2cUpgrade=true and serves H1 to an H1 client. Forcing
+  # EXERIS_HTTP_MAX_VERSION=HTTP_1_1 here previously broke the kernel's H1+TLS path
+  # (regression) — never override the kernel's HTTP version on the H1 baseline.
+  if [[ "$PROTOCOL" == "h2" ]]; then
+    TARGET_CMD+=(
+      EXERIS_HTTP2_ENABLED=true
+      SERVER_HTTP2_ENABLED=true
+      EXERIS_HTTP_MAX_VERSION=HTTP_2
+    )
+    if [[ "$TLS_ENABLED" == "1" ]]; then
+      TARGET_CMD+=(EXERIS_HTTP_H2C_UPGRADE_ENABLED=false)
+    else
+      TARGET_CMD+=(EXERIS_HTTP_H2C_UPGRADE_ENABLED=true)
+    fi
+  fi
+
   # Optional connection-acquisition timeout. Mapped per target family in the
   # native unit each expects: Exeris/Hikari take milliseconds; Quarkus Agroal
   # takes a Duration, so convert ms -> ISO-8601 (e.g. 5000 -> PT5S). Only appended
@@ -1299,6 +1330,46 @@ else
   LOAD_OUT=$("${LOAD_CMD[@]}" 2>&1)
 fi
 echo "$LOAD_OUT"
+
+# Persist the driver's raw output as a first-class run artifact, the same way the
+# target's stdout is kept in target-app.log. The parsed result.json is a lossy
+# projection of this; the raw log is the ground truth for what the load client
+# (and which HTTP version/axis) actually did — needed for honest reproducibility.
+if [[ -n "${OUTPUT_DIR:-}" ]]; then
+  DRIVER_LOG="$OUTPUT_DIR/driver-${DRIVER}.log"
+  {
+    printf '# driver: %s  protocol: %s' "$DRIVER" "${PROTOCOL:-?}"
+    [[ "$DRIVER" == "h2load" ]] && printf '  h2load-axis: %s' "${H2LOAD_AXIS:-?}"
+    printf '\n# command: %s\n\n' "${LOAD_CMD[*]}"
+    printf '%s\n' "$LOAD_OUT"
+  } > "$DRIVER_LOG" 2>/dev/null \
+    && echo "[entity-read-by-id] driver raw output saved: $DRIVER_LOG" \
+    || echo "WARN: could not write driver log to $DRIVER_LOG" >&2
+fi
+
+# Honesty guard (defense in depth): when h2load runs over TLS it negotiates the
+# HTTP version via ALPN and SILENTLY falls back to HTTP/1.1 if the server omits h2.
+# If we asked for HTTP/2 but h2 did not negotiate, the measured traffic was H1 —
+# fail rather than record an H1 run under an H2 (PROTOCOL=h2) label.
+if [[ "$DRIVER" == "h2load" && "$PROTOCOL" == "h2" ]]; then
+  # (1) Negative signal: an explicit ALPN fallback to HTTP/1.1 (covers the TLS path).
+  if printf '%s\n' "$LOAD_OUT" | grep -Eq 'Server does not support ALPN|Falling back to HTTP/1\.1|No protocol negotiated'; then
+    echo "ERROR: h2load requested HTTP/2 but the server did not negotiate h2 (ALPN fallback to HTTP/1.1 detected in the driver output)." >&2
+    echo "ERROR: the measured traffic ran HTTP/1.1, so it cannot be labeled HTTP/2 ('$BASE_URL' served TLS without advertising h2 via ALPN)." >&2
+    echo "ERROR: this target does not speak HTTP/2 over TLS; use a cleartext h2c endpoint (TLS off) against an h2c-capable target. Raw driver output: ${DRIVER_LOG:-<unsaved>}" >&2
+    exit 1
+  fi
+  # (2) Positive signal (TLS only): require h2load to report it negotiated h2 via
+  # ALPN. This fails closed even if a future nghttp2 reworded the fallback notice
+  # above — absence of the positive marker is treated as not-h2. Cleartext h2c uses
+  # prior-knowledge (no ALPN, no "Application protocol" line), so assert under TLS only.
+  if [[ "$TLS_ENABLED" == "1" ]] \
+     && ! printf '%s\n' "$LOAD_OUT" | grep -Eiq 'Application protocol:[[:space:]]*h2([[:space:]]|$)'; then
+    echo "ERROR: h2load requested HTTP/2 over TLS but did not report 'Application protocol: h2' (ALPN did not confirm h2)." >&2
+    echo "ERROR: refusing to label the run HTTP/2 without positive h2 negotiation evidence. Raw driver output: ${DRIVER_LOG:-<unsaved>}" >&2
+    exit 1
+  fi
+fi
 
 # Stop the resource sampler the moment measurement ends, so the sampled window is
 # exactly the measurement window (summarize/augment happen below while the target

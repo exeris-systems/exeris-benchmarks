@@ -172,6 +172,26 @@ assert_validator fail "env-file-entity-local" \
   "$(base_profile | jq '.scenario_id = "entity-read-by-id" | .driver = "wrk"
         | .env_file = "exeris-community-runtime.env"')"
 
+# 18) protocol_selection (auto, no override) -> pass.
+assert_validator pass "protocol-selection-auto" \
+  "$(base_profile | jq '.protocol_selection = {
+        mode: "auto", resolved: "h1", scenario_implied: "h1", overrides_scenario: false }')"
+
+# 19) protocol_selection forcing h2 with override flag -> pass.
+assert_validator pass "protocol-selection-h2-override" \
+  "$(base_profile | jq '.protocol_mode = "h2" | .driver = "h2load"
+        | .protocol_selection = {
+            mode: "h2", resolved: "h2", scenario_implied: "h1", overrides_scenario: true }')"
+
+# 20) protocol_selection missing a required sub-field -> fail (schema).
+assert_validator fail "protocol-selection-incomplete" \
+  "$(base_profile | jq '.protocol_selection = { mode: "h1", resolved: "h1" }')"
+
+# 21) protocol_selection.mode = h3 -> fail (toggle is auto/h1/h2 only).
+assert_validator fail "protocol-selection-bad-mode" \
+  "$(base_profile | jq '.protocol_selection = {
+        mode: "h3", resolved: "h1", scenario_implied: "h1", overrides_scenario: false }')"
+
 echo ""
 if [[ "$FAILURES" -eq 0 ]]; then
   echo "PASS: all guided-profile validator fixtures behaved as expected"

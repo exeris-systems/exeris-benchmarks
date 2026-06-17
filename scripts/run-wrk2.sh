@@ -72,9 +72,13 @@ TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 RESULTS_DIR="$ROOT/results/raw"
 mkdir -p "$RESULTS_DIR"
 RESULT_JSON="$RESULTS_DIR/wrk2-${TIMESTAMP}.json"
-RESULT_RAW_FILE="$(mktemp)"
+# Persist the raw wrk2 measurement output as a first-class artifact (not a temp
+# file): result.json is a lossy projection of it, and the raw log is the ground
+# truth for what the driver actually did — kept for honest reproducibility, the
+# same way target stdout is retained. PERCENTILES_FILE stays an ephemeral temp.
+RESULT_RAW_FILE="$RESULTS_DIR/wrk2-${TIMESTAMP}.raw.txt"
 PERCENTILES_FILE="$(mktemp)"
-trap 'rm -f "$RESULT_RAW_FILE" "$PERCENTILES_FILE"' EXIT
+trap 'rm -f "$PERCENTILES_FILE"' EXIT
 
 WRK_BASE_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS")
 if [[ -n "$LUA_SCRIPT" ]]; then
@@ -242,4 +246,5 @@ fi
 
 echo ""
 echo "Result written to: $RESULT_JSON"
+echo "Raw driver output : $RESULT_RAW_FILE"
 echo "$RESULT_JSON"

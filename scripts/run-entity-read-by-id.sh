@@ -1095,16 +1095,18 @@ if ! target_reachable; then
     fi
   fi
 
-  # HTTP/2 posture for the launched target. The target apps default http2 OFF
-  # (quarkus.http.http2 / server.http2.enabled = ${EXERIS_HTTP2_ENABLED:false}) so
-  # the H1 baseline is pure — the HARNESS must enable h2 for an h2 run, exactly as
-  # run-e2e-shop-order-saga-baseline.sh does. Without this an h2 run launches an
-  # H1-only server: over TLS it omits h2 from ALPN (silent fallback to HTTP/1.1),
-  # over cleartext it rejects the h2c preface. Map PROTOCOL + TLS onto the same env
-  # the saga path uses:
-  #   h2 + TLS       -> HTTP/2 advertised via ALPN (h2c upgrade off)
-  #   h2 + cleartext -> HTTP/2 cleartext (h2c prior-knowledge + upgrade on)
-  #   h1             -> http2 off (explicit, so a stale inherited env can't leak in)
+  # HTTP/2 posture for the launched target — set ONLY for an h2 run. The Quarkus
+  # and Spring targets default http2 OFF (quarkus.http.http2 / server.http2.enabled
+  # = ${EXERIS_HTTP2_ENABLED:false}), so the HARNESS must enable h2 for an h2 run,
+  # exactly as run-e2e-shop-order-saga-baseline.sh does — without it an h2 run
+  # launches an H1-only server (over TLS it omits h2 from ALPN -> silent fallback;
+  # over cleartext it rejects the h2c preface).
+  #
+  # For h1 we deliberately set NOTHING here and let every target keep its defaults:
+  # Quarkus/Spring default http2 off (pure H1), and the Exeris kernel defaults
+  # maxVersion=HTTP_2 / h2cUpgrade=true and serves H1 to an H1 client. Forcing
+  # EXERIS_HTTP_MAX_VERSION=HTTP_1_1 here previously broke the kernel's H1+TLS path
+  # (regression) — never override the kernel's HTTP version on the H1 baseline.
   if [[ "$PROTOCOL" == "h2" ]]; then
     TARGET_CMD+=(
       EXERIS_HTTP2_ENABLED=true
@@ -1116,13 +1118,6 @@ if ! target_reachable; then
     else
       TARGET_CMD+=(EXERIS_HTTP_H2C_UPGRADE_ENABLED=true)
     fi
-  else
-    TARGET_CMD+=(
-      EXERIS_HTTP2_ENABLED=false
-      SERVER_HTTP2_ENABLED=false
-      EXERIS_HTTP_MAX_VERSION=HTTP_1_1
-      EXERIS_HTTP_H2C_UPGRADE_ENABLED=false
-    )
   fi
 
   # Optional connection-acquisition timeout. Mapped per target family in the

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  jfr-steady-state.jfc — ADDITIVE JFR settings overlay for steady-state proof.
+
+  Purpose: give a defensible signal that "C2 has finished" inside the measurement
+  window. Without it you cannot argue you are measuring steady state rather than
+  warmup noise. This file enables three compiler events that the built-in
+  `default`/`profile` configurations do NOT emit usefully:
+
+    - jdk.CompilerStatistics      (period 1s) — nmethodCodeSize / compileCount
+                                  still rising in the window ⇒ warmup not done.
+    - jdk.CompilerQueueUtilization(period 1s) — queueSize > 0 in the window ⇒
+                                  methods are still waiting to be compiled.
+    - jdk.Compilation             (threshold 100ms) — an individual compilation
+                                  taking > ~10s ⇒ the C2 thread is being preempted.
+
+  It is meant to be MERGED on top of a base configuration, e.g.:
+
+    -XX:StartFlightRecording=...,settings=profile,settings=<repo>/env/jfr-steady-state.jfc
+
+  or with jcmd:
+
+    jcmd <pid> JFR.start settings=profile settings=<repo>/env/jfr-steady-state.jfc
+
+  Events not listed here are untouched (the base config's settings win), so this
+  overlay is purely additive — it never disables anything from `profile`.
+
+  NOTE: jdk.CompilerQueueUtilization requires JDK 21+. On older JDKs the JFR
+  parser warns about the unknown event and continues; the run is unaffected.
+
+  This overlay carries NO sensitive/Enterprise data — only HotSpot compiler
+  telemetry — so it is safe under the default `public` publication mode. The
+  resulting .jfr is still raw JFR and remains subject to publish-report.sh
+  publication-mode gating like any other recording.
+-->
+<configuration version="2.0"
+               label="Exeris Steady-State Additive"
+               description="Additive C2 compiler telemetry for steady-state proof; merge on top of profile/default."
+               provider="exeris-benchmarks">
+
+  <event name="jdk.CompilerStatistics">
+    <setting name="enabled">true</setting>
+    <setting name="period">1 s</setting>
+  </event>
+
+  <event name="jdk.CompilerQueueUtilization">
+    <setting name="enabled">true</setting>
+    <setting name="period">1 s</setting>
+  </event>
+
+  <event name="jdk.Compilation">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">100 ms</setting>
+    <setting name="stackTrace">false</setting>
+  </event>
+
+</configuration>

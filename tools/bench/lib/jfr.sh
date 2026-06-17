@@ -62,7 +62,22 @@ bench_start_jfr_recording() {
       done < <(grep -oE 'name=[^ ]+' "${logs_dir}/jfr-start.txt" | sed 's/name=//' 2>/dev/null || true)
     fi
     start_attempted=true
-    if jcmd "$pid" "JFR.start name=${recording_name} settings=${settings} disk=true" \
+    # Additive steady-state compiler telemetry (opt-in, default OFF). jcmd JFR.start
+    # accepts a repeated settings= token, merged on top of the base config — so this
+    # is purely additive. BENCH_JFR_STEADY_STATE=1 uses env/jfr-steady-state.jfc
+    # (resolved relative to this lib: tools/bench/lib → repo root); BENCH_JFR_EXTRA_SETTINGS
+    # overrides with a custom overlay path. See docs/methodology.md.
+    local _extra_settings_arg=""
+    if [[ -n "${BENCH_JFR_EXTRA_SETTINGS:-}" ]]; then
+      _extra_settings_arg=" settings=${BENCH_JFR_EXTRA_SETTINGS}"
+    elif [[ "${BENCH_JFR_STEADY_STATE:-0}" == "1" ]]; then
+      local _lib_repo_root
+      _lib_repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd 2>/dev/null || true)"
+      if [[ -n "$_lib_repo_root" && -f "${_lib_repo_root}/env/jfr-steady-state.jfc" ]]; then
+        _extra_settings_arg=" settings=${_lib_repo_root}/env/jfr-steady-state.jfc"
+      fi
+    fi
+    if jcmd "$pid" "JFR.start name=${recording_name} settings=${settings}${_extra_settings_arg} disk=true" \
         >> "${logs_dir}/jfr-start.txt" 2>&1; then
       start_success=true
       note="${recording_already_present:+replaced existing recording; }recording started"

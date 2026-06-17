@@ -235,6 +235,24 @@ apply_fair_resource_profile() {
     echo "VirtualThread pinning diagnostics enabled: jdk.VirtualThreadPinned + tracePinnedThreads=full"
   fi
 
+  # Additive steady-state compiler telemetry (opt-in, default OFF). Merged into the
+  # shared jfr_settings so all three targets record it symmetrically — a fairness
+  # requirement, since an asymmetric JFR overlay would bias one runtime's profile.
+  # BENCH_JFR_STEADY_STATE=1 uses env/jfr-steady-state.jfc; BENCH_JFR_EXTRA_SETTINGS
+  # overrides with a custom overlay. See docs/methodology.md.
+  if [[ -n "${BENCH_JFR_EXTRA_SETTINGS:-}" ]]; then
+    jfr_settings="${jfr_settings},settings=${BENCH_JFR_EXTRA_SETTINGS}"
+    echo "Steady-state JFR overlay (custom): ${BENCH_JFR_EXTRA_SETTINGS}"
+  elif [[ "${BENCH_JFR_STEADY_STATE:-0}" == "1" ]]; then
+    local steady_jfc="${REPO_ROOT}/env/jfr-steady-state.jfc"
+    if [[ ! -f "$steady_jfc" ]]; then
+      echo "ERROR: BENCH_JFR_STEADY_STATE=1 but overlay file not found: ${steady_jfc}"
+      return 1
+    fi
+    jfr_settings="${jfr_settings},settings=${steady_jfc}"
+    echo "Steady-state JFR overlay enabled: ${steady_jfc} (CompilerStatistics/QueueUtilization/Compilation)"
+  fi
+
   if [[ "$BENCH_ENABLE_SAFEPOINT_DIAGNOSTICS" == "1" ]]; then
     validate_positive_integer "$BENCH_JFR_MAX_SIZE_MB" "BENCH_JFR_MAX_SIZE_MB" || return 1
 

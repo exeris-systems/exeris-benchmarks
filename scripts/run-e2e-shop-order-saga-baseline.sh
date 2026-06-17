@@ -8,6 +8,7 @@ LIB="$REPO_ROOT/tools/bench/lib"
 source "$LIB/readiness.sh"
 source "$LIB/protocol.sh"
 source "$LIB/resource-sampler.sh"
+source "$LIB/os-sampler.sh"
 source "$LIB/jfr.sh"
 source "$LIB/jcmd.sh"
 source "$LIB/perf.sh"
@@ -145,6 +146,16 @@ cleanup_baseline() {
   [[ -n "$PRE_TMP" ]] && rm -f "$PRE_TMP"
   bench_stop_resource_sampler
   bench_stop_perf_stat
+  # Best-effort stop of OS sidecars on any exit path (guarded: trap may fire
+  # before these vars are assigned, and set -u is in effect).
+  if [[ -n "${TARGET_PIDSTAT_PID:-}" ]]; then
+    bench_stop_pidstat_sampler "$TARGET_PIDSTAT_PID" "${TARGET_PIDSTAT_CSV:-/dev/null}" 2>/dev/null || true
+    TARGET_PIDSTAT_PID=""
+  fi
+  if [[ -n "${HOST_MPSTAT_PID:-}" ]]; then
+    bench_stop_mpstat_sampler "$HOST_MPSTAT_PID" "${HOST_MPSTAT_CSV:-/dev/null}" 2>/dev/null || true
+    HOST_MPSTAT_PID=""
+  fi
   # Stop the target process so it does not bleed into subsequent runs.
   if [[ -n "${STOP_TARGET_SCRIPT:-}" && -f "$STOP_TARGET_SCRIPT" && -n "${TARGET_APP:-}" ]]; then
     "$STOP_TARGET_SCRIPT" "$TARGET_APP" 2>/dev/null || true
@@ -450,21 +461,21 @@ ensure_benchmark_infra() {
 
   if [[ "$GRAPH_TRACK" == "neo4j" ]]; then
     echo "Auto-starting benchmark infra: benchmark-postgres, benchmark-neo4j (graph_track=neo4j)"
-    if ! docker compose -f "$BENCHMARK_COMPOSE_FILE" up -d benchmark-postgres benchmark-neo4j; then
+    if ! docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up -d benchmark-postgres benchmark-neo4j; then
       echo "Warning: docker compose failed to start benchmark infra services; checking health anyway." >&2
     fi
     wait_for_compose_service_health "$BENCHMARK_COMPOSE_FILE" "benchmark-postgres" "true"
     wait_for_compose_service_health "$BENCHMARK_COMPOSE_FILE" "benchmark-neo4j" "false"
   else
     echo "Auto-starting benchmark infra: benchmark-postgres (graph_track=${GRAPH_TRACK}, Neo4j skipped)"
-    if ! docker compose -f "$BENCHMARK_COMPOSE_FILE" up -d benchmark-postgres; then
+    if ! docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up -d benchmark-postgres; then
       echo "Warning: docker compose failed to start benchmark-postgres; checking health anyway." >&2
     fi
     wait_for_compose_service_health "$BENCHMARK_COMPOSE_FILE" "benchmark-postgres" "true"
   fi
 
   echo "Running DB seed migrations (benchmark-db-seed)..."
-  docker compose -f "$BENCHMARK_COMPOSE_FILE" up --force-recreate --no-deps benchmark-db-seed
+  docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up --force-recreate --no-deps benchmark-db-seed
   echo "DB seed migrations complete."
 
   if [[ "$GRAPH_TRACK" == "neo4j" ]]; then
@@ -475,7 +486,7 @@ ensure_benchmark_infra() {
   if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
     echo "Axon target detected (contract=${CONTRACT_ID}); starting benchmark-axonserver."
     docker compose -f "$BENCHMARK_COMPOSE_FILE" rm -f --volumes benchmark-axonserver 2>/dev/null || true
-    if ! docker compose -f "$BENCHMARK_COMPOSE_FILE" up -d --force-recreate benchmark-axonserver; then
+    if ! docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up -d --force-recreate benchmark-axonserver; then
       echo "Warning: docker compose failed to start benchmark-axonserver; checking health anyway." >&2
     fi
     wait_for_compose_service_health "$BENCHMARK_COMPOSE_FILE" "benchmark-axonserver" "false"
@@ -738,6 +749,28 @@ BENCHMARK_COMPOSE_FILE="$REPO_ROOT/$BENCHMARK_COMPOSE_REF"
 SEED_MANIFEST_PATH="$REPO_ROOT/$SEED_MANIFEST_REF"
 SEED_VERIFY_SCRIPT="$REPO_ROOT/$SEED_VERIFY_SCRIPT_REF"
 
+# Backend container network mode (fairness gate). By default the stateful backends
+# run bridged with published ports → every target↔backend packet crosses NAT, an
+# asymmetric tax across stacks of differing DB-chattiness. DB_HOST_NETWORK=1 (or
+# BENCH_BACKEND_NETWORK=host) layers the host-net override so backends share the
+# host network with the target. The chosen mode is recorded in result.json.
+# `up` commands use BENCHMARK_COMPOSE_UP_ARGS; health/ps stay on the base file
+# (service names are identical, so the override is not needed to query them).
+BENCHMARK_COMPOSE_UP_ARGS=( -f "$BENCHMARK_COMPOSE_FILE" )
+if [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
+  BACKEND_NETWORK_MODE="host"
+  _hostnet_override="$REPO_ROOT/runtime/compose/e2e-shop-order-saga.host-net.yml"
+  if [[ -f "$_hostnet_override" ]]; then
+    BENCHMARK_COMPOSE_UP_ARGS+=( -f "$_hostnet_override" )
+  else
+    echo "Warning: DB_HOST_NETWORK requested but override not found: $_hostnet_override; falling back to bridge." >&2
+    BACKEND_NETWORK_MODE="bridge"
+  fi
+else
+  BACKEND_NETWORK_MODE="bridge"
+fi
+echo "Backend container network mode: $BACKEND_NETWORK_MODE"
+
 if [[ "$GRAPH_TRACK" == "neo4j" ]]; then
   require_file "$SEED_NEO4J_SCRIPT"
 fi
@@ -761,6 +794,10 @@ mkdir -p "$OUTPUT_DIR"
 K6_OUTPUT_JSON="$OUTPUT_DIR/k6-output.json"
 K6_SUMMARY_JSON="$OUTPUT_DIR/k6-summary.json"
 K6_CONSOLE_LOG="$OUTPUT_DIR/k6-console.log"
+# Per-second throughput reconstruction (warmup curve). The CSV is the raw stream;
+# the JSON is the aggregated series + steady-state/time-to-peak merged into result.json.
+K6_TIMESERIES_CSV="$OUTPUT_DIR/k6-timeseries.csv"
+K6_THROUGHPUT_SERIES_JSON="$OUTPUT_DIR/k6-throughput-series.json"
 ENV_JSON="$OUTPUT_DIR/env.json"
 RUN_METADATA_JSON="$OUTPUT_DIR/run-metadata.json"
 NEO4J_SEED_LOG="$OUTPUT_DIR/neo4j-seed.log"
@@ -787,6 +824,13 @@ RESULT_JSON="$OUTPUT_DIR/result.json"
 RUNTIME_LOG_METADATA_JSON="$LOGS_DIR/runtime-log-metadata.json"
 AXON_STATS_CSV="$LOGS_DIR/axonserver-docker-stats.csv"
 AXON_STATS_PID=""
+# OS-level sidecars (opt-in via BENCH_OS_SIDECARS=1, default OFF). pidstat gives
+# per-thread %wait (C2 starvation) + context switches; mpstat gives per-CPU
+# %usr/%sys/%soft/%idle (network/softirq burn). See tools/bench/lib/os-sampler.sh.
+TARGET_PIDSTAT_CSV="$LOGS_DIR/target-${TARGET_APP}-pidstat.csv"
+HOST_MPSTAT_CSV="$LOGS_DIR/host-mpstat.csv"
+TARGET_PIDSTAT_PID=""
+HOST_MPSTAT_PID=""
 mkdir -p "$LOGS_DIR"
 trap cleanup_baseline EXIT
 
@@ -869,6 +913,20 @@ if [[ -n "$TARGET_PID" ]]; then
   bench_start_resource_sampler "$TARGET_PID" "$RESOURCE_SAMPLES_CSV"
 else
   echo "Warning: target pid could not be detected for base url '$BASE_URL' (port '${TARGET_PORT:-unknown}')." >&2
+fi
+
+# OS-level sidecars (opt-in). pidstat needs the target pid; mpstat is host-global.
+if [[ "${BENCH_OS_SIDECARS:-0}" == "1" ]]; then
+  if [[ -n "$TARGET_PID" ]]; then
+    TARGET_PIDSTAT_PID="$(bench_start_pidstat_sampler "$TARGET_PID" "$TARGET_PIDSTAT_CSV" 1)"
+    [[ -n "$TARGET_PIDSTAT_PID" ]] \
+      && echo "pidstat sidecar started (pid ${TARGET_PIDSTAT_PID}) → $TARGET_PIDSTAT_CSV" \
+      || echo "Warning: pidstat sidecar not started (pidstat missing or pid invalid)." >&2
+  fi
+  HOST_MPSTAT_PID="$(bench_start_mpstat_sampler "$HOST_MPSTAT_CSV" 1)"
+  [[ -n "$HOST_MPSTAT_PID" ]] \
+    && echo "mpstat sidecar started (pid ${HOST_MPSTAT_PID}) → $HOST_MPSTAT_CSV" \
+    || echo "Warning: mpstat sidecar not started (mpstat missing — install sysstat)." >&2
 fi
 
 # Capture jcmd diagnostics and endpoint preflight immediately after PID detection
@@ -966,16 +1024,31 @@ if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *s
 fi
 K6_EXIT_CODE=0
 set +e
-bench_run_k6 "$K6_SCRIPT" "$K6_OUTPUT_JSON" "$K6_SUMMARY_JSON" "" "$K6_DOCKER_IMAGE" \
+bench_run_k6 "$K6_SCRIPT" "$K6_OUTPUT_JSON" "$K6_SUMMARY_JSON" "" "$K6_DOCKER_IMAGE" "$K6_TIMESERIES_CSV" \
   2>&1 | tee "$K6_CONSOLE_LOG"
 K6_EXIT_CODE="${PIPESTATUS[0]}"
 set -e
+
+# Reconstruct the per-second throughput series from the CSV stream so steady-state
+# throughput and time-to-peak come from the measurement window only — not a single
+# average over warmup+measurement+cooldown. Never fatal: emits valid JSON regardless.
+"$REPO_ROOT/tools/aggregate-k6-throughput.sh" "$K6_TIMESERIES_CSV" "$K6_THROUGHPUT_SERIES_JSON" || true
 if [[ "$K6_EXIT_CODE" -ne 0 ]]; then
   echo "Warning: k6 exited with code ${K6_EXIT_CODE} (likely threshold failures). Continuing artifact collection." >&2
 fi
 
 bench_stop_resource_sampler
 bench_stop_perf_stat
+
+# Stop OS-level sidecars (converts raw tool output to CSV; no-op if not started).
+if [[ -n "$TARGET_PIDSTAT_PID" ]]; then
+  bench_stop_pidstat_sampler "$TARGET_PIDSTAT_PID" "$TARGET_PIDSTAT_CSV"
+  TARGET_PIDSTAT_PID=""
+fi
+if [[ -n "$HOST_MPSTAT_PID" ]]; then
+  bench_stop_mpstat_sampler "$HOST_MPSTAT_PID" "$HOST_MPSTAT_CSV"
+  HOST_MPSTAT_PID=""
+fi
 
 # Stop Axon Server docker stats sampler
 if [[ -n "$AXON_STATS_PID" ]]; then
@@ -1059,6 +1132,7 @@ jq -n \
   --arg logs_dir "$LOGS_DIR" \
   --arg compose_ref "$BENCHMARK_COMPOSE_REF" \
   --arg compose_sha256 "$COMPOSE_SHA256" \
+  --arg backend_network_mode "$BACKEND_NETWORK_MODE" \
   --arg seed_baseline_apply_script_ref "$SEED_APPLY_SCRIPT_REF" \
   --arg seed_baseline_apply_script_sha256 "$SEED_APPLY_SCRIPT_SHA256" \
   --arg seed_overlay_manifest_ref "$SEED_MANIFEST_REF" \
@@ -1103,9 +1177,11 @@ jq -n \
     k6_exit_code: $k6_exit_code,
     runner_status: $runner_status,
     logs_dir: $logs_dir,
+    backend_network_mode: $backend_network_mode,
     infra_contract: {
       compose_ref: $compose_ref,
       compose_sha256: $compose_sha256,
+      backend_network_mode: $backend_network_mode,
       seed_baseline: {
         apply_script_ref: $seed_baseline_apply_script_ref,
         apply_script_sha256: $seed_baseline_apply_script_sha256
@@ -1215,10 +1291,32 @@ jq -n \
   }' > "$RUNTIME_LOG_METADATA_JSON"
 
 # Generate result.json (canonical merged artifact)
-# Create null stubs for optional JFR JSON files that may not exist when JFR is disabled.
-for _optional_json in "$JFR_METADATA_JSON" "$JFR_START_JSON"; do
+# Create null stubs for optional JSON files that may not exist (JFR disabled, or the
+# throughput aggregator skipped when no CSV/python3).
+for _optional_json in "$JFR_METADATA_JSON" "$JFR_START_JSON" "$K6_THROUGHPUT_SERIES_JSON"; do
   [[ -f "$_optional_json" ]] || printf 'null\n' > "$_optional_json"
 done
+
+# Effective measurement-window split (seconds), mirroring the k6.js defaults so
+# result.json records the window split explicitly — a fairness/reproducibility
+# field: throughput is steady-state from the measurement window, not a flat average.
+_k6_dur_to_s() {
+  local d="${1:-}" total=0 num unit rest="$d"
+  [[ -z "$rest" ]] && { printf '0\n'; return 0; }
+  while [[ "$rest" =~ ^([0-9]+)(ms|h|m|s)(.*)$ ]]; do
+    num="${BASH_REMATCH[1]}"; unit="${BASH_REMATCH[2]}"; rest="${BASH_REMATCH[3]}"
+    case "$unit" in
+      h)  total=$(( total + num * 3600 )) ;;
+      m)  total=$(( total + num * 60 )) ;;
+      s)  total=$(( total + num )) ;;
+      ms) : ;;  # sub-second: ignored for window seconds
+    esac
+  done
+  printf '%s\n' "$total"
+}
+_warmup_window_s="$(_k6_dur_to_s "${K6_WARMUP_DURATION:-120s}")"
+_measurement_window_s="$(_k6_dur_to_s "${K6_MEASURE_DURATION:-180s}")"
+_cooldown_window_s="$(_k6_dur_to_s "${K6_COOLDOWN_DURATION:-30s}")"
 
 if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_JSON" && -f "$ENV_JSON" ]]; then
   _reproducibility_status="incomplete"
@@ -1242,10 +1340,15 @@ if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_
     --slurpfile runtime_log        "$RUNTIME_LOG_METADATA_JSON" \
     --slurpfile jfr_capture        "$JFR_METADATA_JSON" \
     --slurpfile jfr_start          "$JFR_START_JSON" \
+    --slurpfile throughput_series  "$K6_THROUGHPUT_SERIES_JSON" \
+    --argjson  warmup_window_s     "$_warmup_window_s" \
+    --argjson  measurement_window_s "$_measurement_window_s" \
+    --argjson  cooldown_window_s   "$_cooldown_window_s" \
     '
     ($run_metadata[0]) as $rm |
     ($k6_summary[0].metrics)  as $km |
     ($env_data[0])            as $env |
+    ($throughput_series[0])   as $ts |
     {
       schema_version:           "1",
       run_id:                   $run_id,
@@ -1280,7 +1383,15 @@ if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_
         iteration_duration_avg_ms:   ($km.iteration_duration.avg // null),
         iteration_duration_p90_ms:   ($km.iteration_duration["p(90)"] // null),
         iteration_duration_p95_ms:   ($km.iteration_duration["p(95)"] // null),
-        error_rate_pct:              (($km.http_req_failed.value // 0) * 100)
+        error_rate_pct:              (($km.http_req_failed.value // 0) * 100),
+        steady_state_throughput_rps: ($ts.steady_state_throughput_rps // null),
+        time_to_peak_s:              ($ts.time_to_peak_s // null),
+        throughput_series:           ($ts.throughput_series // [])
+      },
+      run_config: {
+        warmup_window_s:       $warmup_window_s,
+        measurement_window_s:  $measurement_window_s,
+        cooldown_window_s:     $cooldown_window_s
       },
       run_metadata: ($rm + {
         metadata: {

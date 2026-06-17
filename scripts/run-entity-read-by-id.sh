@@ -33,6 +33,9 @@ JFR_LIB="${REPO_ROOT}/tools/bench/lib/jfr.sh"
 RESOURCE_SAMPLER_LIB="${REPO_ROOT}/tools/bench/lib/resource-sampler.sh"
 # shellcheck source=/dev/null
 [[ -f "$RESOURCE_SAMPLER_LIB" ]] && source "$RESOURCE_SAMPLER_LIB"
+OS_SAMPLER_LIB="${REPO_ROOT}/tools/bench/lib/os-sampler.sh"
+# shellcheck source=/dev/null
+[[ -f "$OS_SAMPLER_LIB" ]] && source "$OS_SAMPLER_LIB"
 
 CLAIM_SCOPE="${CLAIM_SCOPE:-exploratory}"
 PROFILE="${PROFILE:-dev-laptop}"
@@ -105,6 +108,16 @@ if [[ "$TLS_ENABLED" == "1" ]]; then TARGET_SCHEME="https"; CURL_INSECURE_OPT="-
 BASE_URL="${BASE_URL:-${TARGET_SCHEME}://localhost:${TARGET_PORT}}"
 SCENARIO_DIR="scenarios/entity-read-by-id"
 DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
+# Backend container network mode (fairness gate). entity-read-by-id is a CROSS-STACK
+# comparison (exeris vs spring vs quarkus against the same Postgres), so bridge/NAT
+# taxes chattier runtimes asymmetrically. DB_HOST_NETWORK=1 (or BENCH_BACKEND_NETWORK=host)
+# layers the host-net override so the DB shares the host network. Recorded in result.json.
+DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.host-net.yml"
+if [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
+  BACKEND_NETWORK_MODE="host"
+else
+  BACKEND_NETWORK_MODE="bridge"
+fi
 DB_INIT_SQL_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql"
 TARGET_MODULE_POM_COMMUNITY="targets/exeris-community-app/pom.xml"
 TARGET_JAR_GLOB_COMMUNITY="targets/exeris-community-app/target/exeris-community-app-*.jar"
@@ -613,10 +626,16 @@ resolve_db_launcher() {
 }
 
 compose_db() {
+  # Layer the host-net override when host mode is requested (fairness gate). Applies
+  # to every compose subcommand; harmless for non-up commands (same project/services).
+  local _net_args=()
+  if [[ "${BACKEND_NETWORK_MODE:-bridge}" == "host" && -f "$DB_COMPOSE_HOSTNET_OVERRIDE" ]]; then
+    _net_args=( -f "$DB_COMPOSE_HOSTNET_OVERRIDE" )
+  fi
   if [[ "$COMPOSE_BIN" == "docker compose" ]]; then
-    docker compose -f "$DB_COMPOSE_FILE" "$@"
+    docker compose -f "$DB_COMPOSE_FILE" "${_net_args[@]}" "$@"
   else
-    docker-compose -f "$DB_COMPOSE_FILE" "$@"
+    docker-compose -f "$DB_COMPOSE_FILE" "${_net_args[@]}" "$@"
   fi
 }
 
@@ -643,9 +662,19 @@ start_db() {
     compose_db up -d
     DB_MANAGED=1
   else
-    if [[ "$DB_PORT" == "5432" ]] && port_reachable 5432; then
-      DB_PORT=55432
-      echo "[step 2/9] WARN: localhost:5432 is occupied by a different service; using localhost:$DB_PORT"
+    # Network args for the docker-run fallback. Host mode binds 5432 directly on the
+    # host (no -p, no port remap); if 5432 is occupied this fails loudly — which is
+    # correct, host networking cannot share an occupied port.
+    local _run_net_args=()
+    if [[ "${BACKEND_NETWORK_MODE:-bridge}" == "host" ]]; then
+      echo "[step 2/9] WARN: docker-run fallback with host networking (DB binds host:5432 directly)."
+      _run_net_args=( --network host )
+    else
+      if [[ "$DB_PORT" == "5432" ]] && port_reachable 5432; then
+        DB_PORT=55432
+        echo "[step 2/9] WARN: localhost:5432 is occupied by a different service; using localhost:$DB_PORT"
+      fi
+      _run_net_args=( -p "$DB_PORT":5432 )
     fi
     echo "[step 2/9] WARN: Using docker-run fallback for managed benchmark DB"
     docker rm -f "$DB_CONTAINER_NAME" >/dev/null 2>&1 || true
@@ -653,7 +682,7 @@ start_db() {
       -e POSTGRES_DB=benchmark_db \
       -e POSTGRES_USER=benchmark \
       -e POSTGRES_PASSWORD=benchmark \
-      -p "$DB_PORT":5432 \
+      "${_run_net_args[@]}" \
       --mount "type=bind,source=$DB_INIT_SQL_FILE,target=/docker-entrypoint-initdb.d/01-pg-stat-statements-init.sql,readonly" \
       --health-cmd 'pg_isready -U benchmark -d benchmark_db' \
       --health-interval 5s \
@@ -882,6 +911,15 @@ cleanup() {
   # orphaned sampler subshell polling a now-dead /proc/<pid>.
   if command -v bench_stop_resource_sampler >/dev/null 2>&1; then
     bench_stop_resource_sampler || true
+  fi
+  # Stop OS sidecars on any exit path (guarded: trap may fire before assignment).
+  if [[ -n "${TARGET_PIDSTAT_PID:-}" ]]; then
+    bench_stop_pidstat_sampler "$TARGET_PIDSTAT_PID" "${TARGET_PIDSTAT_CSV:-/dev/null}" 2>/dev/null || true
+    TARGET_PIDSTAT_PID=""
+  fi
+  if [[ -n "${HOST_MPSTAT_PID:-}" ]]; then
+    bench_stop_mpstat_sampler "$HOST_MPSTAT_PID" "${HOST_MPSTAT_CSV:-/dev/null}" 2>/dev/null || true
+    HOST_MPSTAT_PID=""
   fi
   if [[ "$TARGET_APP_STARTED" -eq 1 ]] && [[ -n "$TARGET_APP_PID" ]] && kill -0 "$TARGET_APP_PID" >/dev/null 2>&1; then
     echo "[cleanup] Stopping benchmark target app (pid=$TARGET_APP_PID)..."
@@ -1286,6 +1324,24 @@ if command -v bench_start_resource_sampler >/dev/null 2>&1; then
   fi
 fi
 
+# OS-level sidecars (opt-in via BENCH_OS_SIDECARS=1, default OFF). entity-read is a
+# cross-stack comparison, so per-thread %wait (C2 starvation) and per-CPU %sys/%soft
+# (network/softirq burn) matter here too. See tools/bench/lib/os-sampler.sh.
+OS_SIDECARS_LOGS_DIR="$OUTPUT_DIR/logs"
+TARGET_PIDSTAT_CSV="$OS_SIDECARS_LOGS_DIR/target-pidstat.csv"
+HOST_MPSTAT_CSV="$OS_SIDECARS_LOGS_DIR/host-mpstat.csv"
+TARGET_PIDSTAT_PID=""
+HOST_MPSTAT_PID=""
+if [[ "${BENCH_OS_SIDECARS:-0}" == "1" ]] && command -v bench_start_pidstat_sampler >/dev/null 2>&1; then
+  mkdir -p "$OS_SIDECARS_LOGS_DIR"
+  if [[ -n "$RESOURCE_TARGET_PID" ]]; then
+    TARGET_PIDSTAT_PID="$(bench_start_pidstat_sampler "$RESOURCE_TARGET_PID" "$TARGET_PIDSTAT_CSV" 1)"
+    [[ -n "$TARGET_PIDSTAT_PID" ]] && echo "[step 6.6/9] pidstat sidecar → $TARGET_PIDSTAT_CSV"
+  fi
+  HOST_MPSTAT_PID="$(bench_start_mpstat_sampler "$HOST_MPSTAT_CSV" 1)"
+  [[ -n "$HOST_MPSTAT_PID" ]] && echo "[step 6.6/9] mpstat sidecar → $HOST_MPSTAT_CSV"
+fi
+
 # Step 7: Measure
 echo "[step 7/9] Measuring ($DURATION)..."
 PERF_STAT_FILE="$OUTPUT_DIR/perf-stat.csv"
@@ -1376,6 +1432,14 @@ fi
 # is still alive, before cleanup tears it down).
 if command -v bench_stop_resource_sampler >/dev/null 2>&1; then
   bench_stop_resource_sampler || true
+fi
+# Stop OS sidecars at the same boundary (converts raw tool output to CSV; no-op if
+# not started).
+if [[ -n "${TARGET_PIDSTAT_PID:-}" ]]; then
+  bench_stop_pidstat_sampler "$TARGET_PIDSTAT_PID" "$TARGET_PIDSTAT_CSV"; TARGET_PIDSTAT_PID=""
+fi
+if [[ -n "${HOST_MPSTAT_PID:-}" ]]; then
+  bench_stop_mpstat_sampler "$HOST_MPSTAT_PID" "$HOST_MPSTAT_CSV"; HOST_MPSTAT_PID=""
 fi
 
 # Fail loudly if the target died during measurement or no requests completed: a
@@ -1507,11 +1571,13 @@ RUN_CONFIG_JSON=$(jq -n \
   --argjson warmup_seconds "$WARMUP_SECONDS" \
   --argjson threads "$THREADS" \
   --argjson connections "$CONNECTIONS" \
+  --arg backend_network_mode "${BACKEND_NETWORK_MODE:-bridge}" \
   '{
     duration_seconds: $duration_seconds,
     warmup_seconds: $warmup_seconds,
     threads: $threads,
-    connections: $connections
+    connections: $connections,
+    backend_network_mode: $backend_network_mode
   }')
 
 METRICS_JSON=$(jq -n \
@@ -1622,11 +1688,16 @@ if [[ -f "$OUTPUT_DIR/env.json" ]]; then
   JDK_VERSION="$(jq -r '.jdk.version // "unknown"' "$OUTPUT_DIR/env.json")"
   HARDWARE_PROFILE_REF="$(jq -r '.hardware_profile // "unknown"' "$OUTPUT_DIR/env.json")"
   JVM_FLAGS_JSON="$(jq -c '.jvm_flags // []' "$OUTPUT_DIR/env.json")"
+  # hardware_profile does not pin the kernel/scheduler; surface both into repro metadata.
+  KERNEL_VERSION="$(jq -r '.kernel // "unknown"' "$OUTPUT_DIR/env.json")"
+  OS_SCHEDULER="$(jq -r '.os_scheduler // "unknown"' "$OUTPUT_DIR/env.json")"
 else
   JDK_VENDOR="unknown"
   JDK_VERSION="unknown"
   HARDWARE_PROFILE_REF="$PROFILE"
   JVM_FLAGS_JSON="[]"
+  KERNEL_VERSION="unknown"
+  OS_SCHEDULER="unknown"
 fi
 
 jq -n \
@@ -1638,6 +1709,8 @@ jq -n \
   --arg jdk_vendor "$JDK_VENDOR" \
   --arg jdk_version "$JDK_VERSION" \
   --arg hardware_profile_ref "$HARDWARE_PROFILE_REF" \
+  --arg kernel_version "${KERNEL_VERSION:-unknown}" \
+  --arg os_scheduler "${OS_SCHEDULER:-unknown}" \
   --arg tool "$TOOL_NAME" \
   --arg tool_version "$TOOL_VERSION_LINE" \
   --arg tier "community" \
@@ -1656,6 +1729,7 @@ jq -n \
   --argjson connections "$CONNECTIONS" \
   --argjson warmup_seconds "$WARMUP_SECONDS" \
   --argjson duration_seconds "$DURATION_SECONDS" \
+  --arg backend_network_mode "${BACKEND_NETWORK_MODE:-bridge}" \
   '{
     timestamp: $timestamp,
     benchmark_commit_sha: $commit_sha,
@@ -1669,6 +1743,8 @@ jq -n \
     },
     jvm_flags: $jvm_flags,
     hardware_profile_ref: $hardware_profile_ref,
+    kernel_version: $kernel_version,
+    os_scheduler: $os_scheduler,
     tool: {
       name: $tool,
       version: $tool_version
@@ -1688,7 +1764,8 @@ jq -n \
       threads: $threads,
       connections: $connections,
       warmup_seconds: $warmup_seconds,
-      duration_seconds: $duration_seconds
+      duration_seconds: $duration_seconds,
+      backend_network_mode: $backend_network_mode
     },
     seed_manifest_refs: {
       manifest_ref: $seed_manifest_ref,

@@ -1300,6 +1300,22 @@ else
 fi
 echo "$LOAD_OUT"
 
+# Persist the driver's raw output as a first-class run artifact, the same way the
+# target's stdout is kept in target-app.log. The parsed result.json is a lossy
+# projection of this; the raw log is the ground truth for what the load client
+# (and which HTTP version/axis) actually did — needed for honest reproducibility.
+if [[ -n "${OUTPUT_DIR:-}" ]]; then
+  DRIVER_LOG="$OUTPUT_DIR/driver-${DRIVER}.log"
+  {
+    printf '# driver: %s  protocol: %s' "$DRIVER" "${PROTOCOL:-?}"
+    [[ "$DRIVER" == "h2load" ]] && printf '  h2load-axis: %s' "${H2LOAD_AXIS:-?}"
+    printf '\n# command: %s\n\n' "${LOAD_CMD[*]}"
+    printf '%s\n' "$LOAD_OUT"
+  } > "$DRIVER_LOG" 2>/dev/null \
+    && echo "[entity-read-by-id] driver raw output saved: $DRIVER_LOG" \
+    || echo "WARN: could not write driver log to $DRIVER_LOG" >&2
+fi
+
 # Stop the resource sampler the moment measurement ends, so the sampled window is
 # exactly the measurement window (summarize/augment happen below while the target
 # is still alive, before cleanup tears it down).

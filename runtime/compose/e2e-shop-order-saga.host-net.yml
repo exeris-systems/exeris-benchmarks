@@ -1,0 +1,45 @@
+# e2e-shop-order-saga.host-net.yml — OPT-IN host-networking override.
+#
+# Apply ON TOP of e2e-shop-order-saga.yml to put the stateful backends
+# (Postgres / Neo4j / Axon Server) on the host network, removing the bridge/NAT
+# hop between the target JVM and its backends:
+#
+#   docker compose -f e2e-shop-order-saga.yml -f e2e-shop-order-saga.host-net.yml up -d ...
+#
+# (The saga baseline runner does this automatically when DB_HOST_NETWORK=1 or
+# BENCH_BACKEND_NETWORK=host.)
+#
+# WHY THIS IS A FAIRNESS GATE, NOT HYGIENE
+#   In the default stack the target JVM runs on the host network but the backends
+#   run bridged with published ports — so every target↔backend packet crosses
+#   docker-proxy/NAT. That overhead is ASYMMETRIC across runtimes: stacks differ in
+#   DB-chattiness (round-trips per request), so the bridge/NAT tax lands unequally.
+#   Exeris and the Axon-based stacks talk to their backends differently, so a
+#   bridged comparison can measure a difference in container networking rather than
+#   in the runtime. Proxy latency also reshapes connection-pool behaviour (waiters
+#   pile up, futex churn), compounding the asymmetry. Pin the mode explicitly and
+#   record it in result.json (run_metadata.backend_network_mode).
+#
+# TRADE-OFF (document, do not hide): host networking removes virtualization +
+# packet-processing noise but moves further from a production-shaped network. State
+# the chosen mode in any cross-stack claim.
+#
+# NOTE: `ports:` from the base file are ignored under host networking; Compose emits
+# a "Published ports are discarded when using host network mode" warning. That is
+# expected — in host mode the services bind the same ports directly on the host.
+
+services:
+  benchmark-postgres:
+    network_mode: host
+
+  benchmark-db-seed:
+    network_mode: host
+    # Service-name DNS does not exist on the host network; reach Postgres on loopback.
+    environment:
+      PGHOST: localhost
+
+  benchmark-neo4j:
+    network_mode: host
+
+  benchmark-axonserver:
+    network_mode: host

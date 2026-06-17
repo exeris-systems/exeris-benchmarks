@@ -339,17 +339,12 @@ case "$DRIVER" in
           echo "ERROR: --driver h2load --h2load-axis h2c is exploratory-only (not comparable to H1/wrk); use --claim-scope exploratory."
           exit 1
         fi
-        # h2c is HTTP/2 *cleartext* prior-knowledge: it requires an http:// endpoint
-        # and must never run over TLS. Over TLS h2load negotiates the version via
-        # ALPN instead and SILENTLY falls back to HTTP/1.1 when the server omits h2
-        # (e.g. an H1-only target like Quarkus), which would record an H1 result
-        # under an H2 label. This runner has no h2-over-TLS axis, so reject the combo.
-        if [[ "$TLS_ENABLED" == "1" ]]; then
-          echo "ERROR: --h2load-axis h2c is HTTP/2 cleartext and cannot run over TLS (TLS_ENABLED=1; client scheme would be https)."
-          echo "ERROR: over TLS h2load relies on ALPN and silently degrades to HTTP/1.1 if the server omits h2, mislabeling an H1 run as H2."
-          echo "ERROR: disable TLS for h2c (cleartext HTTP/2), or use --h2load-axis h1 for HTTP/1.1-over-TLS."
-          exit 1
-        fi
+        # The h2load "h2c" axis means "HTTP/2, no --h1": over cleartext http it is
+        # true h2c (prior-knowledge); over TLS h2load negotiates h2 via ALPN. Both
+        # are valid HTTP/2 now that the target enables http2 for h2 runs (see the
+        # HTTP/2 env block at target launch). The post-load ALPN-fallback guard below
+        # still fails the run if the server did NOT actually negotiate h2, so an
+        # H1-only target can never be mislabeled H2.
         TRANSPORT_MODE="loopback-h2"
         PROTOCOL="h2"
         ;;
@@ -1098,6 +1093,36 @@ if ! target_reachable; then
     if [[ -z "${EXERIS_TRANSPORT_CERT_PATH:-}" || ! -f "${EXERIS_TRANSPORT_CERT_PATH:-/nonexistent}" ]]; then
       echo "[step 6/9] WARN: BENCHMARK_TLS_ENABLED=1 but EXERIS_TRANSPORT_CERT_PATH is unset/missing; the HTTPS target may fail to start. Set EXERIS_TRANSPORT_CERT_PATH/KEY_PATH (or launch via run-guided.sh, which auto-provisions a smoke cert)."
     fi
+  fi
+
+  # HTTP/2 posture for the launched target. The target apps default http2 OFF
+  # (quarkus.http.http2 / server.http2.enabled = ${EXERIS_HTTP2_ENABLED:false}) so
+  # the H1 baseline is pure — the HARNESS must enable h2 for an h2 run, exactly as
+  # run-e2e-shop-order-saga-baseline.sh does. Without this an h2 run launches an
+  # H1-only server: over TLS it omits h2 from ALPN (silent fallback to HTTP/1.1),
+  # over cleartext it rejects the h2c preface. Map PROTOCOL + TLS onto the same env
+  # the saga path uses:
+  #   h2 + TLS       -> HTTP/2 advertised via ALPN (h2c upgrade off)
+  #   h2 + cleartext -> HTTP/2 cleartext (h2c prior-knowledge + upgrade on)
+  #   h1             -> http2 off (explicit, so a stale inherited env can't leak in)
+  if [[ "$PROTOCOL" == "h2" ]]; then
+    TARGET_CMD+=(
+      EXERIS_HTTP2_ENABLED=true
+      SERVER_HTTP2_ENABLED=true
+      EXERIS_HTTP_MAX_VERSION=HTTP_2
+    )
+    if [[ "$TLS_ENABLED" == "1" ]]; then
+      TARGET_CMD+=(EXERIS_HTTP_H2C_UPGRADE_ENABLED=false)
+    else
+      TARGET_CMD+=(EXERIS_HTTP_H2C_UPGRADE_ENABLED=true)
+    fi
+  else
+    TARGET_CMD+=(
+      EXERIS_HTTP2_ENABLED=false
+      SERVER_HTTP2_ENABLED=false
+      EXERIS_HTTP_MAX_VERSION=HTTP_1_1
+      EXERIS_HTTP_H2C_UPGRADE_ENABLED=false
+    )
   fi
 
   # Optional connection-acquisition timeout. Mapped per target family in the

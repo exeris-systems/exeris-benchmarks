@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s] [--driver wrk|h2load] [--h2load-axis h1|h2c] [--backend-mode default-vt|locality-aware] [--target-runtime auto|community|locality|spring|spring-runtime-on-exeris|quarkus] [--target-build jvm|native] [--cpu-affinity <cpuset>] [--client-cpu-affinity <cpuset>]
+# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s] [--driver wrk|h2load|wrk2] [--h2load-axis h1|h2c] [--backend-mode default-vt|locality-aware] [--target-runtime auto|community|locality|spring|spring-runtime-on-exeris|quarkus] [--target-build jvm|native] [--cpu-affinity <cpuset>] [--client-cpu-affinity <cpuset>]
 #   --client-cpu-affinity pins the load driver (wrk/h2load) to a cpuset DISJOINT from --cpu-affinity, so the
 #   target is the bottleneck and its CPU-efficiency shows as throughput. Local target-bound recipe on a 12-core box:
 #   --cpu-affinity 0-2 --client-cpu-affinity 3-9 (target 3 cores, driver 7, leave 10-11 for OS/Postgres).
@@ -330,8 +330,9 @@ esac
 # --- Load-driver resolution ------------------------------------------------
 # Derive the tool/transport/protocol labels up front so env capture and every
 # result artifact stamp the driver that ACTUALLY ran. This runner is wrk- and
-# h2load-capable only; wrk2/k6 have dedicated runners (they parse different
-# output and, for wrk2, enforce CO-free p99 semantics this script does not).
+# wrk + h2load measured inline; wrk2 is launched-then-DELEGATED to run-wrk2.sh for
+# the CO-free latency measurement (this script does not reimplement its semantics).
+# k6 still has its own dedicated runner (different output/parser).
 case "$DRIVER" in
   wrk)
     TOOL_NAME="wrk"
@@ -381,15 +382,32 @@ case "$DRIVER" in
     BENCHMARK_FAMILY="runtime-h2load"
     ;;
   wrk2)
-    echo "ERROR: --driver wrk2 is not supported by this runner (it enforces CO-free p99 semantics and a different parser). Use scripts/run-wrk2.sh."
-    exit 1
+    # wrk2 is a CO-free sub-saturation LATENCY experiment (HTTP/1.1). This runner
+    # does not reimplement it: it launches the target + seeds the DB as usual, then
+    # DELEGATES the measurement phase to scripts/run-wrk2.sh (saturation-discovery
+    # -> warmup -> wrk2 fixed -R, HdrHistogram), and reads back its result. wrk2
+    # needs both wrk (discovery/warmup) and wrk2 (measurement).
+    if ! command -v wrk2 >/dev/null 2>&1 || ! command -v wrk >/dev/null 2>&1; then
+      echo "ERROR: --driver wrk2 requires both wrk2 and wrk in PATH (wrk drives saturation discovery + warmup)."
+      exit 1
+    fi
+    # CO-free latency at a sub-saturation rate is a different measurement than the
+    # wrk-defined throughput contract; never mint a comparison-eligible artifact.
+    if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
+      echo "ERROR: --driver wrk2 is exploratory-only (CO-free sub-saturation latency, not the wrk-defined throughput contract). Use --claim-scope exploratory."
+      exit 1
+    fi
+    TOOL_NAME="wrk2"
+    TRANSPORT_MODE="loopback-h1"
+    PROTOCOL="h1"
+    BENCHMARK_FAMILY="runtime-wrk2"
     ;;
   k6)
     echo "ERROR: --driver k6 is not supported by this runner. Use scripts/run-k6.sh."
     exit 1
     ;;
   *)
-    echo "ERROR: --driver must be wrk or h2load (got: $DRIVER)"
+    echo "ERROR: --driver must be wrk, h2load, or wrk2 (got: $DRIVER)"
     exit 1
     ;;
 esac
@@ -1355,59 +1373,90 @@ fi
 # Step 7: Measure
 echo "[step 7/9] Measuring ($DURATION)..."
 PERF_STAT_FILE="$OUTPUT_DIR/perf-stat.csv"
-if [[ "$DRIVER" == "h2load" ]]; then
-  # --log-file captures per-request timings (start_us, status, dur_us) for the
-  # MEASUREMENT run only (the warmup h2load above is not logged), so the latency
-  # percentiles h2load itself omits can be computed offline. See
-  # tools/aggregate-h2load-latency.sh (closed-loop / coordinated-omission caveat).
-  H2LOAD_LOG_FILE="$OUTPUT_DIR/h2load-requests.log"
-  LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" --log-file="$H2LOAD_LOG_FILE" "$BASE_URL/api/v1/users")
-else
-  LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
-fi
-
-# Pin the load driver to a cpuset disjoint from the target (--cpu-affinity) so the driver does not
-# steal the target's cores. Wrapping LOAD_CMD covers both the perf-stat and plain execution paths.
-if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then
-  echo "[step 7/9] Pinning load driver via taskset: $CLIENT_CPU_AFFINITY (keep disjoint from target $CPU_AFFINITY)"
-  LOAD_CMD=(taskset -c "$CLIENT_CPU_AFFINITY" "${LOAD_CMD[@]}")
-fi
-
-if [[ "$PERF_STAT_REQUIRED" == "1" || "${BENCHMARK_CAPTURE_PERF_STAT:-0}" == "1" ]]; then
-  if ! command -v perf >/dev/null 2>&1; then
-    echo "ERROR: perf-stat capture requested but perf command is unavailable"
-    exit 1
-  fi
-  PERF_NO_SCALE="${BENCHMARK_PERF_NO_SCALE:-1}"
-  if [[ "$PERF_NO_SCALE" != "0" && "$PERF_NO_SCALE" != "1" ]]; then
-    echo "ERROR: BENCHMARK_PERF_NO_SCALE must be 0 or 1 (got '$PERF_NO_SCALE')"
-    exit 1
-  fi
-  PERF_ARGS=(-x, -o "$PERF_STAT_FILE")
-  if [[ "$PERF_NO_SCALE" == "1" ]]; then
-    if perf stat --help 2>&1 | grep -q -- '--no-scale'; then
-      PERF_ARGS=(--no-scale "${PERF_ARGS[@]}")
-    else
-      echo "WARN: perf --no-scale not supported by this perf version; running perf stat with scaling enabled"
-    fi
-  fi
-  echo "[step 7/9] Capturing perf stat to $PERF_STAT_FILE"
+if [[ "$DRIVER" == "wrk2" ]]; then
+  # wrk2 path: the target is already up + seeded (above); DELEGATE the measurement
+  # to run-wrk2.sh (saturation-discovery -> warmup -> wrk2 fixed -R, HdrHistogram).
+  # JFR + OS sidecars (started around this section) wrap the whole delegated run, so
+  # they cover discovery+warmup+measure, not just the measurement window. perf-stat
+  # is not wired for the delegated path. WRK2_TARGET_RPS (env) pins the rate; else
+  # run-wrk2.sh auto-derives ~75% of observed saturation.
+  WRK2_LATENCY_JSON="$OUTPUT_DIR/wrk2-latency.json"
+  WRK2_RAW_FILE="${WRK2_LATENCY_JSON%.json}.raw.txt"
+  echo "[step 7/9] Delegating CO-free latency measurement to run-wrk2.sh (HTTP/1.1, sub-saturation)"
   set +e
-  LOAD_OUT=$(perf stat "${PERF_ARGS[@]}" -- "${LOAD_CMD[@]}" 2>&1)
-  PERF_EXIT_CODE=$?
+  LOAD_OUT=$(
+    WRK_BASE_URL_OVERRIDE="$BASE_URL" \
+    WRK_PATH_OVERRIDE="/api/v1/users" \
+    WRK2_THREADS_OVERRIDE="$THREADS" \
+    WRK2_CONNECTIONS_OVERRIDE="$CONNECTIONS" \
+    WRK2_DURATION_OVERRIDE="$DURATION" \
+    WRK2_CLIENT_CPU_AFFINITY="$CLIENT_CPU_AFFINITY" \
+    WRK2_RESULT_JSON_OVERRIDE="$WRK2_LATENCY_JSON" \
+    HARDWARE_PROFILE="$PROFILE" \
+    "$REPO_ROOT/scripts/run-wrk2.sh" "scenarios/entity-read-by-id" "scenarios/entity-read-by-id" 2>&1
+  )
+  WRK2_EXIT_CODE=$?
   set -e
-  if [[ "$PERF_EXIT_CODE" -ne 0 ]]; then
-    PERF_ERROR_LOG="$OUTPUT_DIR/perf-error.log"
-    printf '%s\n' "$LOAD_OUT" > "$PERF_ERROR_LOG"
-    echo "ERROR: perf stat execution failed (exit_code=$PERF_EXIT_CODE)"
-    echo "ERROR: perf diagnostics saved to $PERF_ERROR_LOG"
-    echo "$LOAD_OUT"
-    exit "$PERF_EXIT_CODE"
+  echo "$LOAD_OUT"
+  if [[ "$WRK2_EXIT_CODE" -ne 0 || ! -f "$WRK2_LATENCY_JSON" ]]; then
+    echo "ERROR: delegated wrk2 measurement failed (exit=$WRK2_EXIT_CODE); see output above."
+    exit 1
   fi
 else
-  LOAD_OUT=$("${LOAD_CMD[@]}" 2>&1)
+  if [[ "$DRIVER" == "h2load" ]]; then
+    # --log-file captures per-request timings (start_us, status, dur_us) for the
+    # MEASUREMENT run only (the warmup h2load above is not logged), so the latency
+    # percentiles h2load itself omits can be computed offline. See
+    # tools/aggregate-h2load-latency.sh (closed-loop / coordinated-omission caveat).
+    H2LOAD_LOG_FILE="$OUTPUT_DIR/h2load-requests.log"
+    LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" --log-file="$H2LOAD_LOG_FILE" "$BASE_URL/api/v1/users")
+  else
+    LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
+  fi
+
+  # Pin the load driver to a cpuset disjoint from the target (--cpu-affinity) so the driver does not
+  # steal the target's cores. Wrapping LOAD_CMD covers both the perf-stat and plain execution paths.
+  if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then
+    echo "[step 7/9] Pinning load driver via taskset: $CLIENT_CPU_AFFINITY (keep disjoint from target $CPU_AFFINITY)"
+    LOAD_CMD=(taskset -c "$CLIENT_CPU_AFFINITY" "${LOAD_CMD[@]}")
+  fi
+
+  if [[ "$PERF_STAT_REQUIRED" == "1" || "${BENCHMARK_CAPTURE_PERF_STAT:-0}" == "1" ]]; then
+    if ! command -v perf >/dev/null 2>&1; then
+      echo "ERROR: perf-stat capture requested but perf command is unavailable"
+      exit 1
+    fi
+    PERF_NO_SCALE="${BENCHMARK_PERF_NO_SCALE:-1}"
+    if [[ "$PERF_NO_SCALE" != "0" && "$PERF_NO_SCALE" != "1" ]]; then
+      echo "ERROR: BENCHMARK_PERF_NO_SCALE must be 0 or 1 (got '$PERF_NO_SCALE')"
+      exit 1
+    fi
+    PERF_ARGS=(-x, -o "$PERF_STAT_FILE")
+    if [[ "$PERF_NO_SCALE" == "1" ]]; then
+      if perf stat --help 2>&1 | grep -q -- '--no-scale'; then
+        PERF_ARGS=(--no-scale "${PERF_ARGS[@]}")
+      else
+        echo "WARN: perf --no-scale not supported by this perf version; running perf stat with scaling enabled"
+      fi
+    fi
+    echo "[step 7/9] Capturing perf stat to $PERF_STAT_FILE"
+    set +e
+    LOAD_OUT=$(perf stat "${PERF_ARGS[@]}" -- "${LOAD_CMD[@]}" 2>&1)
+    PERF_EXIT_CODE=$?
+    set -e
+    if [[ "$PERF_EXIT_CODE" -ne 0 ]]; then
+      PERF_ERROR_LOG="$OUTPUT_DIR/perf-error.log"
+      printf '%s\n' "$LOAD_OUT" > "$PERF_ERROR_LOG"
+      echo "ERROR: perf stat execution failed (exit_code=$PERF_EXIT_CODE)"
+      echo "ERROR: perf diagnostics saved to $PERF_ERROR_LOG"
+      echo "$LOAD_OUT"
+      exit "$PERF_EXIT_CODE"
+    fi
+  else
+    LOAD_OUT=$("${LOAD_CMD[@]}" 2>&1)
+  fi
+  echo "$LOAD_OUT"
 fi
-echo "$LOAD_OUT"
 
 # Persist the driver's raw output as a first-class run artifact, the same way the
 # target's stdout is kept in target-app.log. The parsed result.json is a lossy
@@ -1526,7 +1575,31 @@ if [[ -f "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT" ]]; then
   pg_stat_statements_snapshot "$PG_STAT_STATEMENTS_POST_FILE" "measurement" || true
 fi
 
-if [[ "$DRIVER" == "h2load" ]]; then
+if [[ "$DRIVER" == "wrk2" ]]; then
+  # Metrics from the delegated run-wrk2.sh artifacts: rps + CO-free HdrHistogram
+  # percentiles from the JSON; request/error counts from the measurement raw (run-wrk2
+  # tees ONLY the wrk2 measurement there, so discovery/warmup do not contaminate them).
+  THROUGHPUT_RPS=$(jq -r '.requests_per_sec // empty' "$WRK2_LATENCY_JSON" 2>/dev/null)
+  _wrk2_pct() { jq -r --arg p "$1" '(.latency_percentiles[]? | select(.percentile==$p) | .latency_us) // empty' "$WRK2_LATENCY_JSON" 2>/dev/null | head -1; }
+  LATENCY_P50_US=$(_wrk2_pct p50)
+  LATENCY_P75_US=$(_wrk2_pct p75)
+  LATENCY_P90_US=$(_wrk2_pct p90)
+  LATENCY_P99_US=$(_wrk2_pct p99)
+  LATENCY_P999_US=$(_wrk2_pct p99.9)
+  LATENCY_MEAN_US=""   # wrk2 JSON exposes percentiles, not mean/stdev/max
+  LATENCY_STDEV_US=""
+  LATENCY_MAX_US=""
+  TOTAL_REQUESTS=""
+  NON2XX_ERRORS=0
+  SOCKET_ERRORS=0
+  if [[ -f "$WRK2_RAW_FILE" ]]; then
+    TOTAL_REQUESTS=$(awk '/requests in/ {gsub(/,/,"",$1); print $1; exit}' "$WRK2_RAW_FILE")
+    _n2=$(awk '/Non-2xx or 3xx responses:/ {print $5; exit}' "$WRK2_RAW_FILE"); [[ -n "$_n2" ]] && NON2XX_ERRORS=$_n2
+    _se=$(awk -F'[:, ]+' '/Socket errors:/ {print ($4 + $6 + $8 + $10); exit}' "$WRK2_RAW_FILE"); [[ -n "$_se" ]] && SOCKET_ERRORS=$_se
+  fi
+  TOTAL_ERRORS=$((NON2XX_ERRORS + SOCKET_ERRORS))
+  echo "[step 7/9] wrk2 latency: $WRK2_LATENCY_JSON (p50=${LATENCY_P50_US:-na}us p99=${LATENCY_P99_US:-na}us p99.9=${LATENCY_P999_US:-na}us; CO-free sub-saturation — check load_fraction/at_saturation in the JSON)"
+elif [[ "$DRIVER" == "h2load" ]]; then
   # h2load summary:
   #   finished in 120.05s, 3328.80 req/s, 29.21MB/s
   #   requests: N total, N started, N done, N succeeded, N failed, N errored, N timeout

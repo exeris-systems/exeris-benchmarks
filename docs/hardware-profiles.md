@@ -44,6 +44,27 @@ is not available.
 | Background processes | Minimized; browser/IDE/desktop session closed |
 | Notes | Lower noise than `dev-laptop`, but still not equivalent to `perf-box-amd64`. Absolute publication claims require explicit caveat unless later confirmed on dedicated hardware. |
 
+### Target-bound local measurement (CPU pinning)
+
+On a loopback box the driver (wrk/h2load), the target JVM, and Postgres all share the same
+cores, so a CPU-efficiency improvement in the target does **not** show up as throughput — the
+driver just steals back the freed cycles, and run-to-run variance swamps the signal. To make a
+local run **target-bound** (target = the bottleneck, so rps tracks target efficiency), pin the
+target and the driver to **disjoint** cpusets:
+
+- `run-entity-read-by-id.sh --cpu-affinity <target-cpuset> --client-cpu-affinity <driver-cpuset>`
+  (or answer the two affinity prompts in `run-guided.sh`, LOCAL + unconstrained).
+- Recommended split on a 12-core box: **target `0-2`** (3 cores — the bottleneck), **driver `3-9`**
+  (7 cores — enough to saturate the target), leaving `10-11` for the OS and Postgres. Give the
+  target the *smaller* budget so it saturates first.
+- Both pins are recorded in the run (`cpuAffinity` / `clientCpuAffinity` in `result.json` notes
+  and the guided profile). Keep the two cpusets disjoint — overlapping them reintroduces the
+  contention this is meant to remove.
+
+Even target-bound, treat a single run as noisy: take 2–3 repetitions before concluding, and
+prefer the JFR CPU-profile share (per-method) as the primary signal for transport/allocation
+efficiency work.
+
 ---
 
 ## ci-runner

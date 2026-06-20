@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s] [--driver wrk|h2load] [--h2load-axis h1|h2c] [--backend-mode default-vt|locality-aware] [--target-runtime auto|community|locality|spring|spring-runtime-on-exeris|quarkus] [--target-build jvm|native] [--cpu-affinity <cpuset>]
+# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s] [--driver wrk|h2load] [--h2load-axis h1|h2c] [--backend-mode default-vt|locality-aware] [--target-runtime auto|community|locality|spring|spring-runtime-on-exeris|quarkus] [--target-build jvm|native] [--cpu-affinity <cpuset>] [--client-cpu-affinity <cpuset>]
+#   --client-cpu-affinity pins the load driver (wrk/h2load) to a cpuset DISJOINT from --cpu-affinity, so the
+#   target is the bottleneck and its CPU-efficiency shows as throughput. Local target-bound recipe on a 12-core box:
+#   --cpu-affinity 0-2 --client-cpu-affinity 3-9 (target 3 cores, driver 7, leave 10-11 for OS/Postgres).
 #   --driver h2load is exploratory-only (h2load H1 vs wrk H1 is not directly comparable; h2load emits no latency percentiles). --h2load-axis h2c selects HTTP/2 cleartext (loopback-h2).
 #
 # Orchestrates the entity-read-by-id E2E benchmark run:
@@ -67,6 +70,7 @@ BACKEND_MODE="${BACKEND_MODE:-default-vt}"
 TARGET_RUNTIME="${TARGET_RUNTIME:-auto}"
 TARGET_BUILD="${TARGET_BUILD:-jvm}"
 CPU_AFFINITY="${CPU_AFFINITY:-}"
+CLIENT_CPU_AFFINITY="${CLIENT_CPU_AFFINITY:-}"
 PERF_STAT_REQUIRED="${BENCHMARK_REQUIRE_PERF_STAT:-0}"
 BACKEND_EVIDENCE_REQUIRED="${BENCHMARK_REQUIRE_BACKEND_EVIDENCE:-0}"
 ALLOW_EXTERNAL_DB="${BENCHMARK_ALLOW_EXTERNAL_DB:-0}"
@@ -288,6 +292,7 @@ while [[ $# -gt 0 ]]; do
     --target-runtime) TARGET_RUNTIME="$2"; shift 2 ;;
     --target-build) TARGET_BUILD="$2"; shift 2 ;;
     --cpu-affinity) CPU_AFFINITY="$2"; shift 2 ;;
+    --client-cpu-affinity) CLIENT_CPU_AFFINITY="$2"; shift 2 ;;
     --enable-jfr) ENABLE_JFR="true"; shift ;;
     --no-jfr) ENABLE_JFR="false"; shift ;;
     --jfr-settings) JFR_SETTINGS="$2"; shift 2 ;;
@@ -412,6 +417,11 @@ fi
 
 if [[ -n "$CPU_AFFINITY" ]] && ! command -v taskset >/dev/null 2>&1; then
   echo "ERROR: --cpu-affinity requires taskset command"
+  exit 1
+fi
+
+if [[ -n "$CLIENT_CPU_AFFINITY" ]] && ! command -v taskset >/dev/null 2>&1; then
+  echo "ERROR: --client-cpu-affinity requires taskset command"
   exit 1
 fi
 
@@ -1351,6 +1361,13 @@ else
   LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
 fi
 
+# Pin the load driver to a cpuset disjoint from the target (--cpu-affinity) so the driver does not
+# steal the target's cores. Wrapping LOAD_CMD covers both the perf-stat and plain execution paths.
+if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then
+  echo "[step 7/9] Pinning load driver via taskset: $CLIENT_CPU_AFFINITY (keep disjoint from target $CPU_AFFINITY)"
+  LOAD_CMD=(taskset -c "$CLIENT_CPU_AFFINITY" "${LOAD_CMD[@]}")
+fi
+
 if [[ "$PERF_STAT_REQUIRED" == "1" || "${BENCHMARK_CAPTURE_PERF_STAT:-0}" == "1" ]]; then
   if ! command -v perf >/dev/null 2>&1; then
     echo "ERROR: perf-stat capture requested but perf command is unavailable"
@@ -1670,7 +1687,7 @@ cat > "$RESULT_FILE" <<EOF
   },
   "run_config": $RUN_CONFIG_JSON,
   "metrics": $METRICS_JSON,
-  "notes": "backendMode=$BACKEND_MODE targetRuntimeEffective=$TARGET_RUNTIME_EFFECTIVE targetBuild=$TARGET_BUILD cpuAffinity=${CPU_AFFINITY:-none}",
+  "notes": "backendMode=$BACKEND_MODE targetRuntimeEffective=$TARGET_RUNTIME_EFFECTIVE targetBuild=$TARGET_BUILD cpuAffinity=${CPU_AFFINITY:-none} clientCpuAffinity=${CLIENT_CPU_AFFINITY:-none}",
   "tags": ["backend-mode:$BACKEND_MODE", "target-runtime-effective:$TARGET_RUNTIME_EFFECTIVE", "target-build:$TARGET_BUILD"],
   "raw_output": $(echo "$LOAD_OUT" | jq -Rs .)
 }

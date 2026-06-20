@@ -66,7 +66,7 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 | **Drivers** | h2load `nghttp2/1.68.0`, wrk2 (HdrHistogram), wrk `4.1.0` |
 | **Transport** | **HTTP/2 over TLS 1.3** — `https://localhost:8080`, ALPN `h2`, **identical negotiated cipher `TLS_AES_128_GCM_SHA256` on all three targets** (confirmed driver-side). Providers are **not uniform**: Spring = JSSE (Tomcat `https-jsse-nio`), Quarkus = nominally JSSE, **Exeris = its own kernel `crypto` engine**. Because the engines differ, fairness rests on a **cleartext control** showing the cross-stack gap is unchanged with TLS off (see the TLS caveat below) — not on a shared provider. This is an HTTPS workload. |
 | **Backend** | PostgreSQL in a container (bridge **and** host-net tested) |
-| **Targets** | `exeris-benchmark-app-community-h1`, `quarkus-jvm-vt-tuned`, Spring (reference) |
+| **Targets** | Exeris, Quarkus, Spring (reference) |
 | **Profile class** | `dev-laptop` |
 
 **Read these before any number below:**

@@ -39,21 +39,32 @@ K6_CONSOLE_LOG="$RESULTS_DIR/k6-console-${TIMESTAMP}.log"
 # Per-sample CSV stream (timestamped, with a `scenario` column) so the per-second
 # throughput series — and thus the warmup curve — can be reconstructed instead of
 # trusting a single window-averaged number. See tools/aggregate-k6-throughput.sh.
+# OPT-IN (BENCH_K6_TIMESERIES=1): off by default so a standard run keeps its
+# original shape and avoids concurrent per-sample CSV I/O perturbing the very
+# steady-state being measured.
 K6_TIMESERIES_CSV="$RESULTS_DIR/k6-timeseries-${TIMESTAMP}.csv"
+K6_TIMESERIES_ENABLED="${BENCH_K6_TIMESERIES:-0}"
 
 echo "=== k6 scenario ==="
 echo "  Script    : $K6_SCRIPT"
 echo "  Output    : $RESULT_JSON"
-echo "  Timeseries: $K6_TIMESERIES_CSV"
+if [[ "$K6_TIMESERIES_ENABLED" == "1" ]]; then
+  echo "  Timeseries: $K6_TIMESERIES_CSV"
+else
+  echo "  Timeseries: (disabled — set BENCH_K6_TIMESERIES=1 to enable)"
+fi
 echo "  Console   : $K6_CONSOLE_LOG"
 echo ""
 
 bench_k6_assert_arrival_rate_executor "$K6_SCRIPT" || exit 1
 
+K6_OUT_ARGS=(--out json="$RESULT_JSON" --summary-export="$RESULTS_DIR/k6-summary-${TIMESTAMP}.json")
+if [[ "$K6_TIMESERIES_ENABLED" == "1" ]]; then
+  K6_OUT_ARGS+=(--out csv="$K6_TIMESERIES_CSV")
+fi
+
 k6 run \
-  --out json="$RESULT_JSON" \
-  --out csv="$K6_TIMESERIES_CSV" \
-  --summary-export="$RESULTS_DIR/k6-summary-${TIMESTAMP}.json" \
+  "${K6_OUT_ARGS[@]}" \
   "$@" \
   "$K6_SCRIPT" 2>&1 | tee "$K6_CONSOLE_LOG"
 

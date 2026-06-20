@@ -1166,6 +1166,11 @@ if ! target_reachable; then
       EXERIS_SSL_ENABLED=true
       EXERIS_INSECURE_REQUESTS=disabled
       SERVER_SSL_ENABLED=true
+      # Cross-stack fairness: pin the TLS 1.3 suite so every target negotiates the
+      # same AES-128-GCM-SHA256 Exeris uses natively (the Quarkus target defaults to
+      # the JDK's pick — AES-256 — which would pay more crypto CPU). Applied here on
+      # the comparative path, not baked into the target's own config. Overridable.
+      "EXERIS_TLS_CIPHER_SUITES=${EXERIS_TLS_CIPHER_SUITES:-TLS_AES_128_GCM_SHA256}"
     )
     if [[ -z "${EXERIS_TRANSPORT_CERT_PATH:-}" || ! -f "${EXERIS_TRANSPORT_CERT_PATH:-/nonexistent}" ]]; then
       echo "[step 6/9] WARN: BENCHMARK_TLS_ENABLED=1 but EXERIS_TRANSPORT_CERT_PATH is unset/missing; the HTTPS target may fail to start. Set EXERIS_TRANSPORT_CERT_PATH/KEY_PATH (or launch via run-guided.sh, which auto-provisions a smoke cert)."

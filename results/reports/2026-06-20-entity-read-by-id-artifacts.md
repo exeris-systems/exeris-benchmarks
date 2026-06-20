@@ -16,6 +16,7 @@ re-derived independently. All runs: `entity-read-by-id`, `dev-laptop`, JDK 26, k
 | `h2load-latency.json` / `wrk2-latency.json` (+ `.raw.txt`) | derived percentiles; wrk2 carries `at_saturation` + `load_fraction` |
 | `logs/target-pidstat.csv` | per-thread `%CPU` — the source for **CPU-per-request** |
 | `logs/host-mpstat.csv` | host CPU breakdown (`%sys` / `%soft` / `%wait`) — the bridge-tax evidence |
+| `resource-metrics.json` (+ `resource-samples.csv`) | RSS (`peak_rss_kb`, `rss_kb_avg`, `smaps_rss_kb_max`), VmHWM, thread count, JVM heap used/committed/reserved — the **memory-footprint** evidence |
 | `env.json`, `reproducibility-metadata.json` | SHA, JDK/tool versions, JVM flags, hardware profile |
 | `guided-run-profile.json` | affinity, network mode, warmup/measure, driver options |
 | `postgres-version.txt`, `postgres-settings.tsv`, `pg_stat_statements-*.json` | DB-side reproducibility |

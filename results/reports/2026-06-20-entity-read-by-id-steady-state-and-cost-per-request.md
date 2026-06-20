@@ -5,7 +5,7 @@ categories:
   - performance
   - benchmarking
   - jvm
-summary: "Throughput and latency both lie on this workload — one to coordinated omission, the other to warmup and run-to-run noise. The metric that survives is CPU per request: across three interleaved runs each, Exeris serves ~16% more throughput for ~34% less CPU/request than Quarkus (CV < 1.5%), and reaches steady state while Quarkus is still JIT-compiling after 5 minutes (Spring trails both). JFR, pidstat, and CO-free wrk2 show how — and where a saturated p50 of 146 ms is really a 3 ms service time."
+summary: "Throughput and latency both lie on this workload — one to coordinated omission, the other to warmup and run-to-run noise. The metrics that survive are CPU per request and memory footprint: across three interleaved runs each, Exeris serves ~16% more throughput for ~34% less CPU/request than Quarkus (CV < 1.5%) and runs at ~3.6× smaller peak RSS at matched heap, while reaching steady state when Quarkus is still JIT-compiling after 5 minutes (Spring trails both). JFR, pidstat, and CO-free wrk2 show how — and where a saturated p50 of 146 ms is really a 3 ms service time."
 image: assets/banner.svg
 authors:
   - Arkadiusz Przychocki
@@ -41,6 +41,7 @@ I set out to compare three JVM HTTP stacks on a trivial DB-backed read (`GET /ap
 - **Latency percentiles from a saturated closed-loop driver are not latency.** h2load reported a p50 of **146 ms**; the real service-time p50 was **~3–7 ms**. The 146 ms was queue depth ÷ throughput (Little's law), to the digit.
 - **The JIT matters longer than your warmup.** Exeris reached steady state essentially instantly (C2 compile queue never backed up); Quarkus was *still* compiling hot methods **after 5 minutes** of warmup.
 - **The one metric that stayed stable across all of this was CPU-per-request.** Across three interleaved runs each, Exeris served **+16% throughput for −34% CPU per request** vs Quarkus — both gaps with a coefficient of variation under 1.5%, i.e. 20–40× their own run-to-run noise, and the same edge whether the box was warm, cold, bridged, or host-networked.
+- **Memory footprint says the same thing.** At the *same* max-heap setting, steady-state peak RSS was **~0.96 GiB (Exeris) vs ~3.5 GiB (Quarkus, 3.6×) and ~4.9 GiB (Spring, 5.1×)** — same root cause as CPU/request (Exeris allocates less). JVM-mode comparison; a native Quarkus build would be far smaller.
 
 What I will **not** claim: that Exeris has a better *median* latency (on this hardware that signal is buried in noise), or that any of these absolute numbers transfer off a developer workstation.
 
@@ -160,9 +161,22 @@ Matched, fully-warmed, host-net, target-bound (5 cores), 10-minute measurement:
 | Throughput | **8 844 rps** | 7 836 rps | 3 052 rps |
 | **CPU / request** | **0.390 ms** | 0.552 ms | 0.956 ms |
 | App `%CPU` (of 500% avail.) | 344 (69%) | 432 (86%) | 292 |
+| **Peak RSS** (steady state) | **~0.96 GiB** | ~3.5 GiB | ~4.9 GiB |
 | C2 settled? | yes (peak 0) | **no (peak 97)** | no (peak 72) |
 
 ![CPU per request — Exeris vs Quarkus vs Spring](assets/chart-cpu-per-request.svg)
+
+![Peak RSS — Exeris vs Quarkus vs Spring](assets/chart-rss.svg)
+
+The footprint axis tells the same story as the CPU axis, and just as firmly. Across the
+n=3 set, with **the same max-heap setting for every target** (default `-Xmx`, ~15.2 GiB
+reserved on this box), steady-state **peak RSS** was **~0.96 GiB for Exeris vs ~3.5 GiB for
+Quarkus (3.6×) and ~4.9 GiB for Spring (5.1×)** — CV under 3%. It tracks committed heap:
+Exeris ran on **126–306 MiB of used heap** where Quarkus used 1.2–2.1 GiB and Spring ~1.9 GiB.
+Same root cause as CPU-per-request — Exeris simply allocates less. **Fairness notes:** RSS is
+reported at matched `-Xmx`, so this is not a heap-sizing artifact; and this is **JVM-mode**
+Quarkus — a native-image build would have a dramatically smaller footprint, so the 3.6× is a
+JVM-vs-JVM statement, not a Quarkus-native one.
 
 ![Throughput — Exeris vs Quarkus vs Spring](assets/chart-throughput.svg)
 
@@ -274,7 +288,7 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
 
 **What the data supports (this hardware, this scenario; headline throughput/CPU-per-request firmed at n=3, the rest directional):**
 
-1. **Resource efficiency is Exeris's real differentiator.** −34% CPU per request than Quarkus (n=3 interleaved, CV < 1.5%), ~2.7× less than Spring — stable across every configuration tested.
+1. **Resource efficiency is Exeris's real differentiator — on both CPU and memory.** −34% CPU per request than Quarkus (n=3 interleaved, CV < 1.5%), ~2.7× less than Spring; and at matched `-Xmx`, **3.6× smaller peak RSS than Quarkus** (~0.96 vs ~3.5 GiB), 5.1× smaller than Spring. Both stable across every configuration tested, both with the same root cause (Exeris allocates less). JVM-mode comparison.
 2. **Exeris reaches steady state far faster.** Quarkus was still JIT-compiling after 5 minutes; Exeris was warm almost immediately.
 3. **Exeris has a meaningfully better latency *tail*** (p99+), 1.8–3.3× depending on load.
 4. **Throughput favors Exeris (+16%), and that is a lower bound** — n=3 interleaved (CV < 1.5%), and Exeris was not app-CPU-bound at the point I measured.

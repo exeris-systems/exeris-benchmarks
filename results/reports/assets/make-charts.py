@@ -94,6 +94,13 @@ hbar("chart-throughput.svg",
      "rps",
      note="h2load saturation · Exeris/Quarkus mean of 3 interleaved (CV<1.3%) · Exeris not app-CPU-bound (69%) so this is a lower bound · Spring single ref")
 
+# 2b. Peak RSS (memory footprint) — n=3, matched -Xmx
+hbar("chart-rss.svg",
+     "Peak RSS — entity-read-by-id (steady state, matched -Xmx, n=3)",
+     [("Exeris", 0.96, EX), ("Quarkus", 3.46, QK), ("Spring", 4.87, SP)],
+     "GiB", lower_is_better=True,
+     note="peak RSS, same default -Xmx (~15.2 GiB reserved) for all · Exeris/Quarkus mean of 3 (CV<3%) · JVM-mode (native Quarkus would be far smaller) · Spring single ref")
+
 # 3. Coordinated omission: same Exeris target, two experiments
 grouped_log_latency("chart-coordinated-omission.svg",
      "Same target, two experiments: why a saturated percentile isn't latency (Exeris)",

@@ -63,6 +63,7 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 | **OS / kernel** | Linux `7.0.0-22-generic`, scheduler **EEVDF** |
 | **JDK** | Oracle JDK **26** (`java 26 2026-03-17`) |
 | **Drivers** | h2load `nghttp2/1.68.0`, wrk2 (HdrHistogram), wrk `4.1.0` |
+| **Transport** | **HTTP/2 over TLS 1.3** — `https://localhost:8080`, ALPN `h2`, cipher `TLS_AES_128_GCM_SHA256`. **Identical TLS config, terminated by JSSE (JDK built-in) on all three targets.** This is an HTTPS workload — see the TLS caveat below. |
 | **Backend** | PostgreSQL in a container (bridge **and** host-net tested) |
 | **Targets** | `exeris-benchmark-app-community-h1`, `quarkus-jvm-vt-tuned`, Spring (reference) |
 | **Profile class** | `dev-laptop` |
@@ -74,6 +75,7 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 3. **SMT pinning caveat.** The CPU is 6 physical cores / 12 SMT threads. I pin to *logical* threads (e.g. "target `0-4`"), so some pinned "cores" may be SMT siblings sharing a physical core. The target-bound conclusions hold directionally but the core math is approximate.
 4. **Community track only.** No Enterprise targets, no H3, no locality. Nothing here speaks to those.
 5. **`dev-laptop` means two different environments across this series — note the delta.** An earlier [saga-correctness benchmark](https://blog.arkstack.dev/en/blog/compensation-correctness-saga-benchmark/) on the *same physical machine* ran under a desktop session with a **32 GB cgroup memory overlay**; this run is **headless with no GUI and no memory cap**, so the JVM sees the full ~60 GB and there is no desktop-environment scheduling noise. This is a genuinely *cleaner* environment than the May run — closer to (still not equal to) `perf-box-amd64`. The available memory budget is itself a benchmark variable, so I call it out rather than letting "dev-laptop" read as one fixed thing.
+6. **This is an HTTPS workload, not cleartext — and that is folded into every number.** All runs went over **HTTP/2 + TLS 1.3** (`TLS_AES_128_GCM_SHA256`), terminated by **JSSE (the JDK's built-in provider) on all three targets**. Two consequences. (a) *Fairness holds:* because the TLS provider is shared, the cross-stack CPU-per-request gap is **not** a TLS-engine artifact — it is the runtime/HTTP path running on top of an identical TLS cost. (This is runtime HTTPS serving via JSSE — unrelated to the JMH TLS-engine work, B4/B5/tcnative/`OffHeapTlsEngine`; do not conflate the two tracks.) (b) *Absolute numbers include TLS:* every CPU-per-request and latency figure carries the AES-GCM record cost plus a **ms-scale** handshake (amortized over the `-c 128` keepalive pool, so it does not dominate steady-state — a ms- rather than µs-scale connect time is itself the signature of TLS being on). To **separate** the TLS cost from the runtime cost you would re-run cleartext (`h2c`, TLS off); that is the right next experiment and is *not* done here.
 
 ---
 
@@ -121,7 +123,7 @@ The same class of hidden cost is documented from the other direction in Quarkus'
 
 ## 3. Coordinated omission: why a saturated p50 of 146 ms is not latency
 
-h2load is the only driver in my kit that speaks cleartext HTTP/2 (h2c), so I taught it to emit percentiles (via `--log-file` + offline aggregation). On the warmed, host-net Exeris run it reported:
+h2load is the only driver in my kit that speaks HTTP/2 (here negotiated as **h2 over TLS 1.3 via ALPN** — see the transport row), so I taught it to emit percentiles (via `--log-file` + offline aggregation). On the warmed, host-net Exeris run it reported:
 
 ```
 h2load (closed-loop, at saturation):  p50 = 146 ms,  p99 = 247 ms,  mean = 144 ms
@@ -260,7 +262,7 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
 - **OS sidecars:** `pidstat -t` (per-thread `%wait`, context switches) + `mpstat -P ALL` (`%usr/%sys/%soft/%idle`) over the measurement window (`BENCH_OS_SIDECARS=1`). High `%soft`/`%sys` on the app cores = CPU burned on network/kernel, not the app.
 - **Backend network mode:** `DB_HOST_NETWORK=1` to take the bridge/NAT tax off the path. Treated as a fairness gate; recorded as `backend_network_mode`.
 - **Two-experiment latency:**
-  - *Throughput / CPU-efficiency* — h2load (h2c) at saturation. Percentiles via `--log-file`, **explicitly CO-caveated**.
+  - *Throughput / CPU-efficiency* — h2load (h2 over TLS 1.3) at saturation. Percentiles via `--log-file`, **explicitly CO-caveated**.
   - *Real tail latency* — wrk2 (`-R`, HdrHistogram) at a fixed sub-saturation rate (`WRK2_TARGET_RPS`), CO-free. Always check `at_saturation=false` in the artifact.
 - **CPU per request:** `process %CPU / throughput` from the per-thread pidstat aggregate — the primary cross-stack signal.
 - **Flame graphs:** `tools/jfr-flamegraph.py <jfr> <out.svg>` — self-contained JFR → interactive SVG (no external renderer), Community/OSS recordings only. Shows *where* the CPU goes (the reflection finding above).
@@ -281,6 +283,7 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
 
 - Any claim about **median latency** — it is noise-dominated on this box.
 - Any **absolute** number as production capacity — `dev-laptop`, single runs, SMT-approximate pinning.
+- A **split between TLS cost and runtime cost.** This is an HTTPS workload; the TLS (JSSE) overhead is identical across targets — so it does not distort the *comparison* — but it is baked into every absolute figure. Isolating it needs a cleartext (`h2c`) re-run, not done here.
 - Anything about **Enterprise / H3 / locality** — out of scope.
 
 ## Firming up the numbers

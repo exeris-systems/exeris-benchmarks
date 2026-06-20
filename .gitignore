@@ -32,11 +32,13 @@ Thumbs.db
 # results/raw/*.txt
 # results/raw/k6-*.json
 
-# Raw JFR recordings are NEVER committed. Default publication mode is `public`,
-# which default-denies raw .jfr (extension + FLR\0 signature); Exeris recordings
-# also carry custom telemetry. Publish derived artifacts only (flamegraph SVGs,
-# extracted metrics JSON). For restricted sharing use publish-report.sh
-# --publication-mode internal-only.
+# Raw JFR recordings are not committed.
+#  - Enterprise track: HARD confidentiality rule — public mode default-denies .jfr
+#    (extension + FLR\0 signature). Enterprise H3/locality recordings stay internal.
+#  - Community / open-core: recordings are NOT secret (the code is open), but a JFR
+#    is ~190 MB; git is the wrong place for 2+ GB of binaries. Publish derived
+#    artifacts (flamegraph SVGs, extracted metrics JSON); share raw recordings on
+#    request or as release/download assets, not in git history.
 *.jfr
 *.JFR
 

@@ -23,11 +23,12 @@ re-derived independently. All runs: `entity-read-by-id`, `dev-laptop`, JDK 26, k
 
 ## What is **excluded**, and why
 
-- **Raw `.jfr` recordings** — excluded by the lab's default `public` publication mode
-  (default-denies `.jfr` by extension and `FLR\0` signature) and `.gitignore`. Exeris recordings
-  also carry custom telemetry events. **Derived** artifacts are published instead: the interactive
-  flame graphs (`assets/flame-*.svg`). Raw `.jfr` is available for restricted sharing via
-  `scripts/publish-report.sh --publication-mode internal-only` — ask if you need it.
+- **Raw `.jfr` recordings** — kept out of git for **size**, not confidentiality. These are
+  Community / open-core recordings (the code is open; no Enterprise H3 / locality content), so
+  they are not secret — but each is ~190 MB (~2.2 GB for the set), and git is the wrong place for
+  that. The published form is the **derived** interactive flame graphs (`assets/flame-*.svg`);
+  the raw recordings are available on request (or as download/release assets). The `.jfr`
+  default-deny in `public` mode is the **Enterprise**-track confidentiality rule.
 - **`h2load-requests.log`** (per-request `--log-file` dumps, 100+ MB each) and other `*.log` —
   excluded by size/`.gitignore`. The percentiles they feed are already in `h2load-latency.json`.
 

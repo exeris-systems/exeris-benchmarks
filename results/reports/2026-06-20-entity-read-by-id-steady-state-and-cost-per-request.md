@@ -22,6 +22,8 @@ hardware_profile: dev-laptop
 
 *An entity-read-by-id investigation — Exeris (Community) vs Quarkus, with Spring as a reference point.*
 
+*By **Arkadiusz Przychocki** · 2026-06-20 · categories: performance, benchmarking, jvm*
+
 **Track:** Community · **Benchmark family:** Runtime · **Scenario:** `entity-read-by-id` · **Date:** 2026-06-20 · **Bench commit:** `7e7aeb8`
 
 > **Claim scope: `exploratory`** · **Reproducibility: `complete`** · **Comparison axis: within-tier** · **Hardware profile: `dev-laptop`**

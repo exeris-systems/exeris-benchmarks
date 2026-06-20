@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" font-family="Verdana,Helvetica,sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="492" viewBox="0 0 1200 492" font-family="Verdana,Helvetica,sans-serif">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0f172a"/>
       <stop offset="1" stop-color="#1e293b"/>
     </linearGradient>
   </defs>
-  <rect width="1200" height="440" fill="url(#bg)"/>
+  <rect width="1200" height="492" fill="url(#bg)"/>
   <text x="64" y="92" font-size="20" fill="#60a5fa" letter-spacing="3">PERFORMANCE · BENCHMARKING · JVM</text>
   <text x="64" y="168" font-size="52" font-weight="bold" fill="#f8fafc">When throughput lies</text>
   <text x="64" y="214" font-size="26" fill="#cbd5e1">steady-state, coordinated omission,</text>
@@ -22,4 +22,8 @@
     <rect x="882" y="344" width="254" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/>
     <text x="898" y="370" fill="#93c5fd">median latency</text><text x="898" y="394" font-size="22" font-weight="bold" fill="#f8fafc">noise, not claimed</text>
   </g>
+  <!-- governance / trust strip (mirrors frontmatter so it is visible in the rendered image) -->
+  <line x1="64" y1="426" x2="1136" y2="426" stroke="#334155" stroke-width="1"/>
+  <text x="64" y="452" font-size="14" fill="#cbd5e1">Track <tspan fill="#f8fafc" font-weight="bold">Community</tspan>  ·  Family <tspan fill="#f8fafc" font-weight="bold">Runtime</tspan>  ·  Scenario <tspan fill="#f8fafc" font-weight="bold">entity-read-by-id</tspan>  ·  claim_scope <tspan fill="#fbbf24" font-weight="bold">exploratory</tspan>  ·  reproducibility <tspan fill="#34d399" font-weight="bold">complete</tspan>  ·  axis <tspan fill="#f8fafc" font-weight="bold">within-tier</tspan></text>
+  <text x="64" y="476" font-size="14" fill="#94a3b8">Arkadiusz Przychocki  ·  2026-06-20  ·  profile <tspan fill="#cbd5e1">dev-laptop</tspan> (headless, no GUI, no cgroup cap)</text>
 </svg>

@@ -1,6 +1,6 @@
 ---
 title: "When throughput lies: steady-state, coordinated omission, and the real cost of a request"
-date: 2026-06-20 00:00:00 UTC
+date: 2026-06-21 00:00:00 UTC
 categories:
   - performance
   - benchmarking

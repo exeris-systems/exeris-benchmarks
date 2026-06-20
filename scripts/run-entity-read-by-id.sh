@@ -1356,7 +1356,12 @@ fi
 echo "[step 7/9] Measuring ($DURATION)..."
 PERF_STAT_FILE="$OUTPUT_DIR/perf-stat.csv"
 if [[ "$DRIVER" == "h2load" ]]; then
-  LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" "$BASE_URL/api/v1/users")
+  # --log-file captures per-request timings (start_us, status, dur_us) for the
+  # MEASUREMENT run only (the warmup h2load above is not logged), so the latency
+  # percentiles h2load itself omits can be computed offline. See
+  # tools/aggregate-h2load-latency.sh (closed-loop / coordinated-omission caveat).
+  H2LOAD_LOG_FILE="$OUTPUT_DIR/h2load-requests.log"
+  LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" --log-file="$H2LOAD_LOG_FILE" "$BASE_URL/api/v1/users")
 else
   LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
 fi
@@ -1528,7 +1533,9 @@ if [[ "$DRIVER" == "h2load" ]]; then
   #   status codes: N 2xx, N 3xx, N 4xx, N 5xx
   #   <hdr> min max mean sd +/- sd
   #   time for request:  <min> <max> <mean> <sd> <+/-sd>
-  # h2load emits NO latency percentiles — p50/p75/p90/p99 stay null (not faked).
+  # h2load's own summary has NO percentiles; we recover p50/p75/p90/p99/p999 from
+  # the --log-file via tools/aggregate-h2load-latency.sh (closed-loop CO caveat
+  # recorded in the sidecar). If the log/aggregator is unavailable they stay null.
   THROUGHPUT_RPS=$(sed -nE 's/.*finished in [0-9.]+(m|ms|s|us|h), ([0-9.]+) req\/s,.*/\2/p' <<<"$LOAD_OUT" | head -1)
   H2_TFR_LINE=$(printf '%s\n' "$LOAD_OUT" | awk '/time for request:/ {print; exit}')
   LATENCY_MEAN_US=$(to_us "$(awk '{print $6}' <<<"$H2_TFR_LINE")")
@@ -1538,6 +1545,19 @@ if [[ "$DRIVER" == "h2load" ]]; then
   LATENCY_P75_US=""
   LATENCY_P90_US=""
   LATENCY_P99_US=""
+  LATENCY_P999_US=""
+  # Offline percentiles from the per-request log. Never fatal; emits valid JSON.
+  if [[ -n "${H2LOAD_LOG_FILE:-}" && -f "$H2LOAD_LOG_FILE" ]]; then
+    H2LOAD_LATENCY_JSON="$OUTPUT_DIR/h2load-latency.json"
+    if "$REPO_ROOT/tools/aggregate-h2load-latency.sh" "$H2LOAD_LOG_FILE" "$H2LOAD_LATENCY_JSON" 2>/dev/null; then
+      LATENCY_P50_US=$(jq -r '.latency_p50_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      LATENCY_P75_US=$(jq -r '.latency_p75_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      LATENCY_P90_US=$(jq -r '.latency_p90_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      LATENCY_P99_US=$(jq -r '.latency_p99_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      LATENCY_P999_US=$(jq -r '.latency_p999_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      echo "[step 7/9] h2load latency percentiles: $H2LOAD_LATENCY_JSON (p50=${LATENCY_P50_US:-na}us p99=${LATENCY_P99_US:-na}us, closed-loop/CO caveat applies)"
+    fi
+  fi
   H2_REQ_LINE=$(printf '%s\n' "$LOAD_OUT" | awk '/^requests:/ {print; exit}')
   TOTAL_REQUESTS=$(sed -nE 's/^requests:[[:space:]]*([0-9]+) total.*/\1/p' <<<"$H2_REQ_LINE")
   H2_FAILED=$(sed -nE 's/.*[, ]([0-9]+) failed,.*/\1/p' <<<"$H2_REQ_LINE")
@@ -1562,6 +1582,7 @@ else
   LATENCY_P75_US=$(to_us "$(awk '$1 == "75%" {print $2; exit}' <<<"$LOAD_OUT")")
   LATENCY_P90_US=$(to_us "$(awk '$1 == "90%" {print $2; exit}' <<<"$LOAD_OUT")")
   LATENCY_P99_US=$(to_us "$(awk '$1 == "99%" {print $2; exit}' <<<"$LOAD_OUT")")
+  LATENCY_P999_US=""   # wrk --latency reports 50/75/90/99 only; p99.9 needs wrk2 (run-wrk2.sh)
   TOTAL_REQUESTS=$(awk '/requests in/ {gsub(/,/, "", $1); print $1; exit}' <<<"$LOAD_OUT")
   NON2XX_ERRORS=$(awk '/Non-2xx or 3xx responses:/ {print $5; exit}' <<<"$LOAD_OUT")
   SOCKET_ERRORS=$(awk -F'[:, ]+' '/Socket errors:/ {print ($4 + $6 + $8 + $10); exit}' <<<"$LOAD_OUT")
@@ -1606,6 +1627,7 @@ METRICS_JSON=$(jq -n \
   --arg latency_p75_us "$LATENCY_P75_US" \
   --arg latency_p90_us "$LATENCY_P90_US" \
   --arg latency_p99_us "$LATENCY_P99_US" \
+  --arg latency_p999_us "$LATENCY_P999_US" \
   --arg total_requests "$TOTAL_REQUESTS" \
   --arg total_errors "$TOTAL_ERRORS" \
   --arg error_rate_pct "$ERROR_RATE_PCT" \
@@ -1625,6 +1647,7 @@ METRICS_JSON=$(jq -n \
     latency_p75_us: num_or_null($latency_p75_us),
     latency_p90_us: num_or_null($latency_p90_us),
     latency_p99_us: num_or_null($latency_p99_us),
+    latency_p999_us: num_or_null($latency_p999_us),
     total_requests: num_or_null($total_requests),
     total_errors: num_or_null($total_errors),
     error_rate_pct: num_or_null($error_rate_pct)

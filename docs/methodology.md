@@ -289,12 +289,34 @@ E2E p99 requires arrival-rate tooling: wrk2 (`-R <rps>`) or k6 with `constant-ar
 | Tool / Mode | CO Risk | Claim scope |
 |---|---|---|
 | wrk (default, closed-loop) | ❌ YES | Throughput / saturation probes only |
+| h2load (closed-loop, incl. `--log-file` percentiles) | ❌ YES | Throughput / saturation probes only; percentiles are queueing, not service-time tail |
 | wrk2 with `-R` | ✅ NO | p99/p99.9 latency at declared load fraction |
 | k6 `shared-iterations` / `ramping-vus` | ❌ YES | Throughput probes only |
 | k6 `constant-arrival-rate` | ✅ NO | p99/p99.9 latency at declared arrival rate |
 | JMH `Mode.SampleTime` | N/A (Micro) | Per-call cost distribution |
 
 `co_corrected: true` in a result JSON is only meaningful alongside `r_value`, `observed_saturation_rps`, and `load_fraction`. A `load_fraction ≥ 0.95` means the measurement was at saturation — queuing delays are real, not CO artifacts, but do not represent nominal operating conditions.
+
+### Latency on the h2c axis needs two experiments
+
+h2load is the only driver here that speaks cleartext HTTP/2 (h2c), but it is
+closed-loop and emits no percentiles. We therefore split latency from throughput:
+
+1. **Throughput / CPU-efficiency (h2c, at saturation).** `run-entity-read-by-id.sh
+   --driver h2load` runs h2load with `--log-file`; `tools/aggregate-h2load-latency.sh`
+   reconstructs p50/p75/p90/p99/p99.9 from the per-request log into
+   `h2load-latency.json` and into `result.json` metrics. **These percentiles carry a
+   coordinated-omission caveat** (stamped `co_caveat` in the sidecar): under
+   saturation they track queueing (≈ concurrency ÷ throughput, Little's law), not the
+   service-time tail. Use them to rank-order, not as nominal latency.
+2. **CO-free tail latency (H1, below saturation).** `scripts/run-wrk2.sh` drives a
+   fixed arrival rate (`-R`) with HdrHistogram percentiles. This is the trustworthy
+   p99/p99.9 source — but on the HTTP/1.1 axis (wrk2 has no h2c). State the protocol
+   difference when placing wrk2 latency next to h2load throughput.
+
+The primary Exeris differentiator on these runs is **resource usage per request
+(CPU/req, RSS), not rps or latency** — at saturation both are bottleneck-shaped and
+warmup-sensitive, while CPU/req is stable across warmup and the cleaner signal.
 
 ---
 

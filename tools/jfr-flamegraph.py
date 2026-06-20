@@ -12,10 +12,20 @@ Confidentiality: only run on Community/OSS targets. Stack frames are method name
 do not generate flamegraphs from Enterprise (H3/locality) recordings for public
 artifacts. The output is a derived SVG, not a raw .jfr.
 """
-import sys, subprocess, html, argparse, colorsys
+import sys, os, re, subprocess, html, argparse, colorsys
+
+# JFR event names are dotted identifiers, e.g. jdk.ExecutionSample
+_EVENT_RE = re.compile(r"[A-Za-z][\w.]*\Z")
 
 def extract_folded(jfr_path, event):
     """Run jfr print and fold ExecutionSample stacks into {stack_tuple: count}."""
+    # Validate both untrusted inputs before they reach the OS command: reject an
+    # event that isn't a plain dotted identifier, and a jfr path that isn't an
+    # existing regular file (which also rejects option-like "-…" arguments).
+    if not _EVENT_RE.match(event):
+        sys.exit(f"invalid event name: {event!r}")
+    if not os.path.isfile(jfr_path):
+        sys.exit(f"not a readable file: {jfr_path!r}")
     cmd = ["jfr", "print", "--events", event, "--stack-depth", "2048", jfr_path]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
@@ -324,6 +334,10 @@ def main():
     sub = (f"{total} {a.event} samples · frames ≥ {a.min_pct}% shown · "
            f"click to zoom · Search for regexp highlight · Reset Zoom to restore")
     svg = render_svg(root, a.title, sub, a.min_pct)
+    # Validate the output path before writing: its parent directory must exist.
+    out_dir = os.path.dirname(os.path.abspath(a.out)) or "."
+    if not os.path.isdir(out_dir):
+        sys.exit(f"output directory does not exist: {out_dir}")
     with open(a.out, "w") as fh:
         fh.write(svg)
     print(f"wrote {a.out}  ({total} samples, {len(folded)} unique stacks)")

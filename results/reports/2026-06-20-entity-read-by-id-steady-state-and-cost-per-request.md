@@ -439,4 +439,4 @@ TLS adds a small, symmetric latency tax to both stacks; at matched rate the medi
 
 ---
 
-*Generated as part of the steady-state / fairness instrumentation work (branch `feat/steady-state-fairness-instrumentation`). Methodology lives in `docs/methodology.md`; hardware-profile constraints in `docs/hardware-profiles.md`.*
+*Generated as part of the steady-state / fairness instrumentation work (branch `feat/steady-state-fairness-instrumentation`(merged into `main` and deleted)). Methodology lives in `docs/methodology.md`; hardware-profile constraints in `docs/hardware-profiles.md`.*

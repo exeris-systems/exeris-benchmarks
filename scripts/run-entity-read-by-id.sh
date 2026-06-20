@@ -5,7 +5,7 @@ set -euo pipefail
 #   --client-cpu-affinity pins the load driver (wrk/h2load) to a cpuset DISJOINT from --cpu-affinity, so the
 #   target is the bottleneck and its CPU-efficiency shows as throughput. Local target-bound recipe on a 12-core box:
 #   --cpu-affinity 0-2 --client-cpu-affinity 3-9 (target 3 cores, driver 7, leave 10-11 for OS/Postgres).
-#   --driver h2load is exploratory-only (h2load H1 vs wrk H1 is not directly comparable; h2load emits no latency percentiles). --h2load-axis h2c selects HTTP/2 cleartext (loopback-h2).
+#   --driver h2load is exploratory-only (h2load H1 vs wrk H1 is not directly comparable; h2load emits no latency percentiles). --h2load-axis h2c selects the "HTTP/2, no --h1" axis (transport_mode=loopback-h2); whether the wire is cleartext h2c or h2-over-TLS depends on BENCHMARK_TLS_ENABLED and is recorded in result.json `tls`.
 #
 # Orchestrates the entity-read-by-id E2E benchmark run:
 #   1. Validate claim-scope
@@ -98,9 +98,12 @@ CONTRACT_NAME=""
 # faked). wrk2/k6 are handled by their own runners (run-wrk2.sh / run-k6.sh).
 DRIVER="${DRIVER:-wrk}"
 # Transport axis when DRIVER=h2load. h1 = cleartext HTTP/1.1 (loopback-h1),
-# h2c = HTTP/2 cleartext prior-knowledge (loopback-h2). h2c is exploratory-only
-# per scenarios/entity-read-by-id/h2load.flags (not comparable to H1 or wrk).
+# h2c = the "HTTP/2, no --h1" axis. Its real wire protocol depends on the endpoint
+# scheme: cleartext http:// -> true h2c (loopback-h2c); TLS https:// -> h2 over TLS
+# via ALPN (loopback-h2-tls). h2c is exploratory-only per
+# scenarios/entity-read-by-id/h2load.flags (not comparable to H1 or wrk).
 H2LOAD_AXIS="${ENTITY_READ_H2LOAD_AXIS:-h1}"
+H2LOAD_AXIS_LABEL="$H2LOAD_AXIS"   # human label, refined once TLS state is known
 H2LOAD_H2C_MAX_CONCURRENT_STREAMS="${H2LOAD_H2C_MAX_CONCURRENT_STREAMS:-10}"
 # TLS toggle. When the guided launcher (or any caller) sets BENCHMARK_TLS_ENABLED=1
 # the managed target is launched with TLS (it inherits EXERIS_SSL_ENABLED /
@@ -349,6 +352,7 @@ case "$DRIVER" in
       h1)
         TRANSPORT_MODE="loopback-h1"
         PROTOCOL="h1"
+        H2LOAD_AXIS_LABEL="h1 (cleartext)"
         ;;
       h2c)
         # H2c is exploratory-only and NOT comparable to H1 or to wrk results
@@ -358,14 +362,21 @@ case "$DRIVER" in
           echo "ERROR: --driver h2load --h2load-axis h2c is exploratory-only (not comparable to H1/wrk); use --claim-scope exploratory."
           exit 1
         fi
-        # The h2load "h2c" axis means "HTTP/2, no --h1": over cleartext http it is
-        # true h2c (prior-knowledge); over TLS h2load negotiates h2 via ALPN. Both
-        # are valid HTTP/2 now that the target enables http2 for h2 runs (see the
-        # HTTP/2 env block at target launch). The post-load ALPN-fallback guard below
-        # still fails the run if the server did NOT actually negotiate h2, so an
-        # H1-only target can never be mislabeled H2.
+        # The h2load "h2c" axis means "HTTP/2, no --h1". transport_mode is the schema
+        # enum value (loopback-h2) for both; TLS vs cleartext is orthogonal and is
+        # carried by the `tls` field, NOT by faking an "h2c" transport label when the
+        # endpoint is actually TLS. The human axis label below reflects the real wire.
+        #   - cleartext http://  -> true h2c (prior-knowledge)
+        #   - TLS      https:// -> h2 negotiated via ALPN
+        # The post-load ALPN-fallback guard below still fails the run if the server
+        # did NOT actually negotiate h2, so an H1-only target can never be H2.
         TRANSPORT_MODE="loopback-h2"
         PROTOCOL="h2"
+        if [[ "$TLS_ENABLED" == "1" ]]; then
+          H2LOAD_AXIS_LABEL="h2 (TLS/ALPN)"
+        else
+          H2LOAD_AXIS_LABEL="h2c (cleartext prior-knowledge)"
+        fi
         ;;
       *)
         echo "ERROR: --h2load-axis must be h1 or h2c (got: $H2LOAD_AXIS)"
@@ -1463,11 +1474,20 @@ fi
 # target's stdout is kept in target-app.log. The parsed result.json is a lossy
 # projection of this; the raw log is the ground truth for what the load client
 # (and which HTTP version/axis) actually did — needed for honest reproducibility.
+# Extract the TLS negotiation h2load prints (ground truth for what the wire did).
+# Empty for cleartext / for drivers that don't report it (wrk/wrk2).
+TLS_PROTOCOL="$(printf '%s\n' "$LOAD_OUT" | sed -n 's/^TLS Protocol:[[:space:]]*//p' | head -1)"
+TLS_CIPHER="$(printf '%s\n' "$LOAD_OUT" | sed -n 's/^Cipher:[[:space:]]*//p' | head -1)"
+TLS_ALPN="$(printf '%s\n' "$LOAD_OUT" | sed -n 's/^Application protocol:[[:space:]]*//p' | head -1)"
+
 if [[ -n "${OUTPUT_DIR:-}" ]]; then
   DRIVER_LOG="$OUTPUT_DIR/driver-${DRIVER}.log"
   {
-    printf '# driver: %s  protocol: %s' "$DRIVER" "${PROTOCOL:-?}"
-    [[ "$DRIVER" == "h2load" ]] && printf '  h2load-axis: %s' "${H2LOAD_AXIS:-?}"
+    printf '# driver: %s  protocol: %s  transport: %s  tls: %s' \
+      "$DRIVER" "${PROTOCOL:-?}" "${TRANSPORT_MODE:-?}" \
+      "$([[ "$TLS_ENABLED" == "1" ]] && echo on || echo off)"
+    [[ "$DRIVER" == "h2load" ]] && printf '  h2load-axis: %s' "${H2LOAD_AXIS_LABEL:-${H2LOAD_AXIS:-?}}"
+    [[ -n "$TLS_PROTOCOL" ]] && printf '  negotiated: %s/%s/%s' "$TLS_PROTOCOL" "${TLS_ALPN:-?}" "$TLS_CIPHER"
     printf '\n# command: %s\n\n' "${LOAD_CMD[*]}"
     printf '%s\n' "$LOAD_OUT"
   } > "$DRIVER_LOG" 2>/dev/null \
@@ -1752,6 +1772,18 @@ case "$CLAIM_SCOPE" in
   *)                   EXECUTION_CLASS="exploratory" ;;
 esac
 
+# TLS provenance: record whether TLS was on and what the wire actually negotiated
+# (from the h2load output). Provider is the target's choice and not asserted here.
+if [[ "$TLS_ENABLED" == "1" ]]; then
+  TLS_JSON=$(jq -n --arg p "$TLS_PROTOCOL" --arg c "$TLS_CIPHER" --arg a "$TLS_ALPN" \
+    '{enabled:true}
+     + (if $p!="" then {protocol:$p} else {} end)
+     + (if $c!="" then {cipher:$c} else {} end)
+     + (if $a!="" then {alpn:$a} else {} end)')
+else
+  TLS_JSON='{"enabled":false}'
+fi
+
 cat > "$RESULT_FILE" <<EOF
 {
   "schema_version": "1",
@@ -1767,6 +1799,7 @@ cat > "$RESULT_FILE" <<EOF
   "reproducibility_status": "complete",
   "final_reason": "ok",
   "transport_mode": "$TRANSPORT_MODE",
+  "tls": $TLS_JSON,
   "target": {
     "repo": "exeris-benchmarks",
     "version": "$TARGET_APP_NAME",

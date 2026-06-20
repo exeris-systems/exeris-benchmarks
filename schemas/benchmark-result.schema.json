@@ -42,7 +42,18 @@
     "transport_mode": {
       "type": "string",
       "enum": ["loopback-h1", "loopback-h2", "loopback-h3", "network-h1", "network-h2", "network-h3"],
-      "description": "Transport layer and network path. loopback-h1 results are not equivalent to network-path measurements."
+      "description": "Transport layer and network path. loopback-h1 results are not equivalent to network-path measurements. TLS on/off is orthogonal and lives in `tls`, not here (e.g. h2c cleartext and h2-over-TLS are both transport_mode=loopback-h2)."
+    },
+    "tls": {
+      "type": "object",
+      "description": "TLS state of the measured traffic. enabled distinguishes cleartext (h2c/h1) from TLS; the negotiated fields are recorded from the load client when it reports them (e.g. h2load). Provider is the target's choice and is intentionally NOT asserted here.",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean", "description": "true if the measured traffic ran over TLS (https endpoint)." },
+        "protocol": { "type": "string", "description": "Negotiated TLS version, e.g. TLSv1.3 (as reported by the load client)." },
+        "cipher": { "type": "string", "description": "Negotiated cipher suite, e.g. TLS_AES_128_GCM_SHA256." },
+        "alpn": { "type": "string", "description": "ALPN-negotiated application protocol, e.g. h2." }
+      }
     },
     "seed_ref": {
       "type": "object",

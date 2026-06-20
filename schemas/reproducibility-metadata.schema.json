@@ -89,6 +89,16 @@
       "enum": ["dev-laptop", "dev-isolated", "ci-runner", "perf-box-amd64", "perf-box-arm64", "docker-container", "linux-generic", "aarch64-generic"],
       "examples": ["perf-box-amd64"]
     },
+    "kernel_version": {
+      "type": "string",
+      "description": "Linux kernel release (uname -r). hardware_profile does NOT pin the kernel; two runs on the same profile but different kernels are not directly comparable.",
+      "examples": ["6.8.0-40-generic", "6.1.0-21-amd64"]
+    },
+    "os_scheduler": {
+      "type": "string",
+      "description": "Linux CPU scheduler in effect. The CFS→EEVDF switch (kernel default since 6.6) alone can move worst-case throughput materially, so it is a first-class fairness axis. Best-effort/advisory; see scripts/capture-env.sh.",
+      "enum": ["cfs", "eevdf", "bore", "unknown"]
+    },
     "manifest_version": {
       "type": "string",
       "description": "Benchmark manifest version used",

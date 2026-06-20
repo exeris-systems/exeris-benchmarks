@@ -132,6 +132,44 @@ OS_NAME="$(uname -s)"
 OS_VERSION="$(uname -r)"
 KERNEL_RELEASE="$(uname -r)"
 
+# OS CPU scheduler (advisory). The CFS→EEVDF switch alone can move worst-case
+# throughput materially (kernel default flipped to EEVDF in 6.6), so this is a
+# first-class fairness axis, not hygiene. Detection is best-effort:
+#   1) /sys/kernel/debug/sched/features — authoritative when debugfs is readable.
+#      EEVDF exposes PLACE_LAG / RUN_TO_PARITY; CFS exposed GENTLE_FAIR_SLEEPERS.
+#   2) Fallback: kernel version (>= 6.6 ⇒ eevdf default, otherwise cfs).
+# Reports "unknown" rather than guessing when neither signal is conclusive.
+detect_os_scheduler() {
+  local feats=""
+  if [[ -r /sys/kernel/debug/sched/features ]]; then
+    feats="$(cat /sys/kernel/debug/sched/features 2>/dev/null || true)"
+  fi
+  if [[ -n "$feats" ]]; then
+    case "$feats" in
+      *BORE*)                                       printf 'bore\n'; return 0 ;;
+      *PLACE_LAG*|*RUN_TO_PARITY*|*PLACE_DEADLINE_INITIAL*) printf 'eevdf\n'; return 0 ;;
+      *GENTLE_FAIR_SLEEPERS*|*START_DEBIT*|*LAST_BUDDY*)    printf 'cfs\n';   return 0 ;;
+      *) ;;  # inconclusive feature set — fall through to the version-based fallback below
+    esac
+  fi
+  # Version fallback (Linux only).
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    local rel maj min
+    rel="$(uname -r)"
+    maj="${rel%%.*}"
+    min="${rel#*.}"; min="${min%%.*}"
+    if [[ "$maj" =~ ^[0-9]+$ && "$min" =~ ^[0-9]+$ ]]; then
+      if (( maj > 6 || (maj == 6 && min >= 6) )); then
+        printf 'eevdf\n'; return 0
+      else
+        printf 'cfs\n'; return 0
+      fi
+    fi
+  fi
+  printf 'unknown\n'
+}
+OS_SCHEDULER="$(detect_os_scheduler)"
+
 # JDK
 JAVA_VERSION_OUTPUT="$(java -version 2>&1 || true)"
 JAVA_VERSION_STR="$(printf '%s\n' "$JAVA_VERSION_OUTPUT" | head -1)"
@@ -230,6 +268,7 @@ jq -n \
   --arg os_name "$OS_NAME" \
   --arg os_version "$OS_VERSION" \
   --arg kernel "$KERNEL_RELEASE" \
+  --arg os_scheduler "$OS_SCHEDULER" \
   --arg jdk_vendor "$JAVA_VENDOR" \
   --arg jdk_vendor_raw "$JAVA_VENDOR_RAW" \
   --arg jdk_version "$JAVA_VERSION_STR" \
@@ -266,6 +305,7 @@ jq -n \
     memory_gb: $memory_gb,
     os: { name: $os_name, version: $os_version },
     kernel: $kernel,
+    os_scheduler: $os_scheduler,
     jdk: {
       vendor: $jdk_vendor,
       vendor_raw: $jdk_vendor_raw,

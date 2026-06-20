@@ -100,6 +100,19 @@ popd >/dev/null
 DEPENDENCY_CP="$(filter_stale_exeris_jars "$(cat "$CP_FILE")")"
 CLASSPATH="$ROOT_DIR/exeris-kernel-spi/target/classes:$ROOT_DIR/exeris-kernel-core/target/classes:$ROOT_DIR/exeris-kernel-community/target/classes:$DEPENDENCY_CP"
 
+# Additive steady-state compiler telemetry (opt-in, default OFF ⇒ no change to
+# existing runs). BENCH_JFR_STEADY_STATE=1 merges env/jfr-steady-state.jfc on top
+# of `profile`; BENCH_JFR_EXTRA_SETTINGS=<path.jfc> merges a custom overlay instead.
+# ROOT_DIR points at the exeris-kernel tree, so resolve the benchmarks repo root
+# from SCRIPT_DIR (runtime/drivers/ → repo root). See docs/methodology.md.
+_bench_repo_root="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
+_jfr_extra_settings=""
+if [[ -n "${BENCH_JFR_EXTRA_SETTINGS:-}" ]]; then
+  _jfr_extra_settings=",settings=${BENCH_JFR_EXTRA_SETTINGS}"
+elif [[ "${BENCH_JFR_STEADY_STATE:-0}" == "1" ]]; then
+  _jfr_extra_settings=",settings=${_bench_repo_root}/env/jfr-steady-state.jfc"
+fi
+
 JAVA_ARGS=(
   --enable-preview
   --enable-native-access=ALL-UNNAMED
@@ -109,7 +122,7 @@ JAVA_ARGS=(
   "-Dbenchmark.target.backendMode=$BACKEND_MODE"
   "-Xlog:gc*,safepoint:file=${TARGET_LOG_DIR}/gc-${RUN_TIMESTAMP}.log:time,uptime,level,tags"
   "-Xlog:safepoint:file=${TARGET_LOG_DIR}/safepoint-${RUN_TIMESTAMP}.log:time,uptime,level,tags"
-  "-XX:StartFlightRecording=filename=${TARGET_LOG_DIR}/jfr-${RUN_TIMESTAMP}.jfr,settings=profile,duration=0,maxsize=256m,dumponexit=true"
+  "-XX:StartFlightRecording=filename=${TARGET_LOG_DIR}/jfr-${RUN_TIMESTAMP}.jfr,settings=profile${_jfr_extra_settings},duration=0,maxsize=256m,dumponexit=true"
 )
 
 # JFR ring-buffer NOTE: dumponexit=true retains only the last 256m of events.

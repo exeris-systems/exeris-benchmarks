@@ -43,16 +43,48 @@ const EXPECTED_PROTO = __ENV.K6_EXPECTED_PROTO || '';
 // Default 0.0 (no expected compensation) — override to e.g. 0.03 when EXERIS_SAGA_PAYMENT_FAIL_RATE=0.03.
 const SAGA_EXPECTED_COMPENSATION_RATE = Number.parseFloat(__ENV.K6_SAGA_EXPECTED_COMPENSATION_RATE || '0.0');
 
-// Tunable load parameters — override via --env on the k6 command line or K6_* env vars
+// Tunable load parameters — override via --env on the k6 command line or K6_* env vars.
+// Phase split (default 120s warmup / 180s measurement / 30s cooldown):
+//   warmup      → let the JVM reach steady state (C2 done); EXCLUDED from analysis.
+//   measurement → the only window throughput/p99 claims are computed from.
+//   cooldown    → drains in-flight sagas without contaminating the measurement tail;
+//                 EXCLUDED from analysis.
+// Filter the per-second series / per-request samples by phase (or k6 `scenario`) tag.
 const WARMUP_RATE       = Number.parseInt(__ENV.K6_WARMUP_RATE        || '2',   10);
-const WARMUP_DURATION   = __ENV.K6_WARMUP_DURATION                    || '60s';
+const WARMUP_DURATION   = __ENV.K6_WARMUP_DURATION                    || '120s';
 const WARMUP_VUS_PRE    = Number.parseInt(__ENV.K6_WARMUP_VUS_PRE     || '20',  10);
 const WARMUP_VUS_MAX    = Number.parseInt(__ENV.K6_WARMUP_VUS_MAX     || '60',  10);
 const MEASURE_RATE      = Number.parseInt(__ENV.K6_MEASURE_RATE       || '3',   10);
 const MEASURE_DURATION  = __ENV.K6_MEASURE_DURATION                   || '180s';
 const MEASURE_VUS_PRE   = Number.parseInt(__ENV.K6_MEASURE_VUS_PRE    || '30',  10);
 const MEASURE_VUS_MAX   = Number.parseInt(__ENV.K6_MEASURE_VUS_MAX    || '100', 10);
-const MEASURE_START     = __ENV.K6_MEASURE_START                      || WARMUP_DURATION;
+const COOLDOWN_RATE     = Number.parseInt(__ENV.K6_COOLDOWN_RATE      || String(MEASURE_RATE), 10);
+const COOLDOWN_DURATION = __ENV.K6_COOLDOWN_DURATION                  || '30s';
+const COOLDOWN_VUS_PRE  = Number.parseInt(__ENV.K6_COOLDOWN_VUS_PRE   || String(MEASURE_VUS_PRE), 10);
+const COOLDOWN_VUS_MAX  = Number.parseInt(__ENV.K6_COOLDOWN_VUS_MAX   || String(MEASURE_VUS_MAX), 10);
+
+// Parse a k6 duration string ('120s', '2m', '1m30s', '500ms') to seconds so phase
+// start times can be computed by summation rather than hard-coded. NOTE: 'ms' is
+// truncated, not rounded — phase boundaries are whole seconds, so a sub-second
+// component in WARMUP/MEASURE_DURATION would drift MEASURE_START/COOLDOWN_START.
+// The defaults are whole seconds; keep them so to avoid that drift.
+function durationToSeconds(d) {
+  if (!d) return 0;
+  let total = 0;
+  const re = /(\d+)(ms|h|m|s)/g;
+  let m;
+  while ((m = re.exec(d)) !== null) {
+    const n = Number.parseInt(m[1], 10);
+    if (m[2] === 'h') total += n * 3600;
+    else if (m[2] === 'm') total += n * 60;
+    else if (m[2] === 's') total += n;
+    // 'ms' ignored for whole-second scheduling
+  }
+  return total;
+}
+const MEASURE_START   = __ENV.K6_MEASURE_START || `${durationToSeconds(WARMUP_DURATION)}s`;
+const COOLDOWN_START  = __ENV.K6_COOLDOWN_START
+  || `${durationToSeconds(WARMUP_DURATION) + durationToSeconds(MEASURE_DURATION)}s`;
 
 // Build thresholds dynamically — add http2_rate enforcement when K6_EXPECTED_PROTO=HTTP/2.0
 const _thresholds = {
@@ -97,6 +129,20 @@ export const options = {
       maxVUs: MEASURE_VUS_MAX,
       gracefulStop: '30s',
       tags: { phase: 'measurement' },
+    },
+    // Cooldown: drains in-flight sagas after the measurement window so the tail of
+    // the measurement window is not contaminated by run-shutdown effects. EXCLUDED
+    // from comparative analysis (filter phase=cooldown out).
+    cooldown: {
+      executor: 'constant-arrival-rate',
+      startTime: COOLDOWN_START,
+      rate: COOLDOWN_RATE,
+      timeUnit: '1s',
+      duration: COOLDOWN_DURATION,
+      preAllocatedVUs: COOLDOWN_VUS_PRE,
+      maxVUs: COOLDOWN_VUS_MAX,
+      gracefulStop: '30s',
+      tags: { phase: 'cooldown' },
     },
   },
   systemTags: [

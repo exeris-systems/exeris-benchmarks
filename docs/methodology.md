@@ -189,6 +189,91 @@ the measurement window opens.
 For k6 scenarios use the `stages` array with a ramp-up segment followed by
 the measurement segment. Never include the ramp-up portion in reported numbers.
 
+### Warmup vs steady-state, and the explicit measurement window
+
+Throughput is reported as **steady-state**, computed **only** from an explicit
+measurement window that opens after a defined warmup. Time-to-peak (how long the
+system took to *reach* steady state) is a separate, separately-reported metric — it
+characterizes warmup, not steady-state, and must never be averaged into the
+steady-state throughput.
+
+The canonical split is **warmup → measurement → cooldown**. The default for the
+saga scenario is **120s warmup / 180s measurement / 30s cooldown** (tunable via
+`K6_WARMUP_DURATION` / `K6_MEASURE_DURATION` / `K6_COOLDOWN_DURATION`). Phases are
+separate k6 `constant-arrival-rate` scenarios tagged `phase=warmup|measurement|cooldown`;
+the cooldown drains in-flight work so the measurement tail is not contaminated by
+shutdown effects. The split is recorded in `result.json`
+(`run_config.{warmup,measurement,cooldown}_window_s`).
+
+A flat, single-window run reports the average over warmup + steady-state and so
+**reads warmup noise as steady-state** — the failure this split exists to prevent.
+
+**Reconstruct the warmup curve, don't trust the summary.** A `--summary-export`
+number is a single window average and cannot distinguish warmup from steady-state.
+Stream the per-sample CSV (`k6 run --out csv=...`; the `scenario` column carries the
+phase) and aggregate per-second with `tools/aggregate-k6-throughput.sh`. It emits
+`throughput_series` (per-second, phase-tagged), `steady_state_throughput_rps`
+(mean over measurement buckets, dropping the partial final second), and
+`time_to_peak_s` — all merged into `result.json` `metrics`.
+
+### Proving steady-state: C2 compiler diagnostics
+
+You cannot defend "this is steady-state" without showing the JIT has stopped
+working inside the measurement window. Enable the additive JFR overlay
+(`BENCH_JFR_STEADY_STATE=1` → merges `env/jfr-steady-state.jfc` on top of
+`profile`; symmetric across all targets — an asymmetric overlay would bias one
+runtime's profile) and read these signals:
+
+| Signal | Source | Steady-state reading | Warmup-still-running reading |
+|---|---|---|---|
+| `jdk.CompilerStatistics` (period 1s) | JFR overlay | `nmethodCodeSize` / `compileCount` flat in the window | still rising ⇒ warmup not done |
+| `jdk.CompilerQueueUtilization` (period 1s) | JFR overlay | `queueSize` ≈ 0 | `queueSize > 0` ⇒ methods still waiting to compile |
+| `jdk.Compilation` (threshold 100ms) | JFR overlay | no individual compile > ~10s | a compile > ~10s ⇒ C2 thread is being preempted |
+| `%wait` per thread | `pidstat -t -u -w` sidecar | low on worker/compiler threads | high ⇒ CPU starvation (often C2 preemption) |
+| `%sys` / `%soft` per CPU | `mpstat -P ALL` sidecar | CPU spent in `%usr` (the app) | high `%soft` (softirq/packet processing) or `%sys` ⇒ CPU burned on network/kernel, not the app |
+
+Enable the OS sidecars with `BENCH_OS_SIDECARS=1` (saga baseline); they write
+`logs/target-*-pidstat.csv` and `logs/host-mpstat.csv`. High `%soft`/`%sys` is also
+the first detector for the backend-networking fairness hole below.
+
+### Differential flamegraph (on-demand, not always-on)
+
+This is a diagnostic step, not a per-run metadata field. When `mpstat` shows high
+`%sys`/`%soft`, or the numbers simply do not add up, capture an
+[async-profiler](https://github.com/async-profiler/async-profiler) CPU profile and
+**diff it against a known-clean run**. That is how you attribute the cost to a
+specific cause (spin locks, `nft_do_chain`, `tcp_clean_rtx_queue`, …) rather than
+guessing. Run it only when a signal above points at a problem; do not attach a
+flamegraph to every run.
+
+### Backend container networking is a fairness gate
+
+When stateful backends (Postgres / Neo4j / Axon Server) run in containers, their
+network mode is a **comparison fairness gate**, not hygiene. By default the target
+JVM runs on the host network but the backends run bridged with published ports, so
+every target↔backend packet crosses `docker-proxy`/NAT. That tax is **asymmetric**:
+stacks differ in DB round-trips per request, so bridge/NAT lands unequally — and
+proxy latency further reshapes connection-pool behaviour (waiters pile up, futex
+churn). A bridged cross-stack comparison can therefore measure container networking
+rather than the runtime.
+
+Pin the mode explicitly with `DB_HOST_NETWORK=1` (or `BENCH_BACKEND_NETWORK=host`).
+It layers the matching host-net compose override and the chosen mode is recorded in
+`result.json` (`run_metadata.backend_network_mode` for the saga;
+`run_config.backend_network_mode` for entity-read-by-id).
+
+**Audit note (2026-06):** both cross-stack stacks support the toggle.
+- `e2e-shop-order-saga` → `runtime/compose/e2e-shop-order-saga.host-net.yml`
+  (Postgres + Neo4j + Axon). Cross-stack: exeris-community vs spring vs quarkus.
+- `entity-read-by-id` → `runtime/compose/entity-read-by-id-db.host-net.yml`
+  (Postgres). Also cross-stack — the campaign runs exeris-community vs spring vs
+  quarkus against the same Postgres (`fixed_contract_cross_runtime_h1_v1`), so the
+  bridge/NAT tax is asymmetric here too; default `bridge` must be switched to `host`
+  for any published cross-stack comparison.
+
+Default remains `bridge` (back-compatible); host mode is opt-in but **required** for
+cross-stack claims.
+
 ### Latency claim scope: JMH SampleTime vs E2E
 
 `Mode.SampleTime` measures the **distribution of individual operation cost** at maximum drive rate. Valid claims:
@@ -204,12 +289,34 @@ E2E p99 requires arrival-rate tooling: wrk2 (`-R <rps>`) or k6 with `constant-ar
 | Tool / Mode | CO Risk | Claim scope |
 |---|---|---|
 | wrk (default, closed-loop) | ❌ YES | Throughput / saturation probes only |
+| h2load (closed-loop, incl. `--log-file` percentiles) | ❌ YES | Throughput / saturation probes only; percentiles are queueing, not service-time tail |
 | wrk2 with `-R` | ✅ NO | p99/p99.9 latency at declared load fraction |
 | k6 `shared-iterations` / `ramping-vus` | ❌ YES | Throughput probes only |
 | k6 `constant-arrival-rate` | ✅ NO | p99/p99.9 latency at declared arrival rate |
 | JMH `Mode.SampleTime` | N/A (Micro) | Per-call cost distribution |
 
 `co_corrected: true` in a result JSON is only meaningful alongside `r_value`, `observed_saturation_rps`, and `load_fraction`. A `load_fraction ≥ 0.95` means the measurement was at saturation — queuing delays are real, not CO artifacts, but do not represent nominal operating conditions.
+
+### Latency on the h2c axis needs two experiments
+
+h2load is the only driver here that speaks cleartext HTTP/2 (h2c), but it is
+closed-loop and emits no percentiles. We therefore split latency from throughput:
+
+1. **Throughput / CPU-efficiency (h2c, at saturation).** `run-entity-read-by-id.sh
+   --driver h2load` runs h2load with `--log-file`; `tools/aggregate-h2load-latency.sh`
+   reconstructs p50/p75/p90/p99/p99.9 from the per-request log into
+   `h2load-latency.json` and into `result.json` metrics. **These percentiles carry a
+   coordinated-omission caveat** (stamped `co_caveat` in the sidecar): under
+   saturation they track queueing (≈ concurrency ÷ throughput, Little's law), not the
+   service-time tail. Use them to rank-order, not as nominal latency.
+2. **CO-free tail latency (H1, below saturation).** `scripts/run-wrk2.sh` drives a
+   fixed arrival rate (`-R`) with HdrHistogram percentiles. This is the trustworthy
+   p99/p99.9 source — but on the HTTP/1.1 axis (wrk2 has no h2c). State the protocol
+   difference when placing wrk2 latency next to h2load throughput.
+
+The primary Exeris differentiator on these runs is **resource usage per request
+(CPU/req, RSS), not rps or latency** — at saturation both are bottleneck-shaped and
+warmup-sensitive, while CPU/req is stable across warmup and the cleaner signal.
 
 ---
 

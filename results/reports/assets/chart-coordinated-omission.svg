@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="500" font-family="Verdana,Helvetica,sans-serif" viewBox="0 0 820 500">
+<rect width="820" height="500" fill="#ffffff"/>
+<text x="410" y="28" text-anchor="middle" font-size="16" font-weight="bold">Same target, two experiments: why a saturated percentile isn&#x27;t latency (Exeris)</text>
+<text x="410" y="46" text-anchor="middle" font-size="11" fill="#666">log scale · latency in ms · lower is better ↓</text>
+<line x1="70" y1="430.0" x2="790" y2="430.0" stroke="#eee"/>
+<text x="62" y="434.0" text-anchor="end" font-size="10" fill="#999">1 ms</text>
+<line x1="70" y1="310.0" x2="790" y2="310.0" stroke="#eee"/>
+<text x="62" y="314.0" text-anchor="end" font-size="10" fill="#999">10 ms</text>
+<line x1="70" y1="190.0" x2="790" y2="190.0" stroke="#eee"/>
+<text x="62" y="194.0" text-anchor="end" font-size="10" fill="#999">100 ms</text>
+<line x1="70" y1="70.0" x2="790" y2="70.0" stroke="#eee"/>
+<text x="62" y="74.0" text-anchor="end" font-size="10" fill="#999">1000 ms</text>
+<text x="250.0" y="448" text-anchor="middle" font-size="11">p50</text>
+<rect x="120.4" y="170.3" width="127.6" height="259.7" fill="#f59e0b" rx="1"><title>h2load @ saturation (closed-loop) p50: 146.0 ms</title></rect>
+<rect x="250.0" y="373.6" width="127.6" height="56.4" fill="#2563eb" rx="1"><title>wrk2 sub-saturation (CO-free) p50: 2.95 ms</title></rect>
+<text x="610.0" y="448" text-anchor="middle" font-size="11">p99</text>
+<rect x="480.4" y="142.9" width="127.6" height="287.1" fill="#f59e0b" rx="1"><title>h2load @ saturation (closed-loop) p99: 247.0 ms</title></rect>
+<rect x="610.0" y="320.4" width="127.6" height="109.6" fill="#2563eb" rx="1"><title>wrk2 sub-saturation (CO-free) p99: 8.19 ms</title></rect>
+<rect x="80" y="74" width="12" height="12" fill="#f59e0b"/>
+<text x="96" y="84" font-size="11">h2load @ saturation (closed-loop)</text>
+<rect x="382" y="74" width="12" height="12" fill="#2563eb"/>
+<text x="398" y="84" font-size="11">wrk2 sub-saturation (CO-free)</text>
+<text x="70" y="484" font-size="10.5" fill="#888">h2load p50≈in-flight/throughput (Little&#x27;s law: 1276≈1280 streams) — queueing, not service time · runs 114151Z vs 123114Z</text>
+</svg>

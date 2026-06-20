@@ -42,7 +42,18 @@
     "transport_mode": {
       "type": "string",
       "enum": ["loopback-h1", "loopback-h2", "loopback-h3", "network-h1", "network-h2", "network-h3"],
-      "description": "Transport layer and network path. loopback-h1 results are not equivalent to network-path measurements."
+      "description": "Transport layer and network path. loopback-h1 results are not equivalent to network-path measurements. TLS on/off is orthogonal and lives in `tls`, not here (e.g. h2c cleartext and h2-over-TLS are both transport_mode=loopback-h2)."
+    },
+    "tls": {
+      "type": "object",
+      "description": "TLS state of the measured traffic. enabled distinguishes cleartext (h2c/h1) from TLS; the negotiated fields are recorded from the load client when it reports them (e.g. h2load). Provider is the target's choice and is intentionally NOT asserted here.",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean", "description": "true if the measured traffic ran over TLS (https endpoint)." },
+        "protocol": { "type": "string", "description": "Negotiated TLS version, e.g. TLSv1.3 (as reported by the load client)." },
+        "cipher": { "type": "string", "description": "Negotiated cipher suite, e.g. TLS_AES_128_GCM_SHA256." },
+        "alpn": { "type": "string", "description": "ALPN-negotiated application protocol, e.g. h2." }
+      }
     },
     "seed_ref": {
       "type": "object",
@@ -136,7 +147,10 @@
       "description": "Tool-specific run configuration parameters.",
       "properties": {
         "duration_seconds": { "type": "integer" },
-        "warmup_seconds": { "type": "integer" },
+        "warmup_seconds": { "type": "integer", "description": "Legacy warmup duration field. Prefer warmup_window_s for the explicit warmup/measurement/cooldown split." },
+        "warmup_window_s": { "type": "number", "description": "Explicit warmup window length in seconds. Load before the measurement window; excluded from steady-state throughput." },
+        "measurement_window_s": { "type": "number", "description": "Explicit measurement window length in seconds. Steady-state throughput/latency claims are computed only from this window." },
+        "cooldown_window_s": { "type": "number", "description": "Explicit cooldown window length in seconds after the measurement window; excluded from steady-state metrics." },
         "threads": { "type": "integer" },
         "connections": { "type": "integer" },
         "target_rps": { "type": "integer", "description": "wrk2 / k6 steady-rate target" },
@@ -147,6 +161,7 @@
         "measurement_iterations": { "type": "integer", "description": "JMH -i" },
         "payload_file": { "type": "string" },
         "payload_size_bytes": { "type": "integer" },
+        "backend_network_mode": { "type": "string", "enum": ["host", "bridge"], "description": "Container network mode of stateful backends (Postgres/Neo4j/Axon). 'bridge' adds an asymmetric NAT tax across stacks of differing DB-chattiness; pin and record it for cross-stack comparisons. See docs/methodology.md." },
         "execution_profile_id": { "type": "string", "description": "Execution profile identifier (e.g. runtime-constrained-128m-0p5vcpu-v1)." },
         "contract_id": { "type": "string", "description": "Fixed contract identifier from scenario.json fixed_contracts." },
         "track_id": { "type": "string", "description": "Track identifier (e.g. track-c)." },
@@ -181,6 +196,27 @@
         "jmh_alloc_rate_norm_bytes": {
           "type": "number",
           "description": "gc.alloc.rate.norm from -prof gc. 0 expected on zero-alloc paths."
+        },
+        "steady_state_throughput_rps": {
+          "type": "number",
+          "description": "Throughput computed ONLY from the measurement window (excludes warmup/cooldown). Use this for steady-state claims; throughput_rps may span the whole run."
+        },
+        "time_to_peak_s": {
+          "type": "number",
+          "description": "Seconds from load start until per-second throughput first reaches its plateau (e.g. within 5% of the measurement-window mean). Characterizes warmup ramp, NOT steady-state. CAVEAT: only meaningful for open / throughput-seeking drivers. For rate-capped executors (k6 constant-arrival-rate), throughput is pinned to the configured rate, so this detects the arrival-rate step-up, not when the JIT settled — use the JFR C2 compiler overlay (env/jfr-steady-state.jfc) as the real steady-state proof there."
+        },
+        "throughput_series": {
+          "type": "array",
+          "description": "Per-second throughput samples reconstructed from the driver's timestamped output. Lets a reader rebuild the warmup curve instead of trusting a single window-averaged number.",
+          "items": {
+            "type": "object",
+            "required": ["t_s", "rps"],
+            "properties": {
+              "t_s": { "type": "number", "description": "Seconds since load start (bucket start)." },
+              "rps": { "type": "number", "description": "Requests completed in this 1s bucket." },
+              "phase": { "type": "string", "enum": ["warmup", "measurement", "cooldown", "unknown"], "description": "Phase tag for this bucket, when the driver emits a phase tag." }
+            }
+          }
         }
       }
     },

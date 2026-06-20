@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s] [--driver wrk|h2load] [--h2load-axis h1|h2c] [--backend-mode default-vt|locality-aware] [--target-runtime auto|community|locality|spring|spring-runtime-on-exeris|quarkus] [--target-build jvm|native] [--cpu-affinity <cpuset>]
-#   --driver h2load is exploratory-only (h2load H1 vs wrk H1 is not directly comparable; h2load emits no latency percentiles). --h2load-axis h2c selects HTTP/2 cleartext (loopback-h2).
+# Usage: run-entity-read-by-id.sh [--contract fixed_contract_v1] [--claim-scope exploratory|comparison-eligible] [--profile <hw-profile>] [--output-dir <path>] [--threads <int>] [--connections <int>] [--duration <N>s] [--warmup <N>s] [--driver wrk|h2load|wrk2] [--h2load-axis h1|h2c] [--backend-mode default-vt|locality-aware] [--target-runtime auto|community|locality|spring|spring-runtime-on-exeris|quarkus] [--target-build jvm|native] [--cpu-affinity <cpuset>] [--client-cpu-affinity <cpuset>]
+#   --client-cpu-affinity pins the load driver (wrk/h2load) to a cpuset DISJOINT from --cpu-affinity, so the
+#   target is the bottleneck and its CPU-efficiency shows as throughput. Local target-bound recipe on a 12-core box:
+#   --cpu-affinity 0-2 --client-cpu-affinity 3-9 (target 3 cores, driver 7, leave 10-11 for OS/Postgres).
+#   --driver h2load is exploratory-only (h2load H1 vs wrk H1 is not directly comparable; h2load emits no latency percentiles). --h2load-axis h2c selects the "HTTP/2, no --h1" axis (transport_mode=loopback-h2); whether the wire is cleartext h2c or h2-over-TLS depends on BENCHMARK_TLS_ENABLED and is recorded in result.json `tls`.
 #
 # Orchestrates the entity-read-by-id E2E benchmark run:
 #   1. Validate claim-scope
@@ -19,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 READINESS_LIB="${REPO_ROOT}/tools/bench/lib/readiness.sh"
 if [[ ! -f "$READINESS_LIB" ]]; then
-  echo "ERROR: readiness library not found: $READINESS_LIB"
+  echo "ERROR: readiness library not found: $READINESS_LIB" >&2
   exit 1
 fi
 
@@ -33,6 +36,9 @@ JFR_LIB="${REPO_ROOT}/tools/bench/lib/jfr.sh"
 RESOURCE_SAMPLER_LIB="${REPO_ROOT}/tools/bench/lib/resource-sampler.sh"
 # shellcheck source=/dev/null
 [[ -f "$RESOURCE_SAMPLER_LIB" ]] && source "$RESOURCE_SAMPLER_LIB"
+OS_SAMPLER_LIB="${REPO_ROOT}/tools/bench/lib/os-sampler.sh"
+# shellcheck source=/dev/null
+[[ -f "$OS_SAMPLER_LIB" ]] && source "$OS_SAMPLER_LIB"
 
 CLAIM_SCOPE="${CLAIM_SCOPE:-exploratory}"
 PROFILE="${PROFILE:-dev-laptop}"
@@ -64,6 +70,7 @@ BACKEND_MODE="${BACKEND_MODE:-default-vt}"
 TARGET_RUNTIME="${TARGET_RUNTIME:-auto}"
 TARGET_BUILD="${TARGET_BUILD:-jvm}"
 CPU_AFFINITY="${CPU_AFFINITY:-}"
+CLIENT_CPU_AFFINITY="${CLIENT_CPU_AFFINITY:-}"
 PERF_STAT_REQUIRED="${BENCHMARK_REQUIRE_PERF_STAT:-0}"
 BACKEND_EVIDENCE_REQUIRED="${BENCHMARK_REQUIRE_BACKEND_EVIDENCE:-0}"
 ALLOW_EXTERNAL_DB="${BENCHMARK_ALLOW_EXTERNAL_DB:-0}"
@@ -91,9 +98,12 @@ CONTRACT_NAME=""
 # faked). wrk2/k6 are handled by their own runners (run-wrk2.sh / run-k6.sh).
 DRIVER="${DRIVER:-wrk}"
 # Transport axis when DRIVER=h2load. h1 = cleartext HTTP/1.1 (loopback-h1),
-# h2c = HTTP/2 cleartext prior-knowledge (loopback-h2). h2c is exploratory-only
-# per scenarios/entity-read-by-id/h2load.flags (not comparable to H1 or wrk).
+# h2c = the "HTTP/2, no --h1" axis. Its real wire protocol depends on the endpoint
+# scheme: cleartext http:// -> true h2c (loopback-h2c); TLS https:// -> h2 over TLS
+# via ALPN (loopback-h2-tls). h2c is exploratory-only per
+# scenarios/entity-read-by-id/h2load.flags (not comparable to H1 or wrk).
 H2LOAD_AXIS="${ENTITY_READ_H2LOAD_AXIS:-h1}"
+H2LOAD_AXIS_LABEL="$H2LOAD_AXIS"   # human label, refined once TLS state is known
 H2LOAD_H2C_MAX_CONCURRENT_STREAMS="${H2LOAD_H2C_MAX_CONCURRENT_STREAMS:-10}"
 # TLS toggle. When the guided launcher (or any caller) sets BENCHMARK_TLS_ENABLED=1
 # the managed target is launched with TLS (it inherits EXERIS_SSL_ENABLED /
@@ -105,6 +115,16 @@ if [[ "$TLS_ENABLED" == "1" ]]; then TARGET_SCHEME="https"; CURL_INSECURE_OPT="-
 BASE_URL="${BASE_URL:-${TARGET_SCHEME}://localhost:${TARGET_PORT}}"
 SCENARIO_DIR="scenarios/entity-read-by-id"
 DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
+# Backend container network mode (fairness gate). entity-read-by-id is a CROSS-STACK
+# comparison (exeris vs spring vs quarkus against the same Postgres), so bridge/NAT
+# taxes chattier runtimes asymmetrically. DB_HOST_NETWORK=1 (or BENCH_BACKEND_NETWORK=host)
+# layers the host-net override so the DB shares the host network. Recorded in result.json.
+DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.host-net.yml"
+if [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
+  BACKEND_NETWORK_MODE="host"
+else
+  BACKEND_NETWORK_MODE="bridge"
+fi
 DB_INIT_SQL_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql"
 TARGET_MODULE_POM_COMMUNITY="targets/exeris-community-app/pom.xml"
 TARGET_JAR_GLOB_COMMUNITY="targets/exeris-community-app/target/exeris-community-app-*.jar"
@@ -210,7 +230,7 @@ require_positive_int() {
   local name="$1"
   local value="$2"
   if ! [[ "$value" =~ ^[0-9]+$ ]] || [[ "$value" -le 0 ]]; then
-    echo "ERROR: $name must be a positive integer (got: $value)"
+    echo "ERROR: $name must be a positive integer (got: $value)" >&2
     exit 1
   fi
 }
@@ -219,7 +239,7 @@ require_duration_seconds() {
   local name="$1"
   local value="$2"
   if ! [[ "$value" =~ ^[0-9]+s$ ]]; then
-    echo "ERROR: $name must match <N>s (got: $value)"
+    echo "ERROR: $name must match <N>s (got: $value)" >&2
     exit 1
   fi
 }
@@ -254,7 +274,7 @@ assert_contract_match() {
   local actual="$2"
   local expected="$3"
   if [[ "$actual" != "$expected" ]]; then
-    echo "ERROR: --contract $CONTRACT_NAME requires $flag_name=$expected (got: $actual)"
+    echo "ERROR: --contract $CONTRACT_NAME requires $flag_name=$expected (got: $actual)" >&2
     exit 1
   fi
 }
@@ -275,6 +295,7 @@ while [[ $# -gt 0 ]]; do
     --target-runtime) TARGET_RUNTIME="$2"; shift 2 ;;
     --target-build) TARGET_BUILD="$2"; shift 2 ;;
     --cpu-affinity) CPU_AFFINITY="$2"; shift 2 ;;
+    --client-cpu-affinity) CLIENT_CPU_AFFINITY="$2"; shift 2 ;;
     --enable-jfr) ENABLE_JFR="true"; shift ;;
     --no-jfr) ENABLE_JFR="false"; shift ;;
     --jfr-settings) JFR_SETTINGS="$2"; shift 2 ;;
@@ -286,7 +307,7 @@ case "$BACKEND_MODE" in
   default-vt|locality-aware)
     ;;
   *)
-    echo "ERROR: --backend-mode must be default-vt or locality-aware (got: $BACKEND_MODE)"
+    echo "ERROR: --backend-mode must be default-vt or locality-aware (got: $BACKEND_MODE)" >&2
     exit 1
     ;;
 esac
@@ -295,7 +316,7 @@ case "$TARGET_RUNTIME" in
   auto|community|locality|spring|spring-runtime-on-exeris|quarkus)
     ;;
   *)
-    echo "ERROR: --target-runtime must be auto, community, locality, spring, spring-runtime-on-exeris, or quarkus (got: $TARGET_RUNTIME)"
+    echo "ERROR: --target-runtime must be auto, community, locality, spring, spring-runtime-on-exeris, or quarkus (got: $TARGET_RUNTIME)" >&2
     exit 1
     ;;
 esac
@@ -304,7 +325,7 @@ case "$TARGET_BUILD" in
   jvm|native)
     ;;
   *)
-    echo "ERROR: --target-build must be jvm or native (got: $TARGET_BUILD)"
+    echo "ERROR: --target-build must be jvm or native (got: $TARGET_BUILD)" >&2
     exit 1
     ;;
 esac
@@ -312,8 +333,9 @@ esac
 # --- Load-driver resolution ------------------------------------------------
 # Derive the tool/transport/protocol labels up front so env capture and every
 # result artifact stamp the driver that ACTUALLY ran. This runner is wrk- and
-# h2load-capable only; wrk2/k6 have dedicated runners (they parse different
-# output and, for wrk2, enforce CO-free p99 semantics this script does not).
+# wrk + h2load measured inline; wrk2 is launched-then-DELEGATED to run-wrk2.sh for
+# the CO-free latency measurement (this script does not reimplement its semantics).
+# k6 still has its own dedicated runner (different output/parser).
 case "$DRIVER" in
   wrk)
     TOOL_NAME="wrk"
@@ -323,67 +345,92 @@ case "$DRIVER" in
     ;;
   h2load)
     if ! command -v h2load >/dev/null 2>&1; then
-      echo "ERROR: --driver h2load requires the h2load command (nghttp2)"
+      echo "ERROR: --driver h2load requires the h2load command (nghttp2)" >&2
       exit 1
     fi
     case "$H2LOAD_AXIS" in
       h1)
         TRANSPORT_MODE="loopback-h1"
         PROTOCOL="h1"
+        H2LOAD_AXIS_LABEL="h1 (cleartext)"
         ;;
       h2c)
         # H2c is exploratory-only and NOT comparable to H1 or to wrk results
         # (scenarios/entity-read-by-id/h2load.flags). Refuse to mint a
         # comparison-eligible artifact over it.
         if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
-          echo "ERROR: --driver h2load --h2load-axis h2c is exploratory-only (not comparable to H1/wrk); use --claim-scope exploratory."
+          echo "ERROR: --driver h2load --h2load-axis h2c is exploratory-only (not comparable to H1/wrk); use --claim-scope exploratory." >&2
           exit 1
         fi
-        # The h2load "h2c" axis means "HTTP/2, no --h1": over cleartext http it is
-        # true h2c (prior-knowledge); over TLS h2load negotiates h2 via ALPN. Both
-        # are valid HTTP/2 now that the target enables http2 for h2 runs (see the
-        # HTTP/2 env block at target launch). The post-load ALPN-fallback guard below
-        # still fails the run if the server did NOT actually negotiate h2, so an
-        # H1-only target can never be mislabeled H2.
+        # The h2load "h2c" axis means "HTTP/2, no --h1". transport_mode is the schema
+        # enum value (loopback-h2) for both; TLS vs cleartext is orthogonal and is
+        # carried by the `tls` field, NOT by faking an "h2c" transport label when the
+        # endpoint is actually TLS. The human axis label below reflects the real wire.
+        #   - cleartext http://  -> true h2c (prior-knowledge)
+        #   - TLS      https:// -> h2 negotiated via ALPN
+        # The post-load ALPN-fallback guard below still fails the run if the server
+        # did NOT actually negotiate h2, so an H1-only target can never be H2.
         TRANSPORT_MODE="loopback-h2"
         PROTOCOL="h2"
+        if [[ "$TLS_ENABLED" == "1" ]]; then
+          H2LOAD_AXIS_LABEL="h2 (TLS/ALPN)"
+        else
+          H2LOAD_AXIS_LABEL="h2c (cleartext prior-knowledge)"
+        fi
         ;;
       *)
-        echo "ERROR: --h2load-axis must be h1 or h2c (got: $H2LOAD_AXIS)"
+        echo "ERROR: --h2load-axis must be h1 or h2c (got: $H2LOAD_AXIS)" >&2
         exit 1
         ;;
     esac
     # h2load H1 vs wrk H1 are NOT directly comparable without a cross-driver
     # caveat; the comparison-eligible contract is wrk-defined, so block the mix.
     if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
-      echo "ERROR: --driver h2load is not comparison-eligible (the fixed contract is wrk-defined; h2load H1 vs wrk H1 needs a cross-driver caveat). Use --claim-scope exploratory."
+      echo "ERROR: --driver h2load is not comparison-eligible (the fixed contract is wrk-defined; h2load H1 vs wrk H1 needs a cross-driver caveat). Use --claim-scope exploratory." >&2
       exit 1
     fi
     TOOL_NAME="h2load"
     BENCHMARK_FAMILY="runtime-h2load"
     ;;
   wrk2)
-    echo "ERROR: --driver wrk2 is not supported by this runner (it enforces CO-free p99 semantics and a different parser). Use scripts/run-wrk2.sh."
-    exit 1
+    # wrk2 is a CO-free sub-saturation LATENCY experiment (HTTP/1.1). This runner
+    # does not reimplement it: it launches the target + seeds the DB as usual, then
+    # DELEGATES the measurement phase to scripts/run-wrk2.sh (saturation-discovery
+    # -> warmup -> wrk2 fixed -R, HdrHistogram), and reads back its result. wrk2
+    # needs both wrk (discovery/warmup) and wrk2 (measurement).
+    if ! command -v wrk2 >/dev/null 2>&1 || ! command -v wrk >/dev/null 2>&1; then
+      echo "ERROR: --driver wrk2 requires both wrk2 and wrk in PATH (wrk drives saturation discovery + warmup)." >&2
+      exit 1
+    fi
+    # CO-free latency at a sub-saturation rate is a different measurement than the
+    # wrk-defined throughput contract; never mint a comparison-eligible artifact.
+    if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
+      echo "ERROR: --driver wrk2 is exploratory-only (CO-free sub-saturation latency, not the wrk-defined throughput contract). Use --claim-scope exploratory." >&2
+      exit 1
+    fi
+    TOOL_NAME="wrk2"
+    TRANSPORT_MODE="loopback-h1"
+    PROTOCOL="h1"
+    BENCHMARK_FAMILY="runtime-wrk2"
     ;;
   k6)
-    echo "ERROR: --driver k6 is not supported by this runner. Use scripts/run-k6.sh."
+    echo "ERROR: --driver k6 is not supported by this runner. Use scripts/run-k6.sh." >&2
     exit 1
     ;;
   *)
-    echo "ERROR: --driver must be wrk or h2load (got: $DRIVER)"
+    echo "ERROR: --driver must be wrk, h2load, or wrk2 (got: $DRIVER)" >&2
     exit 1
     ;;
 esac
 
 if [[ "$BACKEND_MODE" == "locality-aware" ]] && [[ "$TARGET_RUNTIME" == "spring" || "$TARGET_RUNTIME" == "spring-runtime-on-exeris" || "$TARGET_RUNTIME" == "quarkus" ]]; then
-  echo "ERROR: --backend-mode locality-aware is Exeris-only and cannot be combined with --target-runtime $TARGET_RUNTIME"
+  echo "ERROR: --backend-mode locality-aware is Exeris-only and cannot be combined with --target-runtime $TARGET_RUNTIME" >&2
   exit 1
 fi
 
 if [[ "$BACKEND_MODE" == "locality-aware" ]]; then
   if [[ "$BENCHMARK_LOCALITY_STRICT" == "1" ]] && [[ "$LOCALITY_MODE_ENABLED" != "1" ]]; then
-    echo "ERROR: --backend-mode locality-aware in strict mode requires BENCHMARK_ENABLE_LOCALITY_MODE=1 (VT scheduler API not verified available)."
+    echo "ERROR: --backend-mode locality-aware in strict mode requires BENCHMARK_ENABLE_LOCALITY_MODE=1 (VT scheduler API not verified available)." >&2
     echo "       Unset BENCHMARK_LOCALITY_STRICT or set BENCHMARK_ENABLE_LOCALITY_MODE=1."
     exit 1
   fi
@@ -393,47 +440,52 @@ if [[ "$BACKEND_MODE" == "locality-aware" ]]; then
 fi
 
 if [[ "${BENCHMARK_REQUIRE_CPU_PINNING:-0}" == "1" ]] && [[ -z "$CPU_AFFINITY" ]]; then
-  echo "ERROR: BENCHMARK_REQUIRE_CPU_PINNING=1 requires --cpu-affinity <cpuset>"
+  echo "ERROR: BENCHMARK_REQUIRE_CPU_PINNING=1 requires --cpu-affinity <cpuset>" >&2
   exit 1
 fi
 
 if [[ -n "$CPU_AFFINITY" ]] && ! command -v taskset >/dev/null 2>&1; then
-  echo "ERROR: --cpu-affinity requires taskset command"
+  echo "ERROR: --cpu-affinity requires taskset command" >&2
+  exit 1
+fi
+
+if [[ -n "$CLIENT_CPU_AFFINITY" ]] && ! command -v taskset >/dev/null 2>&1; then
+  echo "ERROR: --client-cpu-affinity requires taskset command" >&2
   exit 1
 fi
 
 if [[ "$PERF_STAT_REQUIRED" == "1" ]] && ! command -v perf >/dev/null 2>&1; then
-  echo "ERROR: BENCHMARK_REQUIRE_PERF_STAT=1 requires perf command"
+  echo "ERROR: BENCHMARK_REQUIRE_PERF_STAT=1 requires perf command" >&2
   exit 1
 fi
 
 if [[ "$BACKEND_EVIDENCE_REQUIRED" != "0" && "$BACKEND_EVIDENCE_REQUIRED" != "1" ]]; then
-  echo "ERROR: BENCHMARK_REQUIRE_BACKEND_EVIDENCE must be 0 or 1 (got: $BACKEND_EVIDENCE_REQUIRED)"
+  echo "ERROR: BENCHMARK_REQUIRE_BACKEND_EVIDENCE must be 0 or 1 (got: $BACKEND_EVIDENCE_REQUIRED)" >&2
   exit 1
 fi
 
 if [[ "$ALLOW_EXTERNAL_DB" != "0" && "$ALLOW_EXTERNAL_DB" != "1" ]]; then
-  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_DB must be 0 or 1 (got: $ALLOW_EXTERNAL_DB)"
+  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_DB must be 0 or 1 (got: $ALLOW_EXTERNAL_DB)" >&2
   exit 1
 fi
 
 if [[ "$LOCALITY_MODE_ENABLED" != "0" && "$LOCALITY_MODE_ENABLED" != "1" ]]; then
-  echo "ERROR: BENCHMARK_ENABLE_LOCALITY_MODE must be 0 or 1 (got: $LOCALITY_MODE_ENABLED)"
+  echo "ERROR: BENCHMARK_ENABLE_LOCALITY_MODE must be 0 or 1 (got: $LOCALITY_MODE_ENABLED)" >&2
   exit 1
 fi
 
 if [[ "$BENCHMARK_LOCALITY_STRICT" != "0" && "$BENCHMARK_LOCALITY_STRICT" != "1" ]]; then
-  echo "ERROR: BENCHMARK_LOCALITY_STRICT must be 0 or 1 (got: $BENCHMARK_LOCALITY_STRICT)"
+  echo "ERROR: BENCHMARK_LOCALITY_STRICT must be 0 or 1 (got: $BENCHMARK_LOCALITY_STRICT)" >&2
   exit 1
 fi
 
 if [[ "$SKIP_TARGET_BUILD" != "0" && "$SKIP_TARGET_BUILD" != "1" ]]; then
-  echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD must be 0 or 1 (got: $SKIP_TARGET_BUILD)"
+  echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD must be 0 or 1 (got: $SKIP_TARGET_BUILD)" >&2
   exit 1
 fi
 
 if [[ "$ALLOW_EXTERNAL_TARGET" != "0" && "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
-  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_TARGET must be 0 or 1 (got: $ALLOW_EXTERNAL_TARGET)"
+  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_TARGET must be 0 or 1 (got: $ALLOW_EXTERNAL_TARGET)" >&2
   exit 1
 fi
 
@@ -451,13 +503,13 @@ if [[ -n "$CONTRACT_NAME" ]]; then
     fixed_contract_v1|fixed_contract_backend_mode_h1_v1)
       ;;
     *)
-      echo "ERROR: Unsupported contract '$CONTRACT_NAME'. Supported: fixed_contract_v1, fixed_contract_backend_mode_h1_v1"
+      echo "ERROR: Unsupported contract '$CONTRACT_NAME'. Supported: fixed_contract_v1, fixed_contract_backend_mode_h1_v1" >&2
       exit 1
       ;;
   esac
 
   if [[ -n "$DURATION_OVERRIDE" ]]; then
-    echo "ERROR: --duration override is not allowed with --contract $CONTRACT_NAME"
+    echo "ERROR: --duration override is not allowed with --contract $CONTRACT_NAME" >&2
     exit 1
   fi
 
@@ -469,11 +521,11 @@ if [[ -n "$CONTRACT_NAME" ]]; then
 
   if [[ "$CONTRACT_NAME" == "fixed_contract_backend_mode_h1_v1" ]]; then
     if [[ "$TARGET_RUNTIME" != "auto" && "$TARGET_RUNTIME" != "locality" ]]; then
-      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 only supports --target-runtime auto or locality (got: $TARGET_RUNTIME)"
+      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 only supports --target-runtime auto or locality (got: $TARGET_RUNTIME)" >&2
       exit 1
     fi
     if [[ -z "$CPU_AFFINITY" ]]; then
-      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 requires --cpu-affinity (requires_cpu_pinning=true)"
+      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 requires --cpu-affinity (requires_cpu_pinning=true)" >&2
       exit 1
     fi
     BACKEND_EVIDENCE_REQUIRED=0
@@ -488,27 +540,27 @@ case "$CLAIM_SCOPE" in
   comparison-eligible)
     DURATION=60s
     if [[ "$PROFILE" != "perf-box-amd64" ]]; then
-      echo "ERROR: comparison-eligible requires --profile perf-box-amd64 (got: $PROFILE)"
+      echo "ERROR: comparison-eligible requires --profile perf-box-amd64 (got: $PROFILE)" >&2
       exit 1
     fi
     if [[ -z "$CPU_AFFINITY" ]] && [[ "${BENCHMARK_WAIVE_CPU_AFFINITY:-0}" != "1" ]]; then
-      echo "ERROR: comparison-eligible requires --cpu-affinity <cpuset> for reproducible pinning (set BENCHMARK_WAIVE_CPU_AFFINITY=1 to waive)"
+      echo "ERROR: comparison-eligible requires --cpu-affinity <cpuset> for reproducible pinning (set BENCHMARK_WAIVE_CPU_AFFINITY=1 to waive)" >&2
       exit 1
     fi
     ;;
   p99-stable)
-    echo "ERROR: p99-stable requires wrk2 (CO-free). wrk is INELIGIBLE. Use run-wrk2.sh."
+    echo "ERROR: p99-stable requires wrk2 (CO-free). wrk is INELIGIBLE. Use run-wrk2.sh." >&2
     exit 1
     ;;
   *)
-    echo "ERROR: Unknown claim-scope: $CLAIM_SCOPE. Valid: exploratory, comparison-eligible, p99-stable"
+    echo "ERROR: Unknown claim-scope: $CLAIM_SCOPE. Valid: exploratory, comparison-eligible, p99-stable" >&2
     exit 1
     ;;
 esac
 
 if [[ -n "$DURATION_OVERRIDE" ]]; then
   if [[ "$CLAIM_SCOPE" != "exploratory" ]]; then
-    echo "ERROR: --duration override is only allowed with --claim-scope exploratory"
+    echo "ERROR: --duration override is only allowed with --claim-scope exploratory" >&2
     exit 1
   fi
   DURATION="$DURATION_OVERRIDE"
@@ -573,11 +625,11 @@ else
 fi
 
 if [[ "$TARGET_BUILD" == "native" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "locality" ]]; then
-  echo "ERROR: --target-build native is not supported for effective runtime locality (targets/exeris-community-app-locality)"
+  echo "ERROR: --target-build native is not supported for effective runtime locality (targets/exeris-community-app-locality)" >&2
   exit 1
 fi
 if [[ "$TARGET_BUILD" == "native" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "spring-runtime-on-exeris" ]]; then
-  echo "ERROR: --target-build native is not supported for effective runtime spring-runtime-on-exeris (targets/exeris-spring-runtime-app-comp is JVM-only for entity-read-by-id)"
+  echo "ERROR: --target-build native is not supported for effective runtime spring-runtime-on-exeris (targets/exeris-spring-runtime-app-comp is JVM-only for entity-read-by-id)" >&2
   exit 1
 fi
 if [[ "$TLS_ENABLED" == "1" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "spring-runtime-on-exeris" ]]; then
@@ -586,7 +638,7 @@ if [[ "$TLS_ENABLED" == "1" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "spring-runt
   # "Removed (no longer honored)"). With TLS on we would point an https client at an
   # http-only server and get connection failures that look like a target fault. Fail
   # closed rather than emit a confusing/invalid run.
-  echo "ERROR: BENCHMARK_TLS_ENABLED=1 is not supported for spring-runtime-on-exeris (H1-plaintext only; the target ignores the TLS env). Unset BENCHMARK_TLS_ENABLED for this target."
+  echo "ERROR: BENCHMARK_TLS_ENABLED=1 is not supported for spring-runtime-on-exeris (H1-plaintext only; the target ignores the TLS env). Unset BENCHMARK_TLS_ENABLED for this target." >&2
   exit 1
 fi
 TARGET_PID_FILE="/tmp/${TARGET_APP_NAME}-benchmark.pid"
@@ -607,16 +659,22 @@ resolve_db_launcher() {
   elif command -v docker >/dev/null 2>&1; then
     DB_LAUNCH_MODE="docker-run"
   else
-    echo "ERROR: Neither compose nor docker runtime is available"
+    echo "ERROR: Neither compose nor docker runtime is available" >&2
     exit 1
   fi
 }
 
 compose_db() {
+  # Layer the host-net override when host mode is requested (fairness gate). Applies
+  # to every compose subcommand; harmless for non-up commands (same project/services).
+  local _net_args=()
+  if [[ "${BACKEND_NETWORK_MODE:-bridge}" == "host" && -f "$DB_COMPOSE_HOSTNET_OVERRIDE" ]]; then
+    _net_args=( -f "$DB_COMPOSE_HOSTNET_OVERRIDE" )
+  fi
   if [[ "$COMPOSE_BIN" == "docker compose" ]]; then
-    docker compose -f "$DB_COMPOSE_FILE" "$@"
+    docker compose -f "$DB_COMPOSE_FILE" "${_net_args[@]}" "$@"
   else
-    docker-compose -f "$DB_COMPOSE_FILE" "$@"
+    docker-compose -f "$DB_COMPOSE_FILE" "${_net_args[@]}" "$@"
   fi
 }
 
@@ -643,9 +701,19 @@ start_db() {
     compose_db up -d
     DB_MANAGED=1
   else
-    if [[ "$DB_PORT" == "5432" ]] && port_reachable 5432; then
-      DB_PORT=55432
-      echo "[step 2/9] WARN: localhost:5432 is occupied by a different service; using localhost:$DB_PORT"
+    # Network args for the docker-run fallback. Host mode binds 5432 directly on the
+    # host (no -p, no port remap); if 5432 is occupied this fails loudly — which is
+    # correct, host networking cannot share an occupied port.
+    local _run_net_args=()
+    if [[ "${BACKEND_NETWORK_MODE:-bridge}" == "host" ]]; then
+      echo "[step 2/9] WARN: docker-run fallback with host networking (DB binds host:5432 directly)."
+      _run_net_args=( --network host )
+    else
+      if [[ "$DB_PORT" == "5432" ]] && port_reachable 5432; then
+        DB_PORT=55432
+        echo "[step 2/9] WARN: localhost:5432 is occupied by a different service; using localhost:$DB_PORT"
+      fi
+      _run_net_args=( -p "$DB_PORT":5432 )
     fi
     echo "[step 2/9] WARN: Using docker-run fallback for managed benchmark DB"
     docker rm -f "$DB_CONTAINER_NAME" >/dev/null 2>&1 || true
@@ -653,7 +721,7 @@ start_db() {
       -e POSTGRES_DB=benchmark_db \
       -e POSTGRES_USER=benchmark \
       -e POSTGRES_PASSWORD=benchmark \
-      -p "$DB_PORT":5432 \
+      "${_run_net_args[@]}" \
       --mount "type=bind,source=$DB_INIT_SQL_FILE,target=/docker-entrypoint-initdb.d/01-pg-stat-statements-init.sql,readonly" \
       --health-cmd 'pg_isready -U benchmark -d benchmark_db' \
       --health-interval 5s \
@@ -697,7 +765,7 @@ apply_seed_sql() {
     return 0
   fi
 
-  echo "ERROR: psql is required when benchmark DB is not managed by docker-run"
+  echo "ERROR: psql is required when benchmark DB is not managed by docker-run" >&2
   return 1
 }
 
@@ -712,7 +780,7 @@ query_seed_user_count() {
     return 0
   fi
 
-  echo "ERROR: psql is required to verify seed user count when DB is external"
+  echo "ERROR: psql is required to verify seed user count when DB is external" >&2
   return 1
 }
 
@@ -722,7 +790,7 @@ verify_seed_fallback() {
   local expected_count expected_sha256 actual_sha256 actual_count
 
   if ! command -v jq >/dev/null 2>&1; then
-    echo "ERROR: jq is required but not installed"
+    echo "ERROR: jq is required but not installed" >&2
     return 1
   fi
 
@@ -740,7 +808,7 @@ verify_seed_fallback() {
 
   actual_count=$(query_seed_user_count)
   if ! [[ "$actual_count" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: Could not query user count. Output: $actual_count"
+    echo "ERROR: Could not query user count. Output: $actual_count" >&2
     return 1
   fi
 
@@ -854,7 +922,7 @@ verify_backend_mode_evidence() {
   local manifest_token="startupManifestBackendMode=$BACKEND_MODE"
 
   if [[ ! -f "$TARGET_APP_LOG" ]]; then
-    echo "ERROR: Target log not found for backend mode evidence: $TARGET_APP_LOG"
+    echo "ERROR: Target log not found for backend mode evidence: $TARGET_APP_LOG" >&2
     return 1
   fi
 
@@ -866,8 +934,8 @@ verify_backend_mode_evidence() {
     sleep 1
   done
 
-  echo "ERROR: backend mode evidence missing or mismatched after ${timeout}s (expected mode=$BACKEND_MODE)"
-  echo "ERROR: expected tokens: '$descriptor_token' and '$manifest_token'"
+  echo "ERROR: backend mode evidence missing or mismatched after ${timeout}s (expected mode=$BACKEND_MODE)" >&2
+  echo "ERROR: expected tokens: '$descriptor_token' and '$manifest_token'" >&2
   if [[ -f "$TARGET_APP_LOG" ]]; then
     echo "---- backend-mode evidence lines ----"
     grep -E "descriptorBackendMode=|startupManifestBackendMode=" "$TARGET_APP_LOG" || true
@@ -882,6 +950,15 @@ cleanup() {
   # orphaned sampler subshell polling a now-dead /proc/<pid>.
   if command -v bench_stop_resource_sampler >/dev/null 2>&1; then
     bench_stop_resource_sampler || true
+  fi
+  # Stop OS sidecars on any exit path (guarded: trap may fire before assignment).
+  if [[ -n "${TARGET_PIDSTAT_PID:-}" ]]; then
+    bench_stop_pidstat_sampler "$TARGET_PIDSTAT_PID" "${TARGET_PIDSTAT_CSV:-/dev/null}" 2>/dev/null || true
+    TARGET_PIDSTAT_PID=""
+  fi
+  if [[ -n "${HOST_MPSTAT_PID:-}" ]]; then
+    bench_stop_mpstat_sampler "$HOST_MPSTAT_PID" "${HOST_MPSTAT_CSV:-/dev/null}" 2>/dev/null || true
+    HOST_MPSTAT_PID=""
   fi
   if [[ "$TARGET_APP_STARTED" -eq 1 ]] && [[ -n "$TARGET_APP_PID" ]] && kill -0 "$TARGET_APP_PID" >/dev/null 2>&1; then
     echo "[cleanup] Stopping benchmark target app (pid=$TARGET_APP_PID)..."
@@ -912,7 +989,7 @@ for i in $(seq 1 30); do
 done
 
 if ! is_db_healthy; then
-  echo "ERROR: benchmark DB failed to become healthy"
+  echo "ERROR: benchmark DB failed to become healthy" >&2
   exit 1
 fi
 
@@ -958,13 +1035,13 @@ fi
 
 if target_reachable; then
   if [[ "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
-    echo "ERROR: benchmark target already reachable at $BASE_URL and BENCHMARK_ALLOW_EXTERNAL_TARGET is not 1"
-    echo "ERROR: external target is disallowed for backendMode integrity"
+    echo "ERROR: benchmark target already reachable at $BASE_URL and BENCHMARK_ALLOW_EXTERNAL_TARGET is not 1" >&2
+    echo "ERROR: external target is disallowed for backendMode integrity" >&2
     exit 1
   fi
   if [[ "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
-    echo "ERROR: external target reuse cannot satisfy mandatory backend mode evidence in this script path"
-    echo "ERROR: set BENCHMARK_REQUIRE_BACKEND_EVIDENCE=0 to allow external target with warning-only evidence semantics"
+    echo "ERROR: external target reuse cannot satisfy mandatory backend mode evidence in this script path" >&2
+    echo "ERROR: set BENCHMARK_REQUIRE_BACKEND_EVIDENCE=0 to allow external target with warning-only evidence semantics" >&2
     exit 1
   fi
   echo "[step 6/9] WARN: Reusing externally managed target at $BASE_URL (BENCHMARK_ALLOW_EXTERNAL_TARGET=1); backend mode evidence cannot be guaranteed"
@@ -978,19 +1055,19 @@ if ! target_reachable; then
 
   if [[ "$SKIP_TARGET_BUILD" == "1" ]]; then
     if [[ "$artifact_found" -ne 1 ]]; then
-      echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD=1 requires prebuilt target artifacts (runtime=$TARGET_RUNTIME_EFFECTIVE build=$TARGET_BUILD)"
+      echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD=1 requires prebuilt target artifacts (runtime=$TARGET_RUNTIME_EFFECTIVE build=$TARGET_BUILD)" >&2
       if [[ "$TARGET_BUILD" == "jvm" ]]; then
-        echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -DskipTests package"
+        echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -DskipTests package" >&2
       else
         case "$TARGET_RUNTIME_EFFECTIVE" in
           community|spring)
-            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -DskipTests native:compile"
+            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -DskipTests native:compile" >&2
             ;;
           quarkus)
-            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -Dquarkus.native.enabled=true -DskipTests package"
+            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -Dquarkus.native.enabled=true -DskipTests package" >&2
             ;;
           *)
-            echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE"
+            echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE" >&2
             ;;
         esac
       fi
@@ -1044,11 +1121,11 @@ if ! target_reachable; then
             mvn -f "$TARGET_MODULE_POM" -Pnative -Dquarkus.native.enabled=true -DskipTests package
           ;;
         locality)
-          echo "ERROR: --target-build native is not supported for effective runtime locality"
+          echo "ERROR: --target-build native is not supported for effective runtime locality" >&2
           exit 1
           ;;
         *)
-          echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE"
+          echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE" >&2
           exit 1
           ;;
       esac
@@ -1056,9 +1133,9 @@ if ! target_reachable; then
 
     if ! resolve_target_artifact; then
       if [[ "$TARGET_BUILD" == "jvm" ]]; then
-        echo "ERROR: benchmark target jar not found after build (glob: $TARGET_JAR_GLOB)"
+        echo "ERROR: benchmark target jar not found after build (glob: $TARGET_JAR_GLOB)" >&2
       else
-        echo "ERROR: benchmark target native binary not found/executable after build (glob: $TARGET_NATIVE_BIN_GLOB)"
+        echo "ERROR: benchmark target native binary not found/executable after build (glob: $TARGET_NATIVE_BIN_GLOB)" >&2
       fi
       exit 1
     fi
@@ -1089,6 +1166,11 @@ if ! target_reachable; then
       EXERIS_SSL_ENABLED=true
       EXERIS_INSECURE_REQUESTS=disabled
       SERVER_SSL_ENABLED=true
+      # Cross-stack fairness: pin the TLS 1.3 suite so every target negotiates the
+      # same AES-128-GCM-SHA256 Exeris uses natively (the Quarkus target defaults to
+      # the JDK's pick — AES-256 — which would pay more crypto CPU). Applied here on
+      # the comparative path, not baked into the target's own config. Overridable.
+      "EXERIS_TLS_CIPHER_SUITES=${EXERIS_TLS_CIPHER_SUITES:-TLS_AES_128_GCM_SHA256}"
     )
     if [[ -z "${EXERIS_TRANSPORT_CERT_PATH:-}" || ! -f "${EXERIS_TRANSPORT_CERT_PATH:-/nonexistent}" ]]; then
       echo "[step 6/9] WARN: BENCHMARK_TLS_ENABLED=1 but EXERIS_TRANSPORT_CERT_PATH is unset/missing; the HTTPS target may fail to start. Set EXERIS_TRANSPORT_CERT_PATH/KEY_PATH (or launch via run-guided.sh, which auto-provisions a smoke cert)."
@@ -1173,7 +1255,7 @@ fi
 
 echo "[step 6/9] Waiting for target readiness (<=${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s)..."
 if ! wait_for_target; then
-  echo "ERROR: benchmark target app failed readiness check within ${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s"
+  echo "ERROR: benchmark target app failed readiness check within ${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s" >&2
   if [[ -f "$TARGET_APP_LOG" ]]; then
     echo "---- target-app.log (tail) ----"
     tail -n 60 "$TARGET_APP_LOG" || true
@@ -1200,8 +1282,8 @@ while :; do
 done
 if [[ "$preflight_ok" -ne 1 ]]; then
   echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (after ${preflight_attempts} attempt(s) over ${ENTITY_READ_PREFLIGHT_READY_SECONDS}s)"
-  echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/users (status=$BENCH_PREFLIGHT_HTTP_CODE)"
-  echo "ERROR: preflight response body saved at $PREFLIGHT_BODY_FILE"
+  echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/users (status=$BENCH_PREFLIGHT_HTTP_CODE)" >&2
+  echo "ERROR: preflight response body saved at $PREFLIGHT_BODY_FILE" >&2
   exit 1
 fi
 echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (ready after ${preflight_attempts} attempt(s))"
@@ -1212,7 +1294,7 @@ bench_print_preflight_payload_preview "$PREFLIGHT_BODY_FILE" 512
 if [[ "$TARGET_APP_STARTED" -eq 1 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
   verify_backend_mode_evidence
 elif [[ "$TARGET_APP_STARTED" -eq 0 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
-  echo "ERROR: backend mode evidence is mandatory but no local target was started; no local log evidence is available"
+  echo "ERROR: backend mode evidence is mandatory but no local target was started; no local log evidence is available" >&2
   exit 1
 fi
 
@@ -1286,60 +1368,131 @@ if command -v bench_start_resource_sampler >/dev/null 2>&1; then
   fi
 fi
 
+# OS-level sidecars (opt-in via BENCH_OS_SIDECARS=1, default OFF). entity-read is a
+# cross-stack comparison, so per-thread %wait (C2 starvation) and per-CPU %sys/%soft
+# (network/softirq burn) matter here too. See tools/bench/lib/os-sampler.sh.
+OS_SIDECARS_LOGS_DIR="$OUTPUT_DIR/logs"
+TARGET_PIDSTAT_CSV="$OS_SIDECARS_LOGS_DIR/target-pidstat.csv"
+HOST_MPSTAT_CSV="$OS_SIDECARS_LOGS_DIR/host-mpstat.csv"
+TARGET_PIDSTAT_PID=""
+HOST_MPSTAT_PID=""
+if [[ "${BENCH_OS_SIDECARS:-0}" == "1" ]] && command -v bench_start_pidstat_sampler >/dev/null 2>&1; then
+  mkdir -p "$OS_SIDECARS_LOGS_DIR"
+  if [[ -n "$RESOURCE_TARGET_PID" ]]; then
+    TARGET_PIDSTAT_PID="$(bench_start_pidstat_sampler "$RESOURCE_TARGET_PID" "$TARGET_PIDSTAT_CSV" 1)"
+    [[ -n "$TARGET_PIDSTAT_PID" ]] && echo "[step 6.6/9] pidstat sidecar → $TARGET_PIDSTAT_CSV"
+  fi
+  HOST_MPSTAT_PID="$(bench_start_mpstat_sampler "$HOST_MPSTAT_CSV" 1)"
+  [[ -n "$HOST_MPSTAT_PID" ]] && echo "[step 6.6/9] mpstat sidecar → $HOST_MPSTAT_CSV"
+fi
+
 # Step 7: Measure
 echo "[step 7/9] Measuring ($DURATION)..."
 PERF_STAT_FILE="$OUTPUT_DIR/perf-stat.csv"
-if [[ "$DRIVER" == "h2load" ]]; then
-  LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" "$BASE_URL/api/v1/users")
-else
-  LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
-fi
-
-if [[ "$PERF_STAT_REQUIRED" == "1" || "${BENCHMARK_CAPTURE_PERF_STAT:-0}" == "1" ]]; then
-  if ! command -v perf >/dev/null 2>&1; then
-    echo "ERROR: perf-stat capture requested but perf command is unavailable"
-    exit 1
-  fi
-  PERF_NO_SCALE="${BENCHMARK_PERF_NO_SCALE:-1}"
-  if [[ "$PERF_NO_SCALE" != "0" && "$PERF_NO_SCALE" != "1" ]]; then
-    echo "ERROR: BENCHMARK_PERF_NO_SCALE must be 0 or 1 (got '$PERF_NO_SCALE')"
-    exit 1
-  fi
-  PERF_ARGS=(-x, -o "$PERF_STAT_FILE")
-  if [[ "$PERF_NO_SCALE" == "1" ]]; then
-    if perf stat --help 2>&1 | grep -q -- '--no-scale'; then
-      PERF_ARGS=(--no-scale "${PERF_ARGS[@]}")
-    else
-      echo "WARN: perf --no-scale not supported by this perf version; running perf stat with scaling enabled"
-    fi
-  fi
-  echo "[step 7/9] Capturing perf stat to $PERF_STAT_FILE"
+if [[ "$DRIVER" == "wrk2" ]]; then
+  # wrk2 path: the target is already up + seeded (above); DELEGATE the measurement
+  # to run-wrk2.sh (saturation-discovery -> warmup -> wrk2 fixed -R, HdrHistogram).
+  # JFR + OS sidecars (started around this section) wrap the whole delegated run, so
+  # they cover discovery+warmup+measure, not just the measurement window. perf-stat
+  # is not wired for the delegated path. WRK2_TARGET_RPS (env) pins the rate; else
+  # run-wrk2.sh auto-derives ~75% of observed saturation.
+  WRK2_LATENCY_JSON="$OUTPUT_DIR/wrk2-latency.json"
+  WRK2_RAW_FILE="${WRK2_LATENCY_JSON%.json}.raw.txt"
+  echo "[step 7/9] Delegating CO-free latency measurement to run-wrk2.sh (HTTP/1.1, sub-saturation)"
   set +e
-  LOAD_OUT=$(perf stat "${PERF_ARGS[@]}" -- "${LOAD_CMD[@]}" 2>&1)
-  PERF_EXIT_CODE=$?
+  LOAD_OUT=$(
+    WRK_BASE_URL_OVERRIDE="$BASE_URL" \
+    WRK_PATH_OVERRIDE="/api/v1/users" \
+    WRK2_THREADS_OVERRIDE="$THREADS" \
+    WRK2_CONNECTIONS_OVERRIDE="$CONNECTIONS" \
+    WRK2_DURATION_OVERRIDE="$DURATION" \
+    WRK2_CLIENT_CPU_AFFINITY="$CLIENT_CPU_AFFINITY" \
+    WRK2_RESULT_JSON_OVERRIDE="$WRK2_LATENCY_JSON" \
+    WRK2_TARGET_RPS="${WRK2_TARGET_RPS:-}" \
+    HARDWARE_PROFILE="$PROFILE" \
+    "$REPO_ROOT/scripts/run-wrk2.sh" "scenarios/entity-read-by-id" "scenarios/entity-read-by-id" 2>&1
+  )
+  WRK2_EXIT_CODE=$?
   set -e
-  if [[ "$PERF_EXIT_CODE" -ne 0 ]]; then
-    PERF_ERROR_LOG="$OUTPUT_DIR/perf-error.log"
-    printf '%s\n' "$LOAD_OUT" > "$PERF_ERROR_LOG"
-    echo "ERROR: perf stat execution failed (exit_code=$PERF_EXIT_CODE)"
-    echo "ERROR: perf diagnostics saved to $PERF_ERROR_LOG"
-    echo "$LOAD_OUT"
-    exit "$PERF_EXIT_CODE"
+  echo "$LOAD_OUT"
+  if [[ "$WRK2_EXIT_CODE" -ne 0 || ! -f "$WRK2_LATENCY_JSON" ]]; then
+    echo "ERROR: delegated wrk2 measurement failed (exit=$WRK2_EXIT_CODE); see output above." >&2
+    exit 1
   fi
 else
-  LOAD_OUT=$("${LOAD_CMD[@]}" 2>&1)
+  if [[ "$DRIVER" == "h2load" ]]; then
+    # --log-file captures per-request timings (start_us, status, dur_us) for the
+    # MEASUREMENT run only (the warmup h2load above is not logged), so the latency
+    # percentiles h2load itself omits can be computed offline. See
+    # tools/aggregate-h2load-latency.sh (closed-loop / coordinated-omission caveat).
+    H2LOAD_LOG_FILE="$OUTPUT_DIR/h2load-requests.log"
+    LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" --log-file="$H2LOAD_LOG_FILE" "$BASE_URL/api/v1/users")
+  else
+    LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
+  fi
+
+  # Pin the load driver to a cpuset disjoint from the target (--cpu-affinity) so the driver does not
+  # steal the target's cores. Wrapping LOAD_CMD covers both the perf-stat and plain execution paths.
+  if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then
+    echo "[step 7/9] Pinning load driver via taskset: $CLIENT_CPU_AFFINITY (keep disjoint from target $CPU_AFFINITY)"
+    LOAD_CMD=(taskset -c "$CLIENT_CPU_AFFINITY" "${LOAD_CMD[@]}")
+  fi
+
+  if [[ "$PERF_STAT_REQUIRED" == "1" || "${BENCHMARK_CAPTURE_PERF_STAT:-0}" == "1" ]]; then
+    if ! command -v perf >/dev/null 2>&1; then
+      echo "ERROR: perf-stat capture requested but perf command is unavailable" >&2
+      exit 1
+    fi
+    PERF_NO_SCALE="${BENCHMARK_PERF_NO_SCALE:-1}"
+    if [[ "$PERF_NO_SCALE" != "0" && "$PERF_NO_SCALE" != "1" ]]; then
+      echo "ERROR: BENCHMARK_PERF_NO_SCALE must be 0 or 1 (got '$PERF_NO_SCALE')" >&2
+      exit 1
+    fi
+    PERF_ARGS=(-x, -o "$PERF_STAT_FILE")
+    if [[ "$PERF_NO_SCALE" == "1" ]]; then
+      if perf stat --help 2>&1 | grep -q -- '--no-scale'; then
+        PERF_ARGS=(--no-scale "${PERF_ARGS[@]}")
+      else
+        echo "WARN: perf --no-scale not supported by this perf version; running perf stat with scaling enabled"
+      fi
+    fi
+    echo "[step 7/9] Capturing perf stat to $PERF_STAT_FILE"
+    set +e
+    LOAD_OUT=$(perf stat "${PERF_ARGS[@]}" -- "${LOAD_CMD[@]}" 2>&1)
+    PERF_EXIT_CODE=$?
+    set -e
+    if [[ "$PERF_EXIT_CODE" -ne 0 ]]; then
+      PERF_ERROR_LOG="$OUTPUT_DIR/perf-error.log"
+      printf '%s\n' "$LOAD_OUT" > "$PERF_ERROR_LOG"
+      echo "ERROR: perf stat execution failed (exit_code=$PERF_EXIT_CODE)" >&2
+      echo "ERROR: perf diagnostics saved to $PERF_ERROR_LOG" >&2
+      echo "$LOAD_OUT"
+      exit "$PERF_EXIT_CODE"
+    fi
+  else
+    LOAD_OUT=$("${LOAD_CMD[@]}" 2>&1)
+  fi
+  echo "$LOAD_OUT"
 fi
-echo "$LOAD_OUT"
 
 # Persist the driver's raw output as a first-class run artifact, the same way the
 # target's stdout is kept in target-app.log. The parsed result.json is a lossy
 # projection of this; the raw log is the ground truth for what the load client
 # (and which HTTP version/axis) actually did — needed for honest reproducibility.
+# Extract the TLS negotiation h2load prints (ground truth for what the wire did).
+# Empty for cleartext / for drivers that don't report it (wrk/wrk2).
+TLS_PROTOCOL="$(printf '%s\n' "$LOAD_OUT" | sed -n 's/^TLS Protocol:[[:space:]]*//p' | head -1)"
+TLS_CIPHER="$(printf '%s\n' "$LOAD_OUT" | sed -n 's/^Cipher:[[:space:]]*//p' | head -1)"
+TLS_ALPN="$(printf '%s\n' "$LOAD_OUT" | sed -n 's/^Application protocol:[[:space:]]*//p' | head -1)"
+
 if [[ -n "${OUTPUT_DIR:-}" ]]; then
   DRIVER_LOG="$OUTPUT_DIR/driver-${DRIVER}.log"
   {
-    printf '# driver: %s  protocol: %s' "$DRIVER" "${PROTOCOL:-?}"
-    [[ "$DRIVER" == "h2load" ]] && printf '  h2load-axis: %s' "${H2LOAD_AXIS:-?}"
+    printf '# driver: %s  protocol: %s  transport: %s  tls: %s' \
+      "$DRIVER" "${PROTOCOL:-?}" "${TRANSPORT_MODE:-?}" \
+      "$([[ "$TLS_ENABLED" == "1" ]] && echo on || echo off)"
+    [[ "$DRIVER" == "h2load" ]] && printf '  h2load-axis: %s' "${H2LOAD_AXIS_LABEL:-${H2LOAD_AXIS:-?}}"
+    [[ -n "$TLS_PROTOCOL" ]] && printf '  negotiated: %s/%s/%s' "$TLS_PROTOCOL" "${TLS_ALPN:-?}" "$TLS_CIPHER"
     printf '\n# command: %s\n\n' "${LOAD_CMD[*]}"
     printf '%s\n' "$LOAD_OUT"
   } > "$DRIVER_LOG" 2>/dev/null \
@@ -1377,12 +1530,20 @@ fi
 if command -v bench_stop_resource_sampler >/dev/null 2>&1; then
   bench_stop_resource_sampler || true
 fi
+# Stop OS sidecars at the same boundary (converts raw tool output to CSV; no-op if
+# not started).
+if [[ -n "${TARGET_PIDSTAT_PID:-}" ]]; then
+  bench_stop_pidstat_sampler "$TARGET_PIDSTAT_PID" "$TARGET_PIDSTAT_CSV"; TARGET_PIDSTAT_PID=""
+fi
+if [[ -n "${HOST_MPSTAT_PID:-}" ]]; then
+  bench_stop_mpstat_sampler "$HOST_MPSTAT_PID" "$HOST_MPSTAT_CSV"; HOST_MPSTAT_PID=""
+fi
 
 # Fail loudly if the target died during measurement or no requests completed: a
 # crashed/unreachable target must NOT be written out as a successful result.
 if [[ "$TARGET_APP_STARTED" -eq 1 && -n "$TARGET_APP_PID" ]] && ! kill -0 "$TARGET_APP_PID" 2>/dev/null; then
-  echo "ERROR: benchmark target (pid=$TARGET_APP_PID) died during measurement — run is INVALID (not a result)."
-  echo "ERROR: inspect $TARGET_APP_LOG and any hs_err_pid*.log / core dump in $REPO_ROOT."
+  echo "ERROR: benchmark target (pid=$TARGET_APP_PID) died during measurement — run is INVALID (not a result)." >&2
+  echo "ERROR: inspect $TARGET_APP_LOG and any hs_err_pid*.log / core dump in $REPO_ROOT." >&2
   [[ "$ENABLE_JFR" == "true" ]] && echo "NOTE: JFR was enabled. A SIGSEGV in JfrStorage::flush_regular_buffer from a virtual-thread frame is NOT a JDK flake — it means a custom JFR event was held (begin -> blocking op -> commit) across a virtual-thread unmount, flushing a stale carrier-bound buffer (reproducible on JDK 26 GA 26+35). --no-jfr is only a workaround to keep the run going, NOT a diagnosis. Fix is kernel-side: emit such events single-phase, after the blocking op. Check the target frame in hs_err_pid*.log (e.g. fixed for ConnectionAcquireEvent)."
   exit 1
 fi
@@ -1394,8 +1555,8 @@ else
   _LOAD_COMPLETED_REQUESTS="$(printf '%s\n' "$LOAD_OUT" | sed -nE 's/^[[:space:]]*([0-9]+) requests in .*/\1/p' | head -1)"
 fi
 if [[ -n "$_LOAD_COMPLETED_REQUESTS" && "$_LOAD_COMPLETED_REQUESTS" -eq 0 ]]; then
-  echo "ERROR: measurement completed 0 requests (target unreachable or crashed) — run is INVALID (not a result)."
-  echo "ERROR: inspect $TARGET_APP_LOG (socket errors above indicate the target was not serving)."
+  echo "ERROR: measurement completed 0 requests (target unreachable or crashed) — run is INVALID (not a result)." >&2
+  echo "ERROR: inspect $TARGET_APP_LOG (socket errors above indicate the target was not serving)." >&2
   exit 1
 fi
 
@@ -1440,14 +1601,40 @@ if [[ -f "$PG_STAT_STATEMENTS_WRAPPER_SCRIPT" ]]; then
   pg_stat_statements_snapshot "$PG_STAT_STATEMENTS_POST_FILE" "measurement" || true
 fi
 
-if [[ "$DRIVER" == "h2load" ]]; then
+if [[ "$DRIVER" == "wrk2" ]]; then
+  # Metrics from the delegated run-wrk2.sh artifacts: rps + CO-free HdrHistogram
+  # percentiles from the JSON; request/error counts from the measurement raw (run-wrk2
+  # tees ONLY the wrk2 measurement there, so discovery/warmup do not contaminate them).
+  THROUGHPUT_RPS=$(jq -r '.requests_per_sec // empty' "$WRK2_LATENCY_JSON" 2>/dev/null)
+  _wrk2_pct() { local pct="$1"; jq -r --arg p "$pct" '(.latency_percentiles[]? | select(.percentile==$p) | .latency_us) // empty' "$WRK2_LATENCY_JSON" 2>/dev/null | head -1; }
+  LATENCY_P50_US=$(_wrk2_pct p50)
+  LATENCY_P75_US=$(_wrk2_pct p75)
+  LATENCY_P90_US=$(_wrk2_pct p90)
+  LATENCY_P99_US=$(_wrk2_pct p99)
+  LATENCY_P999_US=$(_wrk2_pct p99.9)
+  LATENCY_MEAN_US=""   # wrk2 JSON exposes percentiles, not mean/stdev/max
+  LATENCY_STDEV_US=""
+  LATENCY_MAX_US=""
+  TOTAL_REQUESTS=""
+  NON2XX_ERRORS=0
+  SOCKET_ERRORS=0
+  if [[ -f "$WRK2_RAW_FILE" ]]; then
+    TOTAL_REQUESTS=$(awk '/requests in/ {gsub(/,/,"",$1); print $1; exit}' "$WRK2_RAW_FILE")
+    _n2=$(awk '/Non-2xx or 3xx responses:/ {print $5; exit}' "$WRK2_RAW_FILE"); [[ -n "$_n2" ]] && NON2XX_ERRORS=$_n2
+    _se=$(awk -F'[:, ]+' '/Socket errors:/ {print ($4 + $6 + $8 + $10); exit}' "$WRK2_RAW_FILE"); [[ -n "$_se" ]] && SOCKET_ERRORS=$_se
+  fi
+  TOTAL_ERRORS=$((NON2XX_ERRORS + SOCKET_ERRORS))
+  echo "[step 7/9] wrk2 latency: $WRK2_LATENCY_JSON (p50=${LATENCY_P50_US:-na}us p99=${LATENCY_P99_US:-na}us p99.9=${LATENCY_P999_US:-na}us; CO-free sub-saturation — check load_fraction/at_saturation in the JSON)"
+elif [[ "$DRIVER" == "h2load" ]]; then
   # h2load summary:
   #   finished in 120.05s, 3328.80 req/s, 29.21MB/s
   #   requests: N total, N started, N done, N succeeded, N failed, N errored, N timeout
   #   status codes: N 2xx, N 3xx, N 4xx, N 5xx
   #   <hdr> min max mean sd +/- sd
   #   time for request:  <min> <max> <mean> <sd> <+/-sd>
-  # h2load emits NO latency percentiles — p50/p75/p90/p99 stay null (not faked).
+  # h2load's own summary has NO percentiles; we recover p50/p75/p90/p99/p999 from
+  # the --log-file via tools/aggregate-h2load-latency.sh (closed-loop CO caveat
+  # recorded in the sidecar). If the log/aggregator is unavailable they stay null.
   THROUGHPUT_RPS=$(sed -nE 's/.*finished in [0-9.]+(m|ms|s|us|h), ([0-9.]+) req\/s,.*/\2/p' <<<"$LOAD_OUT" | head -1)
   H2_TFR_LINE=$(printf '%s\n' "$LOAD_OUT" | awk '/time for request:/ {print; exit}')
   LATENCY_MEAN_US=$(to_us "$(awk '{print $6}' <<<"$H2_TFR_LINE")")
@@ -1457,6 +1644,19 @@ if [[ "$DRIVER" == "h2load" ]]; then
   LATENCY_P75_US=""
   LATENCY_P90_US=""
   LATENCY_P99_US=""
+  LATENCY_P999_US=""
+  # Offline percentiles from the per-request log. Never fatal; emits valid JSON.
+  if [[ -n "${H2LOAD_LOG_FILE:-}" && -f "$H2LOAD_LOG_FILE" ]]; then
+    H2LOAD_LATENCY_JSON="$OUTPUT_DIR/h2load-latency.json"
+    if "$REPO_ROOT/tools/aggregate-h2load-latency.sh" "$H2LOAD_LOG_FILE" "$H2LOAD_LATENCY_JSON" 2>/dev/null; then
+      LATENCY_P50_US=$(jq -r '.latency_p50_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      LATENCY_P75_US=$(jq -r '.latency_p75_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      LATENCY_P90_US=$(jq -r '.latency_p90_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      LATENCY_P99_US=$(jq -r '.latency_p99_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      LATENCY_P999_US=$(jq -r '.latency_p999_us // empty' "$H2LOAD_LATENCY_JSON" 2>/dev/null)
+      echo "[step 7/9] h2load latency percentiles: $H2LOAD_LATENCY_JSON (p50=${LATENCY_P50_US:-na}us p99=${LATENCY_P99_US:-na}us, closed-loop/CO caveat applies)"
+    fi
+  fi
   H2_REQ_LINE=$(printf '%s\n' "$LOAD_OUT" | awk '/^requests:/ {print; exit}')
   TOTAL_REQUESTS=$(sed -nE 's/^requests:[[:space:]]*([0-9]+) total.*/\1/p' <<<"$H2_REQ_LINE")
   H2_FAILED=$(sed -nE 's/.*[, ]([0-9]+) failed,.*/\1/p' <<<"$H2_REQ_LINE")
@@ -1481,6 +1681,7 @@ else
   LATENCY_P75_US=$(to_us "$(awk '$1 == "75%" {print $2; exit}' <<<"$LOAD_OUT")")
   LATENCY_P90_US=$(to_us "$(awk '$1 == "90%" {print $2; exit}' <<<"$LOAD_OUT")")
   LATENCY_P99_US=$(to_us "$(awk '$1 == "99%" {print $2; exit}' <<<"$LOAD_OUT")")
+  LATENCY_P999_US=""   # wrk --latency reports 50/75/90/99 only; p99.9 needs wrk2 (run-wrk2.sh)
   TOTAL_REQUESTS=$(awk '/requests in/ {gsub(/,/, "", $1); print $1; exit}' <<<"$LOAD_OUT")
   NON2XX_ERRORS=$(awk '/Non-2xx or 3xx responses:/ {print $5; exit}' <<<"$LOAD_OUT")
   SOCKET_ERRORS=$(awk -F'[:, ]+' '/Socket errors:/ {print ($4 + $6 + $8 + $10); exit}' <<<"$LOAD_OUT")
@@ -1507,11 +1708,13 @@ RUN_CONFIG_JSON=$(jq -n \
   --argjson warmup_seconds "$WARMUP_SECONDS" \
   --argjson threads "$THREADS" \
   --argjson connections "$CONNECTIONS" \
+  --arg backend_network_mode "${BACKEND_NETWORK_MODE:-bridge}" \
   '{
     duration_seconds: $duration_seconds,
     warmup_seconds: $warmup_seconds,
     threads: $threads,
-    connections: $connections
+    connections: $connections,
+    backend_network_mode: $backend_network_mode
   }')
 
 METRICS_JSON=$(jq -n \
@@ -1523,6 +1726,7 @@ METRICS_JSON=$(jq -n \
   --arg latency_p75_us "$LATENCY_P75_US" \
   --arg latency_p90_us "$LATENCY_P90_US" \
   --arg latency_p99_us "$LATENCY_P99_US" \
+  --arg latency_p999_us "$LATENCY_P999_US" \
   --arg total_requests "$TOTAL_REQUESTS" \
   --arg total_errors "$TOTAL_ERRORS" \
   --arg error_rate_pct "$ERROR_RATE_PCT" \
@@ -1542,6 +1746,7 @@ METRICS_JSON=$(jq -n \
     latency_p75_us: num_or_null($latency_p75_us),
     latency_p90_us: num_or_null($latency_p90_us),
     latency_p99_us: num_or_null($latency_p99_us),
+    latency_p999_us: num_or_null($latency_p999_us),
     total_requests: num_or_null($total_requests),
     total_errors: num_or_null($total_errors),
     error_rate_pct: num_or_null($error_rate_pct)
@@ -1572,6 +1777,18 @@ case "$CLAIM_SCOPE" in
   *)                   EXECUTION_CLASS="exploratory" ;;
 esac
 
+# TLS provenance: record whether TLS was on and what the wire actually negotiated
+# (from the h2load output). Provider is the target's choice and not asserted here.
+if [[ "$TLS_ENABLED" == "1" ]]; then
+  TLS_JSON=$(jq -n --arg p "$TLS_PROTOCOL" --arg c "$TLS_CIPHER" --arg a "$TLS_ALPN" \
+    '{enabled:true}
+     + (if $p!="" then {protocol:$p} else {} end)
+     + (if $c!="" then {cipher:$c} else {} end)
+     + (if $a!="" then {alpn:$a} else {} end)')
+else
+  TLS_JSON='{"enabled":false}'
+fi
+
 cat > "$RESULT_FILE" <<EOF
 {
   "schema_version": "1",
@@ -1587,6 +1804,7 @@ cat > "$RESULT_FILE" <<EOF
   "reproducibility_status": "complete",
   "final_reason": "ok",
   "transport_mode": "$TRANSPORT_MODE",
+  "tls": $TLS_JSON,
   "target": {
     "repo": "exeris-benchmarks",
     "version": "$TARGET_APP_NAME",
@@ -1604,7 +1822,7 @@ cat > "$RESULT_FILE" <<EOF
   },
   "run_config": $RUN_CONFIG_JSON,
   "metrics": $METRICS_JSON,
-  "notes": "backendMode=$BACKEND_MODE targetRuntimeEffective=$TARGET_RUNTIME_EFFECTIVE targetBuild=$TARGET_BUILD cpuAffinity=${CPU_AFFINITY:-none}",
+  "notes": "backendMode=$BACKEND_MODE targetRuntimeEffective=$TARGET_RUNTIME_EFFECTIVE targetBuild=$TARGET_BUILD cpuAffinity=${CPU_AFFINITY:-none} clientCpuAffinity=${CLIENT_CPU_AFFINITY:-none}",
   "tags": ["backend-mode:$BACKEND_MODE", "target-runtime-effective:$TARGET_RUNTIME_EFFECTIVE", "target-build:$TARGET_BUILD"],
   "raw_output": $(echo "$LOAD_OUT" | jq -Rs .)
 }
@@ -1622,11 +1840,16 @@ if [[ -f "$OUTPUT_DIR/env.json" ]]; then
   JDK_VERSION="$(jq -r '.jdk.version // "unknown"' "$OUTPUT_DIR/env.json")"
   HARDWARE_PROFILE_REF="$(jq -r '.hardware_profile // "unknown"' "$OUTPUT_DIR/env.json")"
   JVM_FLAGS_JSON="$(jq -c '.jvm_flags // []' "$OUTPUT_DIR/env.json")"
+  # hardware_profile does not pin the kernel/scheduler; surface both into repro metadata.
+  KERNEL_VERSION="$(jq -r '.kernel // "unknown"' "$OUTPUT_DIR/env.json")"
+  OS_SCHEDULER="$(jq -r '.os_scheduler // "unknown"' "$OUTPUT_DIR/env.json")"
 else
   JDK_VENDOR="unknown"
   JDK_VERSION="unknown"
   HARDWARE_PROFILE_REF="$PROFILE"
   JVM_FLAGS_JSON="[]"
+  KERNEL_VERSION="unknown"
+  OS_SCHEDULER="unknown"
 fi
 
 jq -n \
@@ -1638,6 +1861,8 @@ jq -n \
   --arg jdk_vendor "$JDK_VENDOR" \
   --arg jdk_version "$JDK_VERSION" \
   --arg hardware_profile_ref "$HARDWARE_PROFILE_REF" \
+  --arg kernel_version "${KERNEL_VERSION:-unknown}" \
+  --arg os_scheduler "${OS_SCHEDULER:-unknown}" \
   --arg tool "$TOOL_NAME" \
   --arg tool_version "$TOOL_VERSION_LINE" \
   --arg tier "community" \
@@ -1656,6 +1881,7 @@ jq -n \
   --argjson connections "$CONNECTIONS" \
   --argjson warmup_seconds "$WARMUP_SECONDS" \
   --argjson duration_seconds "$DURATION_SECONDS" \
+  --arg backend_network_mode "${BACKEND_NETWORK_MODE:-bridge}" \
   '{
     timestamp: $timestamp,
     benchmark_commit_sha: $commit_sha,
@@ -1669,6 +1895,8 @@ jq -n \
     },
     jvm_flags: $jvm_flags,
     hardware_profile_ref: $hardware_profile_ref,
+    kernel_version: $kernel_version,
+    os_scheduler: $os_scheduler,
     tool: {
       name: $tool,
       version: $tool_version
@@ -1688,7 +1916,8 @@ jq -n \
       threads: $threads,
       connections: $connections,
       warmup_seconds: $warmup_seconds,
-      duration_seconds: $duration_seconds
+      duration_seconds: $duration_seconds,
+      backend_network_mode: $backend_network_mode
     },
     seed_manifest_refs: {
       manifest_ref: $seed_manifest_ref,
@@ -1724,11 +1953,11 @@ SCHEMA_FILE="schemas/benchmark-result.schema.json"
 if command -v check-jsonschema >/dev/null 2>&1; then
   check-jsonschema --schemafile "$SCHEMA_FILE" "$RESULT_FILE" \
     && echo "[step 9/9] Schema validation PASSED" \
-    || { echo "ERROR: result artifact failed schema validation — see above"; exit 1; }
+    || { echo "ERROR: result artifact failed schema validation — see above"; exit 1; } >&2
 elif command -v ajv >/dev/null 2>&1; then
   ajv validate -s "$SCHEMA_FILE" -d "$RESULT_FILE" \
     && echo "[step 9/9] Schema validation PASSED" \
-    || { echo "ERROR: result artifact failed schema validation"; exit 1; }
+    || { echo "ERROR: result artifact failed schema validation"; exit 1; } >&2
 elif command -v python3 >/dev/null 2>&1; then
   set +e
   python3 - "$SCHEMA_FILE" "$RESULT_FILE" <<'PY'
@@ -1771,20 +2000,20 @@ PY
       echo "[step 9/9] Schema validation PASSED"
       ;;
     1)
-      echo "ERROR: result artifact failed schema validation"
+      echo "ERROR: result artifact failed schema validation" >&2
       exit 1
       ;;
     2)
-      echo "ERROR: python3 fallback unavailable because the 'jsonschema' module is not installed"
+      echo "ERROR: python3 fallback unavailable because the 'jsonschema' module is not installed" >&2
       exit 1
       ;;
     *)
-      echo "ERROR: python3 schema validation failed with unexpected exit code: $PYTHON_SCHEMA_RC"
+      echo "ERROR: python3 schema validation failed with unexpected exit code: $PYTHON_SCHEMA_RC" >&2
       exit 1
       ;;
   esac
 else
-  echo "ERROR: No schema validator available. Tried in order: check-jsonschema, ajv, python3+jsonschema"
+  echo "ERROR: No schema validator available. Tried in order: check-jsonschema, ajv, python3+jsonschema" >&2
   exit 1
 fi
 

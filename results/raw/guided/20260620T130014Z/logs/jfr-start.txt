@@ -1,0 +1,8 @@
+705879:
+No available recordings.
+
+Use jcmd 705879 JFR.start to start a recording.
+705879:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 705879 JFR.dump name=entity-read-by-id filename=FILEPATH to copy recording data to file.

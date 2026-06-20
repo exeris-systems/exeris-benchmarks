@@ -1,0 +1,27 @@
+# entity-read-by-id-db.host-net.yml — OPT-IN host-networking override.
+#
+# Apply ON TOP of entity-read-by-id-db.yml to put the benchmark Postgres on the
+# host network, removing the bridge/NAT hop between the target JVM and the DB:
+#
+#   docker compose -f entity-read-by-id-db.yml -f entity-read-by-id-db.host-net.yml up -d
+#
+# (run-entity-read-by-id.sh / run-entity-read-by-id-h2load.sh do this automatically
+# when DB_HOST_NETWORK=1 or BENCH_BACKEND_NETWORK=host.)
+#
+# WHY THIS MATTERS HERE: entity-read-by-id is a CROSS-STACK comparison — the campaign
+# runs exeris-community vs spring vs quarkus against this same Postgres (contract
+# fixed_contract_cross_runtime_h1_v1). The runtimes differ in DB round-trips per
+# request, so a bridged DB taxes them ASYMMETRICALLY: bridge/NAT overhead lands on
+# the chattier stack harder, and you risk measuring container networking instead of
+# the runtime. For any cross-stack claim, pin host mode and record it in result.json.
+#
+# TRADE-OFF (document, do not hide): host networking removes packet-processing noise
+# but moves away from a production-shaped network. State the chosen mode in claims.
+#
+# NOTE: `ports:` from the base file are ignored under host networking; Compose emits a
+# "Published ports are discarded when using host network mode" warning. Expected — in
+# host mode Postgres binds 5432 directly on the host, where the target reaches it.
+
+services:
+  benchmark-db:
+    network_mode: host

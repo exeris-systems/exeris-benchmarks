@@ -65,6 +65,13 @@ TARGET_PORT="${BENCHMARK_TARGET_PORT:-8080}"
 BASE_URL="${BASE_URL:-http://localhost:${TARGET_PORT}}"
 SCENARIO_DIR="scenarios/entity-read-by-id"
 DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
+# Backend container network mode (fairness gate) — see run-entity-read-by-id.sh.
+DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.host-net.yml"
+if [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
+  BACKEND_NETWORK_MODE="host"
+else
+  BACKEND_NETWORK_MODE="bridge"
+fi
 DB_INIT_SQL_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql"
 DB_PORT="${DB_PORT:-5432}"
 DB_CONTAINER_NAME="exeris-benchmark-db"
@@ -258,10 +265,14 @@ resolve_db_launcher() {
 }
 
 compose_db() {
+  local _net_args=()
+  if [[ "${BACKEND_NETWORK_MODE:-bridge}" == "host" && -f "$DB_COMPOSE_HOSTNET_OVERRIDE" ]]; then
+    _net_args=( -f "$DB_COMPOSE_HOSTNET_OVERRIDE" )
+  fi
   if [[ "$COMPOSE_BIN" == "docker compose" ]]; then
-    docker compose -f "$DB_COMPOSE_FILE" "$@"
+    docker compose -f "$DB_COMPOSE_FILE" "${_net_args[@]}" "$@"
   else
-    docker-compose -f "$DB_COMPOSE_FILE" "$@"
+    docker-compose -f "$DB_COMPOSE_FILE" "${_net_args[@]}" "$@"
   fi
 }
 
@@ -304,16 +315,25 @@ start_db() {
     compose_db up -d
     DB_MANAGED=1
   else
-    if [[ "$DB_PORT" == "5432" ]] && port_reachable 5432; then
-      DB_PORT=55432
-      echo "[step 2] WARN: using fallback port $DB_PORT"
+    # Network args: host mode binds 5432 directly (no -p / port remap); fails loudly
+    # if 5432 is occupied, which is the correct outcome for host networking.
+    local _run_net_args=()
+    if [[ "${BACKEND_NETWORK_MODE:-bridge}" == "host" ]]; then
+      echo "[step 2] WARN: docker-run fallback with host networking (DB binds host:5432 directly)."
+      _run_net_args=( --network host )
+    else
+      if [[ "$DB_PORT" == "5432" ]] && port_reachable 5432; then
+        DB_PORT=55432
+        echo "[step 2] WARN: using fallback port $DB_PORT"
+      fi
+      _run_net_args=( -p "$DB_PORT":5432 )
     fi
     docker rm -f "$DB_CONTAINER_NAME" >/dev/null 2>&1 || true
     docker run -d --name "$DB_CONTAINER_NAME" \
       -e POSTGRES_DB=benchmark_db \
       -e POSTGRES_USER=benchmark \
       -e POSTGRES_PASSWORD=benchmark \
-      -p "$DB_PORT":5432 \
+      "${_run_net_args[@]}" \
       --mount "type=bind,source=$DB_INIT_SQL_FILE,target=/docker-entrypoint-initdb.d/01-pg-stat-statements-init.sql,readonly" \
       --health-cmd 'pg_isready -U benchmark -d benchmark_db' \
       --health-interval 5s --health-timeout 5s --health-retries 10 \
@@ -641,6 +661,7 @@ jq -n \
   --argjson connections "$CONNECTIONS" \
   --argjson max_concurrent_streams "$MAX_CONCURRENT_STREAMS" \
   --argjson warmup_seconds "$WARMUP_SECONDS" \
+  --arg backend_network_mode "${BACKEND_NETWORK_MODE:-bridge}" \
   --argjson duration_seconds "$DURATION_SECONDS" \
   --arg throughput_rps "${THROUGHPUT_RPS:-}" \
   --arg total_requests "${TOTAL_REQUESTS:-}" \
@@ -683,7 +704,8 @@ jq -n \
       connections: $connections,
       max_concurrent_streams: $max_concurrent_streams,
       warmup_seconds: $warmup_seconds,
-      duration_seconds: $duration_seconds
+      duration_seconds: $duration_seconds,
+      backend_network_mode: $backend_network_mode
     },
     metrics: {
       throughput_rps:   num_or_null($throughput_rps),
@@ -739,6 +761,7 @@ jq -n \
   --argjson connections "$CONNECTIONS" \
   --argjson max_concurrent_streams "$MAX_CONCURRENT_STREAMS" \
   --argjson warmup_seconds "$WARMUP_SECONDS" \
+  --arg backend_network_mode "${BACKEND_NETWORK_MODE:-bridge}" \
   --argjson duration_seconds "$DURATION_SECONDS" \
   '{
     timestamp: $timestamp,
@@ -763,7 +786,8 @@ jq -n \
       connections: $connections,
       max_concurrent_streams: $max_concurrent_streams,
       warmup_seconds: $warmup_seconds,
-      duration_seconds: $duration_seconds
+      duration_seconds: $duration_seconds,
+      backend_network_mode: $backend_network_mode
     },
     seed_manifest_refs: {
       manifest_ref: "scenarios/entity-read-by-id/seed/seed-manifest.json",

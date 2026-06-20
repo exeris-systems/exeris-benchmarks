@@ -127,13 +127,24 @@ case "${START_MODE}" in
     # ServiceLoader requires access to jdk.internal.module for proper service discovery.
     # See: https://github.com/neo4j-java/neo4j-java-driver/issues (Java 26 compatibility)
     _module_opens="--add-opens java.base/jdk.internal.module=ALL-UNNAMED"
-    
+
+    # Additive steady-state compiler telemetry (opt-in, default OFF ⇒ no change to
+    # existing runs). BENCH_JFR_STEADY_STATE=1 merges env/jfr-steady-state.jfc on top
+    # of `profile`; BENCH_JFR_EXTRA_SETTINGS=<path.jfc> merges a custom overlay instead.
+    # See docs/methodology.md: "Warmup vs steady-state and C2 diagnostics".
+    _jfr_extra_settings=""
+    if [[ -n "${BENCH_JFR_EXTRA_SETTINGS:-}" ]]; then
+      _jfr_extra_settings=",settings=${BENCH_JFR_EXTRA_SETTINGS}"
+    elif [[ "${BENCH_JFR_STEADY_STATE:-0}" == "1" ]]; then
+      _jfr_extra_settings=",settings=${ROOT}/env/jfr-steady-state.jfc"
+    fi
+
     # shellcheck disable=SC2086
     java ${JVM_FLAGS:-} \
       "${_module_opens}" \
       "-Xlog:gc*,safepoint:file=${TARGET_LOG_DIR}/gc-${RUN_TIMESTAMP}.log:time,uptime,level,tags" \
       "-Xlog:safepoint:file=${TARGET_LOG_DIR}/safepoint-${RUN_TIMESTAMP}.log:time,uptime,level,tags" \
-      "-XX:StartFlightRecording=filename=${TARGET_LOG_DIR}/jfr-${RUN_TIMESTAMP}.jfr,settings=profile,duration=0,maxsize=256m,dumponexit=true" \
+      "-XX:StartFlightRecording=filename=${TARGET_LOG_DIR}/jfr-${RUN_TIMESTAMP}.jfr,settings=profile${_jfr_extra_settings},duration=0,maxsize=256m,dumponexit=true" \
       -jar "$JAR_PATH" > "$_tgt_stdout_log" 2>&1 &
     echo "$!" > /tmp/exeris-bench-target.pid
     printf '%s\n' "$_tgt_stdout_log" > /tmp/exeris-bench-target.log.path

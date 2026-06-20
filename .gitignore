@@ -32,6 +32,28 @@ Thumbs.db
 # results/raw/*.txt
 # results/raw/k6-*.json
 
+# Raw JFR recordings are not committed.
+#  - Enterprise track: HARD confidentiality rule — public mode default-denies .jfr
+#    (extension + FLR\0 signature). Enterprise H3/locality recordings stay internal.
+#  - Community / open-core: recordings are NOT secret (the code is open), but a JFR
+#    is ~190 MB; git is the wrong place for 2+ GB of binaries. Publish derived
+#    artifacts (flamegraph SVGs, extracted metrics JSON); share raw recordings on
+#    request or as release/download assets, not in git history.
+*.jfr
+*.JFR
+
+# h2load per-request --log-file dumps are huge (100+ MB each); the derived
+# h2load-latency.json carries the percentiles. (Covered by *.log below too.)
+
+# Per-sample sidecar CSVs (pidstat per-thread, mpstat per-CPU, resource samples):
+# heavy raw streams (20K-35K rows each) that dominate the diff. The aggregated
+# signal lives in resource-metrics.json / *-latency.json / steady-state-evidence.json;
+# raw per-sample CSVs are kept out of git for size and available on request — same
+# policy as .jfr above.
+results/**/target-pidstat.csv
+results/**/host-mpstat.csv
+results/**/resource-samples.csv
+
 # Environment files with real values — template is committed, actuals are not
 runtime/drivers/env/*.env
 !runtime/drivers/env/template.env

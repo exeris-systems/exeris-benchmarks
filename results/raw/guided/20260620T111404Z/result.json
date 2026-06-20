@@ -1,0 +1,49 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260620-132124-504741b",
+  "timestamp": "2026-06-20T11:21:24Z",
+  "scenario": "entity-read-by-id",
+  "tool": "h2load",
+  "env_ref": "/home/arkstack/exeris-benchmarks/results/raw/guided/20260620T111404Z/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h2",
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "spring-benchmark-app",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h2",
+    "commit_sha": "504741b3506ff6403a7d7dedf154a39cbfbdcb33"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+  "duration_seconds": 240,
+  "warmup_seconds": 180,
+  "threads": 4,
+  "connections": 128,
+  "backend_network_mode": "host"
+},
+  "metrics": {
+  "throughput_rps": 3052.42,
+  "latency_mean_us": 417670.000000,
+  "latency_stdev_us": 612840.000000,
+  "latency_max_us": 9610000.000000,
+  "total_requests": 732580,
+  "total_errors": 0,
+  "error_rate_pct": 0.000000
+},
+  "notes": "backendMode=default-vt targetRuntimeEffective=spring targetBuild=jvm cpuAffinity=0-2 clientCpuAffinity=3-8",
+  "tags": ["backend-mode:default-vt", "target-runtime-effective:spring", "target-build:jvm"],
+  "raw_output": "starting benchmark...\nspawning thread #0: 32 total client(s). Timing-based test with 0s of warm-up time and 240s of main duration for measurements.\nspawning thread #1: 32 total client(s). Timing-based test with 0s of warm-up time and 240s of main duration for measurements.\nspawning thread #2: 32 total client(s). Timing-based test with 0s of warm-up time and 240s of main duration for measurements.\nspawning thread #3: 32 total client(s). Timing-based test with 0s of warm-up time and 240s of main duration for measurements.\nWarm-up started for thread #3.\nWarm-up started for thread #2.\nWarm-up started for thread #1.\nWarm-up started for thread #0.\nprogress: 9% of clients started\nprogress: 18% of clients started\nprogress: 28% of clients started\nprogress: 37% of clients started\nprogress: 46% of clients started\nprogress: 56% of clients started\nprogress: 65% of clients started\nprogress: 75% of clients started\nprogress: 84% of clients started\nWarm-up phase is over for thread #3.\nMain benchmark duration is started for thread #3.\nprogress: 93% of clients started\nWarm-up phase is over for thread #0.\nMain benchmark duration is started for thread #0.\nWarm-up phase is over for thread #2.\nMain benchmark duration is started for thread #2.\nWarm-up phase is over for thread #1.\nMain benchmark duration is started for thread #1.\nTLS Protocol: TLSv1.3\nCipher: TLS_AES_128_GCM_SHA256\nServer Temp Key: X25519 253 bits\nApplication protocol: h2\nMain benchmark duration is over for thread #3. Stopping all clients.\nStopped all clients for thread #3\nMain benchmark duration is over for thread #2. Stopping all clients.\nStopped all clients for thread #2\nMain benchmark duration is over for thread #0. Stopping all clients.\nStopped all clients for thread #0\nMain benchmark duration is over for thread #1. Stopping all clients.\nStopped all clients for thread #1\n\nfinished in 240.04s, 3052.42 req/s, 26.69MB/s\nrequests: 732580 total, 733860 started, 732580 done, 732580 succeeded, 0 failed, 0 errored, 0 timeout\nstatus codes: 732580 2xx, 0 3xx, 0 4xx, 0 5xx\ntraffic: 6.26GB (6717099620) total, 25.87MB (27123764) headers (space savings 86.68%), 6.21GB (6670140900) data\n                     min         max         mean         sd        +/- sd\ntime for request:     2.26ms       9.61s    417.67ms    612.84ms    85.40%\ntime for connect:   302.22ms    319.93ms    307.94ms      5.21ms    70.31%\ntime to 1st byte:   312.97ms       1.33s    660.07ms    223.44ms    78.91%\nreq/s           :      21.62       25.86       23.85        1.00    60.94%\n"
+}

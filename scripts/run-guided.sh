@@ -661,6 +661,17 @@ saga_auto_start_infra="no"
 saga_auto_start_target="no"
 saga_skip_seed_verify="no"
 enable_jfr="no"
+# Opt-in steady-state / fairness diagnostics (default OFF — never perturb an
+# existing run shape). os_sidecars => pidstat/mpstat sampling (BENCH_OS_SIDECARS);
+# jfr_steady_state => merge env/jfr-steady-state.jfc (C2 compiler events) on top
+# of the base JFR config (BENCH_JFR_STEADY_STATE, only meaningful when JFR is on).
+enable_os_sidecars="no"
+enable_jfr_steady_state="no"
+# Backend container network mode (default bridge). host => the runner layers the
+# host-net compose override (DB_HOST_NETWORK=1) so the stateful backend (Postgres)
+# shares the host network, removing the bridge/NAT tax that taxes chattier stacks
+# asymmetrically — a fairness gate for cross-stack comparison.
+db_host_network="no"
 
 # Drivers declared by the scenario, intersected with supported load drivers.
 readarray -t SCEN_DRIVERS < <(jq -r '.driver[]?' "$scenario_json" 2>/dev/null || true)
@@ -701,12 +712,28 @@ execution_profile_id=""
 cgroup_memory_limit_mb=""
 cgroup_cpu_quota_pct=""
 cpu_affinity=""
+client_cpu_affinity=""
+# Fixed wrk2 arrival rate (RPS). Empty => run-wrk2.sh auto-derives ~75% of the
+# discovered saturation (per-target). Pin it to compare CO-free latency across
+# stacks at IDENTICAL absolute load instead of each at 75% of its own ceiling.
+wrk2_target_rps=""
 constrained_contract=""
 
 if [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]]; then
   execution_class="$(select_kv "Execution class" "unconstrained" \
     unconstrained "unconstrained — no cgroup/affinity caps" \
     constrained   "constrained   — cgroup memory/CPU caps (exploratory-only, single-target, never comparative)")"
+fi
+
+# Optional target-bound measurement pinning (LOCAL + unconstrained). Pin the target and the load
+# driver to DISJOINT cpusets so the target is the bottleneck and its CPU-efficiency shows as
+# throughput — loopback co-location otherwise lets the driver steal the target's cores, making
+# throughput unmeasurable. Leave the target cpuset empty to keep the current (unpinned) behaviour.
+if [[ "$topology_mode" == "$TOPOLOGY_LOCAL" && "$execution_class" == "unconstrained" ]]; then
+  cpu_affinity="$(prompt_text "Target CPU affinity cpuset for target-bound measurement (e.g. 0-2, empty = none)" "")"
+  if [[ -n "$cpu_affinity" ]]; then
+    client_cpu_affinity="$(prompt_text "Load-driver CPU affinity cpuset — keep DISJOINT from target (e.g. 3-9)" "")"
+  fi
 fi
 
 if [[ "$execution_class" == "constrained" ]]; then
@@ -1006,6 +1033,53 @@ if jfr_supported; then
   enable_jfr="$(choose_option "Record JFR of the target during measurement (adds overhead)?" "no" yes no)"
 fi
 
+# OS sidecars (pidstat/mpstat) are wired into the dedicated saga and
+# entity-read-by-id runners, which know the target PID to sample. Offered only on
+# localhost (the host PID/CPU view must be the machine under test) and only when
+# the tools exist. Default OFF — sampling is opt-in instrumentation.
+os_sidecars_supported() {
+  [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]] || return 1
+  [[ "$is_saga" == "yes" || "$scenario_id" == "entity-read-by-id" ]] || return 1
+  command -v pidstat >/dev/null 2>&1 || command -v mpstat >/dev/null 2>&1 || return 1
+  return 0
+}
+if os_sidecars_supported; then
+  enable_os_sidecars="$(choose_option "Capture OS sidecars (pidstat %wait/ctxsw + mpstat per-CPU %soft/%sys) during measurement?" "no" yes no)"
+fi
+
+# Steady-state JFR overlay (env/jfr-steady-state.jfc): adds C2 compiler events
+# (CompilerStatistics/CompilerQueueUtilization/Compilation) on top of the base JFR
+# config to prove the JIT settled before the measurement window. Only meaningful
+# when JFR is actually being recorded, so it is gated on enable_jfr.
+if [[ "$enable_jfr" == "yes" ]]; then
+  enable_jfr_steady_state="$(choose_option "Merge steady-state JFR overlay (C2 compiler events, proves JIT settled)?" "no" yes no)"
+fi
+
+# Backend network mode: offered where the runner manages a containerized stateful
+# backend it can re-home onto the host network — local saga/entity-read with docker
+# present. host removes the bridge/NAT tax (fairness for cross-stack), at the cost of
+# a less production-shaped network. Default bridge (unchanged run shape).
+backend_net_supported() {
+  [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]] || return 1
+  [[ "$is_saga" == "yes" || "$scenario_id" == "entity-read-by-id" ]] || return 1
+  command -v docker >/dev/null 2>&1 || return 1
+  return 0
+}
+if backend_net_supported; then
+  db_host_network="$(choose_option "Run stateful backend (Postgres) on HOST network instead of bridge? (removes NAT/bridge tax — fairness for cross-stack)" "no" yes no)"
+fi
+
+# Export the opt-in diagnostics into the dispatch environment so every child
+# runner inherits them (the dedicated saga/entity-read runners read
+# BENCH_OS_SIDECARS; the target launchers read BENCH_JFR_STEADY_STATE). Both
+# compare against the literal "1"; export "0" when off so the default is explicit
+# rather than relying on the unset fallback.
+if [[ "$enable_os_sidecars" == "yes" ]]; then export BENCH_OS_SIDECARS=1; else export BENCH_OS_SIDECARS=0; fi
+if [[ "$enable_jfr_steady_state" == "yes" ]]; then export BENCH_JFR_STEADY_STATE=1; else export BENCH_JFR_STEADY_STATE=0; fi
+# DB_HOST_NETWORK is read by the saga/entity-read runners (== "1" => host-net
+# override). Export "0" when off so the default is explicit.
+if [[ "$db_host_network" == "yes" ]]; then export DB_HOST_NETWORK=1; backend_network_mode="host"; else export DB_HOST_NETWORK=0; backend_network_mode="bridge"; fi
+
 # ---------------------------------------------------------------------------
 # Claim scope + fairness attestations (resolved before workload because the
 # entity-read-by-id dispatch mode depends on it: exploratory => free run, no
@@ -1079,6 +1153,20 @@ else
     info "saga drives concurrency by virtual_users/think-time from the contract; threads/connections are not used by the saga runner."
   fi
 fi
+
+# wrk2 fixed arrival rate (entity-read latency runs). Empty keeps the auto behavior
+# (~75% of each target's own discovered saturation); a number pins the rate so
+# CO-free latency is measured at identical absolute load across stacks — the right
+# basis for a cross-stack latency claim. Must stay below the slowest target's
+# saturation, else wrk2 runs at saturation and the percentiles become CO-shaped.
+if [[ "$driver" == "wrk2" && "$scenario_id" == "entity-read-by-id" ]]; then
+  wrk2_target_rps="$(prompt_text "wrk2 fixed arrival rate (RPS, empty = auto ~75% of discovered saturation; pin a value for cross-stack matched-load latency)" "")"
+  if [[ -n "$wrk2_target_rps" ]] && ! [[ "$wrk2_target_rps" =~ ^[0-9]+$ ]]; then
+    warn "wrk2 rate '$wrk2_target_rps' is not a positive integer; falling back to auto (~75% saturation)."
+    wrk2_target_rps=""
+  fi
+fi
+
 hardware_profile="$(select_kv "Hardware profile" "dev-laptop" \
   linux-generic    "linux-generic" \
   aarch64-generic  "aarch64-generic" \
@@ -1193,11 +1281,16 @@ jq -n \
   --arg saga_auto_start_target "$saga_auto_start_target" \
   --arg saga_skip_seed_verify "$saga_skip_seed_verify" \
   --arg enable_jfr "$enable_jfr" \
+  --arg enable_os_sidecars "$enable_os_sidecars" \
+  --arg enable_jfr_steady_state "$enable_jfr_steady_state" \
+  --arg backend_network_mode "${backend_network_mode:-bridge}" \
   --arg execution_class "$execution_class" \
   --arg execution_profile_id "$execution_profile_id" \
   --arg cgroup_memory_limit_mb "$cgroup_memory_limit_mb" \
   --arg cgroup_cpu_quota_pct "$cgroup_cpu_quota_pct" \
   --arg cpu_affinity "$cpu_affinity" \
+  --arg client_cpu_affinity "$client_cpu_affinity" \
+  --arg wrk2_target_rps "$wrk2_target_rps" \
   --argjson delay_ms "${delay_ms:-0}" \
   --argjson loss_pct "${loss_pct:-0}" \
   --argjson jitter_ms "${jitter_ms:-0}" \
@@ -1292,6 +1385,9 @@ jq -n \
                 }
        else . end)
   | (. + {enable_jfr: ($enable_jfr == "yes")})
+  | (. + {os_sidecars: ($enable_os_sidecars == "yes")})
+  | (. + {jfr_steady_state: ($enable_jfr_steady_state == "yes")})
+  | (. + {backend_network_mode: $backend_network_mode})
   | (. + {execution_class: $execution_class})
   | (if $execution_class == "constrained"
        then . + (if $execution_profile_id != "" then {execution_profile_id: $execution_profile_id} else {} end)
@@ -1301,8 +1397,10 @@ jq -n \
                         + (if $cgroup_cpu_quota_pct != "" then {cpu_quota_pct: ($cgroup_cpu_quota_pct | tonumber)} else {} end)
                         )}
                    else {} end)
-              + (if $cpu_affinity != "" then {cpu_affinity: $cpu_affinity} else {} end)
        else . end)
+  | (if $cpu_affinity != "" then . + {cpu_affinity: $cpu_affinity} else . end)
+  | (if $client_cpu_affinity != "" then . + {client_cpu_affinity: $client_cpu_affinity} else . end)
+  | (if $wrk2_target_rps != "" then . + {wrk2_target_rps: ($wrk2_target_rps | tonumber)} else . end)
   ' > "$PROFILE_OUT"
 
 info "Profile written: $PROFILE_OUT"
@@ -1375,6 +1473,13 @@ if [[ "$is_saga" == "yes" ]]; then
 fi
 if jfr_supported; then
   echo "  jfr                : enable_jfr=$enable_jfr (recorded into the run dir)"
+  [[ "$enable_jfr" == "yes" ]] && echo "  jfr_steady_state   : $enable_jfr_steady_state (merge env/jfr-steady-state.jfc — C2 compiler events)"
+fi
+if os_sidecars_supported; then
+  echo "  os_sidecars        : $enable_os_sidecars (pidstat/mpstat sampling during measurement)"
+fi
+if backend_net_supported; then
+  echo "  backend_network    : ${backend_network_mode:-bridge} (host removes bridge/NAT tax; DB_HOST_NETWORK=$([[ "$db_host_network" == "yes" ]] && echo 1 || echo 0))"
 fi
 echo "  execution_class    : $execution_class"
 if [[ "$execution_class" == "constrained" ]]; then
@@ -1719,6 +1824,21 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
     exit 3
   fi
 
+  # wrk2 is a CO-free sub-saturation LATENCY experiment (HTTP/1.1). It flows through
+  # run-entity-read-by-id.sh like wrk/h2load — the runner launches the target + seeds
+  # the DB, then DELEGATES the measurement to run-wrk2.sh (saturation-discovery ->
+  # warmup -> wrk2 fixed -R, HdrHistogram) and writes wrk2-latency.json into the run
+  # dir. So it is turnkey; just inform the operator about the protocol/semantics.
+  if [[ "$entity_driver" == "wrk2" ]]; then
+    if [[ -n "$wrk2_target_rps" ]]; then
+      export WRK2_TARGET_RPS="$wrk2_target_rps"
+      warn "entity-read-by-id + wrk2: CO-free LATENCY run (HTTP/1.1) at FIXED rate ${wrk2_target_rps} rps. The runner delegates to run-wrk2.sh; ensure this rate is below the target's saturation or percentiles become CO-shaped (check at_saturation in wrk2-latency.json)."
+    else
+      warn "entity-read-by-id + wrk2: CO-free sub-saturation LATENCY run (HTTP/1.1). Rate auto-derives to ~75% of observed saturation (per target). Pin WRK2_TARGET_RPS (the wrk2-rate prompt) for cross-stack matched-load latency."
+    fi
+    [[ "$protocol_mode" == "h2" ]] && warn "Requested protocol was h2, but wrk2 is HTTP/1.1 only — the latency run will be H1. State the protocol difference when placing it next to h2load throughput."
+  fi
+
   erbid_cmd=(
     env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build"
     "$REPO_ROOT/scripts/run-entity-read-by-id.sh"
@@ -1747,11 +1867,13 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
     # cpu-affinity). Workload was read from the contract above.
     erbid_cmd+=(--contract "$contract_id" --claim-scope comparison-eligible)
     [[ -n "$cpu_affinity" ]] && erbid_cmd+=(--cpu-affinity "$cpu_affinity")
+    [[ -n "$client_cpu_affinity" ]] && erbid_cmd+=(--client-cpu-affinity "$client_cpu_affinity")
     info "Dispatch: run-entity-read-by-id.sh (contract=$contract_id, comparison-eligible, launch_mode=$launch_mode)"
   else
     # Free exploratory mode: no fixed contract, workload (incl. duration) honored.
     erbid_cmd+=(--claim-scope exploratory --duration "${measurement_seconds}s")
     [[ -n "$cpu_affinity" ]] && erbid_cmd+=(--cpu-affinity "$cpu_affinity")
+    [[ -n "$client_cpu_affinity" ]] && erbid_cmd+=(--client-cpu-affinity "$client_cpu_affinity")
     info "Dispatch: run-entity-read-by-id.sh (exploratory free run, no fixed contract, launch_mode=$launch_mode)"
   fi
   [[ "$enable_jfr" == "yes" ]] && erbid_cmd+=(--enable-jfr)

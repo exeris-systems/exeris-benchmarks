@@ -1,0 +1,8 @@
+798061:
+No available recordings.
+
+Use jcmd 798061 JFR.start to start a recording.
+798061:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 798061 JFR.dump name=entity-read-by-id filename=FILEPATH to copy recording data to file.

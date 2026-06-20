@@ -15,6 +15,11 @@
 #   WRK2_THREADS=8 WRK2_CONNECTIONS=256 WRK2_DURATION=90s ./scripts/run-wrk2.sh targets/exeris-kernel/community scenarios/keepalive-steady
 set -euo pipefail
 
+# Force C locale so awk-computed numbers (LOAD_FRACTION via printf "%.6f", rates)
+# use a decimal POINT, not a locale comma. On a comma locale (e.g. pl_PL) "0,75"
+# would be invalid JSON for the jq --argjson below and abort the whole run.
+export LC_ALL=C
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$SCRIPT_DIR/.."
 
@@ -71,16 +76,32 @@ URL="${WRK_BASE_URL}${WRK_PATH:-/}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 RESULTS_DIR="$ROOT/results/raw"
 mkdir -p "$RESULTS_DIR"
-RESULT_JSON="$RESULTS_DIR/wrk2-${TIMESTAMP}.json"
+# WRK2_RESULT_JSON_OVERRIDE lets a caller (e.g. run-entity-read-by-id.sh delegating
+# its measurement phase) pin the result path into its own run dir; the raw log is
+# derived next to it. Default keeps the historical results/raw/wrk2-<TS>.json.
+RESULT_JSON="${WRK2_RESULT_JSON_OVERRIDE:-$RESULTS_DIR/wrk2-${TIMESTAMP}.json}"
+mkdir -p "$(dirname "$RESULT_JSON")"
 # Persist the raw wrk2 measurement output as a first-class artifact (not a temp
 # file): result.json is a lossy projection of it, and the raw log is the ground
 # truth for what the driver actually did — kept for honest reproducibility, the
 # same way target stdout is retained. PERCENTILES_FILE stays an ephemeral temp.
-RESULT_RAW_FILE="$RESULTS_DIR/wrk2-${TIMESTAMP}.raw.txt"
+RESULT_RAW_FILE="${RESULT_JSON%.json}.raw.txt"
 PERCENTILES_FILE="$(mktemp)"
 trap 'rm -f "$PERCENTILES_FILE"' EXIT
 
-WRK_BASE_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS")
+# Optional client-side CPU pinning so the load driver stays on a cpuset DISJOINT
+# from the target (target-bound measurement). Honored by every wrk/wrk2 pass.
+WRK2_TASKSET_PREFIX=()
+if [[ -n "${WRK2_CLIENT_CPU_AFFINITY:-}" ]]; then
+  if command -v taskset >/dev/null 2>&1; then
+    WRK2_TASKSET_PREFIX=(taskset -c "$WRK2_CLIENT_CPU_AFFINITY")
+    echo "  Client pin : taskset -c $WRK2_CLIENT_CPU_AFFINITY"
+  else
+    echo "WARN: WRK2_CLIENT_CPU_AFFINITY set but taskset unavailable; driver not pinned." >&2
+  fi
+fi
+
+WRK_BASE_CMD=("${WRK2_TASKSET_PREFIX[@]}" wrk -t "$THREADS" -c "$CONNECTIONS")
 if [[ -n "$LUA_SCRIPT" ]]; then
   WRK_BASE_CMD+=(--script "$LUA_SCRIPT")
 fi
@@ -118,7 +139,7 @@ echo "--- Warmup (60s) ---"
 "${WRK_BASE_CMD[@]}" -d 60s "$URL" > /dev/null
 
 echo "--- Measurement (wrk2, fixed rate) ---"
-WRK2_CMD=(wrk2 -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" -R "$MEASUREMENT_RPS" --latency)
+WRK2_CMD=("${WRK2_TASKSET_PREFIX[@]}" wrk2 -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" -R "$MEASUREMENT_RPS" --latency)
 if [[ -n "$LUA_SCRIPT" ]]; then
   WRK2_CMD+=(--script "$LUA_SCRIPT")
 fi

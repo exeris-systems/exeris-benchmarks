@@ -1,0 +1,8 @@
+1352687:
+No available recordings.
+
+Use jcmd 1352687 JFR.start to start a recording.
+1352687:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 1352687 JFR.dump name=entity-read-by-id filename=FILEPATH to copy recording data to file.

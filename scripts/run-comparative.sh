@@ -2586,6 +2586,17 @@ if [[ -z "$JDK_VENDOR_DETECTED" ]]; then
 fi
 
 HARDWARE_PROFILE_REF="${HARDWARE_PROFILE:-dev-laptop}"
+# Backend container network mode (fairness gate). run-comparative.sh drives
+# EXTERNALLY-launched targets + DB, so it cannot set the mode — it records what the
+# operator declares via DB_HOST_NETWORK / BENCH_BACKEND_NETWORK so the comparative
+# artifact is honest about it. Cross-stack comparisons MUST use host networking (a
+# bridged DB taxes chattier runtimes asymmetrically); warn loudly otherwise.
+if [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
+  BACKEND_NETWORK_MODE="host"
+else
+  BACKEND_NETWORK_MODE="bridge"
+  echo "WARN: comparative run with backend_network_mode=bridge. Cross-stack comparisons should launch the DB with the host-net override (DB_HOST_NETWORK=1) — bridge/NAT taxes chattier stacks asymmetrically. See docs/methodology.md." >&2
+fi
 JVM_CLASS="${BENCHMARK_JVM_CLASS:-jvm}"
 TARGET_MODE="${BENCHMARK_TARGET_MODE:-compat}"
 PAYLOAD_SIZE_BYTES="${BENCHMARK_PAYLOAD_SIZE_BYTES:-1024}"
@@ -2923,6 +2934,7 @@ parse_wrk_to_result() {
     --arg jdk_version         "$JDK_VERSION_DETECTED" \
     --arg benchmark_tool_version "$WRK_VERSION_DETECTED" \
     --arg hardware_profile    "$HARDWARE_PROFILE_REF" \
+    --arg backend_network_mode "$BACKEND_NETWORK_MODE" \
     --arg target_classification "$TARGET_CLASSIFICATION" \
     --arg pinned_jdk_version "${PINNED_JDK_VERSION:-${JDK_VERSION_DETECTED:-unknown}}" \
     --arg pinned_tool_version "${PINNED_BENCH_TOOL_VERSION:-${WRK_VERSION_DETECTED:-unknown}}" \
@@ -2999,6 +3011,7 @@ parse_wrk_to_result() {
         benchmark_tool_version: $benchmark_tool_version,
         jvm_flags: $jvm_flags,
         hardware_profile: $hardware_profile,
+        backend_network_mode: $backend_network_mode,
         scenario_id: $scenario,
         target_classification: $target_classification
       },

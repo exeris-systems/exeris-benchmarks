@@ -353,16 +353,16 @@ latency-median difference smaller than ~55% is not real on this box — which is
 why I refuse to claim one. The −34% CPU/req gap, by contrast, is ~20× the metric's own
 noise.
 
-**Recipe to publication-grade — what's done, what's still open:**
-
-1. Move to `perf-box-amd64` — turbo off, pinned kernel/scheduler, `performance` governor. *(open — these are `dev-laptop` runs.)*
-2. ✅ **Interleave repetitions** A,B,A,B,A,B so box drift averages out instead of biasing whoever ran during a noisy window. *(done — n=3 each; ≥5 would tighten the interval further.)*
-3. Fix the wrk2 rate to the **same fraction of the shared (lower) saturation** for both stacks, so load fraction is identical (the CO-free pair had 0.785 vs 0.808). *(open for the latency axis.)*
-4. ✅ Confirm `C2 peak == 0` for every stack before its measurement window opens. *(done.)*
-5. ✅ Aggregate: `tools/aggregate-runs.py results/raw/guided/<run-dirs...>` → report mean ± stdev, drop any metric whose CV exceeds the claimed gap. *(done.)*
-
-The throughput, CPU-per-request and peak-RSS findings are now **firmed** (n=3 interleaved,
-CV < 2.5%); latency-median stays **explicitly inconclusive** until step 3 and a quiet box.
+**Limitations — what would sharpen these numbers.** The throughput, CPU-per-request and
+peak-RSS gaps are firmed (n=3 interleaved, CV < 2.5%); the latency picture is not, and three
+things still bound the work. (1) These are **`dev-laptop`** runs with turbo on — relative,
+same-box comparison only, not publication-grade absolutes; `perf-box-amd64` would fix that.
+(2) The cross-stack **latency load fraction isn't matched**: the rate was a fixed 6 000 rps,
+but each stack's saturation ceiling differs (and drifts day-to-day), so the same rate lands at
+different fractions of capacity — which, as §5 shows, is what moves the tail. Pegging the rate
+to a fixed fraction (~0.65) of the *measured, shared-lower* ceiling each session would make the
+latency tail comparable. (3) **n=3** firms the headline gaps tightly; ≥5 reps would narrow the
+interval further. Until (1)–(2), latency-median and tail stay **explicitly inconclusive**.
 
 ---
 

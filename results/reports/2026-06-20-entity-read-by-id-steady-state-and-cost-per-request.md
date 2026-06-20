@@ -27,7 +27,7 @@ hardware_profile: dev-laptop
 **Track:** Community · **Benchmark family:** Runtime · **Scenario:** `entity-read-by-id` · **Date:** 2026-06-20 · **Bench commit:** `7e7aeb8`
 
 > **Claim scope: `exploratory`** · **Reproducibility: `complete`** · **Comparison axis: within-tier** · **Hardware profile: `dev-laptop`**
-> Per the lab's [status & claim-eligibility rules](../../docs/status-and-claim-eligibility.md), this run is **not `comparison_eligible`** — that status is reserved for the `perf-box-amd64` profile, and everything here ran on `dev-laptop`. The headline throughput / CPU-per-request gaps are firmed at **n=3 interleaved with CV < 1.5%** (see *Firming up the numbers*), which makes them **exploratory-with-tight-CV**, not a merge-gating comparative claim. Treat every number as directional unless a section says otherwise. **Source artifacts** for every cited run (normalized `result.json`, steady-state evidence, pidstat/mpstat CSVs, env + reproducibility metadata) are published alongside this report — see the [artifacts manifest](2026-06-20-entity-read-by-id-artifacts.md). These are **Community / open-core** recordings, so the raw `.jfr` is not secret — the derived interactive flame graphs are published here, and the raw recordings (~190 MB each) are available on request. They are kept out of git for size, not confidentiality; the `.jfr` default-deny in `public` mode is the **Enterprise**-track rule (H3 / locality recordings stay internal).
+> Per the lab's [status & claim-eligibility rules](../../docs/status-and-claim-eligibility.md), this run is **not `comparison_eligible`** — that status is reserved for the `perf-box-amd64` profile, and everything here ran on `dev-laptop`. The headline gaps are firmed at **n=3 interleaved** — throughput and CPU-per-request at **CV < 1.5%**, peak RSS at **CV < 2.5%** (CV% = run-to-run variation across the repeats; see *Firming up the numbers*) — which makes them **exploratory-with-tight-CV**, not a merge-gating comparative claim. Treat every number as directional unless a section says otherwise. **Source artifacts** for every cited run (normalized `result.json`, steady-state evidence, pidstat/mpstat CSVs, env + reproducibility metadata) are published alongside this report — see the [artifacts manifest](2026-06-20-entity-read-by-id-artifacts.md). These are **Community / open-core** recordings, so the raw `.jfr` is not secret — the derived interactive flame graphs are published here, and the raw recordings (~190 MB each) are available on request. They are kept out of git for size, not confidentiality; the `.jfr` default-deny in `public` mode is the **Enterprise**-track rule (H3 / locality recordings stay internal).
 
 ![banner](assets/banner.svg)
 
@@ -64,7 +64,7 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 | **OS / kernel** | Linux `7.0.0-22-generic`, scheduler **EEVDF** |
 | **JDK** | Oracle JDK **26** (`java 26 2026-03-17`) |
 | **Drivers** | h2load `nghttp2/1.68.0`, wrk2 (HdrHistogram), wrk `4.1.0` |
-| **Transport** | **HTTP/2 over TLS 1.3** — `https://localhost:8080`, ALPN `h2`, cipher `TLS_AES_128_GCM_SHA256`. **Identical TLS config, terminated by JSSE (JDK built-in) on all three targets.** This is an HTTPS workload — see the TLS caveat below. |
+| **Transport** | **HTTP/2 over TLS 1.3** — `https://localhost:8080`, ALPN `h2`, **identical negotiated cipher `TLS_AES_128_GCM_SHA256` on all three targets** (confirmed driver-side). Providers are **not uniform**: Spring = JSSE (Tomcat `https-jsse-nio`), Quarkus = nominally JSSE, **Exeris = its own kernel `crypto` engine**. Because the engines differ, fairness rests on a **cleartext control** showing the cross-stack gap is unchanged with TLS off (see the TLS caveat below) — not on a shared provider. This is an HTTPS workload. |
 | **Backend** | PostgreSQL in a container (bridge **and** host-net tested) |
 | **Targets** | `exeris-benchmark-app-community-h1`, `quarkus-jvm-vt-tuned`, Spring (reference) |
 | **Profile class** | `dev-laptop` |
@@ -76,7 +76,15 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 3. **SMT pinning caveat.** The CPU is 6 physical cores / 12 SMT threads. I pin to *logical* threads (e.g. "target `0-4`"), so some pinned "cores" may be SMT siblings sharing a physical core. The target-bound conclusions hold directionally but the core math is approximate.
 4. **Community track only.** No Enterprise targets, no H3, no locality. Nothing here speaks to those.
 5. **`dev-laptop` means two different environments across this series — note the delta.** An earlier [saga-correctness benchmark](https://blog.arkstack.dev/en/blog/compensation-correctness-saga-benchmark/) on the *same physical machine* ran under a desktop session with a **32 GB cgroup memory overlay**; this run is **headless with no GUI and no memory cap**, so the JVM sees the full ~60 GB and there is no desktop-environment scheduling noise. This is a genuinely *cleaner* environment than the May run — closer to (still not equal to) `perf-box-amd64`. The available memory budget is itself a benchmark variable, so I call it out rather than letting "dev-laptop" read as one fixed thing.
-6. **This is an HTTPS workload, not cleartext — and that is folded into every number.** All runs went over **HTTP/2 + TLS 1.3** (`TLS_AES_128_GCM_SHA256`), terminated by **JSSE (the JDK's built-in provider) on all three targets**. Two consequences. (a) *Fairness holds:* because the TLS provider is shared, the cross-stack CPU-per-request gap is **not** a TLS-engine artifact — it is the runtime/HTTP path running on top of an identical TLS cost. (This is runtime HTTPS serving via JSSE — unrelated to the JMH TLS-engine work, B4/B5/tcnative/`OffHeapTlsEngine`; do not conflate the two tracks.) (b) *Absolute numbers include TLS:* every CPU-per-request and latency figure carries the AES-GCM record cost plus a **ms-scale** handshake (amortized over the `-c 128` keepalive pool, so it does not dominate steady-state — a ms- rather than µs-scale connect time is itself the signature of TLS being on). To **separate** the TLS cost from the runtime cost you would re-run cleartext (`h2c`, TLS off); that is the right next experiment and is *not* done here.
+6. **This is an HTTPS workload — and a cleartext control proves the gap isn't a TLS artifact.** The headline runs went over **HTTP/2 + TLS 1.3** (`TLS_AES_128_GCM_SHA256`, ms-scale handshake amortized over the `-c 128` keepalive pool), so the absolute CPU/req and latency figures carry the AES-GCM record cost. The fairness question — *could the gap be a TLS-engine difference rather than a runtime difference?* — I answered by **re-running the same h2load comparison cleartext** (`h2c`, TLS fully off, µs-scale connect confirming it): a matched, warmed, host-net control run per stack.
+
+   | gap (Exeris vs Quarkus) | TLS on (n=3) | cleartext (n=1 control) |
+   |---|---|---|
+   | throughput | **+16.2%** | **+15.8%** |
+   | CPU / request | **−33.7%** | **−34.4%** |
+   | peak RSS ratio | **3.6×** | **3.9×** |
+
+   The gap is **the same with TLS and with it removed entirely** — within run-to-run noise on throughput and CPU/req. (Peak RSS does shift measurably: the cleartext figures sit just below the TLS-on n=3 bands, so TLS adds real buffer memory, and the ratio widens slightly 3.6×→3.9× — TLS buffers are a larger fraction of Exeris's small footprint. The gap survives either way.) This matters because the stacks do **not** share a TLS engine (Spring & Quarkus are nominally JSSE; **Exeris uses its own kernel `crypto` engine**), so a "shared-provider → not a confound" argument would *not* hold here — but the cleartext control closes that gap directly: with TLS off, Exeris's distinct engine is out of the path entirely and the difference is unchanged, so it is **not** where the gap comes from. This is a runtime/HTTP-path property. (Per-stack, TLS adds a small, *similar* cost — Exeris CPU/req 0.337→0.359 ms, Quarkus 0.513→0.541 ms; ~2% throughput each — so it does not distort the comparison.) The **latency axis** was controlled the same way — a wrk2 TLS-vs-cleartext pair per stack at matched 6 000 rps, CO-corrected (all **h1**, like §5; the TLS-on members are §5's headroom control) — and TLS again adds only a small, *symmetric* tax: Exeris p99 4.8→5.5 ms, Quarkus 4.4→4.6 ms; medians move <0.1 ms. This is runtime HTTPS serving — **unrelated** to the JMH TLS-engine work (B4/B5/tcnative/`OffHeapTlsEngine`); do not conflate the two tracks.
 
 ---
 
@@ -161,8 +169,10 @@ Matched, fully-warmed, host-net, target-bound (5 cores), 10-minute measurement:
 | Throughput | **8 844 rps** | 7 836 rps | 3 052 rps |
 | **CPU / request** | **0.390 ms** | 0.552 ms | 0.956 ms |
 | App `%CPU` (of 500% avail.) | 344 (69%) | 432 (86%) | 292 |
-| **Peak RSS** (steady state) | **~0.96 GiB** | ~3.5 GiB | ~4.9 GiB |
+| **Peak RSS** (steady state, n=3 mean †) | **~0.96 GiB** | ~3.5 GiB | ~4.9 GiB |
 | C2 settled? | yes (peak 0) | **no (peak 97)** | no (peak 72) |
+
+† Every other row is the single warmed reference run (8 844 rps); **peak RSS is the n=3 interleaved mean** (per-run RSS in *Firming up the numbers*) — Exeris/Quarkus firmed at CV < 2.5%, Spring is a single reference.
 
 ![CPU per request — Exeris vs Quarkus vs Spring](assets/chart-cpu-per-request.svg)
 
@@ -171,7 +181,8 @@ Matched, fully-warmed, host-net, target-bound (5 cores), 10-minute measurement:
 The footprint axis tells the same story as the CPU axis, and just as firmly. Across the
 n=3 set, with **the same max-heap setting for every target** (default `-Xmx`, ~15.2 GiB
 reserved on this box), steady-state **peak RSS** was **~0.96 GiB for Exeris vs ~3.5 GiB for
-Quarkus (3.6×) and ~4.9 GiB for Spring (5.1×)** — CV under 3%. It tracks committed heap:
+Quarkus (3.6×)** — both firmed at CV under 2.5% — **and ~4.9 GiB for Spring (5.1×)**, a single
+reference run. It tracks committed heap:
 Exeris ran on **126–306 MiB of used heap** where Quarkus used 1.2–2.1 GiB and Spring ~1.9 GiB.
 Same root cause as CPU-per-request — Exeris simply allocates less. **Fairness notes:** RSS is
 reported at matched `-Xmx`, so this is not a heap-sizing artifact; and this is **JVM-mode**
@@ -222,9 +233,9 @@ The single clearest contributor to Quarkus's higher per-request cost is **reflec
 
 ---
 
-## 5. Latency: tail differs, median is inconclusive
+## 5. Latency: the tail tracks load, the median is inconclusive
 
-This is the one axis that does not favor Exeris, and it is reported as measured.
+This is the one axis that does not cleanly favor Exeris, and it is reported as measured. Everything here is **CO-free wrk2 over h1** — the only h2 latency I have is the coordinated-omission artifact from §3, which isn't latency at all. So these comparisons hold the **protocol constant (h1)** and the driver constant (wrk2); what varies between them is **how close to saturation the box was**, which turns out to be the thing that moves the tail.
 
 **Comparison A — each stack at 75% of its *own* saturation (good box state):**
 
@@ -248,10 +259,10 @@ These two comparisons **disagree about the median**. Comparison A says Exeris p5
 
 So, honestly:
 
-- **Median / typical latency: not distinguishable on this hardware.** The run-to-run noise (2.3×) is larger than any between-stack difference I saw. I do **not** claim a median-latency win for Exeris.
-- **Tail latency (p99 and beyond): consistently favors Exeris** — 1.8× in Comparison A, 2.6–3.3× in Comparison B. This is robust across runs and is consistent with the rest of the picture (Quarkus's still-warming JIT and higher CPU/req → more GC/compilation jitter → fatter tail).
+- **Median / typical latency: not distinguishable on this hardware.** The run-to-run noise (2.3×) is larger than any between-stack difference I saw. I do **not** claim a median-latency win for Exeris. The headroom control run (same wrk2 h1, fixed 6 000 rps, box in a better state) says the same thing more cleanly: medians **1.8 ms vs 1.75 ms**, within 0.1 ms.
+- **Tail latency (p99 and beyond): favors Exeris only *near saturation* — it is a load-fraction effect, not a durable property.** Exeris's tail was 1.8× better in Comparison A and 2.6–3.3× in Comparison B. But every one of these is **h1** (wrk2), so the protocol is constant — what differs is how loaded the box was. In Comparison B the box's ceiling had drifted *low* (~7 500 rps), so a fixed 6 000 rps put both stacks at a high load fraction (Exeris 0.785, Quarkus 0.808) and Quarkus's tail ballooned (p99 46.78 ms). A separate control run at the **same protocol, same fixed 6 000 rps**, but with the box in a better state (ceiling ~8 700–9 500 rps → load fraction only ~0.65) erases the gap entirely: Exeris p99 **5.5 ms** vs Quarkus **4.6 ms** — a wash, marginally Quarkus's way. So the tail "advantage" is real only when the system is pushed toward its ceiling (consistent with Quarkus's still-warming JIT → more GC/compile jitter under pressure); give both headroom at the identical rate and it vanishes. The tail tracks **load fraction**, not the stack. Reported as found.
 
-**Fairness caveat on Comparison B:** because the two runs discovered slightly different saturation points, the *load fraction* differed — Exeris ran at 0.785 of its ceiling, Quarkus at 0.808. Quarkus was pushed marginally closer to saturation, which inflates its tail somewhat. Part of the p99 gap is this asymmetry, not pure efficiency. A cleaner design fixes the rate as the same fraction of the *shared lower* saturation.
+**Fairness caveat on Comparison B:** because the two runs discovered slightly different saturation points, the *load fraction* differed — Exeris ran at 0.785 of its ceiling, Quarkus at 0.808. Quarkus was pushed marginally closer to saturation, which inflates its tail somewhat. Part of the p99 gap is this asymmetry, not pure efficiency — which is exactly why the headroom control run above (same protocol, same rate, lower load fraction) is the more trustworthy read on the tail. A cleaner design fixes the rate as the same fraction of the *shared lower* saturation for both stacks.
 
 ---
 
@@ -286,18 +297,18 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
 
 ## Conclusions
 
-**What the data supports (this hardware, this scenario; headline throughput/CPU-per-request firmed at n=3, the rest directional):**
+**What the data supports (this hardware, this scenario; headline throughput / CPU-per-request / peak-RSS firmed at n=3, the rest directional):**
 
-1. **Resource efficiency is Exeris's real differentiator — on both CPU and memory.** −34% CPU per request than Quarkus (n=3 interleaved, CV < 1.5%), ~2.7× less than Spring; and at matched `-Xmx`, **3.6× smaller peak RSS than Quarkus** (~0.96 vs ~3.5 GiB), 5.1× smaller than Spring. Both stable across every configuration tested, both with the same root cause (Exeris allocates less). JVM-mode comparison.
+1. **Resource efficiency is Exeris's real differentiator — on both CPU and memory.** −34% CPU per request than Quarkus (n=3 interleaved, CV < 1.5%), ~2.7× less than Spring; and at matched `-Xmx`, **3.6× smaller peak RSS than Quarkus** (~0.96 vs ~3.5 GiB; n=3 interleaved, CV < 2.5%), 5.1× smaller than Spring. Both gaps are provider-independent (they hold cleartext too; see disclaimer #6), stable across every configuration tested, and share the same root cause (Exeris allocates less). JVM-mode comparison.
 2. **Exeris reaches steady state far faster.** Quarkus was still JIT-compiling after 5 minutes; Exeris was warm almost immediately.
-3. **Exeris has a meaningfully better latency *tail*** (p99+), 1.8–3.3× depending on load.
+3. **Exeris has a better latency *tail* (p99+) only near saturation** (1.8–3.3×, all h1) — and it is a *load-fraction* effect, not a durable property: a control run at the identical protocol and rate but with box headroom erases it (p99 5.5 vs 4.6 ms, a wash). Median latency is indistinguishable throughout.
 4. **Throughput favors Exeris (+16%), and that is a lower bound** — n=3 interleaved (CV < 1.5%), and Exeris was not app-CPU-bound at the point I measured.
 
 **What the data does *not* support:**
 
 - Any claim about **median latency** — it is noise-dominated on this box.
 - Any **absolute** number as production capacity — `dev-laptop`, single runs, SMT-approximate pinning.
-- A **split between TLS cost and runtime cost.** This is an HTTPS workload; the TLS (JSSE) overhead is identical across targets — so it does not distort the *comparison* — but it is baked into every absolute figure. Isolating it needs a cleartext (`h2c`) re-run, not done here.
+- A **firmed per-stack TLS overhead.** The cleartext control (disclaimer #6) settles the *comparison* question — the gap is provider-independent — and gives a directional per-stack TLS cost (~2% throughput, ~0.02 ms CPU/req each), but that absolute attribution is a single control run, not firmed at n=3; treat it as directional.
 - Anything about **Enterprise / H3 / locality** — out of scope.
 
 ## Firming up the numbers
@@ -306,19 +317,25 @@ Single runs gave the direction; they don't give an interval. So I ran the headli
 comparison the way the recipe below prescribes: **six runs, interleaved A,B,A,B,A,B**
 (Exeris, Quarkus, three each), every one host-networked, warmed to a confirmed-empty
 C2 queue, target pinned to cores 0–4 and the driver to 5–9. `tools/aggregate-runs.py`
-collapses each triple into mean ± **CV%** (coefficient of variation) — the honest way
-to ask "is this difference bigger than the noise?":
+collapses each triple into mean ± **CV%**. **Throughout this report, CV% is the
+*coefficient of variation between repeated runs*** — stdev ÷ mean across the three
+identically-configured runs, i.e. how far a metric wanders from one run to the next on an
+unchanged setup. It is the honest yardstick for "is this between-stack difference bigger
+than my own run-to-run noise?": a gap many times its metric's CV is real; a gap smaller
+than the CV is not.
 
 | metric | Exeris (n=3) | Quarkus (n=3) | gap | worst CV |
 |---|---|---|---|---|
 | **CPU / request** | **0.3585 ms** (CV 0.2%) | 0.541 ms (CV 1.5%) | **−33.7%** | 1.5% |
 | throughput (rps) | **9 374** (CV 0.8%) | 8 068 (CV 1.3%) | **+16.2%** | 1.3% |
+| **peak RSS** | **0.964 GiB** (CV 2.3%) | 3.457 GiB (CV 1.4%) | **−72.1%** (3.6× less) | 2.3% |
 
-Both headline gaps are **20–40× larger than their own run-to-run noise** — they survive
-the interleave, so they are real, not an artifact of which stack happened to run during
-a quiet window. (These are h2load-at-saturation runs, so their p50/p99 are
-*coordinated-omission* percentiles — queueing, not service time; see §3. The firm-up
-here is for **throughput and CPU/request only**.)
+All three headline gaps are **far larger than their own run-to-run noise** (20–40× for
+throughput and CPU/request, ~30× for RSS) — they survive the interleave, so they are real,
+not an artifact of which stack happened to run during a quiet window. (These are
+h2load-at-saturation runs, so their p50/p99 are *coordinated-omission* percentiles —
+queueing, not service time; see §3. The firm-up here is for **throughput, CPU/request and
+peak RSS** — never the CO latency percentiles.)
 
 Latency-median is the opposite story. On the CO-free wrk2 runs, the same tool makes the
 report's central honesty point quantitative:
@@ -344,8 +361,8 @@ noise.
 4. ✅ Confirm `C2 peak == 0` for every stack before its measurement window opens. *(done.)*
 5. ✅ Aggregate: `tools/aggregate-runs.py results/raw/guided/<run-dirs...>` → report mean ± stdev, drop any metric whose CV exceeds the claimed gap. *(done.)*
 
-The throughput and CPU-per-request findings are now **firmed** (n=3 interleaved, CV < 1.5%);
-latency-median stays **explicitly inconclusive** until step 3 and a quiet box.
+The throughput, CPU-per-request and peak-RSS findings are now **firmed** (n=3 interleaved,
+CV < 2.5%); latency-median stays **explicitly inconclusive** until step 3 and a quiet box.
 
 ---
 
@@ -365,18 +382,38 @@ All runs: `entity-read-by-id`, host-net (unless noted), `dev-laptop`, JDK 26, ke
 
 **Firm-up set — interleaved A,B,A,B,A,B, host-net, warmed (C2=0), target 0–4 / driver 5–9, h2load at saturation:**
 
-| Timestamp (UTC) | Target | rps | CPU/req (ms) |
-|---|---|---|---|
-| `…134826Z` | Exeris | 9 454 | 0.359 |
-| `…140518Z` | Quarkus | 8 158 | 0.534 |
-| `…142125Z` | Exeris | 9 296 | 0.358 |
-| `…143724Z` | Quarkus | 7 952 | 0.550 |
-| `…145345Z` | Exeris | 9 373 | 0.359 |
-| `…151001Z` | Quarkus | 8 096 | 0.539 |
-| **Exeris mean (n=3)** | | **9 374** (CV 0.8%) | **0.3585** (CV 0.2%) |
-| **Quarkus mean (n=3)** | | **8 068** (CV 1.3%) | **0.541** (CV 1.5%) |
+| Timestamp (UTC) | Target | rps | CPU/req (ms) | peak RSS (GiB) |
+|---|---|---|---|---|
+| `…134826Z` | Exeris | 9 454 | 0.359 | 0.961 |
+| `…140518Z` | Quarkus | 8 158 | 0.534 | 3.446 |
+| `…142125Z` | Exeris | 9 296 | 0.358 | 0.939 |
+| `…143724Z` | Quarkus | 7 952 | 0.550 | 3.522 |
+| `…145345Z` | Exeris | 9 373 | 0.359 | 0.992 |
+| `…151001Z` | Quarkus | 8 096 | 0.539 | 3.405 |
+| **Exeris mean (n=3)** | | **9 374** (CV 0.8%) | **0.3585** (CV 0.2%) | **0.964** (CV 2.3%) |
+| **Quarkus mean (n=3)** | | **8 068** (CV 1.3%) | **0.541** (CV 1.5%) | **3.457** (CV 1.4%) |
 
-Reproduce: `tools/aggregate-runs.py results/raw/guided/{134826Z,142125Z,145345Z}` (Exeris) and `{140518Z,143724Z,151001Z}` (Quarkus).
+Reproduce: `tools/aggregate-runs.py results/raw/guided/{134826Z,142125Z,145345Z}` (Exeris) and `{140518Z,143724Z,151001Z}` (Quarkus). Peak RSS per run from each `resource-metrics.json` (`peak_rss_kb`); same matched `-Xmx` (`heap_reserved` ≈ 15.2 GiB) for all.
+
+**Cleartext TLS-control (§disclaimer 6) — same h2load comparison, TLS off (`h2c`), host-net, warmed, target 0–4 / driver 5–9:**
+
+| Timestamp (UTC) | Target | rps | CPU/req (ms) | peak RSS (GiB) | connect |
+|---|---|---|---|---|---|
+| `…173152Z` | Exeris | 9 578 | 0.337 | 0.835 | 282 µs |
+| `…174756Z` | Quarkus | 8 270 | 0.513 | 3.282 | 239 µs |
+
+µs-scale connect confirms cleartext; the gap (+15.8% rps, −34.4% CPU/req, 3.9× RSS) matches the TLS gap above — see disclaimer #6.
+
+**Latency TLS-control (§disclaimer 6, §5) — wrk2, `h1`, matched 6 000 rps, CO-corrected, host-net, warmed:**
+
+| Timestamp (UTC) | Target | TLS | p50 (ms) | p99 (ms) | p99.9 (ms) |
+|---|---|---|---|---|---|
+| `…180704Z` | Exeris | on | 1.83 | 5.53 | 9.52 |
+| `…184831Z` | Exeris | off (cleartext) | 1.76 | 4.80 | 7.89 |
+| `…183109Z` | Quarkus | on | 1.75 | 4.62 | 10.10 |
+| `…190612Z` | Quarkus | off (cleartext) | 1.74 | 4.38 | 8.17 |
+
+TLS adds a small, symmetric latency tax to both stacks; at matched rate the medians are within 0.1 ms and the tail is a wash. These are **h1** (wrk2), same as all of §5; the **TLS-on** members (`…180704Z` / `…183109Z`) are the *headroom control* §5 uses to show the tail gap is a load-fraction effect.
 
 *Bridge-vs-host-net (§2) and the short-warmup progression (§1) come from earlier runs in the same session; see `results/raw/guided/`.*
 

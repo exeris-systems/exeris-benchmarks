@@ -44,16 +44,28 @@ re-derived independently. All runs: `entity-read-by-id`, `dev-laptop`, JDK 26, k
 | `20260620T123720Z` | Quarkus | wrk2 | 75%-own-sat — p50 9.03, p99 14.73 ms |
 | `20260620T125344Z` | Exeris | wrk2 | matched 6 000 rps — p50 6.73, p99 18.05 ms |
 | `20260620T130014Z` | Quarkus | wrk2 | matched 6 000 rps — p50 6.48, p99 46.78 ms |
-| `20260620T134826Z` | Exeris | h2load | firm-up #1 — 9 454 rps, CPU/req 0.359 ms |
-| `20260620T140518Z` | Quarkus | h2load | firm-up #1 — 8 158 rps, CPU/req 0.534 ms |
-| `20260620T142125Z` | Exeris | h2load | firm-up #2 — 9 296 rps, CPU/req 0.358 ms |
-| `20260620T143724Z` | Quarkus | h2load | firm-up #2 — 7 952 rps, CPU/req 0.550 ms |
-| `20260620T145345Z` | Exeris | h2load | firm-up #3 — 9 373 rps, CPU/req 0.359 ms |
-| `20260620T151001Z` | Quarkus | h2load | firm-up #3 — 8 096 rps, CPU/req 0.539 ms |
+| `20260620T134826Z` | Exeris | h2load | firm-up #1 — 9 454 rps, CPU/req 0.359 ms, RSS 0.961 GiB |
+| `20260620T140518Z` | Quarkus | h2load | firm-up #1 — 8 158 rps, CPU/req 0.534 ms, RSS 3.446 GiB |
+| `20260620T142125Z` | Exeris | h2load | firm-up #2 — 9 296 rps, CPU/req 0.358 ms, RSS 0.939 GiB |
+| `20260620T143724Z` | Quarkus | h2load | firm-up #2 — 7 952 rps, CPU/req 0.550 ms, RSS 3.522 GiB |
+| `20260620T145345Z` | Exeris | h2load | firm-up #3 — 9 373 rps, CPU/req 0.359 ms, RSS 0.992 GiB |
+| `20260620T151001Z` | Quarkus | h2load | firm-up #3 — 8 096 rps, CPU/req 0.539 ms, RSS 3.405 GiB |
+| `20260620T173152Z` | Exeris | h2load | **TLS control: cleartext** (`tls.enabled:false`, h2c) — 9 578 rps, CPU/req 0.337 ms, RSS 0.835 GiB |
+| `20260620T174756Z` | Quarkus | h2load | **TLS control: cleartext** (`tls.enabled:false`, h2c) — 8 270 rps, CPU/req 0.513 ms, RSS 3.282 GiB |
+| `20260620T180704Z` | Exeris | wrk2 | **latency TLS control: TLS on**, h1, 6 000 rps CO-corrected — p50 1.83, p99 5.53 ms |
+| `20260620T184831Z` | Exeris | wrk2 | **latency TLS control: cleartext**, h1, 6 000 rps CO-corrected — p50 1.76, p99 4.80 ms |
+| `20260620T183109Z` | Quarkus | wrk2 | **latency TLS control: TLS on**, h1, 6 000 rps CO-corrected — p50 1.75, p99 4.62 ms |
+| `20260620T190612Z` | Quarkus | wrk2 | **latency TLS control: cleartext**, h1, 6 000 rps CO-corrected — p50 1.74, p99 4.38 ms |
 
 The firm-up set (`…134826Z`–`…151001Z`) is interleaved A,B,A,B,A,B, host-net, warmed (C2=0),
-target pinned `0-4` / driver `5-9`. Bridge-vs-host (§2) and the warmup progression (§1) draw on
-additional earlier runs in the same session under `results/raw/guided/`.
+target pinned `0-4` / driver `5-9`; **peak RSS** (firmed with throughput/CPU at n=3) comes from
+each run's `resource-metrics.json` `peak_rss_kb`, at matched `-Xmx`. The **cleartext control pair**
+(`…173152Z` / `…174756Z`) repeats the h2load comparison with TLS off (same warmup/pinning/host-net,
+µs-scale connect) to show the throughput/CPU/RSS gap is provider-independent; the **latency TLS-control
+quartet** (`…180704Z` / `…184831Z` / `…183109Z` / `…190612Z`) does the same for latency on **h1** (wrk2,
+matched 6 000 rps, CO-corrected, TLS on vs off per stack) — both feed report disclaimer #6. Bridge-vs-host
+(§2) and the warmup progression (§1) draw on additional earlier runs in the same session under
+`results/raw/guided/`.
 
 ## Reproduce the headline numbers
 

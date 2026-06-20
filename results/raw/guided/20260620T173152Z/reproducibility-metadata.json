@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-06-20T17:47:12Z",
+  "benchmark_commit_sha": "60b1767604c1ff535f0f62fb0eedb7c30b78ee1c",
+  "target_commit_sha": "60b1767604c1ff535f0f62fb0eedb7c30b78ee1c",
+  "scenario_id": "entity-read-by-id",
+  "scenario_classification": "runtime-baseline-db-read-path",
+  "contract": "none",
+  "jdk": {
+    "vendor": "oracle",
+    "version": "java version \"26\" 2026-03-17"
+  },
+  "jvm_flags": [],
+  "hardware_profile_ref": "dev-laptop",
+  "kernel_version": "7.0.0-22-generic",
+  "os_scheduler": "eevdf",
+  "tool": {
+    "name": "h2load",
+    "version": "h2load nghttp2/1.68.0"
+  },
+  "axis_labels": {
+    "tier": "community",
+    "protocol_mode": "h2",
+    "benchmark_family": "runtime-h2load",
+    "transport_mode": "loopback-h2",
+    "execution_class": "exploratory",
+    "comparison_axis": "within-tier",
+    "claim_scope": "exploratory"
+  },
+  "mode": "baseline-db",
+  "wiring_model": "backend-mode:default-vt target-runtime-effective:community target-build:jvm",
+  "run_config": {
+    "threads": 4,
+    "connections": 128,
+    "warmup_seconds": 300,
+    "duration_seconds": 600,
+    "backend_network_mode": "host"
+  },
+  "seed_manifest_refs": {
+    "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+    "manifest_version": "1"
+  }
+}

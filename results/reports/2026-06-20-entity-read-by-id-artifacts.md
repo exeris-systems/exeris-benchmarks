@@ -24,8 +24,10 @@ re-derived independently. All runs: `entity-read-by-id`, `dev-laptop`, JDK 26, k
 
 - **Raw `.jfr` recordings** — kept out of git for **size**, not confidentiality. These are
   Community / open-core recordings (the code is open; no Enterprise H3 / locality content), so
-  they are not secret — but each is ~190 MB (~2.2 GB for the set), and git is the wrong place for
-  that. The published form is the **derived** interactive flame graphs (`assets/flame-*.svg`);
+  they are not secret — but they are large and uneven: ~240–250 MB each for Exeris (its
+  high-volume custom telemetry hits JFR's 250 MB `maxsize` cap), ~135–155 MB for Quarkus, ~62 MB
+  for Spring — ~3.3 GB for the set, and git is the wrong place for that. The published form is
+  the **derived** interactive flame graphs (`assets/flame-*.svg`);
   the raw recordings are available on request (or as download/release assets). The `.jfr`
   default-deny in `public` mode is the **Enterprise**-track confidentiality rule.
 - **`h2load-requests.log`** (per-request `--log-file` dumps, 100+ MB each) and other `*.log` —

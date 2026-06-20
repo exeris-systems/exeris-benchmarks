@@ -159,10 +159,13 @@ This `CPU/req` advantage reproduced in every configuration I measured (−26% to
 
 ### Where the CPU goes — the flame graphs
 
-CPU-per-request says *how much*; the flame graphs say *on what*. Interactive SVGs (hover for frames):
+CPU-per-request says *how much*; the flame graphs say *on what*. These are
+`flamegraph.pl`-style interactive SVGs — **click a frame to zoom**, **Search** (top-right)
+to highlight a regexp across the stacks and read the matched-percentage, **Reset Zoom**
+to restore, hover for the full frame + sample count. Open them in a browser:
 
-- [Exeris CPU flame graph](assets/flame-exeris-entity-read.svg)
-- [Quarkus CPU flame graph](assets/flame-quarkus-entity-read.svg)
+- [Exeris CPU flame graph](assets/flame-exeris-entity-read.svg) — e.g. search `jackson` (serialization) or `postgresql` (the JDBC path)
+- [Quarkus CPU flame graph](assets/flame-quarkus-entity-read.svg) — e.g. search `[Ii]nvoke` to light up the ARC-interceptor + reflection band
 
 Top self-time methods (leaf frames):
 

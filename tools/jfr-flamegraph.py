@@ -73,80 +73,239 @@ def color_for(name):
     r, g, b = colorsys.hsv_to_rgb(hue, min(sat, 0.9), min(val, 0.95))
     return f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
 
+# flamegraph.pl-style interactive JS: click-to-zoom, regexp search + "Matched %",
+# Reset Zoom, hover detail. Faithful adaptation of Brendan Gregg's flamegraph.pl
+# (CDDL/Apache-2.0) to the SVG structure this script emits.
+FLAMEGRAPH_JS = r'''
+var details, searchbtn, unzoombtn, matchedtxt, svg, searching;
+var nametype = "Function:", fontsize = 11, fontwidth = 0.59,
+    xpad = 10, inverted = 0, searchcolor = "rgb(230,0,230)";
+function init(evt) {
+    details = document.getElementById("details").firstChild;
+    searchbtn = document.getElementById("search");
+    unzoombtn = document.getElementById("unzoom");
+    matchedtxt = document.getElementById("matched");
+    svg = document.getElementsByTagName("svg")[0];
+    searching = 0;
+}
+function s(node) { details.nodeValue = nametype + " " + g_to_text(node); }
+function c() { details.nodeValue = " "; }
+function find_child(node, sel) { var c = node.querySelectorAll(sel); return c.length ? c[0] : undefined; }
+function orig_save(e, attr, val) {
+    if (e.getAttribute("_orig_" + attr) != null) return;
+    if (e.getAttribute(attr) == null) return;
+    if (val == undefined) val = e.getAttribute(attr);
+    e.setAttribute("_orig_" + attr, val);
+}
+function orig_load(e, attr) {
+    if (e.getAttribute("_orig_" + attr) == null) return;
+    e.setAttribute(attr, e.getAttribute("_orig_" + attr));
+    e.removeAttribute("_orig_" + attr);
+}
+function g_to_text(e) { return find_child(e, "title").firstChild.nodeValue; }
+function g_to_func(e) { var f = g_to_text(e); if (f != null) f = f.replace(/ .*/, ""); return f; }
+function update_text(e) {
+    var r = find_child(e, "rect"), t = find_child(e, "text");
+    if (!r || !t) return;
+    var w = parseFloat(r.getAttribute("width")) - 3;
+    var txt = find_child(e, "title").textContent.replace(/ .*/, "");
+    t.setAttribute("x", parseFloat(r.getAttribute("x")) + 3);
+    if (w < 2 * fontsize * fontwidth) { t.textContent = ""; return; }
+    t.textContent = txt;
+    var sl = t.getSubStringLength(0, txt.length);
+    if (/^ *$/.test(txt) || sl < w) return;
+    for (var x = txt.length - 2; x > 0; x--) {
+        if (t.getSubStringLength(0, x + 2) <= w) { t.textContent = txt.substring(0, x) + ".."; return; }
+    }
+    t.textContent = "";
+}
+function zoom_reset(e) {
+    if (e.attributes != undefined) { orig_load(e, "x"); orig_load(e, "width"); }
+    if (e.childNodes == undefined) return;
+    for (var i = 0, c = e.childNodes; i < c.length; i++) zoom_reset(c[i]);
+}
+function zoom_child(e, x, ratio) {
+    if (e.attributes != undefined) {
+        if (e.getAttribute("x") != null) {
+            orig_save(e, "x");
+            e.setAttribute("x", (parseFloat(e.getAttribute("x")) - x - xpad) * ratio + xpad);
+            if (e.tagName == "text")
+                e.setAttribute("x", parseFloat(find_child(e.parentNode, "rect[x]").getAttribute("x")) + 3);
+        }
+        if (e.getAttribute("width") != null) {
+            orig_save(e, "width");
+            e.setAttribute("width", parseFloat(e.getAttribute("width")) * ratio);
+        }
+    }
+    if (e.childNodes == undefined) return;
+    for (var i = 0, c = e.childNodes; i < c.length; i++) zoom_child(c[i], x - xpad, ratio);
+}
+function zoom_parent(e) {
+    if (e.attributes) {
+        if (e.getAttribute("x") != null) { orig_save(e, "x"); e.setAttribute("x", xpad); }
+        if (e.getAttribute("width") != null) {
+            orig_save(e, "width");
+            e.setAttribute("width", parseInt(svg.width.baseVal.value) - xpad * 2);
+        }
+    }
+    if (e.childNodes == undefined) return;
+    for (var i = 0, c = e.childNodes; i < c.length; i++) zoom_parent(c[i]);
+}
+function zoom(node) {
+    var attr = find_child(node, "rect");
+    var width = parseFloat(attr.getAttribute("width"));
+    var xmin = parseFloat(attr.getAttribute("x"));
+    var xmax = xmin + width;
+    var ymin = parseFloat(attr.getAttribute("y"));
+    var ratio = (svg.width.baseVal.value - 2 * xpad) / width;
+    var fudge = 0.0001;
+    unzoombtn.classList.remove("hide");
+    var el = document.getElementsByTagName("g");
+    for (var i = 0; i < el.length; i++) {
+        var e = el[i], a = find_child(e, "rect");
+        if (!a) continue;
+        var ex = parseFloat(a.getAttribute("x")), ew = parseFloat(a.getAttribute("width"));
+        var upstack = inverted == 0 ? parseFloat(a.getAttribute("y")) > ymin
+                                    : parseFloat(a.getAttribute("y")) < ymin;
+        if (upstack) {
+            if (ex <= xmin && (ex + ew + fudge) >= xmax) { e.classList.add("parent"); zoom_parent(e); update_text(e); }
+            else e.classList.add("hide");
+        } else {
+            if (ex < xmin || ex + fudge >= xmax) e.classList.add("hide");
+            else { zoom_child(e, xmin, ratio); update_text(e); }
+        }
+    }
+}
+function unzoom() {
+    unzoombtn.classList.add("hide");
+    var el = document.getElementsByTagName("g");
+    for (var i = 0; i < el.length; i++) {
+        el[i].classList.remove("parent"); el[i].classList.remove("hide");
+        zoom_reset(el[i]); update_text(el[i]);
+    }
+}
+function reset_search() {
+    var el = document.querySelectorAll("rect");
+    for (var i = 0; i < el.length; i++) orig_load(el[i], "fill");
+}
+function search_prompt() {
+    if (!searching) {
+        var term = prompt("Enter a search term (regexp allowed, e.g. ^jdk\\.proxy or Postgres)", "");
+        if (term != null) search(term);
+    } else {
+        reset_search(); searching = 0;
+        searchbtn.firstChild.nodeValue = "Search";
+        searchbtn.style.opacity = "0.4";
+        matchedtxt.classList.add("hide"); matchedtxt.firstChild.nodeValue = "";
+    }
+}
+function search(term) {
+    var re = new RegExp(term);
+    var el = document.getElementsByTagName("g"), matches = {}, maxwidth = 0;
+    for (var i = 0; i < el.length; i++) {
+        var e = el[i];
+        if (e.getAttribute("class") != "func_g") continue;
+        var func = g_to_func(e), rect = find_child(e, "rect");
+        if (func == null || rect == null) continue;
+        var w = parseFloat(rect.getAttribute("width"));
+        if (w > maxwidth) maxwidth = w;
+        if (func.match(re)) {
+            var x = parseFloat(rect.getAttribute("x"));
+            orig_save(rect, "fill"); rect.setAttribute("fill", searchcolor);
+            if (matches[x] == undefined || w > matches[x]) matches[x] = w;
+            searching = 1;
+        }
+    }
+    if (!searching) return;
+    searchbtn.firstChild.nodeValue = "Reset Search";
+    searchbtn.style.opacity = "1.0";
+    var count = 0, lastx = -1, lastw = 0, keys = [];
+    for (var k in matches) if (matches.hasOwnProperty(k)) keys.push(k);
+    keys.sort(function(a, b) { return a - b; });
+    var fudge = 0.0001;
+    for (var k in keys) {
+        var x = parseFloat(keys[k]), w = matches[keys[k]];
+        if (x >= lastx + lastw - fudge) { count += w; lastx = x; lastw = w; }
+    }
+    matchedtxt.classList.remove("hide");
+    var pct = 100 * count / maxwidth;
+    matchedtxt.firstChild.nodeValue = "Matched: " + (pct == 100 ? "100" : pct.toFixed(1)) + "%";
+}
+'''
+
 def render_svg(root, title, subtitle, min_pct):
-    WIDTH, FRAME_H, PAD, FONT = 1200, 16, 12, 12
+    WIDTH, FRAME_H, PAD, FONT = 1200, 16, 12, 11
     XPAD = 10
     inner_w = WIDTH - 2 * XPAD
     total = root.value or 1
     min_value = total * min_pct / 100.0
 
-    # assign depth + x; collect rects
+    # assign depth + x; collect rects (root frame at depth 0 included, like flamegraph.pl)
     rects = []
     max_depth = [0]
     def layout(node, depth, x):
-        width = inner_w * node.value / total
-        if depth > 0 and node.value >= min_value:
-            rects.append((node, depth, x, width))
+        if node.value >= min_value:
+            rects.append((node, depth, x, inner_w * node.value / total))
             max_depth[0] = max(max_depth[0], depth)
         cx = x
         for child in sorted(node.children.values(), key=lambda n: -n.value):
-            cw = inner_w * child.value / total
             layout(child, depth + 1, cx)
-            cx += cw
+            cx += inner_w * child.value / total
     layout(root, 0, XPAD)
 
-    depth = max_depth[0] + 1
-    height = depth * FRAME_H + 3 * PAD + 40
+    n_levels = max_depth[0] + 1
+    top_ui = 56                               # room for title/subtitle/buttons
+    height = n_levels * FRAME_H + top_ui + 2 * PAD + 18
     def y_of(d):  # invert: deeper frames higher up, root at bottom
-        return height - PAD - d * FRAME_H
+        return height - PAD - 18 - d * FRAME_H
 
-    parts = []
-    parts.append(
+    e = html.escape
+    parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{height}" '
-        f'viewBox="0 0 {WIDTH} {height}" font-family="Verdana,Helvetica,sans-serif" '
-        f'onload="init(evt)">')
-    parts.append(f'<rect width="{WIDTH}" height="{height}" fill="#fafafa"/>')
-    parts.append(f'<text x="{WIDTH//2}" y="22" text-anchor="middle" font-size="17" '
-                 f'font-weight="bold">{html.escape(title)}</text>')
-    parts.append(f'<text x="{WIDTH//2}" y="38" text-anchor="middle" font-size="11" '
-                 f'fill="#555">{html.escape(subtitle)}</text>')
-    parts.append('<text id="details" x="10" y="%d" font-size="11" fill="#333"> </text>'
-                 % (height - 4))
+        f'viewBox="0 0 {WIDTH} {height}" onload="init(evt)">',
+        '<style>\n'
+        '  text { font-family: Verdana, Helvetica, sans-serif; }\n'
+        '  .func_g { cursor: pointer; }\n'
+        '  .func_g:hover rect { stroke: #000; stroke-width: 0.5; }\n'
+        '  .hide { display: none; }\n'
+        '  #search, #unzoom { font-size: 12px; fill: #0a3; font-weight: bold; cursor: pointer; }\n'
+        '  #search { opacity: 0.4; }\n'
+        '  #matched { font-size: 11px; fill: #333; }\n'
+        '</style>',
+        f'<rect width="{WIDTH}" height="{height}" fill="#fafafa"/>',
+        f'<text x="{WIDTH//2}" y="22" text-anchor="middle" font-size="17" font-weight="bold">{e(title)}</text>',
+        f'<text x="{WIDTH//2}" y="38" text-anchor="middle" font-size="11" fill="#555">{e(subtitle)}</text>',
+        f'<text id="details" x="10" y="{height-5}"> </text>',
+        f'<text id="unzoom" class="hide" onclick="unzoom()" x="10" y="50">Reset Zoom</text>',
+        f'<text id="search" onclick="search_prompt()" x="{WIDTH-90}" y="50">Search</text>',
+        f'<text id="matched" class="hide" x="{WIDTH-340}" y="{height-5}"> </text>',
+    ]
 
     for node, d, x, w in rects:
-        if w < 0.3:
+        if w < 0.2:
             continue
         y = y_of(d) - FRAME_H
         pct = 100.0 * node.value / total
         label = node.name
-        # truncate label to fit
-        maxchars = int(w / (FONT * 0.6))
-        shown = label[-maxchars:] if maxchars >= 3 and len(label) > maxchars else (label if maxchars >= 3 else "")
         short = label.rsplit(".", 1)[-1]
-        tip = f"{label}  ({node.value} samples, {pct:.2f}%)"
+        # flamegraph.pl-style prefix truncation; JS update_text re-truncates on zoom
+        maxchars = int(w / (FONT * 0.59))
+        if w < 2 * FONT * 0.59:
+            shown = ""
+        elif len(label) > maxchars:
+            shown = (label[:maxchars - 2] + "..") if maxchars > 2 else ""
+        else:
+            shown = label
+        tip = f"{label} ({node.value} samples, {pct:.2f}%)"
         parts.append(
-            f'<g class="f"><title>{html.escape(tip)}</title>'
+            f'<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">'
+            f'<title>{e(tip)}</title>'
             f'<rect x="{x:.2f}" y="{y}" width="{w:.2f}" height="{FRAME_H-1}" '
-            f'fill="{color_for(short)}" rx="1.5" data-name="{html.escape(label)}" '
-            f'data-pct="{pct:.2f}"/>' )
-        if w > 28:
-            parts.append(
-                f'<text x="{x+2:.2f}" y="{y+FRAME_H-4}" font-size="{FONT-1}" '
-                f'clip-path="inset(0)">{html.escape(shown)}</text>')
-        parts.append('</g>')
+            f'fill="{color_for(short)}" rx="1.5"/>'
+            f'<text x="{x+3:.2f}" y="{y+FRAME_H-4}" font-size="{FONT-1}">{e(shown)}</text>'
+            f'</g>')
 
-    # minimal interactivity: hover updates the details line
-    parts.append('''<script type="text/ecmascript"><![CDATA[
-function init(evt){
-  var svg=evt.target.ownerDocument; var det=svg.getElementById("details");
-  var gs=svg.getElementsByClassName("f");
-  for(var i=0;i<gs.length;i++){(function(g){
-    var r=g.getElementsByTagName("rect")[0];
-    g.addEventListener("mouseover",function(){det.textContent=r.getAttribute("data-name")+"  ("+r.getAttribute("data-pct")+"%)";r.setAttribute("stroke","#000");r.setAttribute("stroke-width","0.5");});
-    g.addEventListener("mouseout",function(){det.textContent=" ";r.removeAttribute("stroke");});
-  })(gs[i]);}
-}
-]]></script>''')
+    parts.append('<script><![CDATA[' + FLAMEGRAPH_JS + ']]></script>')
     parts.append('</svg>')
     return "\n".join(parts)
 
@@ -162,7 +321,8 @@ def main():
     if total == 0:
         sys.exit("no samples extracted (wrong event? empty recording?)")
     root = build_tree(folded)
-    sub = f"{total} {a.event} samples · frames ≥ {a.min_pct}% shown · hover for detail"
+    sub = (f"{total} {a.event} samples · frames ≥ {a.min_pct}% shown · "
+           f"click to zoom · Search for regexp highlight · Reset Zoom to restore")
     svg = render_svg(root, a.title, sub, a.min_pct)
     with open(a.out, "w") as fh:
         fh.write(svg)

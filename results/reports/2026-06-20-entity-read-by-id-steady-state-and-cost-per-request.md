@@ -12,6 +12,10 @@ authors:
 track: Community
 benchmark_family: Runtime
 scenario: entity-read-by-id
+claim_scope: exploratory
+reproducibility_status: complete
+comparison_axis: within-tier
+hardware_profile: dev-laptop
 ---
 
 # When throughput lies: steady-state, coordinated omission, and the real cost of a request
@@ -19,6 +23,9 @@ scenario: entity-read-by-id
 *An entity-read-by-id investigation — Exeris (Community) vs Quarkus, with Spring as a reference point.*
 
 **Track:** Community · **Benchmark family:** Runtime · **Scenario:** `entity-read-by-id` · **Date:** 2026-06-20 · **Bench commit:** `7e7aeb8`
+
+> **Claim scope: `exploratory`** · **Reproducibility: `complete`** · **Comparison axis: within-tier** · **Hardware profile: `dev-laptop`**
+> Per the lab's [status & claim-eligibility rules](../../docs/status-and-claim-eligibility.md), this run is **not `comparison_eligible`** — that status is reserved for the `perf-box-amd64` profile, and everything here ran on `dev-laptop`. The headline throughput / CPU-per-request gaps are firmed at **n=3 interleaved with CV < 1.5%** (see *Firming up the numbers*), which makes them **exploratory-with-tight-CV**, not a merge-gating comparative claim. Treat every number as directional unless a section says otherwise. Source artifacts (`result.json`, JFR, env) under `results/raw/guided/`.
 
 ![banner](assets/banner.svg)
 
@@ -49,7 +56,8 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 
 | | |
 |---|---|
-| **Hardware** | AMD Ryzen 5 **5600 (6 cores / 12 threads, SMT)**, 60 GB RAM, `performance` governor |
+| **Hardware** | AMD Ryzen 5 **5600 (6 cores / 12 threads, SMT)**, **64 GB RAM (~60 GB available)**, `performance` governor |
+| **Environment** | **Headless** — isolated Linux terminal, **no GUI, no cgroup memory cap** (full RAM budget to the JVM) |
 | **OS / kernel** | Linux `7.0.0-22-generic`, scheduler **EEVDF** |
 | **JDK** | Oracle JDK **26** (`java 26 2026-03-17`) |
 | **Drivers** | h2load `nghttp2/1.68.0`, wrk2 (HdrHistogram), wrk `4.1.0` |
@@ -60,15 +68,16 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 **Read these before any number below:**
 
 1. **`dev-laptop`, not `perf-box-amd64`.** Turbo is on, it is a workstation, and absolute numbers are **not** publication-grade. Use them for *relative, same-box* comparison only.
-2. **Repetition count varies by axis.** The headline throughput / CPU-per-request comparison is **n=3 interleaved** (A,B,A,B,A,B) — see "Firming up the numbers". Most per-act *illustrative* runs (the Act-by-Act walkthroughs) are single runs unless stated; treat those individual latencies as *directional*. Where I show two runs of the "same" thing they disagree by up to **2.3×** on median latency — which is the whole point of the variance section.
+2. **Repetition count varies by axis.** The headline throughput / CPU-per-request comparison is **n=3 interleaved** (A,B,A,B,A,B) — see "Firming up the numbers". Most *illustrative* runs (the per-section walkthroughs) are single runs unless stated; treat those individual latencies as *directional*. Where I show two runs of the "same" thing they disagree by up to **2.3×** on median latency — which is the whole point of the variance section.
 3. **SMT pinning caveat.** The CPU is 6 physical cores / 12 SMT threads. I pin to *logical* threads (e.g. "target `0-4`"), so some pinned "cores" may be SMT siblings sharing a physical core. The target-bound conclusions hold directionally but the core math is approximate.
 4. **Community track only.** No Enterprise targets, no H3, no locality. Nothing here speaks to those.
+5. **`dev-laptop` means two different environments across this series — note the delta.** An earlier saga-correctness report on the *same physical machine* ran under a desktop session with a **32 GB cgroup memory overlay**; this run is **headless with no GUI and no memory cap**, so the JVM sees the full ~60 GB and there is no desktop-environment scheduling noise. This is a genuinely *cleaner* environment than the May run — closer to (still not equal to) `perf-box-amd64`. The available memory budget is itself a benchmark variable, so I call it out rather than letting "dev-laptop" read as one fixed thing.
 
 ---
 
-## Act 1 — The warmup trap: when 5 minutes isn't enough
+## 1. Proving steady state instead of assuming it
 
-The first thing I added was a way to *prove* steady state instead of assuming it. I overlay three JFR compiler events (`jdk.CompilerStatistics`, `jdk.CompilerQueueUtilization`, `jdk.Compilation`) on the recording and watch the **C2 compile queue** drain.
+The first thing I added was a way to *prove* it. I overlay three JFR compiler events (`jdk.CompilerStatistics`, `jdk.CompilerQueueUtilization`, `jdk.Compilation`) on the recording and watch the **C2 compile queue** drain.
 
 The rule I adopted: a run is only "warm" if the C2 queue is empty for the whole measurement window.
 
@@ -87,7 +96,7 @@ What I found, on identical 5-minute-warmup / 10-minute-measure runs:
 
 ---
 
-## Act 2 — The bridge tax: your network plumbing is a benchmark variable
+## 2. Backend networking is a benchmark variable: bridge vs host
 
 Naively, the database lives "in a container" and you stop thinking about it. That is a mistake when the app is chatty enough.
 
@@ -106,7 +115,7 @@ This is a **fairness gate, not hygiene**: bridge/NAT taxes a chattier stack asym
 
 ---
 
-## Act 3 — Coordinated omission: a p50 of 146 ms that was never real
+## 3. Coordinated omission: why a saturated p50 of 146 ms is not latency
 
 h2load is the only driver in my kit that speaks cleartext HTTP/2 (h2c), so I taught it to emit percentiles (via `--log-file` + offline aggregation). On the warmed, host-net Exeris run it reported:
 
@@ -114,7 +123,7 @@ h2load is the only driver in my kit that speaks cleartext HTTP/2 (h2c), so I tau
 h2load (closed-loop, at saturation):  p50 = 146 ms,  p99 = 247 ms,  mean = 144 ms
 ```
 
-146 ms for an indexed primary-key lookup is absurd — and it is **coordinated omission**, demonstrable to the digit. h2load is closed-loop: with `-c 128 -m 10` it keeps up to **1 280** streams in flight. By Little's law:
+146 ms for an indexed primary-key lookup is absurd — and it is **coordinated omission**, demonstrable to the digit. The term, the failure mode, and the open-loop fix are Gil Tene's — see his talk [*How NOT to Measure Latency*](https://www.infoq.com/presentations/latency-response-time/) and the tools that came out of it, [HdrHistogram](http://hdrhistogram.org/) and [wrk2](https://github.com/giltene/wrk2) (both of which the CO-free experiment below relies on). h2load is closed-loop: with `-c 128 -m 10` it keeps up to **1 280** streams in flight. By Little's law:
 
 ```
 in-flight = throughput × latency = 8 844 rps × 0.1443 s ≈ 1 276  ≈  1 280 streams
@@ -134,7 +143,7 @@ wrk2 (open-loop, ~75% load):  p50 = 2.95 ms,  p99 = 8.19 ms
 
 ---
 
-## Act 4 — The metric that didn't lie: CPU per request
+## 4. CPU per request: the metric that stayed stable
 
 Throughput moved with the network. Latency moved with load and box noise. Warmup moved with time. Through all of it, **CPU consumed per request** stayed put — and it is the cleanest expression of "how much machine does this stack cost."
 
@@ -160,12 +169,23 @@ This `CPU/req` advantage reproduced in every configuration I measured (−26% to
 ### Where the CPU goes — the flame graphs
 
 CPU-per-request says *how much*; the flame graphs say *on what*. These are
-`flamegraph.pl`-style interactive SVGs — **click a frame to zoom**, **Search** (top-right)
-to highlight a regexp across the stacks and read the matched-percentage, **Reset Zoom**
-to restore, hover for the full frame + sample count. Open them in a browser:
+`flamegraph.pl`-style interactive SVGs, embedded below — **click a frame to zoom**,
+**Search** (top-right) to highlight a regexp across the stacks and read the
+matched-percentage, **Reset Zoom** to restore, hover for the full frame + sample count.
+(They render and stay interactive when this page is served; on a renderer that strips
+embedded SVG/JS, use the fallback link beneath each.)
 
-- [Exeris CPU flame graph](assets/flame-exeris-entity-read.svg) — e.g. search `jackson` (serialization) or `postgresql` (the JDBC path)
-- [Quarkus CPU flame graph](assets/flame-quarkus-entity-read.svg) — e.g. search `[Ii]nvoke` to light up the ARC-interceptor + reflection band
+**Exeris** — try searching `jackson` (serialization) or `postgresql` (the JDBC path):
+
+<object data="assets/flame-exeris-entity-read.svg" type="image/svg+xml" width="100%" style="max-width:1200px;border:1px solid #e5e7eb">
+  <a href="assets/flame-exeris-entity-read.svg">Exeris CPU flame graph (interactive SVG)</a>
+</object>
+
+**Quarkus** — try searching `[Ii]nvoke` to light up the ARC-interceptor + reflection band:
+
+<object data="assets/flame-quarkus-entity-read.svg" type="image/svg+xml" width="100%" style="max-width:1200px;border:1px solid #e5e7eb">
+  <a href="assets/flame-quarkus-entity-read.svg">Quarkus CPU flame graph (interactive SVG)</a>
+</object>
 
 Top self-time methods (leaf frames):
 
@@ -182,9 +202,9 @@ The single clearest contributor to Quarkus's higher per-request cost is **reflec
 
 ---
 
-## Act 5 — Latency, honestly: tail yes, median no
+## 5. Latency: tail differs, median is inconclusive
 
-Here the story gets uncomfortable, and I report it straight.
+This is the one axis that does not favor Exeris, and it is reported as measured.
 
 **Comparison A — each stack at 75% of its *own* saturation (good box state):**
 
@@ -276,7 +296,7 @@ to ask "is this difference bigger than the noise?":
 Both headline gaps are **20–40× larger than their own run-to-run noise** — they survive
 the interleave, so they are real, not an artifact of which stack happened to run during
 a quiet window. (These are h2load-at-saturation runs, so their p50/p99 are
-*coordinated-omission* percentiles — queueing, not service time; see Act 3. The firm-up
+*coordinated-omission* percentiles — queueing, not service time; see §3. The firm-up
 here is for **throughput and CPU/request only**.)
 
 Latency-median is the opposite story. On the CO-free wrk2 runs, the same tool makes the
@@ -337,7 +357,7 @@ All runs: `entity-read-by-id`, host-net (unless noted), `dev-laptop`, JDK 26, ke
 
 Reproduce: `tools/aggregate-runs.py results/raw/guided/{134826Z,142125Z,145345Z}` (Exeris) and `{140518Z,143724Z,151001Z}` (Quarkus).
 
-*Bridge-vs-host-net (Act 2) and the short-warmup progression (Act 1) come from earlier runs in the same session; see `results/raw/guided/`.*
+*Bridge-vs-host-net (§2) and the short-warmup progression (§1) come from earlier runs in the same session; see `results/raw/guided/`.*
 
 ---
 

@@ -1,0 +1,8 @@
+879932:
+No available recordings.
+
+Use jcmd 879932 JFR.start to start a recording.
+879932:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 879932 JFR.dump name=entity-read-by-id filename=FILEPATH to copy recording data to file.

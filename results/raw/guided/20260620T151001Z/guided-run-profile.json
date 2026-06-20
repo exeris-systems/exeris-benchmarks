@@ -1,0 +1,65 @@
+{
+  "schema_version": "1",
+  "benchmark_family": "runtime",
+  "benchmark_commit_sha": "358e7a874dcabb69fad8fdd21061b1880ad09d4c",
+  "jdk_version": "java version 26 2026-03-17",
+  "tool_versions": {
+    "jq": "jq-1.8.1",
+    "k6": "k6 v1.6.1 (commit/2ac2bb560e, go1.25.6, linux/amd64)",
+    "wrk": "wrk debian/4.1.0-4build3 [epoll] Copyright (C) 2012 Will Glozer",
+    "h2load": "h2load nghttp2/1.68.0",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu4.1"
+  },
+  "jvm_flags": [],
+  "hardware_profile": "dev-laptop",
+  "scenario_id": "entity-read-by-id",
+  "target_classification": "baseline",
+  "protocol_mode": "h2",
+  "protocol_selection": {
+    "mode": "h2",
+    "resolved": "h2",
+    "scenario_implied": "h1",
+    "overrides_scenario": true
+  },
+  "transport_security": {
+    "mode": "on",
+    "tls_enabled": true,
+    "scheme": "https",
+    "effective_transport": "h2",
+    "target_declared_scheme": "https",
+    "overrides_target_declared": false
+  },
+  "tier": "community",
+  "topology_mode": "localhost",
+  "connectivity": "local",
+  "run_type": "exploratory",
+  "target_mode": "single",
+  "claim_scope": "descriptive_only",
+  "targets": [
+    "quarkus-jvm-vt-tuned"
+  ],
+  "contract_id": "fixed_contract_v1",
+  "output_dir": "/home/arkstack/exeris-benchmarks/results/raw/guided/20260620T151001Z",
+  "fairness_attestations": {
+    "payload_equivalent": false,
+    "concurrency_equivalent": false,
+    "protocol_mode_equivalent": false,
+    "target_scope_equivalent": false
+  },
+  "workload": {
+    "warmup_seconds": 300,
+    "measurement_seconds": 600,
+    "threads": 4,
+    "connections": 128
+  },
+  "driver": "h2load",
+  "launch_mode": "prebuild",
+  "runtime_mode": "jvm",
+  "enable_jfr": true,
+  "os_sidecars": true,
+  "jfr_steady_state": true,
+  "backend_network_mode": "host",
+  "execution_class": "unconstrained",
+  "cpu_affinity": "0-4",
+  "client_cpu_affinity": "5-9"
+}

@@ -1,0 +1,54 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260620-142932-1155bc6",
+  "timestamp": "2026-06-20T12:29:32Z",
+  "scenario": "entity-read-by-id",
+  "tool": "h2load",
+  "env_ref": "/home/arkstack/exeris-benchmarks/results/raw/guided/20260620T121411Z/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h2",
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "quarkus-benchmark-app",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h2",
+    "commit_sha": "1155bc65d802718b6b7d0487f6dcf86d0583c421"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+  "duration_seconds": 600,
+  "warmup_seconds": 300,
+  "threads": 4,
+  "connections": 128,
+  "backend_network_mode": "host"
+},
+  "metrics": {
+  "throughput_rps": 7836.20,
+  "latency_mean_us": 163540.000000,
+  "latency_stdev_us": 27860.000000,
+  "latency_max_us": 693260.000000,
+  "latency_p50_us": 160309,
+  "latency_p75_us": 171281,
+  "latency_p90_us": 187232,
+  "latency_p99_us": 261723,
+  "latency_p999_us": 374142,
+  "total_requests": 4701721,
+  "total_errors": 0,
+  "error_rate_pct": 0.000000
+},
+  "notes": "backendMode=default-vt targetRuntimeEffective=quarkus targetBuild=jvm cpuAffinity=0-4 clientCpuAffinity=5-9",
+  "tags": ["backend-mode:default-vt", "target-runtime-effective:quarkus", "target-build:jvm"],
+  "raw_output": "starting benchmark...\nspawning thread #0: 32 total client(s). Timing-based test with 0s of warm-up time and 600s of main duration for measurements.\nspawning thread #1: 32 total client(s). Timing-based test with 0s of warm-up time and 600s of main duration for measurements.\nspawning thread #2: 32 total client(s). Timing-based test with 0s of warm-up time and 600s of main duration for measurements.\nspawning thread #3: 32 total client(s). Timing-based test with 0s of warm-up time and 600s of main duration for measurements.\nWarm-up started for thread #1.\nWarm-up started for thread #3.\nWarm-up started for thread #0.\nWarm-up started for thread #2.\nprogress: 9% of clients started\nprogress: 18% of clients started\nprogress: 28% of clients started\nprogress: 37% of clients started\nprogress: 46% of clients started\nprogress: 56% of clients started\nprogress: 65% of clients started\nprogress: 75% of clients started\nprogress: 84% of clients started\nWarm-up phase is over for thread #2.\nMain benchmark duration is started for thread #2.\nprogress: 93% of clients started\nWarm-up phase is over for thread #3.\nMain benchmark duration is started for thread #3.\nWarm-up phase is over for thread #1.\nMain benchmark duration is started for thread #1.\nWarm-up phase is over for thread #0.\nMain benchmark duration is started for thread #0.\nTLS Protocol: TLSv1.3\nCipher: TLS_AES_128_GCM_SHA256\nServer Temp Key: X25519 253 bits\nApplication protocol: h2\nMain benchmark duration is over for thread #2. Stopping all clients.\nStopped all clients for thread #2\nMain benchmark duration is over for thread #1. Stopping all clients.\nStopped all clients for thread #1\nMain benchmark duration is over for thread #0. Stopping all clients.\nStopped all clients for thread #0\nMain benchmark duration is over for thread #3. Stopping all clients.\nStopped all clients for thread #3\n\nfinished in 600.06s, 7836.20 req/s, 68.30MB/s\nrequests: 4701721 total, 4703001 started, 4701721 done, 4701721 succeeded, 0 failed, 0 errored, 0 timeout\nstatus codes: 4701721 2xx, 0 3xx, 0 4xx, 0 5xx\ntraffic: 40.02GB (42969035259) total, 8.97MB (9407410) headers (space savings 96.15%), 39.87GB (42809169705) data\n                     min         max         mean         sd        +/- sd\ntime for request:     5.73ms    693.26ms    163.54ms     27.86ms    83.42%\ntime for connect:     7.89ms    154.56ms     64.49ms     32.87ms    67.19%\ntime to 1st byte:    93.37ms    418.89ms    230.77ms     79.09ms    73.44%\nreq/s           :      61.00       61.42       61.22        0.08    63.28%\n"
+}

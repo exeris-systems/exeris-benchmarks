@@ -32,6 +32,17 @@ Thumbs.db
 # results/raw/*.txt
 # results/raw/k6-*.json
 
+# Raw JFR recordings are NEVER committed. Default publication mode is `public`,
+# which default-denies raw .jfr (extension + FLR\0 signature); Exeris recordings
+# also carry custom telemetry. Publish derived artifacts only (flamegraph SVGs,
+# extracted metrics JSON). For restricted sharing use publish-report.sh
+# --publication-mode internal-only.
+*.jfr
+*.JFR
+
+# h2load per-request --log-file dumps are huge (100+ MB each); the derived
+# h2load-latency.json carries the percentiles. (Covered by *.log below too.)
+
 # Environment files with real values — template is committed, actuals are not
 runtime/drivers/env/*.env
 !runtime/drivers/env/template.env

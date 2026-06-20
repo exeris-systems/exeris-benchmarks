@@ -1354,9 +1354,9 @@ jq -n \
                         + (if $cgroup_cpu_quota_pct != "" then {cpu_quota_pct: ($cgroup_cpu_quota_pct | tonumber)} else {} end)
                         )}
                    else {} end)
-              + (if $cpu_affinity != "" then {cpu_affinity: $cpu_affinity} else {} end)
-              + (if $client_cpu_affinity != "" then {client_cpu_affinity: $client_cpu_affinity} else {} end)
        else . end)
+  | (if $cpu_affinity != "" then . + {cpu_affinity: $cpu_affinity} else . end)
+  | (if $client_cpu_affinity != "" then . + {client_cpu_affinity: $client_cpu_affinity} else . end)
   ' > "$PROFILE_OUT"
 
 info "Profile written: $PROFILE_OUT"

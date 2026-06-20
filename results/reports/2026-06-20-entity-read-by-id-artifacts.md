@@ -14,9 +14,7 @@ re-derived independently. All runs: `entity-read-by-id`, `dev-laptop`, JDK 26, k
 | `result.json` | normalized metrics (throughput, latency percentiles, errors) + run config + classification |
 | `steady-state-evidence.json` | C2 compiler-queue / compilation overlay used to prove warm |
 | `h2load-latency.json` / `wrk2-latency.json` (+ `.raw.txt`) | derived percentiles; wrk2 carries `at_saturation` + `load_fraction` |
-| `logs/target-pidstat.csv` | per-thread `%CPU` — the source for **CPU-per-request** |
-| `logs/host-mpstat.csv` | host CPU breakdown (`%sys` / `%soft` / `%wait`) — the bridge-tax evidence |
-| `resource-metrics.json` (+ `resource-samples.csv`) | RSS (`peak_rss_kb`, `rss_kb_avg`, `smaps_rss_kb_max`), VmHWM, thread count, JVM heap used/committed/reserved — the **memory-footprint** evidence |
+| `resource-metrics.json` | aggregated per run: `cpu_time_seconds` (the source for **CPU-per-request**), RSS (`peak_rss_kb`, `rss_kb_avg`, `smaps_rss_kb_max`), VmHWM, thread count, JVM heap used/committed/reserved — the **CPU-efficiency + memory-footprint** evidence |
 | `env.json`, `reproducibility-metadata.json` | SHA, JDK/tool versions, JVM flags, hardware profile |
 | `guided-run-profile.json` | affinity, network mode, warmup/measure, driver options |
 | `postgres-version.txt`, `postgres-settings.tsv`, `pg_stat_statements-*.json` | DB-side reproducibility |
@@ -32,6 +30,12 @@ re-derived independently. All runs: `entity-read-by-id`, `dev-laptop`, JDK 26, k
   default-deny in `public` mode is the **Enterprise**-track confidentiality rule.
 - **`h2load-requests.log`** (per-request `--log-file` dumps, 100+ MB each) and other `*.log` —
   excluded by size/`.gitignore`. The percentiles they feed are already in `h2load-latency.json`.
+- **Per-sample sidecar CSVs** — `logs/target-pidstat.csv` (per-thread `%CPU`/`%wait`),
+  `logs/host-mpstat.csv` (per-CPU `%sys`/`%soft`/`%wait` — the bridge-tax signal), and
+  `resource-samples.csv` (the RSS time series). These are 20K–35K-row raw streams that dominate
+  the diff; they are kept out of git for **size** (same policy as `.jfr`) and available on
+  request. Everything cited in the report is derived from them into `resource-metrics.json`
+  (CPU-per-request, peak RSS) and the steady-state/latency JSON, which **are** committed.
 
 ## Run index
 

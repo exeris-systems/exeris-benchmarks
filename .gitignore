@@ -45,6 +45,15 @@ Thumbs.db
 # h2load per-request --log-file dumps are huge (100+ MB each); the derived
 # h2load-latency.json carries the percentiles. (Covered by *.log below too.)
 
+# Per-sample sidecar CSVs (pidstat per-thread, mpstat per-CPU, resource samples):
+# heavy raw streams (20K-35K rows each) that dominate the diff. The aggregated
+# signal lives in resource-metrics.json / *-latency.json / steady-state-evidence.json;
+# raw per-sample CSVs are kept out of git for size and available on request — same
+# policy as .jfr above.
+results/**/target-pidstat.csv
+results/**/host-mpstat.csv
+results/**/resource-samples.csv
+
 # Environment files with real values — template is committed, actuals are not
 runtime/drivers/env/*.env
 !runtime/drivers/env/template.env

@@ -1,8 +1,0 @@
-endpoint=/api/v1/users
-query_constant=READ_TOP_USERS_JSON_SQL
-limits.users=10
-limits.friends=10
-limits.interests=10
-capture_control=BENCH_CAPTURE_DB_EXPLAIN
-pg_stat_statements_enabled=true
-pg_stat_statements_max=10000

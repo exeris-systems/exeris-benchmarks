@@ -26,7 +26,7 @@ def pidstat_cpu_per_req(run_dir, rps):
     proc_cpu, n = 0.0, 0
     with open(csvp) as fh:
         r = csv.reader(fh)
-        header = next(r, None)
+        next(r, None)  # skip CSV header row
         for row in r:
             if len(row) < 13:
                 continue

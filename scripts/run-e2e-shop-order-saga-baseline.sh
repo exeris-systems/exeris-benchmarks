@@ -1313,6 +1313,7 @@ _k6_dur_to_s() {
       m)  total=$(( total + num * 60 )) ;;
       s)  total=$(( total + num )) ;;
       ms) : ;;  # sub-second: ignored for window seconds
+      *)  : ;;  # regex guarantees one of the above; default keeps the case exhaustive
     esac
   done
   printf '%s\n' "$total"

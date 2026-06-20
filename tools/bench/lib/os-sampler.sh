@@ -28,6 +28,7 @@ set -u
 # a single comma. Used for both pidstat -h and mpstat output.
 _os_sampler_row_to_csv() {
   sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/[[:space:]]+/,/g'
+  return  # propagate sed's exit status explicitly
 }
 
 # bench_start_pidstat_sampler <pid> <out_csv> [interval_s]

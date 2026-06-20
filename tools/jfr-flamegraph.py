@@ -14,45 +14,52 @@ artifacts. The output is a derived SVG, not a raw .jfr.
 """
 import sys, os, re, subprocess, html, argparse, colorsys
 
-# JFR event names are dotted identifiers, e.g. jdk.ExecutionSample
+# Allowlists used to validate untrusted CLI input before it reaches the `jfr`
+# OS command or the filesystem. _EVENT_RE = dotted identifier (jdk.ExecutionSample);
+# _PATH_SAFE_RE = no leading '-' (so an arg can't be read as an option) and no
+# shell-meta / whitespace. This regex validation is the sanitization boundary.
 _EVENT_RE = re.compile(r"[A-Za-z][\w.]*\Z")
+_PATH_SAFE_RE = re.compile(r"[\w./@+][\w./@+-]*\Z")
+
+def validate_inputs(jfr_path, event):
+    """Reject any untrusted value that isn't a plain event id / safe file path
+    before it is passed to the OS command."""
+    if not _EVENT_RE.fullmatch(event):
+        sys.exit(f"invalid event name: {event!r}")
+    if not _PATH_SAFE_RE.fullmatch(jfr_path):
+        sys.exit(f"unsafe jfr path: {jfr_path!r}")
+    if not os.path.isfile(jfr_path):
+        sys.exit(f"not a readable file: {jfr_path!r}")
+
+def fold_stacks(stdout):
+    """Fold `jfr print` stackTrace blocks into {root-first stack tuple: count}."""
+    folded, frames, in_stack, total = {}, [], False, 0
+    for line in stdout.splitlines():
+        s = line.strip()
+        if s.startswith("stackTrace = ["):
+            frames, in_stack = [], True
+        elif not in_stack:
+            continue
+        elif s == "]":
+            in_stack = False
+            if frames:
+                key = tuple(reversed(frames))  # jfr is leaf-first; flamegraph wants root-first
+                folded[key] = folded.get(key, 0) + 1
+                total += 1
+            frames = []
+        elif s != "...":
+            fn = s.split("(", 1)[0]  # "pkg.Class.method(args) line: N" -> "pkg.Class.method"
+            frames.append(fn if fn else s)
+    return folded, total
 
 def extract_folded(jfr_path, event):
     """Run jfr print and fold ExecutionSample stacks into {stack_tuple: count}."""
-    # Validate both untrusted inputs before they reach the OS command: reject an
-    # event that isn't a plain dotted identifier, and a jfr path that isn't an
-    # existing regular file (which also rejects option-like "-…" arguments).
-    if not _EVENT_RE.match(event):
-        sys.exit(f"invalid event name: {event!r}")
-    if not os.path.isfile(jfr_path):
-        sys.exit(f"not a readable file: {jfr_path!r}")
+    validate_inputs(jfr_path, event)
     cmd = ["jfr", "print", "--events", event, "--stack-depth", "2048", jfr_path]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         sys.exit(f"jfr print failed: {proc.stderr[:400]}")
-    folded = {}
-    frames, in_stack, total = [], False, 0
-    for line in proc.stdout.splitlines():
-        s = line.strip()
-        if s.startswith("stackTrace = ["):
-            frames, in_stack = [], True
-            continue
-        if in_stack:
-            if s == "]":
-                in_stack = False
-                if frames:
-                    # jfr lists leaf-first; flamegraph wants root-first
-                    key = tuple(reversed(frames))
-                    folded[key] = folded.get(key, 0) + 1
-                    total += 1
-                frames = []
-                continue
-            if s == "...":
-                continue
-            # frame line: "pkg.Class.method(args) line: N"  -> keep "pkg.Class.method"
-            fn = s.split("(", 1)[0]
-            frames.append(fn if fn else s)
-    return folded, total
+    return fold_stacks(proc.stdout)
 
 class Node:
     __slots__ = ("name", "value", "children")
@@ -286,7 +293,7 @@ def render_svg(root, title, subtitle, min_pct):
         f'<text x="{WIDTH//2}" y="22" text-anchor="middle" font-size="17" font-weight="bold">{e(title)}</text>',
         f'<text x="{WIDTH//2}" y="38" text-anchor="middle" font-size="11" fill="#555">{e(subtitle)}</text>',
         f'<text id="details" x="10" y="{height-5}"> </text>',
-        f'<text id="unzoom" class="hide" onclick="unzoom()" x="10" y="50">Reset Zoom</text>',
+        '<text id="unzoom" class="hide" onclick="unzoom()" x="10" y="50">Reset Zoom</text>',
         f'<text id="search" onclick="search_prompt()" x="{WIDTH-90}" y="50">Search</text>',
         f'<text id="matched" class="hide" x="{WIDTH-340}" y="{height-5}"> </text>',
     ]
@@ -334,7 +341,10 @@ def main():
     sub = (f"{total} {a.event} samples · frames ≥ {a.min_pct}% shown · "
            f"click to zoom · Search for regexp highlight · Reset Zoom to restore")
     svg = render_svg(root, a.title, sub, a.min_pct)
-    # Validate the output path before writing: its parent directory must exist.
+    # Validate the (untrusted) output path before touching the filesystem: same
+    # allowlist as the inputs, and its parent directory must already exist.
+    if not _PATH_SAFE_RE.fullmatch(a.out):
+        sys.exit(f"unsafe output path: {a.out!r}")
     out_dir = os.path.dirname(os.path.abspath(a.out)) or "."
     if not os.path.isdir(out_dir):
         sys.exit(f"output directory does not exist: {out_dir}")

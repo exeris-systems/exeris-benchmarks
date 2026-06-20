@@ -79,6 +79,7 @@ def grouped_log_latency(fname, title, percentiles, series, note=""):
     print("wrote", fname)
 
 EX, QK, SP = "#2563eb", "#dc2626", "#9ca3af"  # exeris blue, quarkus red, spring grey
+P999 = "p99.9"  # tail percentile key, used across the latency charts
 
 # 1. CPU per request (the durable differentiator) — n=3 interleaved, host-net, warmed, 5 cores
 hbar("chart-cpu-per-request.svg",
@@ -112,9 +113,9 @@ grouped_log_latency("chart-coordinated-omission.svg",
 # 4. CO-free latency Exeris vs Quarkus, matched 6000 rps
 grouped_log_latency("chart-latency-matched.svg",
      "CO-free latency at matched load (6000 rps) — Exeris vs Quarkus",
-     ["p50", "p90", "p99", "p99.9"],
-     [("Exeris", EX, {"p50": 6.73, "p90": 11.29, "p99": 18.05, "p99.9": 43.26}),
-      ("Quarkus", QK, {"p50": 6.48, "p90": 11.18, "p99": 46.78, "p99.9": 142.46})],
+     ["p50", "p90", "p99", P999],
+     [("Exeris", EX, {"p50": 6.73, "p90": 11.29, "p99": 18.05, P999: 43.26}),
+      ("Quarkus", QK, {"p50": 6.48, "p90": 11.18, "p99": 46.78, P999: 142.46})],
      note="wrk2, at_saturation=false · median ≈ equal (noise-dominated), tail favors Exeris · runs 125344Z vs 130014Z")
 
 print("done")

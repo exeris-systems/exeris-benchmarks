@@ -246,7 +246,7 @@ apply_fair_resource_profile() {
   elif [[ "${BENCH_JFR_STEADY_STATE:-0}" == "1" ]]; then
     local steady_jfc="${REPO_ROOT}/env/jfr-steady-state.jfc"
     if [[ ! -f "$steady_jfc" ]]; then
-      echo "ERROR: BENCH_JFR_STEADY_STATE=1 but overlay file not found: ${steady_jfc}"
+      echo "ERROR: BENCH_JFR_STEADY_STATE=1 but overlay file not found: ${steady_jfc}" >&2
       return 1
     fi
     jfr_settings="${jfr_settings},settings=${steady_jfc}"

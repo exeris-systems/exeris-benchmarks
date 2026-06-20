@@ -30,7 +30,9 @@ CSV="${1:-}"
 OUT="${2:-}"
 
 emit() {
-  if [[ -n "$OUT" ]]; then printf '%s\n' "$1" > "$OUT"; else printf '%s\n' "$1"; fi
+  local payload="$1"
+  if [[ -n "$OUT" ]]; then printf '%s\n' "$payload" > "$OUT"; else printf '%s\n' "$payload"; fi
+  return 0
 }
 
 if [[ -z "$CSV" || ! -f "$CSV" ]]; then

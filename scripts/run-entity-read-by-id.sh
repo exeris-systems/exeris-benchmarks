@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 READINESS_LIB="${REPO_ROOT}/tools/bench/lib/readiness.sh"
 if [[ ! -f "$READINESS_LIB" ]]; then
-  echo "ERROR: readiness library not found: $READINESS_LIB"
+  echo "ERROR: readiness library not found: $READINESS_LIB" >&2
   exit 1
 fi
 
@@ -230,7 +230,7 @@ require_positive_int() {
   local name="$1"
   local value="$2"
   if ! [[ "$value" =~ ^[0-9]+$ ]] || [[ "$value" -le 0 ]]; then
-    echo "ERROR: $name must be a positive integer (got: $value)"
+    echo "ERROR: $name must be a positive integer (got: $value)" >&2
     exit 1
   fi
 }
@@ -239,7 +239,7 @@ require_duration_seconds() {
   local name="$1"
   local value="$2"
   if ! [[ "$value" =~ ^[0-9]+s$ ]]; then
-    echo "ERROR: $name must match <N>s (got: $value)"
+    echo "ERROR: $name must match <N>s (got: $value)" >&2
     exit 1
   fi
 }
@@ -274,7 +274,7 @@ assert_contract_match() {
   local actual="$2"
   local expected="$3"
   if [[ "$actual" != "$expected" ]]; then
-    echo "ERROR: --contract $CONTRACT_NAME requires $flag_name=$expected (got: $actual)"
+    echo "ERROR: --contract $CONTRACT_NAME requires $flag_name=$expected (got: $actual)" >&2
     exit 1
   fi
 }
@@ -307,7 +307,7 @@ case "$BACKEND_MODE" in
   default-vt|locality-aware)
     ;;
   *)
-    echo "ERROR: --backend-mode must be default-vt or locality-aware (got: $BACKEND_MODE)"
+    echo "ERROR: --backend-mode must be default-vt or locality-aware (got: $BACKEND_MODE)" >&2
     exit 1
     ;;
 esac
@@ -316,7 +316,7 @@ case "$TARGET_RUNTIME" in
   auto|community|locality|spring|spring-runtime-on-exeris|quarkus)
     ;;
   *)
-    echo "ERROR: --target-runtime must be auto, community, locality, spring, spring-runtime-on-exeris, or quarkus (got: $TARGET_RUNTIME)"
+    echo "ERROR: --target-runtime must be auto, community, locality, spring, spring-runtime-on-exeris, or quarkus (got: $TARGET_RUNTIME)" >&2
     exit 1
     ;;
 esac
@@ -325,7 +325,7 @@ case "$TARGET_BUILD" in
   jvm|native)
     ;;
   *)
-    echo "ERROR: --target-build must be jvm or native (got: $TARGET_BUILD)"
+    echo "ERROR: --target-build must be jvm or native (got: $TARGET_BUILD)" >&2
     exit 1
     ;;
 esac
@@ -345,7 +345,7 @@ case "$DRIVER" in
     ;;
   h2load)
     if ! command -v h2load >/dev/null 2>&1; then
-      echo "ERROR: --driver h2load requires the h2load command (nghttp2)"
+      echo "ERROR: --driver h2load requires the h2load command (nghttp2)" >&2
       exit 1
     fi
     case "$H2LOAD_AXIS" in
@@ -359,7 +359,7 @@ case "$DRIVER" in
         # (scenarios/entity-read-by-id/h2load.flags). Refuse to mint a
         # comparison-eligible artifact over it.
         if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
-          echo "ERROR: --driver h2load --h2load-axis h2c is exploratory-only (not comparable to H1/wrk); use --claim-scope exploratory."
+          echo "ERROR: --driver h2load --h2load-axis h2c is exploratory-only (not comparable to H1/wrk); use --claim-scope exploratory." >&2
           exit 1
         fi
         # The h2load "h2c" axis means "HTTP/2, no --h1". transport_mode is the schema
@@ -379,14 +379,14 @@ case "$DRIVER" in
         fi
         ;;
       *)
-        echo "ERROR: --h2load-axis must be h1 or h2c (got: $H2LOAD_AXIS)"
+        echo "ERROR: --h2load-axis must be h1 or h2c (got: $H2LOAD_AXIS)" >&2
         exit 1
         ;;
     esac
     # h2load H1 vs wrk H1 are NOT directly comparable without a cross-driver
     # caveat; the comparison-eligible contract is wrk-defined, so block the mix.
     if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
-      echo "ERROR: --driver h2load is not comparison-eligible (the fixed contract is wrk-defined; h2load H1 vs wrk H1 needs a cross-driver caveat). Use --claim-scope exploratory."
+      echo "ERROR: --driver h2load is not comparison-eligible (the fixed contract is wrk-defined; h2load H1 vs wrk H1 needs a cross-driver caveat). Use --claim-scope exploratory." >&2
       exit 1
     fi
     TOOL_NAME="h2load"
@@ -399,13 +399,13 @@ case "$DRIVER" in
     # -> warmup -> wrk2 fixed -R, HdrHistogram), and reads back its result. wrk2
     # needs both wrk (discovery/warmup) and wrk2 (measurement).
     if ! command -v wrk2 >/dev/null 2>&1 || ! command -v wrk >/dev/null 2>&1; then
-      echo "ERROR: --driver wrk2 requires both wrk2 and wrk in PATH (wrk drives saturation discovery + warmup)."
+      echo "ERROR: --driver wrk2 requires both wrk2 and wrk in PATH (wrk drives saturation discovery + warmup)." >&2
       exit 1
     fi
     # CO-free latency at a sub-saturation rate is a different measurement than the
     # wrk-defined throughput contract; never mint a comparison-eligible artifact.
     if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
-      echo "ERROR: --driver wrk2 is exploratory-only (CO-free sub-saturation latency, not the wrk-defined throughput contract). Use --claim-scope exploratory."
+      echo "ERROR: --driver wrk2 is exploratory-only (CO-free sub-saturation latency, not the wrk-defined throughput contract). Use --claim-scope exploratory." >&2
       exit 1
     fi
     TOOL_NAME="wrk2"
@@ -414,23 +414,23 @@ case "$DRIVER" in
     BENCHMARK_FAMILY="runtime-wrk2"
     ;;
   k6)
-    echo "ERROR: --driver k6 is not supported by this runner. Use scripts/run-k6.sh."
+    echo "ERROR: --driver k6 is not supported by this runner. Use scripts/run-k6.sh." >&2
     exit 1
     ;;
   *)
-    echo "ERROR: --driver must be wrk, h2load, or wrk2 (got: $DRIVER)"
+    echo "ERROR: --driver must be wrk, h2load, or wrk2 (got: $DRIVER)" >&2
     exit 1
     ;;
 esac
 
 if [[ "$BACKEND_MODE" == "locality-aware" ]] && [[ "$TARGET_RUNTIME" == "spring" || "$TARGET_RUNTIME" == "spring-runtime-on-exeris" || "$TARGET_RUNTIME" == "quarkus" ]]; then
-  echo "ERROR: --backend-mode locality-aware is Exeris-only and cannot be combined with --target-runtime $TARGET_RUNTIME"
+  echo "ERROR: --backend-mode locality-aware is Exeris-only and cannot be combined with --target-runtime $TARGET_RUNTIME" >&2
   exit 1
 fi
 
 if [[ "$BACKEND_MODE" == "locality-aware" ]]; then
   if [[ "$BENCHMARK_LOCALITY_STRICT" == "1" ]] && [[ "$LOCALITY_MODE_ENABLED" != "1" ]]; then
-    echo "ERROR: --backend-mode locality-aware in strict mode requires BENCHMARK_ENABLE_LOCALITY_MODE=1 (VT scheduler API not verified available)."
+    echo "ERROR: --backend-mode locality-aware in strict mode requires BENCHMARK_ENABLE_LOCALITY_MODE=1 (VT scheduler API not verified available)." >&2
     echo "       Unset BENCHMARK_LOCALITY_STRICT or set BENCHMARK_ENABLE_LOCALITY_MODE=1."
     exit 1
   fi
@@ -440,52 +440,52 @@ if [[ "$BACKEND_MODE" == "locality-aware" ]]; then
 fi
 
 if [[ "${BENCHMARK_REQUIRE_CPU_PINNING:-0}" == "1" ]] && [[ -z "$CPU_AFFINITY" ]]; then
-  echo "ERROR: BENCHMARK_REQUIRE_CPU_PINNING=1 requires --cpu-affinity <cpuset>"
+  echo "ERROR: BENCHMARK_REQUIRE_CPU_PINNING=1 requires --cpu-affinity <cpuset>" >&2
   exit 1
 fi
 
 if [[ -n "$CPU_AFFINITY" ]] && ! command -v taskset >/dev/null 2>&1; then
-  echo "ERROR: --cpu-affinity requires taskset command"
+  echo "ERROR: --cpu-affinity requires taskset command" >&2
   exit 1
 fi
 
 if [[ -n "$CLIENT_CPU_AFFINITY" ]] && ! command -v taskset >/dev/null 2>&1; then
-  echo "ERROR: --client-cpu-affinity requires taskset command"
+  echo "ERROR: --client-cpu-affinity requires taskset command" >&2
   exit 1
 fi
 
 if [[ "$PERF_STAT_REQUIRED" == "1" ]] && ! command -v perf >/dev/null 2>&1; then
-  echo "ERROR: BENCHMARK_REQUIRE_PERF_STAT=1 requires perf command"
+  echo "ERROR: BENCHMARK_REQUIRE_PERF_STAT=1 requires perf command" >&2
   exit 1
 fi
 
 if [[ "$BACKEND_EVIDENCE_REQUIRED" != "0" && "$BACKEND_EVIDENCE_REQUIRED" != "1" ]]; then
-  echo "ERROR: BENCHMARK_REQUIRE_BACKEND_EVIDENCE must be 0 or 1 (got: $BACKEND_EVIDENCE_REQUIRED)"
+  echo "ERROR: BENCHMARK_REQUIRE_BACKEND_EVIDENCE must be 0 or 1 (got: $BACKEND_EVIDENCE_REQUIRED)" >&2
   exit 1
 fi
 
 if [[ "$ALLOW_EXTERNAL_DB" != "0" && "$ALLOW_EXTERNAL_DB" != "1" ]]; then
-  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_DB must be 0 or 1 (got: $ALLOW_EXTERNAL_DB)"
+  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_DB must be 0 or 1 (got: $ALLOW_EXTERNAL_DB)" >&2
   exit 1
 fi
 
 if [[ "$LOCALITY_MODE_ENABLED" != "0" && "$LOCALITY_MODE_ENABLED" != "1" ]]; then
-  echo "ERROR: BENCHMARK_ENABLE_LOCALITY_MODE must be 0 or 1 (got: $LOCALITY_MODE_ENABLED)"
+  echo "ERROR: BENCHMARK_ENABLE_LOCALITY_MODE must be 0 or 1 (got: $LOCALITY_MODE_ENABLED)" >&2
   exit 1
 fi
 
 if [[ "$BENCHMARK_LOCALITY_STRICT" != "0" && "$BENCHMARK_LOCALITY_STRICT" != "1" ]]; then
-  echo "ERROR: BENCHMARK_LOCALITY_STRICT must be 0 or 1 (got: $BENCHMARK_LOCALITY_STRICT)"
+  echo "ERROR: BENCHMARK_LOCALITY_STRICT must be 0 or 1 (got: $BENCHMARK_LOCALITY_STRICT)" >&2
   exit 1
 fi
 
 if [[ "$SKIP_TARGET_BUILD" != "0" && "$SKIP_TARGET_BUILD" != "1" ]]; then
-  echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD must be 0 or 1 (got: $SKIP_TARGET_BUILD)"
+  echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD must be 0 or 1 (got: $SKIP_TARGET_BUILD)" >&2
   exit 1
 fi
 
 if [[ "$ALLOW_EXTERNAL_TARGET" != "0" && "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
-  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_TARGET must be 0 or 1 (got: $ALLOW_EXTERNAL_TARGET)"
+  echo "ERROR: BENCHMARK_ALLOW_EXTERNAL_TARGET must be 0 or 1 (got: $ALLOW_EXTERNAL_TARGET)" >&2
   exit 1
 fi
 
@@ -503,13 +503,13 @@ if [[ -n "$CONTRACT_NAME" ]]; then
     fixed_contract_v1|fixed_contract_backend_mode_h1_v1)
       ;;
     *)
-      echo "ERROR: Unsupported contract '$CONTRACT_NAME'. Supported: fixed_contract_v1, fixed_contract_backend_mode_h1_v1"
+      echo "ERROR: Unsupported contract '$CONTRACT_NAME'. Supported: fixed_contract_v1, fixed_contract_backend_mode_h1_v1" >&2
       exit 1
       ;;
   esac
 
   if [[ -n "$DURATION_OVERRIDE" ]]; then
-    echo "ERROR: --duration override is not allowed with --contract $CONTRACT_NAME"
+    echo "ERROR: --duration override is not allowed with --contract $CONTRACT_NAME" >&2
     exit 1
   fi
 
@@ -521,11 +521,11 @@ if [[ -n "$CONTRACT_NAME" ]]; then
 
   if [[ "$CONTRACT_NAME" == "fixed_contract_backend_mode_h1_v1" ]]; then
     if [[ "$TARGET_RUNTIME" != "auto" && "$TARGET_RUNTIME" != "locality" ]]; then
-      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 only supports --target-runtime auto or locality (got: $TARGET_RUNTIME)"
+      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 only supports --target-runtime auto or locality (got: $TARGET_RUNTIME)" >&2
       exit 1
     fi
     if [[ -z "$CPU_AFFINITY" ]]; then
-      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 requires --cpu-affinity (requires_cpu_pinning=true)"
+      echo "ERROR: --contract fixed_contract_backend_mode_h1_v1 requires --cpu-affinity (requires_cpu_pinning=true)" >&2
       exit 1
     fi
     BACKEND_EVIDENCE_REQUIRED=0
@@ -540,27 +540,27 @@ case "$CLAIM_SCOPE" in
   comparison-eligible)
     DURATION=60s
     if [[ "$PROFILE" != "perf-box-amd64" ]]; then
-      echo "ERROR: comparison-eligible requires --profile perf-box-amd64 (got: $PROFILE)"
+      echo "ERROR: comparison-eligible requires --profile perf-box-amd64 (got: $PROFILE)" >&2
       exit 1
     fi
     if [[ -z "$CPU_AFFINITY" ]] && [[ "${BENCHMARK_WAIVE_CPU_AFFINITY:-0}" != "1" ]]; then
-      echo "ERROR: comparison-eligible requires --cpu-affinity <cpuset> for reproducible pinning (set BENCHMARK_WAIVE_CPU_AFFINITY=1 to waive)"
+      echo "ERROR: comparison-eligible requires --cpu-affinity <cpuset> for reproducible pinning (set BENCHMARK_WAIVE_CPU_AFFINITY=1 to waive)" >&2
       exit 1
     fi
     ;;
   p99-stable)
-    echo "ERROR: p99-stable requires wrk2 (CO-free). wrk is INELIGIBLE. Use run-wrk2.sh."
+    echo "ERROR: p99-stable requires wrk2 (CO-free). wrk is INELIGIBLE. Use run-wrk2.sh." >&2
     exit 1
     ;;
   *)
-    echo "ERROR: Unknown claim-scope: $CLAIM_SCOPE. Valid: exploratory, comparison-eligible, p99-stable"
+    echo "ERROR: Unknown claim-scope: $CLAIM_SCOPE. Valid: exploratory, comparison-eligible, p99-stable" >&2
     exit 1
     ;;
 esac
 
 if [[ -n "$DURATION_OVERRIDE" ]]; then
   if [[ "$CLAIM_SCOPE" != "exploratory" ]]; then
-    echo "ERROR: --duration override is only allowed with --claim-scope exploratory"
+    echo "ERROR: --duration override is only allowed with --claim-scope exploratory" >&2
     exit 1
   fi
   DURATION="$DURATION_OVERRIDE"
@@ -625,11 +625,11 @@ else
 fi
 
 if [[ "$TARGET_BUILD" == "native" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "locality" ]]; then
-  echo "ERROR: --target-build native is not supported for effective runtime locality (targets/exeris-community-app-locality)"
+  echo "ERROR: --target-build native is not supported for effective runtime locality (targets/exeris-community-app-locality)" >&2
   exit 1
 fi
 if [[ "$TARGET_BUILD" == "native" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "spring-runtime-on-exeris" ]]; then
-  echo "ERROR: --target-build native is not supported for effective runtime spring-runtime-on-exeris (targets/exeris-spring-runtime-app-comp is JVM-only for entity-read-by-id)"
+  echo "ERROR: --target-build native is not supported for effective runtime spring-runtime-on-exeris (targets/exeris-spring-runtime-app-comp is JVM-only for entity-read-by-id)" >&2
   exit 1
 fi
 if [[ "$TLS_ENABLED" == "1" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "spring-runtime-on-exeris" ]]; then
@@ -638,7 +638,7 @@ if [[ "$TLS_ENABLED" == "1" ]] && [[ "$TARGET_RUNTIME_EFFECTIVE" == "spring-runt
   # "Removed (no longer honored)"). With TLS on we would point an https client at an
   # http-only server and get connection failures that look like a target fault. Fail
   # closed rather than emit a confusing/invalid run.
-  echo "ERROR: BENCHMARK_TLS_ENABLED=1 is not supported for spring-runtime-on-exeris (H1-plaintext only; the target ignores the TLS env). Unset BENCHMARK_TLS_ENABLED for this target."
+  echo "ERROR: BENCHMARK_TLS_ENABLED=1 is not supported for spring-runtime-on-exeris (H1-plaintext only; the target ignores the TLS env). Unset BENCHMARK_TLS_ENABLED for this target." >&2
   exit 1
 fi
 TARGET_PID_FILE="/tmp/${TARGET_APP_NAME}-benchmark.pid"
@@ -659,7 +659,7 @@ resolve_db_launcher() {
   elif command -v docker >/dev/null 2>&1; then
     DB_LAUNCH_MODE="docker-run"
   else
-    echo "ERROR: Neither compose nor docker runtime is available"
+    echo "ERROR: Neither compose nor docker runtime is available" >&2
     exit 1
   fi
 }
@@ -765,7 +765,7 @@ apply_seed_sql() {
     return 0
   fi
 
-  echo "ERROR: psql is required when benchmark DB is not managed by docker-run"
+  echo "ERROR: psql is required when benchmark DB is not managed by docker-run" >&2
   return 1
 }
 
@@ -780,7 +780,7 @@ query_seed_user_count() {
     return 0
   fi
 
-  echo "ERROR: psql is required to verify seed user count when DB is external"
+  echo "ERROR: psql is required to verify seed user count when DB is external" >&2
   return 1
 }
 
@@ -790,7 +790,7 @@ verify_seed_fallback() {
   local expected_count expected_sha256 actual_sha256 actual_count
 
   if ! command -v jq >/dev/null 2>&1; then
-    echo "ERROR: jq is required but not installed"
+    echo "ERROR: jq is required but not installed" >&2
     return 1
   fi
 
@@ -808,7 +808,7 @@ verify_seed_fallback() {
 
   actual_count=$(query_seed_user_count)
   if ! [[ "$actual_count" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: Could not query user count. Output: $actual_count"
+    echo "ERROR: Could not query user count. Output: $actual_count" >&2
     return 1
   fi
 
@@ -922,7 +922,7 @@ verify_backend_mode_evidence() {
   local manifest_token="startupManifestBackendMode=$BACKEND_MODE"
 
   if [[ ! -f "$TARGET_APP_LOG" ]]; then
-    echo "ERROR: Target log not found for backend mode evidence: $TARGET_APP_LOG"
+    echo "ERROR: Target log not found for backend mode evidence: $TARGET_APP_LOG" >&2
     return 1
   fi
 
@@ -934,8 +934,8 @@ verify_backend_mode_evidence() {
     sleep 1
   done
 
-  echo "ERROR: backend mode evidence missing or mismatched after ${timeout}s (expected mode=$BACKEND_MODE)"
-  echo "ERROR: expected tokens: '$descriptor_token' and '$manifest_token'"
+  echo "ERROR: backend mode evidence missing or mismatched after ${timeout}s (expected mode=$BACKEND_MODE)" >&2
+  echo "ERROR: expected tokens: '$descriptor_token' and '$manifest_token'" >&2
   if [[ -f "$TARGET_APP_LOG" ]]; then
     echo "---- backend-mode evidence lines ----"
     grep -E "descriptorBackendMode=|startupManifestBackendMode=" "$TARGET_APP_LOG" || true
@@ -989,7 +989,7 @@ for i in $(seq 1 30); do
 done
 
 if ! is_db_healthy; then
-  echo "ERROR: benchmark DB failed to become healthy"
+  echo "ERROR: benchmark DB failed to become healthy" >&2
   exit 1
 fi
 
@@ -1035,13 +1035,13 @@ fi
 
 if target_reachable; then
   if [[ "$ALLOW_EXTERNAL_TARGET" != "1" ]]; then
-    echo "ERROR: benchmark target already reachable at $BASE_URL and BENCHMARK_ALLOW_EXTERNAL_TARGET is not 1"
-    echo "ERROR: external target is disallowed for backendMode integrity"
+    echo "ERROR: benchmark target already reachable at $BASE_URL and BENCHMARK_ALLOW_EXTERNAL_TARGET is not 1" >&2
+    echo "ERROR: external target is disallowed for backendMode integrity" >&2
     exit 1
   fi
   if [[ "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
-    echo "ERROR: external target reuse cannot satisfy mandatory backend mode evidence in this script path"
-    echo "ERROR: set BENCHMARK_REQUIRE_BACKEND_EVIDENCE=0 to allow external target with warning-only evidence semantics"
+    echo "ERROR: external target reuse cannot satisfy mandatory backend mode evidence in this script path" >&2
+    echo "ERROR: set BENCHMARK_REQUIRE_BACKEND_EVIDENCE=0 to allow external target with warning-only evidence semantics" >&2
     exit 1
   fi
   echo "[step 6/9] WARN: Reusing externally managed target at $BASE_URL (BENCHMARK_ALLOW_EXTERNAL_TARGET=1); backend mode evidence cannot be guaranteed"
@@ -1055,19 +1055,19 @@ if ! target_reachable; then
 
   if [[ "$SKIP_TARGET_BUILD" == "1" ]]; then
     if [[ "$artifact_found" -ne 1 ]]; then
-      echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD=1 requires prebuilt target artifacts (runtime=$TARGET_RUNTIME_EFFECTIVE build=$TARGET_BUILD)"
+      echo "ERROR: BENCHMARK_SKIP_TARGET_BUILD=1 requires prebuilt target artifacts (runtime=$TARGET_RUNTIME_EFFECTIVE build=$TARGET_BUILD)" >&2
       if [[ "$TARGET_BUILD" == "jvm" ]]; then
-        echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -DskipTests package"
+        echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -DskipTests package" >&2
       else
         case "$TARGET_RUNTIME_EFFECTIVE" in
           community|spring)
-            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -DskipTests native:compile"
+            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -DskipTests native:compile" >&2
             ;;
           quarkus)
-            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -Dquarkus.native.enabled=true -DskipTests package"
+            echo "ERROR: prebuild command: mvn -f \"$TARGET_MODULE_POM\" -Pnative -Dquarkus.native.enabled=true -DskipTests package" >&2
             ;;
           *)
-            echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE"
+            echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE" >&2
             ;;
         esac
       fi
@@ -1121,11 +1121,11 @@ if ! target_reachable; then
             mvn -f "$TARGET_MODULE_POM" -Pnative -Dquarkus.native.enabled=true -DskipTests package
           ;;
         locality)
-          echo "ERROR: --target-build native is not supported for effective runtime locality"
+          echo "ERROR: --target-build native is not supported for effective runtime locality" >&2
           exit 1
           ;;
         *)
-          echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE"
+          echo "ERROR: unsupported effective runtime for native build: $TARGET_RUNTIME_EFFECTIVE" >&2
           exit 1
           ;;
       esac
@@ -1133,9 +1133,9 @@ if ! target_reachable; then
 
     if ! resolve_target_artifact; then
       if [[ "$TARGET_BUILD" == "jvm" ]]; then
-        echo "ERROR: benchmark target jar not found after build (glob: $TARGET_JAR_GLOB)"
+        echo "ERROR: benchmark target jar not found after build (glob: $TARGET_JAR_GLOB)" >&2
       else
-        echo "ERROR: benchmark target native binary not found/executable after build (glob: $TARGET_NATIVE_BIN_GLOB)"
+        echo "ERROR: benchmark target native binary not found/executable after build (glob: $TARGET_NATIVE_BIN_GLOB)" >&2
       fi
       exit 1
     fi
@@ -1255,7 +1255,7 @@ fi
 
 echo "[step 6/9] Waiting for target readiness (<=${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s)..."
 if ! wait_for_target; then
-  echo "ERROR: benchmark target app failed readiness check within ${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s"
+  echo "ERROR: benchmark target app failed readiness check within ${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s" >&2
   if [[ -f "$TARGET_APP_LOG" ]]; then
     echo "---- target-app.log (tail) ----"
     tail -n 60 "$TARGET_APP_LOG" || true
@@ -1282,8 +1282,8 @@ while :; do
 done
 if [[ "$preflight_ok" -ne 1 ]]; then
   echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (after ${preflight_attempts} attempt(s) over ${ENTITY_READ_PREFLIGHT_READY_SECONDS}s)"
-  echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/users (status=$BENCH_PREFLIGHT_HTTP_CODE)"
-  echo "ERROR: preflight response body saved at $PREFLIGHT_BODY_FILE"
+  echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/users (status=$BENCH_PREFLIGHT_HTTP_CODE)" >&2
+  echo "ERROR: preflight response body saved at $PREFLIGHT_BODY_FILE" >&2
   exit 1
 fi
 echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (ready after ${preflight_attempts} attempt(s))"
@@ -1294,7 +1294,7 @@ bench_print_preflight_payload_preview "$PREFLIGHT_BODY_FILE" 512
 if [[ "$TARGET_APP_STARTED" -eq 1 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
   verify_backend_mode_evidence
 elif [[ "$TARGET_APP_STARTED" -eq 0 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
-  echo "ERROR: backend mode evidence is mandatory but no local target was started; no local log evidence is available"
+  echo "ERROR: backend mode evidence is mandatory but no local target was started; no local log evidence is available" >&2
   exit 1
 fi
 
@@ -1416,7 +1416,7 @@ if [[ "$DRIVER" == "wrk2" ]]; then
   set -e
   echo "$LOAD_OUT"
   if [[ "$WRK2_EXIT_CODE" -ne 0 || ! -f "$WRK2_LATENCY_JSON" ]]; then
-    echo "ERROR: delegated wrk2 measurement failed (exit=$WRK2_EXIT_CODE); see output above."
+    echo "ERROR: delegated wrk2 measurement failed (exit=$WRK2_EXIT_CODE); see output above." >&2
     exit 1
   fi
 else
@@ -1440,12 +1440,12 @@ else
 
   if [[ "$PERF_STAT_REQUIRED" == "1" || "${BENCHMARK_CAPTURE_PERF_STAT:-0}" == "1" ]]; then
     if ! command -v perf >/dev/null 2>&1; then
-      echo "ERROR: perf-stat capture requested but perf command is unavailable"
+      echo "ERROR: perf-stat capture requested but perf command is unavailable" >&2
       exit 1
     fi
     PERF_NO_SCALE="${BENCHMARK_PERF_NO_SCALE:-1}"
     if [[ "$PERF_NO_SCALE" != "0" && "$PERF_NO_SCALE" != "1" ]]; then
-      echo "ERROR: BENCHMARK_PERF_NO_SCALE must be 0 or 1 (got '$PERF_NO_SCALE')"
+      echo "ERROR: BENCHMARK_PERF_NO_SCALE must be 0 or 1 (got '$PERF_NO_SCALE')" >&2
       exit 1
     fi
     PERF_ARGS=(-x, -o "$PERF_STAT_FILE")
@@ -1464,8 +1464,8 @@ else
     if [[ "$PERF_EXIT_CODE" -ne 0 ]]; then
       PERF_ERROR_LOG="$OUTPUT_DIR/perf-error.log"
       printf '%s\n' "$LOAD_OUT" > "$PERF_ERROR_LOG"
-      echo "ERROR: perf stat execution failed (exit_code=$PERF_EXIT_CODE)"
-      echo "ERROR: perf diagnostics saved to $PERF_ERROR_LOG"
+      echo "ERROR: perf stat execution failed (exit_code=$PERF_EXIT_CODE)" >&2
+      echo "ERROR: perf diagnostics saved to $PERF_ERROR_LOG" >&2
       echo "$LOAD_OUT"
       exit "$PERF_EXIT_CODE"
     fi
@@ -1542,8 +1542,8 @@ fi
 # Fail loudly if the target died during measurement or no requests completed: a
 # crashed/unreachable target must NOT be written out as a successful result.
 if [[ "$TARGET_APP_STARTED" -eq 1 && -n "$TARGET_APP_PID" ]] && ! kill -0 "$TARGET_APP_PID" 2>/dev/null; then
-  echo "ERROR: benchmark target (pid=$TARGET_APP_PID) died during measurement — run is INVALID (not a result)."
-  echo "ERROR: inspect $TARGET_APP_LOG and any hs_err_pid*.log / core dump in $REPO_ROOT."
+  echo "ERROR: benchmark target (pid=$TARGET_APP_PID) died during measurement — run is INVALID (not a result)." >&2
+  echo "ERROR: inspect $TARGET_APP_LOG and any hs_err_pid*.log / core dump in $REPO_ROOT." >&2
   [[ "$ENABLE_JFR" == "true" ]] && echo "NOTE: JFR was enabled. A SIGSEGV in JfrStorage::flush_regular_buffer from a virtual-thread frame is NOT a JDK flake — it means a custom JFR event was held (begin -> blocking op -> commit) across a virtual-thread unmount, flushing a stale carrier-bound buffer (reproducible on JDK 26 GA 26+35). --no-jfr is only a workaround to keep the run going, NOT a diagnosis. Fix is kernel-side: emit such events single-phase, after the blocking op. Check the target frame in hs_err_pid*.log (e.g. fixed for ConnectionAcquireEvent)."
   exit 1
 fi
@@ -1555,8 +1555,8 @@ else
   _LOAD_COMPLETED_REQUESTS="$(printf '%s\n' "$LOAD_OUT" | sed -nE 's/^[[:space:]]*([0-9]+) requests in .*/\1/p' | head -1)"
 fi
 if [[ -n "$_LOAD_COMPLETED_REQUESTS" && "$_LOAD_COMPLETED_REQUESTS" -eq 0 ]]; then
-  echo "ERROR: measurement completed 0 requests (target unreachable or crashed) — run is INVALID (not a result)."
-  echo "ERROR: inspect $TARGET_APP_LOG (socket errors above indicate the target was not serving)."
+  echo "ERROR: measurement completed 0 requests (target unreachable or crashed) — run is INVALID (not a result)." >&2
+  echo "ERROR: inspect $TARGET_APP_LOG (socket errors above indicate the target was not serving)." >&2
   exit 1
 fi
 
@@ -1606,7 +1606,7 @@ if [[ "$DRIVER" == "wrk2" ]]; then
   # percentiles from the JSON; request/error counts from the measurement raw (run-wrk2
   # tees ONLY the wrk2 measurement there, so discovery/warmup do not contaminate them).
   THROUGHPUT_RPS=$(jq -r '.requests_per_sec // empty' "$WRK2_LATENCY_JSON" 2>/dev/null)
-  _wrk2_pct() { jq -r --arg p "$1" '(.latency_percentiles[]? | select(.percentile==$p) | .latency_us) // empty' "$WRK2_LATENCY_JSON" 2>/dev/null | head -1; }
+  _wrk2_pct() { local pct="$1"; jq -r --arg p "$pct" '(.latency_percentiles[]? | select(.percentile==$p) | .latency_us) // empty' "$WRK2_LATENCY_JSON" 2>/dev/null | head -1; }
   LATENCY_P50_US=$(_wrk2_pct p50)
   LATENCY_P75_US=$(_wrk2_pct p75)
   LATENCY_P90_US=$(_wrk2_pct p90)
@@ -1953,11 +1953,11 @@ SCHEMA_FILE="schemas/benchmark-result.schema.json"
 if command -v check-jsonschema >/dev/null 2>&1; then
   check-jsonschema --schemafile "$SCHEMA_FILE" "$RESULT_FILE" \
     && echo "[step 9/9] Schema validation PASSED" \
-    || { echo "ERROR: result artifact failed schema validation — see above"; exit 1; }
+    || { echo "ERROR: result artifact failed schema validation — see above"; exit 1; } >&2
 elif command -v ajv >/dev/null 2>&1; then
   ajv validate -s "$SCHEMA_FILE" -d "$RESULT_FILE" \
     && echo "[step 9/9] Schema validation PASSED" \
-    || { echo "ERROR: result artifact failed schema validation"; exit 1; }
+    || { echo "ERROR: result artifact failed schema validation"; exit 1; } >&2
 elif command -v python3 >/dev/null 2>&1; then
   set +e
   python3 - "$SCHEMA_FILE" "$RESULT_FILE" <<'PY'
@@ -2000,20 +2000,20 @@ PY
       echo "[step 9/9] Schema validation PASSED"
       ;;
     1)
-      echo "ERROR: result artifact failed schema validation"
+      echo "ERROR: result artifact failed schema validation" >&2
       exit 1
       ;;
     2)
-      echo "ERROR: python3 fallback unavailable because the 'jsonschema' module is not installed"
+      echo "ERROR: python3 fallback unavailable because the 'jsonschema' module is not installed" >&2
       exit 1
       ;;
     *)
-      echo "ERROR: python3 schema validation failed with unexpected exit code: $PYTHON_SCHEMA_RC"
+      echo "ERROR: python3 schema validation failed with unexpected exit code: $PYTHON_SCHEMA_RC" >&2
       exit 1
       ;;
   esac
 else
-  echo "ERROR: No schema validator available. Tried in order: check-jsonschema, ajv, python3+jsonschema"
+  echo "ERROR: No schema validator available. Tried in order: check-jsonschema, ajv, python3+jsonschema" >&2
   exit 1
 fi
 

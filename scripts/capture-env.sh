@@ -149,6 +149,7 @@ detect_os_scheduler() {
       *BORE*)                                       printf 'bore\n'; return 0 ;;
       *PLACE_LAG*|*RUN_TO_PARITY*|*PLACE_DEADLINE_INITIAL*) printf 'eevdf\n'; return 0 ;;
       *GENTLE_FAIR_SLEEPERS*|*START_DEBIT*|*LAST_BUDDY*)    printf 'cfs\n';   return 0 ;;
+      *) ;;  # inconclusive feature set — fall through to the version-based fallback below
     esac
   fi
   # Version fallback (Linux only).

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="500" font-family="Verdana,Helvetica,sans-serif" viewBox="0 0 820 500">
+<rect width="820" height="500" fill="#ffffff"/>
+<text x="410" y="28" text-anchor="middle" font-size="16" font-weight="bold">CO-free latency at matched load (6000 rps) — Exeris vs Quarkus</text>
+<text x="410" y="46" text-anchor="middle" font-size="11" fill="#666">log scale · latency in ms · lower is better ↓</text>
+<line x1="70" y1="430.0" x2="790" y2="430.0" stroke="#eee"/>
+<text x="62" y="434.0" text-anchor="end" font-size="10" fill="#999">1 ms</text>
+<line x1="70" y1="310.0" x2="790" y2="310.0" stroke="#eee"/>
+<text x="62" y="314.0" text-anchor="end" font-size="10" fill="#999">10 ms</text>
+<line x1="70" y1="190.0" x2="790" y2="190.0" stroke="#eee"/>
+<text x="62" y="194.0" text-anchor="end" font-size="10" fill="#999">100 ms</text>
+<line x1="70" y1="70.0" x2="790" y2="70.0" stroke="#eee"/>
+<text x="62" y="74.0" text-anchor="end" font-size="10" fill="#999">1000 ms</text>
+<text x="160.0" y="448" text-anchor="middle" font-size="11">p50</text>
+<rect x="95.2" y="330.6" width="62.8" height="99.4" fill="#2563eb" rx="1"><title>Exeris p50: 6.73 ms</title></rect>
+<rect x="160.0" y="332.6" width="62.8" height="97.4" fill="#dc2626" rx="1"><title>Quarkus p50: 6.48 ms</title></rect>
+<text x="340.0" y="448" text-anchor="middle" font-size="11">p90</text>
+<rect x="275.2" y="303.7" width="62.8" height="126.3" fill="#2563eb" rx="1"><title>Exeris p90: 11.29 ms</title></rect>
+<rect x="340.0" y="304.2" width="62.8" height="125.8" fill="#dc2626" rx="1"><title>Quarkus p90: 11.18 ms</title></rect>
+<text x="520.0" y="448" text-anchor="middle" font-size="11">p99</text>
+<rect x="455.2" y="279.2" width="62.8" height="150.8" fill="#2563eb" rx="1"><title>Exeris p99: 18.05 ms</title></rect>
+<rect x="520.0" y="229.6" width="62.8" height="200.4" fill="#dc2626" rx="1"><title>Quarkus p99: 46.78 ms</title></rect>
+<text x="700.0" y="448" text-anchor="middle" font-size="11">p99.9</text>
+<rect x="635.2" y="233.7" width="62.8" height="196.3" fill="#2563eb" rx="1"><title>Exeris p99.9: 43.26 ms</title></rect>
+<rect x="700.0" y="171.6" width="62.8" height="258.4" fill="#dc2626" rx="1"><title>Quarkus p99.9: 142.46 ms</title></rect>
+<rect x="80" y="74" width="12" height="12" fill="#2563eb"/>
+<text x="96" y="84" font-size="11">Exeris</text>
+<rect x="166" y="74" width="12" height="12" fill="#dc2626"/>
+<text x="182" y="84" font-size="11">Quarkus</text>
+<text x="70" y="484" font-size="10.5" fill="#888">wrk2, at_saturation=false · median ≈ equal (noise-dominated), tail favors Exeris · runs 125344Z vs 130014Z</text>
+</svg>

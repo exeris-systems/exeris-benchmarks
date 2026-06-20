@@ -112,6 +112,8 @@ wrk2 (open-loop, ~75% load):  p50 = 2.95 ms,  p99 = 8.19 ms
 
 **p50: 2.95 ms vs 146 ms — a 49× gap between the real service time and the saturated-queue artifact.** This is the single most important methodological point in the report: *never quote a saturated closed-loop percentile as latency.* Our h2load percentiles ship with a `co_caveat` stamped into the artifact for exactly this reason.
 
+![Coordinated omission: h2load saturated vs wrk2 CO-free, same Exeris target](assets/chart-coordinated-omission.svg)
+
 ---
 
 ## Act 4 — The metric that didn't lie: CPU per request
@@ -127,11 +129,35 @@ Matched, fully-warmed, host-net, target-bound (5 cores), 10-minute measurement:
 | App `%CPU` (of 500% avail.) | 344 (69%) | 432 (86%) | 292 |
 | C2 settled? | yes (peak 0) | **no (peak 97)** | no (peak 72) |
 
+![CPU per request — Exeris vs Quarkus vs Spring](assets/chart-cpu-per-request.svg)
+
+![Throughput — Exeris vs Quarkus vs Spring](assets/chart-throughput.svg)
+
 - **Exeris serves +13% more throughput for −29% less CPU per request** than Quarkus. To deliver its *lower* 7 836 rps, Quarkus burned 432% CPU; Exeris delivered *more* (8 844) on 344%.
 - Spring is a different era: **2.7× the CPU per request** of Exeris. (We are taking the operator's "archaic" characterization as a hypothesis; the data is consistent with it. No deeper Spring analysis was done.)
 - **Exeris was not even CPU-bound on the app** (344 of 500% used) — its throughput ceiling here is *higher* than 8 844; the bottleneck had moved to the driver / DB / kernel. So **+13% is a lower bound.**
 
 This `CPU/req` advantage reproduced in every configuration we measured (−26% to −32% across bridge, host-net, 3/4/5 cores, warm/short-warmup). It is the durable finding.
+
+### Where the CPU goes — the flame graphs
+
+CPU-per-request says *how much*; the flame graphs say *on what*. Interactive SVGs (hover for frames):
+
+- [Exeris CPU flame graph](assets/flame-exeris-entity-read.svg)
+- [Quarkus CPU flame graph](assets/flame-quarkus-entity-read.svg)
+
+Top self-time methods (leaf frames):
+
+| Exeris | Quarkus |
+|---|---|
+| Jackson 3 serialization (`BeanPropertyWriter.get`, `UTF8JsonGenerator`) | **`DirectMethodHandleAccessor.invoke` — ~10.5% (reflection)** |
+| Postgres decode / `PgResultSet.getString` | Jackson 2 (`UTF8JsonGenerator.writeFieldName`) |
+| `MethodHandle` dispatch (`Invokers.checkCustomized`) | `StringLatin1.toLowerCase` ~5.3%, heavy `HashMap`/`TreeNode` |
+| relatively flat profile (top frame ~8%) | Netty/Vert.x event loop + `getFastLong` |
+
+The single clearest contributor to Quarkus's higher per-request cost is **reflection**: ~10.5% of CPU in `DirectMethodHandleAccessor.invoke`, plus notable `String.toLowerCase` and hash-map churn in the request path. **Important fairness note:** this is **JVM-mode** Quarkus. Quarkus is *designed* for native-image, where build-time processing eliminates most reflection; in a native build this hot frame would largely disappear. We measured JVM mode for an apples-to-apples comparison with the JVM-mode Exeris/Spring targets — a native Quarkus comparison is a separate (and fairer-to-Quarkus) experiment.
+
+**Sampling caveat:** the recordings hold very different ExecutionSample counts — **Exeris 9 582 vs Quarkus 201 060** over the same 10 minutes. This is a thread-model artifact (Exeris's virtual-thread carriers present far fewer sampleable platform threads than Quarkus's event-loop pool), and it is the same reason Exeris's `.jfr` is larger by *bytes* (custom Exeris telemetry events) yet smaller by *CPU samples*. Flame-graph **proportions** are valid for both; absolute resolution is much finer for Quarkus.
 
 ---
 
@@ -154,6 +180,8 @@ Here the story gets uncomfortable, and we report it straight.
 | p90 | 11.29 ms | 11.18 ms |
 | p99 | **18.05 ms** | 46.78 ms |
 | p99.9 | **43.26 ms** | 142.46 ms |
+
+![CO-free latency at matched 6000 rps — Exeris vs Quarkus](assets/chart-latency-matched.svg)
 
 These two comparisons **disagree about the median**. Comparison A says Exeris p50 is 3× better; Comparison B says the medians are identical. The tie-breaker is variance: between two Exeris runs minutes apart, with no config change, the saturation discovery swung **8 954 → 7 643 rps (−15%)** and p50 swung **2.95 → 6.73 ms (2.3×)** — pure box-state noise on a workstation.
 
@@ -190,6 +218,8 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
   - *Throughput / CPU-efficiency* — h2load (h2c) at saturation. Percentiles via `--log-file`, **explicitly CO-caveated**.
   - *Real tail latency* — wrk2 (`-R`, HdrHistogram) at a fixed sub-saturation rate (`WRK2_TARGET_RPS`), CO-free. Always check `at_saturation=false` in the artifact.
 - **CPU per request:** `process %CPU / throughput` from the per-thread pidstat aggregate — the primary cross-stack signal.
+- **Flame graphs:** `tools/jfr-flamegraph.py <jfr> <out.svg>` — self-contained JFR → interactive SVG (no external renderer), Community/OSS recordings only. Shows *where* the CPU goes (the reflection finding above).
+- **Repetition aggregation:** `tools/aggregate-runs.py <run-dirs…>` → mean ± stdev ± CV% across reps; a difference smaller than its metric's CV% is noise.
 
 ---
 
@@ -208,7 +238,36 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
 - Any **absolute** number as production capacity — `dev-laptop`, single runs, SMT-approximate pinning.
 - Anything about **Enterprise / H3 / locality** — out of scope.
 
-**To make this publication-grade:** move to `perf-box-amd64` (no turbo, pinned kernel/scheduler), run **interleaved repetitions** (A,B,A,B…) to average box drift, fix the wrk2 rate to the same fraction of the *shared lower* saturation, and confirm C2-settled for every stack before measuring.
+## Firming up the numbers
+
+Single runs gave the direction; they don't give an interval. `tools/aggregate-runs.py`
+turns a set of repetitions into mean ± stdev ± **CV%** (coefficient of variation), which
+is the honest way to ask "is this difference bigger than the noise?". Even on just the
+two Exeris wrk2 runs we already have, it makes the report's central honesty point
+quantitative:
+
+| metric | mean | CV% |
+|---|---|---|
+| **cpu_per_req_ms** | 0.449 | **1.4%** |
+| throughput_rps | 6 335 | 8.1% |
+| latency_p50_ms | 4.84 | **55%** ⚠ |
+| latency_p99_ms | 13.1 | **53%** ⚠ |
+| latency_p999_ms | 27.8 | **78%** ⚠ |
+
+CPU-per-request varies **1.4%** run-to-run; median latency varies **55%**. Any
+between-stack latency-median difference smaller than ~55% is not real on this box —
+which is exactly why we refuse to claim one. The −29% CPU/req gap, by contrast, is
+~20× the metric's own noise.
+
+**Recipe to reach publication-grade:**
+
+1. Move to `perf-box-amd64` — turbo off, pinned kernel/scheduler, `performance` governor.
+2. **Interleave repetitions** A,B,A,B,A,B (≥5 each) so box drift averages out instead of biasing whoever ran during a noisy window.
+3. Fix the wrk2 rate to the **same fraction of the shared (lower) saturation** for both stacks, so load fraction is identical (this run had 0.785 vs 0.808).
+4. Confirm `C2 peak == 0` for every stack before its measurement window opens.
+5. Aggregate: `tools/aggregate-runs.py results/raw/guided/<run-dirs...>` → report mean ± stdev, drop any metric whose CV exceeds the claimed gap.
+
+Until then, treat throughput/CPU-per-request as solid directional findings and latency-median as **explicitly inconclusive**.
 
 ---
 

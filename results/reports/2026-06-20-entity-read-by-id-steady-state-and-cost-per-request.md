@@ -71,7 +71,7 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 2. **Repetition count varies by axis.** The headline throughput / CPU-per-request comparison is **n=3 interleaved** (A,B,A,B,A,B) — see "Firming up the numbers". Most *illustrative* runs (the per-section walkthroughs) are single runs unless stated; treat those individual latencies as *directional*. Where I show two runs of the "same" thing they disagree by up to **2.3×** on median latency — which is the whole point of the variance section.
 3. **SMT pinning caveat.** The CPU is 6 physical cores / 12 SMT threads. I pin to *logical* threads (e.g. "target `0-4`"), so some pinned "cores" may be SMT siblings sharing a physical core. The target-bound conclusions hold directionally but the core math is approximate.
 4. **Community track only.** No Enterprise targets, no H3, no locality. Nothing here speaks to those.
-5. **`dev-laptop` means two different environments across this series — note the delta.** An earlier saga-correctness report on the *same physical machine* ran under a desktop session with a **32 GB cgroup memory overlay**; this run is **headless with no GUI and no memory cap**, so the JVM sees the full ~60 GB and there is no desktop-environment scheduling noise. This is a genuinely *cleaner* environment than the May run — closer to (still not equal to) `perf-box-amd64`. The available memory budget is itself a benchmark variable, so I call it out rather than letting "dev-laptop" read as one fixed thing.
+5. **`dev-laptop` means two different environments across this series — note the delta.** An earlier [saga-correctness benchmark](https://blog.arkstack.dev/en/blog/compensation-correctness-saga-benchmark/) on the *same physical machine* ran under a desktop session with a **32 GB cgroup memory overlay**; this run is **headless with no GUI and no memory cap**, so the JVM sees the full ~60 GB and there is no desktop-environment scheduling noise. This is a genuinely *cleaner* environment than the May run — closer to (still not equal to) `perf-box-amd64`. The available memory budget is itself a benchmark variable, so I call it out rather than letting "dev-laptop" read as one fixed thing.
 
 ---
 
@@ -92,7 +92,7 @@ What I found, on identical 5-minute-warmup / 10-minute-measure runs:
 
 **Consequence:** any Quarkus throughput number here is a mild *under*-estimate (it is still improving), and short-warmup latency for Quarkus is partly cold-JIT noise. This is also why I stopped trusting any run I couldn't confirm warm.
 
-> Reference reading on exactly this failure mode: *"When the JIT can't keep up."* I hit the same wall from the other side — the harness, not the app.
+> Reference reading on exactly this failure mode: Francesco Nigro's [*"When the JIT can't keep up"*](https://github.com/franz1981/redhatperf.github.io/blob/blog/harder-better-faster-stronger-earlier/content/post/when-the-jit-cant-keep-up/index.adoc) (draft/preprint at time of writing — links to the source on the post's working branch). I hit the same wall from the other side — the harness, not the app.
 
 ---
 
@@ -112,6 +112,8 @@ Same Exeris target, same workload, **only** the Postgres container network mode 
 The application's CPU-per-request **did not change** (0.357 → 0.358 ms). What changed is that under bridge networking, every DB round-trip went through NAT / `docker-proxy`, burning the target's cores on **softirq and `%sys`** — so the JVM's own threads sat in the run queue waiting (`%wait` 265%). Remove the NAT and the threads stop waiting (`%wait` → 57%), and the same per-request cost converts into **+20% throughput** — even after *giving the target one fewer core*.
 
 This is a **fairness gate, not hygiene**: bridge/NAT taxes a chattier stack asymmetrically. A higher-throughput target does *more* DB round-trips per second, so it pays *more* bridge tax — which means bridge networking can silently penalize exactly the stack that would otherwise look best. All cross-stack comparisons below use **host networking**.
+
+The same class of hidden cost is documented from the other direction in Quarkus's [*The hidden cost of rootless container networking*](https://quarkus.io/blog/hidden-cost-rootless-container-networking/) — different layer (rootless vs bridge/NAT), same lesson: the container network path is a benchmark variable, not a constant.
 
 ---
 

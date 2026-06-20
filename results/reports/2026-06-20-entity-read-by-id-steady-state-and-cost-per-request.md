@@ -5,7 +5,7 @@ categories:
   - performance
   - benchmarking
   - jvm
-summary: "Throughput and latency both lie on this workload — one to coordinated omission, the other to warmup and run-to-run noise. The metric that survives is CPU per request: Exeris serves ~13% more throughput for ~29% less CPU/request than Quarkus, and reaches steady state while Quarkus is still JIT-compiling after 5 minutes (Spring trails both). JFR, pidstat, and CO-free wrk2 show how — and where a saturated p50 of 146 ms is really a 3 ms service time."
+summary: "Throughput and latency both lie on this workload — one to coordinated omission, the other to warmup and run-to-run noise. The metric that survives is CPU per request: across three interleaved runs each, Exeris serves ~16% more throughput for ~34% less CPU/request than Quarkus (CV < 1.5%), and reaches steady state while Quarkus is still JIT-compiling after 5 minutes (Spring trails both). JFR, pidstat, and CO-free wrk2 show how — and where a saturated p50 of 146 ms is really a 3 ms service time."
 image: assets/banner.svg
 authors:
   - Arkadiusz Przychocki
@@ -31,7 +31,7 @@ I set out to compare three JVM HTTP stacks on a trivial DB-backed read (`GET /ap
 - **Throughput depends on the network plumbing, not just the app.** Moving Postgres from a bridged container to host networking lifted Exeris throughput **+20%** with *zero* application change — the bridge/NAT tax was stealing the target's CPU as softirq.
 - **Latency percentiles from a saturated closed-loop driver are not latency.** h2load reported a p50 of **146 ms**; the real service-time p50 was **~3–7 ms**. The 146 ms was queue depth ÷ throughput (Little's law), to the digit.
 - **The JIT matters longer than your warmup.** Exeris reached steady state essentially instantly (C2 compile queue never backed up); Quarkus was *still* compiling hot methods **after 5 minutes** of warmup.
-- **The one metric that stayed stable across all of this was CPU-per-request.** Exeris served comparable-or-higher throughput for **~29% less CPU per request** — the same edge whether the box was warm, cold, bridged, or host-networked.
+- **The one metric that stayed stable across all of this was CPU-per-request.** Across three interleaved runs each, Exeris served **+16% throughput for −34% CPU per request** vs Quarkus — both gaps with a coefficient of variation under 1.5%, i.e. 20–40× their own run-to-run noise, and the same edge whether the box was warm, cold, bridged, or host-networked.
 
 What I will **not** claim: that Exeris has a better *median* latency (on this hardware that signal is buried in noise), or that any of these absolute numbers transfer off a developer workstation.
 
@@ -60,7 +60,7 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 **Read these before any number below:**
 
 1. **`dev-laptop`, not `perf-box-amd64`.** Turbo is on, it is a workstation, and absolute numbers are **not** publication-grade. Use them for *relative, same-box* comparison only.
-2. **Single run per configuration** unless stated. Where I show two runs of the "same" thing they disagree by up to **2.3×** on median latency — see the variance section. Treat single-run latencies as *directional*.
+2. **Repetition count varies by axis.** The headline throughput / CPU-per-request comparison is **n=3 interleaved** (A,B,A,B,A,B) — see "Firming up the numbers". Most per-act *illustrative* runs (the Act-by-Act walkthroughs) are single runs unless stated; treat those individual latencies as *directional*. Where I show two runs of the "same" thing they disagree by up to **2.3×** on median latency — which is the whole point of the variance section.
 3. **SMT pinning caveat.** The CPU is 6 physical cores / 12 SMT threads. I pin to *logical* threads (e.g. "target `0-4`"), so some pinned "cores" may be SMT siblings sharing a physical core. The target-bound conclusions hold directionally but the core math is approximate.
 4. **Community track only.** No Enterprise targets, no H3, no locality. Nothing here speaks to those.
 
@@ -151,9 +151,9 @@ Matched, fully-warmed, host-net, target-bound (5 cores), 10-minute measurement:
 
 ![Throughput — Exeris vs Quarkus vs Spring](assets/chart-throughput.svg)
 
-- **Exeris serves +13% more throughput for −29% less CPU per request** than Quarkus. To deliver its *lower* 7 836 rps, Quarkus burned 432% CPU; Exeris delivered *more* (8 844) on 344%.
+- **Exeris serves more throughput for less CPU per request** than Quarkus. In this single warmed run, to deliver its *lower* 7 836 rps Quarkus burned 432% CPU; Exeris delivered *more* (8 844) on 344%. Repeated three times interleaved (see "Firming up the numbers"), the gap firms to **+16.2% throughput / −33.7% CPU per request**, both with CV < 1.5%.
 - Spring is a different era: **2.7× the CPU per request** of Exeris. (I'm taking the "archaic" characterization as a hypothesis; the data is consistent with it. No deeper Spring analysis was done.)
-- **Exeris was not even CPU-bound on the app** (344 of 500% used) — its throughput ceiling here is *higher* than 8 844; the bottleneck had moved to the driver / DB / kernel. So **+13% is a lower bound.**
+- **Exeris was not even CPU-bound on the app** (344 of 500% used) — its throughput ceiling here is *higher* than 8 844; the bottleneck had moved to the driver / DB / kernel. So **the throughput gap is a lower bound.**
 
 This `CPU/req` advantage reproduced in every configuration I measured (−26% to −32% across bridge, host-net, 3/4/5 cores, warm/short-warmup). It is the durable finding.
 
@@ -243,12 +243,12 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
 
 ## Conclusions
 
-**What the data supports (this hardware, this scenario, directional):**
+**What the data supports (this hardware, this scenario; headline throughput/CPU-per-request firmed at n=3, the rest directional):**
 
-1. **Resource efficiency is Exeris's real differentiator.** ~29% less CPU per request than Quarkus, ~2.7× less than Spring — stable across every configuration tested.
+1. **Resource efficiency is Exeris's real differentiator.** −34% CPU per request than Quarkus (n=3 interleaved, CV < 1.5%), ~2.7× less than Spring — stable across every configuration tested.
 2. **Exeris reaches steady state far faster.** Quarkus was still JIT-compiling after 5 minutes; Exeris was warm almost immediately.
 3. **Exeris has a meaningfully better latency *tail*** (p99+), 1.8–3.3× depending on load.
-4. **Throughput favors Exeris (+13%), and that is a lower bound** — Exeris was not app-CPU-bound at the point I measured.
+4. **Throughput favors Exeris (+16%), and that is a lower bound** — n=3 interleaved (CV < 1.5%), and Exeris was not app-CPU-bound at the point I measured.
 
 **What the data does *not* support:**
 
@@ -258,11 +258,26 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
 
 ## Firming up the numbers
 
-Single runs gave the direction; they don't give an interval. `tools/aggregate-runs.py`
-turns a set of repetitions into mean ± stdev ± **CV%** (coefficient of variation), which
-is the honest way to ask "is this difference bigger than the noise?". Even on just the
-two Exeris wrk2 runs I already have, it makes the report's central honesty point
-quantitative:
+Single runs gave the direction; they don't give an interval. So I ran the headline
+comparison the way the recipe below prescribes: **six runs, interleaved A,B,A,B,A,B**
+(Exeris, Quarkus, three each), every one host-networked, warmed to a confirmed-empty
+C2 queue, target pinned to cores 0–4 and the driver to 5–9. `tools/aggregate-runs.py`
+collapses each triple into mean ± **CV%** (coefficient of variation) — the honest way
+to ask "is this difference bigger than the noise?":
+
+| metric | Exeris (n=3) | Quarkus (n=3) | gap | worst CV |
+|---|---|---|---|---|
+| **CPU / request** | **0.3585 ms** (CV 0.2%) | 0.541 ms (CV 1.5%) | **−33.7%** | 1.5% |
+| throughput (rps) | **9 374** (CV 0.8%) | 8 068 (CV 1.3%) | **+16.2%** | 1.3% |
+
+Both headline gaps are **20–40× larger than their own run-to-run noise** — they survive
+the interleave, so they are real, not an artifact of which stack happened to run during
+a quiet window. (These are h2load-at-saturation runs, so their p50/p99 are
+*coordinated-omission* percentiles — queueing, not service time; see Act 3. The firm-up
+here is for **throughput and CPU/request only**.)
+
+Latency-median is the opposite story. On the CO-free wrk2 runs, the same tool makes the
+report's central honesty point quantitative:
 
 | metric | mean | CV% |
 |---|---|---|
@@ -272,20 +287,21 @@ quantitative:
 | latency_p99_ms | 13.1 | **53%** ⚠ |
 | latency_p999_ms | 27.8 | **78%** ⚠ |
 
-CPU-per-request varies **1.4%** run-to-run; median latency varies **55%**. Any
-between-stack latency-median difference smaller than ~55% is not real on this box —
-which is exactly why I refuse to claim one. The −29% CPU/req gap, by contrast, is
-~20× the metric's own noise.
+CPU-per-request varies ~1% run-to-run; median latency varies **55%**. Any between-stack
+latency-median difference smaller than ~55% is not real on this box — which is exactly
+why I refuse to claim one. The −34% CPU/req gap, by contrast, is ~20× the metric's own
+noise.
 
-**Recipe to reach publication-grade:**
+**Recipe to publication-grade — what's done, what's still open:**
 
-1. Move to `perf-box-amd64` — turbo off, pinned kernel/scheduler, `performance` governor.
-2. **Interleave repetitions** A,B,A,B,A,B (≥5 each) so box drift averages out instead of biasing whoever ran during a noisy window.
-3. Fix the wrk2 rate to the **same fraction of the shared (lower) saturation** for both stacks, so load fraction is identical (this run had 0.785 vs 0.808).
-4. Confirm `C2 peak == 0` for every stack before its measurement window opens.
-5. Aggregate: `tools/aggregate-runs.py results/raw/guided/<run-dirs...>` → report mean ± stdev, drop any metric whose CV exceeds the claimed gap.
+1. Move to `perf-box-amd64` — turbo off, pinned kernel/scheduler, `performance` governor. *(open — these are `dev-laptop` runs.)*
+2. ✅ **Interleave repetitions** A,B,A,B,A,B so box drift averages out instead of biasing whoever ran during a noisy window. *(done — n=3 each; ≥5 would tighten the interval further.)*
+3. Fix the wrk2 rate to the **same fraction of the shared (lower) saturation** for both stacks, so load fraction is identical (the CO-free pair had 0.785 vs 0.808). *(open for the latency axis.)*
+4. ✅ Confirm `C2 peak == 0` for every stack before its measurement window opens. *(done.)*
+5. ✅ Aggregate: `tools/aggregate-runs.py results/raw/guided/<run-dirs...>` → report mean ± stdev, drop any metric whose CV exceeds the claimed gap. *(done.)*
 
-Until then, treat throughput/CPU-per-request as solid directional findings and latency-median as **explicitly inconclusive**.
+The throughput and CPU-per-request findings are now **firmed** (n=3 interleaved, CV < 1.5%);
+latency-median stays **explicitly inconclusive** until step 3 and a quiet box.
 
 ---
 
@@ -302,6 +318,21 @@ All runs: `entity-read-by-id`, host-net (unless noted), `dev-laptop`, JDK 26, ke
 | `…123720Z` | Quarkus | wrk2 | 75%-own-sat — p50 9.03, p99 14.73 ms |
 | `…125344Z` | Exeris | wrk2 | matched 6 000 rps — p50 6.73, p99 18.05 ms |
 | `…130014Z` | Quarkus | wrk2 | matched 6 000 rps — p50 6.48, p99 46.78 ms |
+
+**Firm-up set — interleaved A,B,A,B,A,B, host-net, warmed (C2=0), target 0–4 / driver 5–9, h2load at saturation:**
+
+| Timestamp (UTC) | Target | rps | CPU/req (ms) |
+|---|---|---|---|
+| `…134826Z` | Exeris | 9 454 | 0.359 |
+| `…140518Z` | Quarkus | 8 158 | 0.534 |
+| `…142125Z` | Exeris | 9 296 | 0.358 |
+| `…143724Z` | Quarkus | 7 952 | 0.550 |
+| `…145345Z` | Exeris | 9 373 | 0.359 |
+| `…151001Z` | Quarkus | 8 096 | 0.539 |
+| **Exeris mean (n=3)** | | **9 374** (CV 0.8%) | **0.3585** (CV 0.2%) |
+| **Quarkus mean (n=3)** | | **8 068** (CV 1.3%) | **0.541** (CV 1.5%) |
+
+Reproduce: `tools/aggregate-runs.py results/raw/guided/{134826Z,142125Z,145345Z}` (Exeris) and `{140518Z,143724Z,151001Z}` (Quarkus).
 
 *Bridge-vs-host-net (Act 2) and the short-warmup progression (Act 1) come from earlier runs in the same session; see `results/raw/guided/`.*
 

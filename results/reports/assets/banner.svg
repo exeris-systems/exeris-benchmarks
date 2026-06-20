@@ -14,7 +14,7 @@
   <!-- headline stat strip -->
   <g font-size="15">
     <rect x="64"  y="344" width="250" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/>
-    <text x="80" y="370" fill="#93c5fd">CPU / request</text><text x="80" y="394" font-size="22" font-weight="bold" fill="#f8fafc">−29%</text>
+    <text x="80" y="370" fill="#93c5fd">CPU / request (n=3)</text><text x="80" y="394" font-size="22" font-weight="bold" fill="#f8fafc">−34%</text>
     <rect x="330" y="344" width="250" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/>
     <text x="346" y="370" fill="#93c5fd">h2load p50 vs wrk2 p50</text><text x="346" y="394" font-size="22" font-weight="bold" fill="#f8fafc">146 ms → 3 ms</text>
     <rect x="596" y="344" width="270" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/>

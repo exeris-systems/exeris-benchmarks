@@ -80,19 +80,19 @@ def grouped_log_latency(fname, title, percentiles, series, note=""):
 
 EX, QK, SP = "#2563eb", "#dc2626", "#9ca3af"  # exeris blue, quarkus red, spring grey
 
-# 1. CPU per request (the durable differentiator) — 5/10 host-net, 5 cores
+# 1. CPU per request (the durable differentiator) — n=3 interleaved, host-net, warmed, 5 cores
 hbar("chart-cpu-per-request.svg",
-     "CPU per request — entity-read-by-id (host-net, warmed)",
-     [("Exeris", 0.390, EX), ("Quarkus", 0.552, QK), ("Spring", 0.956, SP)],
+     "CPU per request — entity-read-by-id (host-net, warmed, n=3)",
+     [("Exeris", 0.3585, EX), ("Quarkus", 0.541, QK), ("Spring", 0.956, SP)],
      "ms/req", lower_is_better=True,
-     note="process %CPU / throughput, pidstat aggregate · runs 114151Z / 121411Z / 111404Z · dev-laptop")
+     note="process %CPU / throughput, pidstat aggregate · Exeris/Quarkus mean of 3 interleaved (CV<1.5%) · Spring single ref · dev-laptop")
 
-# 2. Throughput — same runs
+# 2. Throughput — same n=3 interleaved set
 hbar("chart-throughput.svg",
-     "Throughput — entity-read-by-id (h2load, saturation, host-net, warmed)",
-     [("Exeris", 8844, EX), ("Quarkus", 7836, QK), ("Spring", 3052, SP)],
+     "Throughput — entity-read-by-id (h2load, saturation, host-net, warmed, n=3)",
+     [("Exeris", 9374, EX), ("Quarkus", 8068, QK), ("Spring", 3052, SP)],
      "rps",
-     note="h2load saturation · Exeris not app-CPU-bound (69%) so this is a lower bound · dev-laptop, single run")
+     note="h2load saturation · Exeris/Quarkus mean of 3 interleaved (CV<1.3%) · Exeris not app-CPU-bound (69%) so this is a lower bound · Spring single ref")
 
 # 3. Coordinated omission: same Exeris target, two experiments
 grouped_log_latency("chart-coordinated-omission.svg",

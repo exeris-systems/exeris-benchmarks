@@ -373,6 +373,11 @@
       "type": "boolean",
       "description": "Whether the steady-state JFR overlay (env/jfr-steady-state.jfc, C2 compiler events) was merged (BENCH_JFR_STEADY_STATE)."
     },
+    "backend_network_mode": {
+      "type": "string",
+      "enum": ["host", "bridge"],
+      "description": "Container network mode for the stateful backend (Postgres). host layers the host-net override (DB_HOST_NETWORK=1) to remove the bridge/NAT tax; bridge is the default."
+    },
     "execution_class": {
       "type": "string",
       "enum": [

@@ -667,6 +667,11 @@ enable_jfr="no"
 # of the base JFR config (BENCH_JFR_STEADY_STATE, only meaningful when JFR is on).
 enable_os_sidecars="no"
 enable_jfr_steady_state="no"
+# Backend container network mode (default bridge). host => the runner layers the
+# host-net compose override (DB_HOST_NETWORK=1) so the stateful backend (Postgres)
+# shares the host network, removing the bridge/NAT tax that taxes chattier stacks
+# asymmetrically — a fairness gate for cross-stack comparison.
+db_host_network="no"
 
 # Drivers declared by the scenario, intersected with supported load drivers.
 readarray -t SCEN_DRIVERS < <(jq -r '.driver[]?' "$scenario_json" 2>/dev/null || true)
@@ -1046,6 +1051,20 @@ if [[ "$enable_jfr" == "yes" ]]; then
   enable_jfr_steady_state="$(choose_option "Merge steady-state JFR overlay (C2 compiler events, proves JIT settled)?" "no" yes no)"
 fi
 
+# Backend network mode: offered where the runner manages a containerized stateful
+# backend it can re-home onto the host network — local saga/entity-read with docker
+# present. host removes the bridge/NAT tax (fairness for cross-stack), at the cost of
+# a less production-shaped network. Default bridge (unchanged run shape).
+backend_net_supported() {
+  [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]] || return 1
+  [[ "$is_saga" == "yes" || "$scenario_id" == "entity-read-by-id" ]] || return 1
+  command -v docker >/dev/null 2>&1 || return 1
+  return 0
+}
+if backend_net_supported; then
+  db_host_network="$(choose_option "Run stateful backend (Postgres) on HOST network instead of bridge? (removes NAT/bridge tax — fairness for cross-stack)" "no" yes no)"
+fi
+
 # Export the opt-in diagnostics into the dispatch environment so every child
 # runner inherits them (the dedicated saga/entity-read runners read
 # BENCH_OS_SIDECARS; the target launchers read BENCH_JFR_STEADY_STATE). Both
@@ -1053,6 +1072,9 @@ fi
 # rather than relying on the unset fallback.
 if [[ "$enable_os_sidecars" == "yes" ]]; then export BENCH_OS_SIDECARS=1; else export BENCH_OS_SIDECARS=0; fi
 if [[ "$enable_jfr_steady_state" == "yes" ]]; then export BENCH_JFR_STEADY_STATE=1; else export BENCH_JFR_STEADY_STATE=0; fi
+# DB_HOST_NETWORK is read by the saga/entity-read runners (== "1" => host-net
+# override). Export "0" when off so the default is explicit.
+if [[ "$db_host_network" == "yes" ]]; then export DB_HOST_NETWORK=1; backend_network_mode="host"; else export DB_HOST_NETWORK=0; backend_network_mode="bridge"; fi
 
 # ---------------------------------------------------------------------------
 # Claim scope + fairness attestations (resolved before workload because the
@@ -1243,6 +1265,7 @@ jq -n \
   --arg enable_jfr "$enable_jfr" \
   --arg enable_os_sidecars "$enable_os_sidecars" \
   --arg enable_jfr_steady_state "$enable_jfr_steady_state" \
+  --arg backend_network_mode "${backend_network_mode:-bridge}" \
   --arg execution_class "$execution_class" \
   --arg execution_profile_id "$execution_profile_id" \
   --arg cgroup_memory_limit_mb "$cgroup_memory_limit_mb" \
@@ -1345,6 +1368,7 @@ jq -n \
   | (. + {enable_jfr: ($enable_jfr == "yes")})
   | (. + {os_sidecars: ($enable_os_sidecars == "yes")})
   | (. + {jfr_steady_state: ($enable_jfr_steady_state == "yes")})
+  | (. + {backend_network_mode: $backend_network_mode})
   | (. + {execution_class: $execution_class})
   | (if $execution_class == "constrained"
        then . + (if $execution_profile_id != "" then {execution_profile_id: $execution_profile_id} else {} end)
@@ -1433,6 +1457,9 @@ if jfr_supported; then
 fi
 if os_sidecars_supported; then
   echo "  os_sidecars        : $enable_os_sidecars (pidstat/mpstat sampling during measurement)"
+fi
+if backend_net_supported; then
+  echo "  backend_network    : ${backend_network_mode:-bridge} (host removes bridge/NAT tax; DB_HOST_NETWORK=$([[ "$db_host_network" == "yes" ]] && echo 1 || echo 0))"
 fi
 echo "  execution_class    : $execution_class"
 if [[ "$execution_class" == "constrained" ]]; then

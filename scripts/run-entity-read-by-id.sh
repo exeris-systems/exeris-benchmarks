@@ -1392,6 +1392,7 @@ if [[ "$DRIVER" == "wrk2" ]]; then
     WRK2_DURATION_OVERRIDE="$DURATION" \
     WRK2_CLIENT_CPU_AFFINITY="$CLIENT_CPU_AFFINITY" \
     WRK2_RESULT_JSON_OVERRIDE="$WRK2_LATENCY_JSON" \
+    WRK2_TARGET_RPS="${WRK2_TARGET_RPS:-}" \
     HARDWARE_PROFILE="$PROFILE" \
     "$REPO_ROOT/scripts/run-wrk2.sh" "scenarios/entity-read-by-id" "scenarios/entity-read-by-id" 2>&1
   )

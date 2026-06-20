@@ -411,6 +411,11 @@
       "type": "string",
       "minLength": 1
     },
+    "wrk2_target_rps": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Fixed wrk2 arrival rate (RPS). Present only when pinned; absent => run-wrk2.sh auto-derives ~75% of discovered saturation."
+    },
     "targets": {
       "type": "array",
       "items": {

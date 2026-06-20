@@ -713,6 +713,10 @@ cgroup_memory_limit_mb=""
 cgroup_cpu_quota_pct=""
 cpu_affinity=""
 client_cpu_affinity=""
+# Fixed wrk2 arrival rate (RPS). Empty => run-wrk2.sh auto-derives ~75% of the
+# discovered saturation (per-target). Pin it to compare CO-free latency across
+# stacks at IDENTICAL absolute load instead of each at 75% of its own ceiling.
+wrk2_target_rps=""
 constrained_contract=""
 
 if [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]]; then
@@ -1149,6 +1153,20 @@ else
     info "saga drives concurrency by virtual_users/think-time from the contract; threads/connections are not used by the saga runner."
   fi
 fi
+
+# wrk2 fixed arrival rate (entity-read latency runs). Empty keeps the auto behavior
+# (~75% of each target's own discovered saturation); a number pins the rate so
+# CO-free latency is measured at identical absolute load across stacks — the right
+# basis for a cross-stack latency claim. Must stay below the slowest target's
+# saturation, else wrk2 runs at saturation and the percentiles become CO-shaped.
+if [[ "$driver" == "wrk2" && "$scenario_id" == "entity-read-by-id" ]]; then
+  wrk2_target_rps="$(prompt_text "wrk2 fixed arrival rate (RPS, empty = auto ~75% of discovered saturation; pin a value for cross-stack matched-load latency)" "")"
+  if [[ -n "$wrk2_target_rps" ]] && ! [[ "$wrk2_target_rps" =~ ^[0-9]+$ ]]; then
+    warn "wrk2 rate '$wrk2_target_rps' is not a positive integer; falling back to auto (~75% saturation)."
+    wrk2_target_rps=""
+  fi
+fi
+
 hardware_profile="$(select_kv "Hardware profile" "dev-laptop" \
   linux-generic    "linux-generic" \
   aarch64-generic  "aarch64-generic" \
@@ -1272,6 +1290,7 @@ jq -n \
   --arg cgroup_cpu_quota_pct "$cgroup_cpu_quota_pct" \
   --arg cpu_affinity "$cpu_affinity" \
   --arg client_cpu_affinity "$client_cpu_affinity" \
+  --arg wrk2_target_rps "$wrk2_target_rps" \
   --argjson delay_ms "${delay_ms:-0}" \
   --argjson loss_pct "${loss_pct:-0}" \
   --argjson jitter_ms "${jitter_ms:-0}" \
@@ -1381,6 +1400,7 @@ jq -n \
        else . end)
   | (if $cpu_affinity != "" then . + {cpu_affinity: $cpu_affinity} else . end)
   | (if $client_cpu_affinity != "" then . + {client_cpu_affinity: $client_cpu_affinity} else . end)
+  | (if $wrk2_target_rps != "" then . + {wrk2_target_rps: ($wrk2_target_rps | tonumber)} else . end)
   ' > "$PROFILE_OUT"
 
 info "Profile written: $PROFILE_OUT"
@@ -1810,7 +1830,12 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
   # warmup -> wrk2 fixed -R, HdrHistogram) and writes wrk2-latency.json into the run
   # dir. So it is turnkey; just inform the operator about the protocol/semantics.
   if [[ "$entity_driver" == "wrk2" ]]; then
-    warn "entity-read-by-id + wrk2: CO-free sub-saturation LATENCY run (HTTP/1.1). The runner delegates measurement to run-wrk2.sh; rate auto-derives to ~75% of observed saturation unless WRK2_TARGET_RPS is set."
+    if [[ -n "$wrk2_target_rps" ]]; then
+      export WRK2_TARGET_RPS="$wrk2_target_rps"
+      warn "entity-read-by-id + wrk2: CO-free LATENCY run (HTTP/1.1) at FIXED rate ${wrk2_target_rps} rps. The runner delegates to run-wrk2.sh; ensure this rate is below the target's saturation or percentiles become CO-shaped (check at_saturation in wrk2-latency.json)."
+    else
+      warn "entity-read-by-id + wrk2: CO-free sub-saturation LATENCY run (HTTP/1.1). Rate auto-derives to ~75% of observed saturation (per target). Pin WRK2_TARGET_RPS (the wrk2-rate prompt) for cross-stack matched-load latency."
+    fi
     [[ "$protocol_mode" == "h2" ]] && warn "Requested protocol was h2, but wrk2 is HTTP/1.1 only — the latency run will be H1. State the protocol difference when placing it next to h2load throughput."
   fi
 

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" font-family="Verdana,Helvetica,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="440" fill="url(#bg)"/>
+  <text x="64" y="92" font-size="20" fill="#60a5fa" letter-spacing="3">PERFORMANCE · BENCHMARKING · JVM</text>
+  <text x="64" y="168" font-size="52" font-weight="bold" fill="#f8fafc">When throughput lies</text>
+  <text x="64" y="214" font-size="26" fill="#cbd5e1">steady-state, coordinated omission,</text>
+  <text x="64" y="248" font-size="26" fill="#cbd5e1">and the real cost of a request</text>
+  <text x="64" y="312" font-size="17" fill="#94a3b8">entity-read-by-id · Exeris (Community) vs Quarkus, Spring as reference · JDK 26 · dev-laptop</text>
+  <!-- headline stat strip -->
+  <g font-size="15">
+    <rect x="64"  y="344" width="250" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/>
+    <text x="80" y="370" fill="#93c5fd">CPU / request</text><text x="80" y="394" font-size="22" font-weight="bold" fill="#f8fafc">−29%</text>
+    <rect x="330" y="344" width="250" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/>
+    <text x="346" y="370" fill="#93c5fd">h2load p50 vs wrk2 p50</text><text x="346" y="394" font-size="22" font-weight="bold" fill="#f8fafc">146 ms → 3 ms</text>
+    <rect x="596" y="344" width="270" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/>
+    <text x="612" y="370" fill="#93c5fd">steady state</text><text x="612" y="394" font-size="22" font-weight="bold" fill="#f8fafc">instant vs &gt;5 min</text>
+    <rect x="882" y="344" width="254" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/>
+    <text x="898" y="370" fill="#93c5fd">median latency</text><text x="898" y="394" font-size="22" font-weight="bold" fill="#f8fafc">noise, not claimed</text>
+  </g>
+</svg>

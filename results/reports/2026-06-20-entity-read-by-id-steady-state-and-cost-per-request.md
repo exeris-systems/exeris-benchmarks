@@ -1,21 +1,39 @@
+---
+title: "When throughput lies: steady-state, coordinated omission, and the real cost of a request"
+date: 2026-06-20 00:00:00 UTC
+categories:
+  - performance
+  - benchmarking
+  - jvm
+summary: "Throughput and latency both lie on this workload — one to coordinated omission, the other to warmup and run-to-run noise. The metric that survives is CPU per request: Exeris serves ~13% more throughput for ~29% less CPU/request than Quarkus, and reaches steady state while Quarkus is still JIT-compiling after 5 minutes (Spring trails both). JFR, pidstat, and CO-free wrk2 show how — and where a saturated p50 of 146 ms is really a 3 ms service time."
+image: assets/banner.svg
+authors:
+  - Arkadiusz Przychocki
+track: Community
+benchmark_family: Runtime
+scenario: entity-read-by-id
+---
+
 # When throughput lies: steady-state, coordinated omission, and the real cost of a request
 
 *An entity-read-by-id investigation — Exeris (Community) vs Quarkus, with Spring as a reference point.*
 
 **Track:** Community · **Benchmark family:** Runtime · **Scenario:** `entity-read-by-id` · **Date:** 2026-06-20 · **Bench commit:** `7e7aeb8`
 
+![banner](assets/banner.svg)
+
 ---
 
 ## TL;DR
 
-We set out to compare three JVM HTTP stacks on a trivial DB-backed read (`GET /api/v1/users` → indexed Postgres lookup) and discovered that almost every number you would naively quote is wrong for a different reason:
+I set out to compare three JVM HTTP stacks on a trivial DB-backed read (`GET /api/v1/users` → indexed Postgres lookup) and discovered that almost every number you would naively quote is wrong for a different reason:
 
 - **Throughput depends on the network plumbing, not just the app.** Moving Postgres from a bridged container to host networking lifted Exeris throughput **+20%** with *zero* application change — the bridge/NAT tax was stealing the target's CPU as softirq.
 - **Latency percentiles from a saturated closed-loop driver are not latency.** h2load reported a p50 of **146 ms**; the real service-time p50 was **~3–7 ms**. The 146 ms was queue depth ÷ throughput (Little's law), to the digit.
 - **The JIT matters longer than your warmup.** Exeris reached steady state essentially instantly (C2 compile queue never backed up); Quarkus was *still* compiling hot methods **after 5 minutes** of warmup.
 - **The one metric that stayed stable across all of this was CPU-per-request.** Exeris served comparable-or-higher throughput for **~29% less CPU per request** — the same edge whether the box was warm, cold, bridged, or host-networked.
 
-What we will **not** claim: that Exeris has a better *median* latency (on this hardware that signal is buried in noise), or that any of these absolute numbers transfer off a developer workstation.
+What I will **not** claim: that Exeris has a better *median* latency (on this hardware that signal is buried in noise), or that any of these absolute numbers transfer off a developer workstation.
 
 ---
 
@@ -42,19 +60,19 @@ The interesting output of this session is less "stack X beat stack Y" and more *
 **Read these before any number below:**
 
 1. **`dev-laptop`, not `perf-box-amd64`.** Turbo is on, it is a workstation, and absolute numbers are **not** publication-grade. Use them for *relative, same-box* comparison only.
-2. **Single run per configuration** unless stated. Where we show two runs of the "same" thing they disagree by up to **2.3×** on median latency — see the variance section. Treat single-run latencies as *directional*.
-3. **SMT pinning caveat.** The CPU is 6 physical cores / 12 SMT threads. We pin to *logical* threads (e.g. "target `0-4`"), so some pinned "cores" may be SMT siblings sharing a physical core. The target-bound conclusions hold directionally but the core math is approximate.
+2. **Single run per configuration** unless stated. Where I show two runs of the "same" thing they disagree by up to **2.3×** on median latency — see the variance section. Treat single-run latencies as *directional*.
+3. **SMT pinning caveat.** The CPU is 6 physical cores / 12 SMT threads. I pin to *logical* threads (e.g. "target `0-4`"), so some pinned "cores" may be SMT siblings sharing a physical core. The target-bound conclusions hold directionally but the core math is approximate.
 4. **Community track only.** No Enterprise targets, no H3, no locality. Nothing here speaks to those.
 
 ---
 
 ## Act 1 — The warmup trap: when 5 minutes isn't enough
 
-The first thing we added was a way to *prove* steady state instead of assuming it. We overlay three JFR compiler events (`jdk.CompilerStatistics`, `jdk.CompilerQueueUtilization`, `jdk.Compilation`) on the recording and watch the **C2 compile queue** drain.
+The first thing I added was a way to *prove* steady state instead of assuming it. I overlay three JFR compiler events (`jdk.CompilerStatistics`, `jdk.CompilerQueueUtilization`, `jdk.Compilation`) on the recording and watch the **C2 compile queue** drain.
 
-The rule we adopted: a run is only "warm" if the C2 queue is empty for the whole measurement window.
+The rule I adopted: a run is only "warm" if the C2 queue is empty for the whole measurement window.
 
-What we found, on identical 5-minute-warmup / 10-minute-measure runs:
+What I found, on identical 5-minute-warmup / 10-minute-measure runs:
 
 | | Exeris | Quarkus |
 |---|---|---|
@@ -63,9 +81,9 @@ What we found, on identical 5-minute-warmup / 10-minute-measure runs:
 
 **Exeris's C2 queue never backed up** — it was fully compiled almost immediately. **Quarkus was still doing >100 ms compilations 5+ minutes in.** Earlier runs made this even more visible: a 60 s warmup left Quarkus compiling through the *first ~57 s of its measurement window*, and Quarkus throughput climbed from 5 642 → 6 660 rps (+18%) just by extending warmup 120 s → 180 s, while Exeris was flat regardless.
 
-**Consequence:** any Quarkus throughput number here is a mild *under*-estimate (it is still improving), and short-warmup latency for Quarkus is partly cold-JIT noise. This is also why we stopped trusting any run we couldn't confirm warm.
+**Consequence:** any Quarkus throughput number here is a mild *under*-estimate (it is still improving), and short-warmup latency for Quarkus is partly cold-JIT noise. This is also why I stopped trusting any run I couldn't confirm warm.
 
-> Reference reading on exactly this failure mode: *"When the JIT can't keep up."* We hit the same wall from the other side — the harness, not the app.
+> Reference reading on exactly this failure mode: *"When the JIT can't keep up."* I hit the same wall from the other side — the harness, not the app.
 
 ---
 
@@ -90,7 +108,7 @@ This is a **fairness gate, not hygiene**: bridge/NAT taxes a chattier stack asym
 
 ## Act 3 — Coordinated omission: a p50 of 146 ms that was never real
 
-h2load is the only driver in our kit that speaks cleartext HTTP/2 (h2c), so we taught it to emit percentiles (via `--log-file` + offline aggregation). On the warmed, host-net Exeris run it reported:
+h2load is the only driver in my kit that speaks cleartext HTTP/2 (h2c), so I taught it to emit percentiles (via `--log-file` + offline aggregation). On the warmed, host-net Exeris run it reported:
 
 ```
 h2load (closed-loop, at saturation):  p50 = 146 ms,  p99 = 247 ms,  mean = 144 ms
@@ -110,7 +128,7 @@ The fix is a *different experiment*, not a different parser: **wrk2 at a fixed a
 wrk2 (open-loop, ~75% load):  p50 = 2.95 ms,  p99 = 8.19 ms
 ```
 
-**p50: 2.95 ms vs 146 ms — a 49× gap between the real service time and the saturated-queue artifact.** This is the single most important methodological point in the report: *never quote a saturated closed-loop percentile as latency.* Our h2load percentiles ship with a `co_caveat` stamped into the artifact for exactly this reason.
+**p50: 2.95 ms vs 146 ms — a 49× gap between the real service time and the saturated-queue artifact.** This is the single most important methodological point in the report: *never quote a saturated closed-loop percentile as latency.* My h2load percentiles ship with a `co_caveat` stamped into the artifact for exactly this reason.
 
 ![Coordinated omission: h2load saturated vs wrk2 CO-free, same Exeris target](assets/chart-coordinated-omission.svg)
 
@@ -134,10 +152,10 @@ Matched, fully-warmed, host-net, target-bound (5 cores), 10-minute measurement:
 ![Throughput — Exeris vs Quarkus vs Spring](assets/chart-throughput.svg)
 
 - **Exeris serves +13% more throughput for −29% less CPU per request** than Quarkus. To deliver its *lower* 7 836 rps, Quarkus burned 432% CPU; Exeris delivered *more* (8 844) on 344%.
-- Spring is a different era: **2.7× the CPU per request** of Exeris. (We are taking the operator's "archaic" characterization as a hypothesis; the data is consistent with it. No deeper Spring analysis was done.)
+- Spring is a different era: **2.7× the CPU per request** of Exeris. (I'm taking the "archaic" characterization as a hypothesis; the data is consistent with it. No deeper Spring analysis was done.)
 - **Exeris was not even CPU-bound on the app** (344 of 500% used) — its throughput ceiling here is *higher* than 8 844; the bottleneck had moved to the driver / DB / kernel. So **+13% is a lower bound.**
 
-This `CPU/req` advantage reproduced in every configuration we measured (−26% to −32% across bridge, host-net, 3/4/5 cores, warm/short-warmup). It is the durable finding.
+This `CPU/req` advantage reproduced in every configuration I measured (−26% to −32% across bridge, host-net, 3/4/5 cores, warm/short-warmup). It is the durable finding.
 
 ### Where the CPU goes — the flame graphs
 
@@ -155,7 +173,7 @@ Top self-time methods (leaf frames):
 | `MethodHandle` dispatch (`Invokers.checkCustomized`) | `StringLatin1.toLowerCase` ~5.3%, heavy `HashMap`/`TreeNode` |
 | relatively flat profile (top frame ~8%) | Netty/Vert.x event loop + `getFastLong` |
 
-The single clearest contributor to Quarkus's higher per-request cost is **reflection**: ~10.5% of CPU in `DirectMethodHandleAccessor.invoke`, plus notable `String.toLowerCase` and hash-map churn in the request path. **Important fairness note:** this is **JVM-mode** Quarkus. Quarkus is *designed* for native-image, where build-time processing eliminates most reflection; in a native build this hot frame would largely disappear. We measured JVM mode for an apples-to-apples comparison with the JVM-mode Exeris/Spring targets — a native Quarkus comparison is a separate (and fairer-to-Quarkus) experiment.
+The single clearest contributor to Quarkus's higher per-request cost is **reflection**: ~10.5% of CPU in `DirectMethodHandleAccessor.invoke`, plus notable `String.toLowerCase` and hash-map churn in the request path. **Important fairness note:** this is **JVM-mode** Quarkus. Quarkus is *designed* for native-image, where build-time processing eliminates most reflection; in a native build this hot frame would largely disappear. I measured JVM mode for an apples-to-apples comparison with the JVM-mode Exeris/Spring targets — a native Quarkus comparison is a separate (and fairer-to-Quarkus) experiment.
 
 **Sampling caveat:** the recordings hold very different ExecutionSample counts — **Exeris 9 582 vs Quarkus 201 060** over the same 10 minutes. This is a thread-model artifact (Exeris's virtual-thread carriers present far fewer sampleable platform threads than Quarkus's event-loop pool), and it is the same reason Exeris's `.jfr` is larger by *bytes* (custom Exeris telemetry events) yet smaller by *CPU samples*. Flame-graph **proportions** are valid for both; absolute resolution is much finer for Quarkus.
 
@@ -163,7 +181,7 @@ The single clearest contributor to Quarkus's higher per-request cost is **reflec
 
 ## Act 5 — Latency, honestly: tail yes, median no
 
-Here the story gets uncomfortable, and we report it straight.
+Here the story gets uncomfortable, and I report it straight.
 
 **Comparison A — each stack at 75% of its *own* saturation (good box state):**
 
@@ -187,18 +205,18 @@ These two comparisons **disagree about the median**. Comparison A says Exeris p5
 
 So, honestly:
 
-- **Median / typical latency: not distinguishable on this hardware.** The run-to-run noise (2.3×) is larger than any between-stack difference we saw. We do **not** claim a median-latency win for Exeris.
+- **Median / typical latency: not distinguishable on this hardware.** The run-to-run noise (2.3×) is larger than any between-stack difference I saw. I do **not** claim a median-latency win for Exeris.
 - **Tail latency (p99 and beyond): consistently favors Exeris** — 1.8× in Comparison A, 2.6–3.3× in Comparison B. This is robust across runs and is consistent with the rest of the picture (Quarkus's still-warming JIT and higher CPU/req → more GC/compilation jitter → fatter tail).
 
 **Fairness caveat on Comparison B:** because the two runs discovered slightly different saturation points, the *load fraction* differed — Exeris ran at 0.785 of its ceiling, Quarkus at 0.808. Quarkus was pushed marginally closer to saturation, which inflates its tail somewhat. Part of the p99 gap is this asymmetry, not pure efficiency. A cleaner design fixes the rate as the same fraction of the *shared lower* saturation.
 
 ---
 
-## What we had to fix before we could trust any of this
+## What I had to fix before I could trust any of this
 
 Three measurement bugs were found and fixed mid-investigation. They are worth listing because each one would have silently corrupted a result:
 
-1. **pidstat per-thread CSV corruption.** JVM thread names contain spaces (`C2 CompilerThread0`, `G1 Young RemSet Sampling`). A naive whitespace→comma conversion split them into extra columns — corrupting exactly the C2-thread `%wait` row we cared about. Fixed by quoting the trailing command column.
+1. **pidstat per-thread CSV corruption.** JVM thread names contain spaces (`C2 CompilerThread0`, `G1 Young RemSet Sampling`). A naive whitespace→comma conversion split them into extra columns — corrupting exactly the C2-thread `%wait` row I cared about. Fixed by quoting the trailing command column.
 2. **wrk2 lost a full run to a locale comma.** On a `pl_PL` locale, `awk`'s `printf "%.6f"` emitted `0,75`, which `jq --argjson` rejected as invalid JSON — *after* a complete 2-minute measurement. Fixed by forcing `LC_ALL=C`.
 3. **CPU pinning wasn't being recorded.** The guided profile only persisted CPU affinity for *constrained* runs, so target-bound (unconstrained) runs dropped it from the reproducibility metadata. Fixed.
 
@@ -230,7 +248,7 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
 1. **Resource efficiency is Exeris's real differentiator.** ~29% less CPU per request than Quarkus, ~2.7× less than Spring — stable across every configuration tested.
 2. **Exeris reaches steady state far faster.** Quarkus was still JIT-compiling after 5 minutes; Exeris was warm almost immediately.
 3. **Exeris has a meaningfully better latency *tail*** (p99+), 1.8–3.3× depending on load.
-4. **Throughput favors Exeris (+13%), and that is a lower bound** — Exeris was not app-CPU-bound at the point we measured.
+4. **Throughput favors Exeris (+13%), and that is a lower bound** — Exeris was not app-CPU-bound at the point I measured.
 
 **What the data does *not* support:**
 
@@ -243,7 +261,7 @@ Everything below is wired into `run-entity-read-by-id.sh` / `run-guided.sh` and 
 Single runs gave the direction; they don't give an interval. `tools/aggregate-runs.py`
 turns a set of repetitions into mean ± stdev ± **CV%** (coefficient of variation), which
 is the honest way to ask "is this difference bigger than the noise?". Even on just the
-two Exeris wrk2 runs we already have, it makes the report's central honesty point
+two Exeris wrk2 runs I already have, it makes the report's central honesty point
 quantitative:
 
 | metric | mean | CV% |
@@ -256,7 +274,7 @@ quantitative:
 
 CPU-per-request varies **1.4%** run-to-run; median latency varies **55%**. Any
 between-stack latency-median difference smaller than ~55% is not real on this box —
-which is exactly why we refuse to claim one. The −29% CPU/req gap, by contrast, is
+which is exactly why I refuse to claim one. The −29% CPU/req gap, by contrast, is
 ~20× the metric's own noise.
 
 **Recipe to reach publication-grade:**

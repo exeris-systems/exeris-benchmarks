@@ -22,14 +22,18 @@ _EVENT_RE = re.compile(r"[A-Za-z][\w.]*\Z")
 _PATH_SAFE_RE = re.compile(r"[\w./@+][\w./@+-]*\Z")
 
 def validate_inputs(jfr_path, event):
-    """Reject any untrusted value that isn't a plain event id / safe file path
-    before it is passed to the OS command."""
-    if not _EVENT_RE.fullmatch(event):
+    """Validate the untrusted CLI inputs and RETURN the sanitized values, each
+    re-derived from its allowlist match — so callers pass only the validated
+    forms to the OS command (and the taint is broken at this boundary)."""
+    ev = _EVENT_RE.fullmatch(event)
+    if not ev:
         sys.exit(f"invalid event name: {event!r}")
-    if not _PATH_SAFE_RE.fullmatch(jfr_path):
+    pa = _PATH_SAFE_RE.fullmatch(jfr_path)
+    if not pa:
         sys.exit(f"unsafe jfr path: {jfr_path!r}")
-    if not os.path.isfile(jfr_path):
+    if not os.path.isfile(pa.group(0)):
         sys.exit(f"not a readable file: {jfr_path!r}")
+    return pa.group(0), ev.group(0)
 
 def fold_stacks(stdout):
     """Fold `jfr print` stackTrace blocks into {root-first stack tuple: count}."""
@@ -54,7 +58,7 @@ def fold_stacks(stdout):
 
 def extract_folded(jfr_path, event):
     """Run jfr print and fold ExecutionSample stacks into {stack_tuple: count}."""
-    validate_inputs(jfr_path, event)
+    jfr_path, event = validate_inputs(jfr_path, event)  # use only the sanitized values
     cmd = ["jfr", "print", "--events", event, "--stack-depth", "2048", jfr_path]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
@@ -342,15 +346,17 @@ def main():
            f"click to zoom · Search for regexp highlight · Reset Zoom to restore")
     svg = render_svg(root, a.title, sub, a.min_pct)
     # Validate the (untrusted) output path before touching the filesystem: same
-    # allowlist as the inputs, and its parent directory must already exist.
-    if not _PATH_SAFE_RE.fullmatch(a.out):
+    # allowlist as the inputs; use the sanitized, match-derived value from here on.
+    out_match = _PATH_SAFE_RE.fullmatch(a.out)
+    if not out_match:
         sys.exit(f"unsafe output path: {a.out!r}")
-    out_dir = os.path.dirname(os.path.abspath(a.out)) or "."
+    out_path = out_match.group(0)
+    out_dir = os.path.dirname(os.path.abspath(out_path)) or "."
     if not os.path.isdir(out_dir):
         sys.exit(f"output directory does not exist: {out_dir}")
-    with open(a.out, "w") as fh:
+    with open(out_path, "w") as fh:
         fh.write(svg)
-    print(f"wrote {a.out}  ({total} samples, {len(folded)} unique stacks)")
+    print(f"wrote {out_path}  ({total} samples, {len(folded)} unique stacks)")
 
 if __name__ == "__main__":
     main()

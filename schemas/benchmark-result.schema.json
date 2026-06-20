@@ -192,7 +192,7 @@
         },
         "time_to_peak_s": {
           "type": "number",
-          "description": "Seconds from load start until per-second throughput first reaches steady-state (e.g. within 5% of the measurement-window mean). Reported separately from steady-state throughput; characterizes warmup, not steady-state."
+          "description": "Seconds from load start until per-second throughput first reaches its plateau (e.g. within 5% of the measurement-window mean). Characterizes warmup ramp, NOT steady-state. CAVEAT: only meaningful for open / throughput-seeking drivers. For rate-capped executors (k6 constant-arrival-rate), throughput is pinned to the configured rate, so this detects the arrival-rate step-up, not when the JIT settled — use the JFR C2 compiler overlay (env/jfr-steady-state.jfc) as the real steady-state proof there."
         },
         "throughput_series": {
           "type": "array",

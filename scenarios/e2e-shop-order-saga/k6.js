@@ -64,7 +64,10 @@ const COOLDOWN_VUS_PRE  = Number.parseInt(__ENV.K6_COOLDOWN_VUS_PRE   || String(
 const COOLDOWN_VUS_MAX  = Number.parseInt(__ENV.K6_COOLDOWN_VUS_MAX   || String(MEASURE_VUS_MAX), 10);
 
 // Parse a k6 duration string ('120s', '2m', '1m30s', '500ms') to seconds so phase
-// start times can be computed by summation rather than hard-coded.
+// start times can be computed by summation rather than hard-coded. NOTE: 'ms' is
+// truncated, not rounded — phase boundaries are whole seconds, so a sub-second
+// component in WARMUP/MEASURE_DURATION would drift MEASURE_START/COOLDOWN_START.
+// The defaults are whole seconds; keep them so to avoid that drift.
 function durationToSeconds(d) {
   if (!d) return 0;
   let total = 0;

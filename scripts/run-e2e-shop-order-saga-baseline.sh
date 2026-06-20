@@ -754,8 +754,11 @@ SEED_VERIFY_SCRIPT="$REPO_ROOT/$SEED_VERIFY_SCRIPT_REF"
 # asymmetric tax across stacks of differing DB-chattiness. DB_HOST_NETWORK=1 (or
 # BENCH_BACKEND_NETWORK=host) layers the host-net override so backends share the
 # host network with the target. The chosen mode is recorded in result.json.
-# `up` commands use BENCHMARK_COMPOSE_UP_ARGS; health/ps stay on the base file
-# (service names are identical, so the override is not needed to query them).
+# Only `up` commands use BENCHMARK_COMPOSE_UP_ARGS; rm/health/ps stay on the base
+# file. The override only changes a service's network_mode — service names and the
+# project are identical, so rm/health/ps resolve the same containers either way.
+# (This is why the entity-read runners, which have no rm step, apply the override
+# to every compose_db subcommand: there the asymmetry simply doesn't arise.)
 BENCHMARK_COMPOSE_UP_ARGS=( -f "$BENCHMARK_COMPOSE_FILE" )
 if [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
   BACKEND_NETWORK_MODE="host"

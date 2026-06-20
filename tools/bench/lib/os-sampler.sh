@@ -63,13 +63,38 @@ bench_stop_pidstat_sampler() {
   # pidstat -h prints a "Linux ..." banner, a "# Time ..." header, and may emit
   # "Average:" rows. Drop the banner, keep the first header (once, "#" stripped),
   # keep all per-sample data rows, drop Average rows.
+  #
+  # Command-column hazard: with -t, the trailing Command column holds JVM thread
+  # comms that contain spaces ("C2 CompilerThread0", "G1 Young RemSet Sampling").
+  # A blind whitespace->comma collapse would split those into extra fields and
+  # give variable column counts on exactly the rows we care about (the C2 thread
+  # for the %wait signal). So convert only the fixed leading columns to commas and
+  # keep Command verbatim as a single quoted final field. The Command index is read
+  # from the header; if it can't be found we fall back to the plain collapse.
   awk '
     NF==0 { next }
     /Linux/ { next }
-    /^#/  { if (!hdr) { sub(/^#[ \t]*/, ""); print; hdr=1 } next }
     /^Average:/ { next }
-    { print }
-  ' "$raw" | _os_sampler_row_to_csv > "$out_csv"
+    /^#/ {
+      if (!hdr) {
+        sub(/^#[ \t]*/, "")
+        for (i=1; i<=NF; i++) if ($i=="Command") cmd=i
+        out=$1; for (i=2; i<=NF; i++) out=out","$i
+        print out; hdr=1
+      }
+      next
+    }
+    {
+      if (cmd>0 && NF>=cmd) {
+        out=$1; for (i=2; i<cmd; i++) out=out","$i
+        c=$cmd; for (i=cmd+1; i<=NF; i++) c=c" "$i
+        gsub(/"/, "\"\"", c)            # escape embedded quotes (rare)
+        print out",\"" c "\""
+      } else {
+        gsub(/[ \t]+/, ","); sub(/^,/, ""); sub(/,$/, ""); print
+      }
+    }
+  ' "$raw" > "$out_csv"
   rm -f "$raw" 2>/dev/null || true
 }
 

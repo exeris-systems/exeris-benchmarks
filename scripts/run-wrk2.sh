@@ -15,6 +15,11 @@
 #   WRK2_THREADS=8 WRK2_CONNECTIONS=256 WRK2_DURATION=90s ./scripts/run-wrk2.sh targets/exeris-kernel/community scenarios/keepalive-steady
 set -euo pipefail
 
+# Force C locale so awk-computed numbers (LOAD_FRACTION via printf "%.6f", rates)
+# use a decimal POINT, not a locale comma. On a comma locale (e.g. pl_PL) "0,75"
+# would be invalid JSON for the jq --argjson below and abort the whole run.
+export LC_ALL=C
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$SCRIPT_DIR/.."
 

@@ -1804,6 +1804,32 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
     exit 3
   fi
 
+  # wrk2 is a separate CO-free sub-saturation latency experiment with its own
+  # runner (run-wrk2.sh: wrk saturation-discovery -> warmup -> wrk2 fixed -R with
+  # HdrHistogram). run-entity-read-by-id.sh deliberately rejects it. Route here.
+  # NOTE: run-wrk2.sh is a load-driver ONLY — it does NOT launch the target or
+  # seed Postgres (unlike the wrk/h2load path), so the target + DB must already be
+  # up and serving. It is HTTP/1.1 (wrk2 has no h2c). Its result lands in
+  # results/raw/wrk2-*.json, not the guided output dir, and it does not apply the
+  # client CPU affinity. wrk2.lua/wrk.env for entity-read supply the URL/path.
+  if [[ "$entity_driver" == "wrk2" ]]; then
+    wrk2_url="http://localhost:8080"   # entity-read local target default (scenarios/entity-read-by-id/wrk.env)
+    warn "entity-read-by-id + wrk2 -> scripts/run-wrk2.sh (CO-free sub-saturation latency, HTTP/1.1)."
+    warn "run-wrk2.sh drives a PRE-LAUNCHED target: it does NOT launch the app or seed Postgres. Ensure the target + DB are up at $wrk2_url before continuing."
+    warn "wrk2 result is written to results/raw/wrk2-*.json (NOT $output_dir); client CPU affinity ('${client_cpu_affinity:-none}') is not applied by run-wrk2.sh."
+    [[ "$protocol_mode" == "h2" ]] && warn "Requested protocol was h2, but wrk2 is HTTP/1.1 only — the latency run will be H1. State the protocol difference when placing it next to h2load throughput."
+    wrk2_target_arg="targets/${targets[0]}"
+    [[ -d "$REPO_ROOT/$wrk2_target_arg" ]] || wrk2_target_arg="scenarios/entity-read-by-id"
+    info "Dispatch: run-wrk2.sh (target=$wrk2_target_arg scenario=entity-read-by-id, rate=auto-discover unless WRK2_TARGET_RPS set)"
+    WRK_BASE_URL_OVERRIDE="$wrk2_url" \
+    WRK_PATH_OVERRIDE="/api/v1/users" \
+    WRK2_THREADS_OVERRIDE="$threads" \
+    WRK2_CONNECTIONS_OVERRIDE="$connections" \
+    WRK2_DURATION_OVERRIDE="${measurement_seconds}s" \
+      "$REPO_ROOT/scripts/run-wrk2.sh" "$wrk2_target_arg" "scenarios/entity-read-by-id"
+    exit $?
+  fi
+
   erbid_cmd=(
     env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build"
     "$REPO_ROOT/scripts/run-entity-read-by-id.sh"

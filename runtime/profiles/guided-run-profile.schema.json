@@ -365,6 +365,14 @@
     "enable_jfr": {
       "type": "boolean"
     },
+    "os_sidecars": {
+      "type": "boolean",
+      "description": "Whether pidstat/mpstat OS sidecars were captured (BENCH_OS_SIDECARS)."
+    },
+    "jfr_steady_state": {
+      "type": "boolean",
+      "description": "Whether the steady-state JFR overlay (env/jfr-steady-state.jfc, C2 compiler events) was merged (BENCH_JFR_STEADY_STATE)."
+    },
     "execution_class": {
       "type": "string",
       "enum": [
@@ -391,6 +399,10 @@
       }
     },
     "cpu_affinity": {
+      "type": "string",
+      "minLength": 1
+    },
+    "client_cpu_affinity": {
       "type": "string",
       "minLength": 1
     },

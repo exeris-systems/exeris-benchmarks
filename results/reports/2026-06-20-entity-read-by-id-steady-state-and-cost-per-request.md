@@ -206,6 +206,23 @@ matched-percentage, **Reset Zoom** to restore, hover for the full frame + sample
 (They render and stay interactive when this page is served; on a renderer that strips
 embedded SVG/JS, use the fallback link beneath each.)
 
+**What Quarkus configuration this profiles — and why it is the fair one.** The Quarkus
+target runs `@RunOnVirtualThread` over blocking `quarkus-jdbc-postgresql` — virtual threads
+carrying blocking JDBC, no worker-pool offload — which keeps the **database-access model
+matched**: Spring and Exeris also use blocking JDBC, so all three stacks hit Postgres the same
+way and no driver swap contaminates the comparison. This is Quarkus's recommended posture for
+blocking-IO endpoints, so it profiles Quarkus *at* its blocking-stack best, not a strawman. The
+one Quarkus variant that might be faster — fully reactive (RESTEasy Reactive + the Vert.x
+reactive PG client / Hibernate Reactive, end-to-end non-blocking) — replaces blocking JDBC with
+a non-blocking driver, so it is **no longer matched** against the JDBC Spring/Exeris stacks.
+That is exactly the line Quarkus's own [Spring-vs-Quarkus comparison](https://github.com/quarkusio/spring-quarkus-perf-comparison)
+draws — itself a DB-backed JPA/Hibernate benchmark that includes a virtual-thread variant, with
+the stated rule that *"if a change … changes the architecture of an application (i.e. moving
+blocking to reactive, using virtual threads, etc), then these changes should be applied to all
+the versions."* A reactive Quarkus measured against blocking Spring/Exeris would break that
+rule, so it is a different DB-access model and a separate experiment — explicitly **out of
+scope** here, not a "faster Quarkus I skipped."
+
 **Exeris** — try searching `jackson` (serialization) or `postgresql` (the JDBC path):
 
 <object data="assets/flame-exeris-entity-read.svg" type="image/svg+xml" width="100%" style="max-width:1200px;border:1px solid #e5e7eb">
@@ -229,7 +246,7 @@ Top self-time methods (leaf frames):
 
 The single clearest contributor to Quarkus's higher per-request cost is **reflection**: ~10.5% of CPU in `DirectMethodHandleAccessor.invoke`, plus notable `String.toLowerCase` and hash-map churn in the request path. **Important fairness note:** this is **JVM-mode** Quarkus. Quarkus is *designed* for native-image, where build-time processing eliminates most reflection; in a native build this hot frame would largely disappear. I measured JVM mode for an apples-to-apples comparison with the JVM-mode Exeris/Spring targets — a native Quarkus comparison is a separate (and fairer-to-Quarkus) experiment.
 
-**Sampling caveat:** the recordings hold very different ExecutionSample counts — **Exeris 9 582 vs Quarkus 201 060** over the same 10 minutes. This is a thread-model artifact (Exeris's virtual-thread carriers present far fewer sampleable platform threads than Quarkus's event-loop pool), and it is the same reason Exeris's `.jfr` is larger by *bytes* (custom Exeris telemetry events) yet smaller by *CPU samples*. Flame-graph **proportions** are valid for both; absolute resolution is much finer for Quarkus.
+**Sampling caveat — and why it doesn't touch the headline.** The recordings hold very different ExecutionSample counts — **Exeris 9 582 vs Quarkus 201 060** over the same 10 minutes. This is a thread-model artifact (Exeris's virtual-thread carriers present far fewer sampleable platform threads than Quarkus's event-loop pool), and it is the same reason Exeris's `.jfr` is larger by *bytes* (custom Exeris telemetry events) yet smaller by *CPU samples*. Crucially, **the CPU-per-request magnitude is not derived from these sample counts** — it is measured independently as pidstat process-CPU ÷ throughput (§4, the firmed n=3 figure). The flame graphs are used **only for the distribution** (where the CPU goes); the differing ExecutionSample totals change sampling *resolution*, not the headline number. So the count disparity is a profiling-resolution artifact, not a measurement bias: flame-graph **proportions** are valid for both, resolution is just finer for Quarkus.
 
 ---
 

@@ -83,9 +83,9 @@ CAMPAIGN_SUMMARY_CSV="${CAMPAIGN_OUTPUT_DIR}/campaign-summary.csv"
 CONNECTIONS=(8 16 32 64 128 256)
 TRIAD_LABELS=(A B C)
 TRIAD_TARGETS=(
-  exeris-benchmark-app-community-h1
-  spring-jvm-vt-tuned
-  quarkus-jvm-vt-tuned
+  exeris-community
+  spring-hibernate
+  quarkus-hibernate
 )
 PAIR_ORDERS=(ab ba)
 SEQUENCE_TOTAL=3
@@ -353,13 +353,13 @@ build_target_artifact() {
   local pom_path=""
 
   case "$target_id" in
-    exeris-benchmark-app-community-h1)
+    exeris-community)
       module_path="targets/exeris-community-app"
       ;;
-    spring-jvm-vt-tuned)
+    spring-hibernate)
       module_path="targets/spring-benchmark-app"
       ;;
-    quarkus-jvm-vt-tuned)
+    quarkus-hibernate)
       module_path="targets/quarkus-benchmark-app"
       ;;
     *)
@@ -380,9 +380,9 @@ prebuild_campaign_targets() {
   echo "PREBUILD CAMPAIGN TARGET ARTIFACTS"
   echo "============================================================"
 
-  build_target_artifact "exeris-benchmark-app-community-h1"
-  build_target_artifact "spring-jvm-vt-tuned"
-  build_target_artifact "quarkus-jvm-vt-tuned"
+  build_target_artifact "exeris-community"
+  build_target_artifact "spring-hibernate"
+  build_target_artifact "quarkus-hibernate"
 
   echo "============================================================"
   echo "PREBUILD COMPLETED"
@@ -1209,13 +1209,13 @@ run_triad_target_once() {
   target_classification="${TARGET_TIER[$target_id]:-unknown}/${TARGET_PROTOCOL[$target_id]:-unknown}/${TARGET_LAUNCHER[$target_id]:-unknown}"
 
   case "$target_id" in
-    exeris-benchmark-app-community-h1)
+    exeris-community)
       target_java_opts="${EXERIS_JAVA_OPTS:-}"
       ;;
-    spring-jvm-vt-tuned)
+    spring-hibernate)
       target_java_opts="${SPRING_JAVA_OPTS:-}"
       ;;
-    quarkus-jvm-vt-tuned)
+    quarkus-hibernate)
       target_java_opts="${QUARKUS_JAVA_OPTS:-}"
       ;;
     *)

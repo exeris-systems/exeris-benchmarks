@@ -64,7 +64,7 @@ _bench_protocol_mode_from_asset_matrix() {
 bench_derive_declared_protocol_mode() {
   # Priority: explicit override > target-asset-matrix declaration > name-sniff fallback.
   # The matrix lookup prevents misclassification of targets whose names lack an
-  # h1/h2/h2c token (e.g. "quarkus-app-axon"), which previously fell through to
+  # h1/h2/h2c token (e.g. "quarkus-hibernate"), which previously fell through to
   # the "h2" default and forced SSL onto an h2c-declared endpoint.
   if [[ -n "${BENCH_PROTOCOL_MODE_OVERRIDE:-}" ]]; then
     echo "$BENCH_PROTOCOL_MODE_OVERRIDE"

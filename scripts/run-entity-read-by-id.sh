@@ -47,6 +47,19 @@ THREADS="${THREADS:-4}"
 CONNECTIONS="${CONNECTIONS:-128}"
 EXERIS_DB_POOL_MIN_SIZE="${EXERIS_DB_POOL_MIN_SIZE:-16}"
 EXERIS_DB_POOL_MAX_SIZE="${EXERIS_DB_POOL_MAX_SIZE:-256}"
+# Fail loud on an inconsistent pool pair instead of silently clamping. The kernel
+# rejects min > max (IllegalArgumentException at bootstrap), but the more important
+# hazard here is fairness: an ambient EXERIS_DB_POOL_MAX_SIZE leaking from a prior
+# (e.g. constrained) run overrides max while min falls back to its default 16,
+# producing both a crash AND a per-target pool divergence. Refuse to run rather
+# than mask it — set BOTH vars (or neither) so every target shares one pool config.
+if [[ "$EXERIS_DB_POOL_MIN_SIZE" =~ ^[0-9]+$ && "$EXERIS_DB_POOL_MAX_SIZE" =~ ^[0-9]+$ ]] \
+   && (( EXERIS_DB_POOL_MIN_SIZE > EXERIS_DB_POOL_MAX_SIZE )); then
+  echo "ERROR: EXERIS_DB_POOL_MIN_SIZE=${EXERIS_DB_POOL_MIN_SIZE} > EXERIS_DB_POOL_MAX_SIZE=${EXERIS_DB_POOL_MAX_SIZE}." >&2
+  echo "       Likely an ambient EXERIS_DB_POOL_MAX_SIZE leaked from a prior run while min fell back to its default." >&2
+  echo "       Set BOTH EXERIS_DB_POOL_MIN_SIZE and EXERIS_DB_POOL_MAX_SIZE consistently, or 'unset' both to use the matched defaults (16/256)." >&2
+  exit 1
+fi
 # DB connection-acquisition timeout (ms). Defaults to 30000 to match Spring
 # Hikari (~30 s) and Quarkus Agroal, so cold-start / latency-spike pool
 # contention surfaces as latency on ALL targets instead of fail-fast
@@ -149,6 +162,22 @@ TARGET_MODULE_POM_QUARKUS="targets/quarkus-benchmark-app/pom.xml"
 TARGET_JAR_GLOB_QUARKUS="targets/quarkus-benchmark-app/target/quarkus-benchmark-app-*-runner.jar"
 TARGET_NATIVE_BIN_GLOB_QUARKUS="targets/quarkus-benchmark-app/target/quarkus-benchmark-app-*-runner"
 TARGET_APP_NAME_QUARKUS="quarkus-benchmark-app"
+# Quarkus "tuned" target: pure-JDBC (no ORM) + native epoll transport + native BoringSSL
+# TLS; counterpart of default-Quarkus quarkus-hibernate. Distinct module/target dir
+# (quarkus-benchmark-app-tuned) keeps its jar glob from matching the Hibernate
+# quarkus-benchmark-app jar.
+TARGET_MODULE_POM_QUARKUS_TUNED="targets/quarkus-benchmark-app-tuned/pom.xml"
+TARGET_JAR_GLOB_QUARKUS_TUNED="targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-*-runner.jar"
+TARGET_NATIVE_BIN_GLOB_QUARKUS_TUNED="targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-*-runner"
+TARGET_APP_NAME_QUARKUS_TUNED="quarkus-benchmark-app-tuned"
+# Quarkus JBS-repro target: pure-JDBC like quarkus-tuned but built WITHOUT netty native
+# epoll transport and WITHOUT netty-tcnative BoringSSL on the classpath (pure JDK NIO +
+# JSSE). Isolated sibling used to reproduce the C2xLoom Jackson-serialize SIGSEGV under
+# h2-over-TLS; NOT a benchmark-grade target. Kept off the comparative path on purpose.
+TARGET_MODULE_POM_QUARKUS_JDBC_JSSE="targets/quarkus-benchmark-app-jdbc-jsse/pom.xml"
+TARGET_JAR_GLOB_QUARKUS_JDBC_JSSE="targets/quarkus-benchmark-app-jdbc-jsse/target/quarkus-benchmark-app-jdbc-jsse-*-runner.jar"
+TARGET_NATIVE_BIN_GLOB_QUARKUS_JDBC_JSSE="targets/quarkus-benchmark-app-jdbc-jsse/target/quarkus-benchmark-app-jdbc-jsse-*-runner"
+TARGET_APP_NAME_QUARKUS_JDBC_JSSE="quarkus-benchmark-app-jdbc-jsse"
 TARGET_MODULE_POM="$TARGET_MODULE_POM_COMMUNITY"
 TARGET_JAR_GLOB="$TARGET_JAR_GLOB_COMMUNITY"
 TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_COMMUNITY"
@@ -313,10 +342,10 @@ case "$BACKEND_MODE" in
 esac
 
 case "$TARGET_RUNTIME" in
-  auto|community|locality|spring|spring-runtime-on-exeris|quarkus)
+  auto|community|locality|spring|spring-runtime-on-exeris|quarkus|quarkus-tuned|quarkus-jdbc|quarkus-jdbc-jsse)
     ;;
   *)
-    echo "ERROR: --target-runtime must be auto, community, locality, spring, spring-runtime-on-exeris, or quarkus (got: $TARGET_RUNTIME)" >&2
+    echo "ERROR: --target-runtime must be auto, community, locality, spring, spring-runtime-on-exeris, quarkus, or quarkus-tuned (legacy: quarkus-jdbc) (got: $TARGET_RUNTIME)" >&2
     exit 1
     ;;
 esac
@@ -620,6 +649,20 @@ else
       TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_QUARKUS"
       TARGET_APP_NAME="$TARGET_APP_NAME_QUARKUS"
       TARGET_RUNTIME_EFFECTIVE="quarkus"
+      ;;
+    quarkus-tuned|quarkus-jdbc)
+      TARGET_MODULE_POM="$TARGET_MODULE_POM_QUARKUS_TUNED"
+      TARGET_JAR_GLOB="$TARGET_JAR_GLOB_QUARKUS_TUNED"
+      TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_QUARKUS_TUNED"
+      TARGET_APP_NAME="$TARGET_APP_NAME_QUARKUS_TUNED"
+      TARGET_RUNTIME_EFFECTIVE="quarkus-tuned"
+      ;;
+    quarkus-jdbc-jsse)
+      TARGET_MODULE_POM="$TARGET_MODULE_POM_QUARKUS_JDBC_JSSE"
+      TARGET_JAR_GLOB="$TARGET_JAR_GLOB_QUARKUS_JDBC_JSSE"
+      TARGET_NATIVE_BIN_GLOB="$TARGET_NATIVE_BIN_GLOB_QUARKUS_JDBC_JSSE"
+      TARGET_APP_NAME="$TARGET_APP_NAME_QUARKUS_JDBC_JSSE"
+      TARGET_RUNTIME_EFFECTIVE="quarkus-jdbc-jsse"
       ;;
   esac
 fi
@@ -944,6 +987,16 @@ verify_backend_mode_evidence() {
   return 1
 }
 
+# Crash-safe run-phase marker. Each transition atomically overwrites phase.state with
+# a single "<phase> <epoch_ms>" line; the file survives SIGKILL (e.g. a cgroup OOM
+# kill leaves the JVM no chance to log anything), so the constrained wrapper can read
+# the furthest phase reached and attribute a kill to warmup vs measure vs teardown.
+# Productive phases only — cleanup() records teardown liveness in teardown.state.
+mark_run_phase() {
+  [[ -n "${OUTPUT_DIR:-}" ]] || return 0
+  printf '%s %s\n' "$1" "$(date +%s%3N)" > "${OUTPUT_DIR}/phase.state" 2>/dev/null || true
+}
+
 cleanup() {
   local exit_code=$?
   # Stop the target resource sampler first so an interrupted run never leaks an
@@ -960,7 +1013,19 @@ cleanup() {
     bench_stop_mpstat_sampler "$HOST_MPSTAT_PID" "${HOST_MPSTAT_CSV:-/dev/null}" 2>/dev/null || true
     HOST_MPSTAT_PID=""
   fi
+  # Record whether the target was still alive when teardown began. If it died before
+  # this point the kill happened during the run (warmup/measure); if it was alive an
+  # OOM seen after this is a teardown-phase kill. Written even on the OOM-killed path
+  # so the constrained wrapper can split "died in measure" from "died after measure".
+  local target_alive_at_teardown=0
   if [[ "$TARGET_APP_STARTED" -eq 1 ]] && [[ -n "$TARGET_APP_PID" ]] && kill -0 "$TARGET_APP_PID" >/dev/null 2>&1; then
+    target_alive_at_teardown=1
+  fi
+  if [[ -n "${OUTPUT_DIR:-}" ]]; then
+    printf 'target_alive_at_teardown=%s %s\n' "$target_alive_at_teardown" "$(date +%s%3N)" \
+      > "${OUTPUT_DIR}/teardown.state" 2>/dev/null || true
+  fi
+  if [[ "$target_alive_at_teardown" -eq 1 ]]; then
     echo "[cleanup] Stopping benchmark target app (pid=$TARGET_APP_PID)..."
     kill "$TARGET_APP_PID" >/dev/null 2>&1 || true
     wait "$TARGET_APP_PID" 2>/dev/null || true
@@ -974,6 +1039,7 @@ cleanup() {
 
 resolve_db_launcher
 trap cleanup EXIT
+mark_run_phase setup
 
 echo "[entity-read-by-id] claim_scope=$CLAIM_SCOPE profile=$PROFILE driver=$DRIVER transport=$TRANSPORT_MODE duration=$DURATION warmup=$WARMUP threads=$THREADS connections=$CONNECTIONS target_runtime=$TARGET_RUNTIME target_build=$TARGET_BUILD effective_runtime=$TARGET_RUNTIME_EFFECTIVE target_app=$TARGET_APP_NAME skip_target_build=$SKIP_TARGET_BUILD db_pool_min=$EXERIS_DB_POOL_MIN_SIZE db_pool_max=$EXERIS_DB_POOL_MAX_SIZE db_conn_timeout_ms=${EXERIS_DB_CONNECTION_TIMEOUT_MS:-<default>} output=$OUTPUT_DIR"
 
@@ -1218,6 +1284,14 @@ if ! target_reachable; then
 
   if [[ "$TARGET_BUILD" == "jvm" ]]; then
     TARGET_CMD+=(java)
+    # Extra JVM flags for the managed target (e.g. -Djdk.virtualThreadScheduler.parallelism=1
+    # or -XX:TieredStopAtLevel=1). This runner builds its OWN `java` command instead of the
+    # registry EXTERNAL_START_CMD, so it must honor QUARKUS_JAVA_OPTS here too — otherwise the
+    # flag is silently dropped. Word-split intentionally (JVM flags are space-separated, no spaces).
+    if [[ -n "${QUARKUS_JAVA_OPTS:-}" ]]; then
+      # shellcheck disable=SC2206
+      TARGET_CMD+=( ${QUARKUS_JAVA_OPTS} )
+    fi
     # exeris-spring-runtime-app-comp embeds the Exeris kernel in-process (web/tx/
     # data/flow), whose classes are compiled with preview features and need native
     # access + module opens — exactly like the standalone community/locality targets.
@@ -1251,8 +1325,10 @@ if ! target_reachable; then
   TARGET_APP_PID=$!
   echo "$TARGET_APP_PID" > "$TARGET_PID_FILE"
   TARGET_APP_STARTED=1
+  mark_run_phase launch
 fi
 
+mark_run_phase readiness
 echo "[step 6/9] Waiting for target readiness (<=${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s)..."
 if ! wait_for_target; then
   echo "ERROR: benchmark target app failed readiness check within ${ENTITY_READ_TARGET_READINESS_SECONDS:-60}s" >&2
@@ -1329,6 +1405,7 @@ if [[ "$DRIVER" == "h2load" ]]; then
   fi
 fi
 
+mark_run_phase warmup
 echo "[step 6/9] Warmup ($WARMUP, driver=$DRIVER)..."
 if [[ "$DRIVER" == "h2load" ]]; then
   h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$WARMUP_SECONDS" "$BASE_URL/api/v1/users" > /dev/null 2>&1 || true
@@ -1387,6 +1464,7 @@ if [[ "${BENCH_OS_SIDECARS:-0}" == "1" ]] && command -v bench_start_pidstat_samp
 fi
 
 # Step 7: Measure
+mark_run_phase measure
 echo "[step 7/9] Measuring ($DURATION)..."
 PERF_STAT_FILE="$OUTPUT_DIR/perf-stat.csv"
 if [[ "$DRIVER" == "wrk2" ]]; then
@@ -1559,6 +1637,10 @@ if [[ -n "$_LOAD_COMPLETED_REQUESTS" && "$_LOAD_COMPLETED_REQUESTS" -eq 0 ]]; th
   echo "ERROR: inspect $TARGET_APP_LOG (socket errors above indicate the target was not serving)." >&2
   exit 1
 fi
+# Measurement window closed with the target alive and >0 requests: the measurement
+# itself is valid. A cgroup OOM seen by the wrapper after this marker is a teardown-
+# phase kill, not a measurement failure.
+mark_run_phase measure_complete
 
 # Summarize target resource samples (and, for a live JVM, augment with heap/NMT
 # breakdown via jcmd) while the target is still alive — cleanup kills it on exit.

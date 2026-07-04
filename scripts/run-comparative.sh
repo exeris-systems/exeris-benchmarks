@@ -7,8 +7,8 @@ set -euo pipefail
 #
 # Usage:
 #   scripts/run-comparative.sh \
-#     --target-a  exeris-benchmark-app-community-h1 \
-#     --target-b  spring-jvm-vt-tuned     \
+#     --target-a  exeris-community \
+#     --target-b  spring-hibernate     \
 #     --scenario-id entity-read-by-id     \
 #     --contract-id fixed_contract_v1     \
 #     --output-dir results/raw/entity-read-by-id/YYYYMMDD-comparative-NNN \

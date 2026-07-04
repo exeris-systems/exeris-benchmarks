@@ -359,6 +359,54 @@
         },
         "skip_seed_verify": {
           "type": "boolean"
+        },
+        "k6_load_shape": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Operator choice of the saga k6 phase shape. mode=default keeps the scenario k6.js/k6.env phase split (120s warmup / 180s measurement / 30s cooldown); mode=custom exports the listed K6_* env vars (phase durations, and optionally per-phase arrival rates + max VU pools) which bench_run_k6 forwards into the k6 __ENV, overriding the k6.js defaults for this run only.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["default", "custom"]
+            },
+            "warmup_duration": {
+              "type": "string",
+              "description": "k6 duration string (e.g. 90s, 2m, 1m30s) exported as K6_WARMUP_DURATION."
+            },
+            "measurement_duration": {
+              "type": "string",
+              "description": "k6 duration string exported as K6_MEASURE_DURATION (the analyzed window)."
+            },
+            "cooldown_duration": {
+              "type": "string",
+              "description": "k6 duration string exported as K6_COOLDOWN_DURATION."
+            },
+            "warmup_rate": {
+              "type": "integer",
+              "description": "Per-phase arrival rate (iters/s) exported as K6_WARMUP_RATE."
+            },
+            "measurement_rate": {
+              "type": "integer",
+              "description": "Per-phase arrival rate (iters/s) exported as K6_MEASURE_RATE."
+            },
+            "cooldown_rate": {
+              "type": "integer",
+              "description": "Per-phase arrival rate (iters/s) exported as K6_COOLDOWN_RATE."
+            },
+            "warmup_max_vus": {
+              "type": "integer",
+              "description": "Max VU pool exported as K6_WARMUP_VUS_MAX (preAllocatedVUs pinned equal to avoid mid-window VU growth)."
+            },
+            "measurement_max_vus": {
+              "type": "integer",
+              "description": "Max VU pool exported as K6_MEASURE_VUS_MAX (preAllocatedVUs pinned equal)."
+            },
+            "cooldown_max_vus": {
+              "type": "integer",
+              "description": "Max VU pool exported as K6_COOLDOWN_VUS_MAX (preAllocatedVUs pinned equal)."
+            }
+          },
+          "required": ["mode"]
         }
       }
     },
@@ -398,6 +446,25 @@
           "minimum": 1
         },
         "cpu_quota_pct": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "constrained_jvm_overrides": {
+      "description": "Operator JVM-overlay overrides for a constrained entity-read-by-id run. The cgroup fixes MaxRAM; these override the profile/auto-derived GC and heap (e.g. when a target cannot survive the default serial GC / -Xmx).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gc": {
+          "type": "string",
+          "enum": ["serial", "g1", "parallel", "z", "shenandoah"]
+        },
+        "xms_mb": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "xmx_mb": {
           "type": "integer",
           "minimum": 1
         }

@@ -213,6 +213,24 @@ prompt_nonneg_int() {
   done
 }
 
+# Validate a k6 duration string (e.g. 90s, 2m, 1m30s, 500ms). Mirrors the saga
+# k6.js durationToSeconds parser, which accepts concatenated unit groups, so a
+# value accepted here is one the script can parse for MEASURE_START/COOLDOWN_START.
+prompt_k6_duration() {
+  local prompt="$1"
+  local default="$2"
+  local value=""
+  while true; do
+    read -r -p "$prompt [$default]: " value || true
+    value="${value:-$default}"
+    if [[ "$value" =~ ^([0-9]+(ms|s|m|h))+$ ]]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+    echo "Invalid k6 duration '$value'. Use forms like 90s, 2m, 1m30s, 500ms." >&2
+  done
+}
+
 tool_version_or_unknown() {
   local tool="$1"
   if ! command -v "$tool" >/dev/null 2>&1; then
@@ -246,6 +264,10 @@ map_entity_runtime() {
     # rule, otherwise it collapses onto the Tomcat/Axon spring-benchmark-app.
     *spring-runtime-on-exeris*|*spring-on-exeris*) printf '%s\n' "spring-runtime-on-exeris" ;;
     *spring*) printf '%s\n' "spring" ;;
+    # quarkus-tuned (pure JDBC + native epoll/BoringSSL; legacy id quarkus-jdbc) must be
+    # matched BEFORE the generic *quarkus* rule, otherwise it collapses onto the
+    # default-Quarkus Hibernate quarkus-benchmark-app.
+    *quarkus-tuned*|*quarkus-jdbc*) printf '%s\n' "quarkus-tuned" ;;
     *quarkus*) printf '%s\n' "quarkus" ;;
     *locality*) printf '%s\n' "locality" ;;
     *community*|*enterprise*|*exeris*) printf '%s\n' "community" ;;
@@ -279,9 +301,9 @@ map_entity_backend_mode() {
 #   - spring (Tomcat) / quarkus → baseline (not an Exeris runtime at all)
 derive_target_classification() {
   case "$(map_entity_runtime "$1")" in
-    spring-runtime-on-exeris) printf '%s\n' "compat" ;;
-    community|locality)       printf '%s\n' "pure" ;;
-    spring|quarkus)           printf '%s\n' "baseline" ;;
+    spring-runtime-on-exeris)  printf '%s\n' "compat" ;;
+    community|locality)        printf '%s\n' "pure" ;;
+    spring|quarkus|quarkus-tuned) printf '%s\n' "baseline" ;;
     *)                        printf '%s\n' "pure" ;;
   esac
 }
@@ -296,6 +318,7 @@ map_target_dir() {
     # generic spring* rule so it is not mapped onto the Tomcat/Axon spring app.
     spring-runtime-on-exeris*|spring-on-exeris*) dir="targets/exeris-spring-runtime-app-comp" ;;
     spring*)  dir="targets/spring-benchmark-app" ;;
+    quarkus-tuned*|quarkus-jdbc*) dir="targets/quarkus-benchmark-app-tuned" ;;
     quarkus*) dir="targets/quarkus-benchmark-app" ;;
     *)        dir="targets/exeris-community-app" ;;
   esac
@@ -673,6 +696,24 @@ enable_jfr_steady_state="no"
 # asymmetrically — a fairness gate for cross-stack comparison.
 db_host_network="no"
 
+# Saga k6 load-shape override (saga only). 'default' keeps the scenario k6.js/k6.env
+# phase split (120s warmup / 180s measurement / 30s cooldown). 'custom' lets the
+# operator override the phase DURATIONS (and optionally per-phase arrival rates + max
+# VU pools); the chosen values are exported as K6_* env vars, which the saga runner's
+# bench_run_k6 forwards into the k6 __ENV and bench_read_k6_defaults never overwrites
+# (an already-set env var wins over the k6.env default), so they override the k6.js
+# defaults for this run only. Empty fields = keep the k6.js default for that phase.
+saga_k6_phase_mode="default"
+saga_k6_warmup_duration=""
+saga_k6_measure_duration=""
+saga_k6_cooldown_duration=""
+saga_k6_warmup_rate=""
+saga_k6_measure_rate=""
+saga_k6_cooldown_rate=""
+saga_k6_warmup_vus_max=""
+saga_k6_measure_vus_max=""
+saga_k6_cooldown_vus_max=""
+
 # Drivers declared by the scenario, intersected with supported load drivers.
 readarray -t SCEN_DRIVERS < <(jq -r '.driver[]?' "$scenario_json" 2>/dev/null || true)
 
@@ -713,11 +754,22 @@ cgroup_memory_limit_mb=""
 cgroup_cpu_quota_pct=""
 cpu_affinity=""
 client_cpu_affinity=""
+# Optional operator JVM-overlay overrides for constrained entity-read-by-id runs
+# (the cgroup fixes MaxRAM, but some targets — e.g. Quarkus — can't survive the
+# auto-derived serial GC / heap). Empty = profile/auto-derived default.
+constrained_jvm_gc=""
+constrained_jvm_xms_mb=""
+constrained_jvm_xmx_mb=""
 # Fixed wrk2 arrival rate (RPS). Empty => run-wrk2.sh auto-derives ~75% of the
 # discovered saturation (per-target). Pin it to compare CO-free latency across
 # stacks at IDENTICAL absolute load instead of each at 75% of its own ceiling.
 wrk2_target_rps=""
 constrained_contract=""
+# Set to "yes" when the operator picks a custom (non-named) constrained spec for
+# entity-read-by-id: the dispatch synthesizes an ad-hoc exploratory execution
+# profile + fixed contract from the entered mem/cpu and drives the real
+# cgroup-enforced runner against them (never comparison-eligible).
+constrained_custom="no"
 
 if [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]]; then
   execution_class="$(select_kv "Execution class" "unconstrained" \
@@ -762,13 +814,51 @@ if [[ "$execution_class" == "constrained" ]]; then
   else
     cgroup_memory_limit_mb="$(prompt_positive_int "cgroup memory_limit_mb" "256")"
     cgroup_cpu_quota_pct="$(prompt_positive_int "cgroup cpu_quota_pct (100 = 1.0 vCPU)" "100")"
+    # entity-read-by-id has no named profile for an arbitrary mem/cpu pair. Mint a
+    # deterministic ad-hoc execution-profile + contract id from the entered limits
+    # so the contract default, the recorded guided profile, and the build heuristic
+    # below are all coherent. The matching JSON specs are synthesized at dispatch
+    # (write_adhoc_constrained_specs) and are exploratory/comparison-forbidden.
+    if [[ "$scenario_id" == "entity-read-by-id" ]]; then
+      constrained_custom="yes"
+      execution_profile_id="runtime-constrained-custom-${cgroup_memory_limit_mb}m-${cgroup_cpu_quota_pct}pct-v1"
+      constrained_contract="fixed_contract_runtime_h1_constrained_custom_${cgroup_memory_limit_mb}m_${cgroup_cpu_quota_pct}pct_v1"
+      (( cgroup_memory_limit_mb < 96 )) && warn "custom constrained memory_limit_mb=${cgroup_memory_limit_mb} is very tight; even a native build may not boot. Exploratory probe only."
+    fi
   fi
 
   cpu_affinity="$(prompt_text "CPU affinity cpuset (e.g. 0-3, empty = none)" "")"
 
-  # entity-read-by-id constrained runs are driven by a named execution profile +
+  # JVM tuning escape hatch (entity-read-by-id only; saga's constrained path uses a
+  # different runner). The cgroup fixes MaxRAM, but the profile-derived GC (serial) +
+  # heap can be too tight for some targets to even survive — let the operator pick.
+  # Empty/'default' = keep the profile/auto-derived overlay.
+  if [[ "$scenario_id" == "entity-read-by-id" ]]; then
+    constrained_jvm_gc="$(select_kv "Constrained JVM GC (cgroup sets MaxRAM; this only changes the collector)" "default" \
+      default    "default    — profile default (serial; min-footprint profiles also force C1-only JIT)" \
+      serial     "serial     — -XX:+UseSerialGC (smallest footprint)" \
+      g1         "g1         — -XX:+UseG1GC (Quarkus default; needs more headroom than serial)" \
+      parallel   "parallel   — -XX:+UseParallelGC" \
+      z          "z          — -XX:+UseZGC (large native footprint; risky in a tight cgroup)" \
+      shenandoah "shenandoah — -XX:+UseShenandoahGC (needs headroom)")"
+    [[ "$constrained_jvm_gc" == "default" ]] && constrained_jvm_gc=""
+    constrained_jvm_xmx_mb="$(prompt_text "Constrained JVM -Xmx MB (empty = profile/auto-derived)" "")"
+    constrained_jvm_xms_mb="$(prompt_text "Constrained JVM -Xms MB (empty = profile/auto-derived)" "")"
+    for _h in xmx:"$constrained_jvm_xmx_mb" xms:"$constrained_jvm_xms_mb"; do
+      _k="${_h%%:*}"; _v="${_h#*:}"
+      [[ -z "$_v" ]] && continue
+      [[ "$_v" =~ ^[0-9]+$ ]] || fail "constrained JVM -${_k} must be a positive integer (MB), got: '$_v'"
+    done
+    if [[ -n "$constrained_jvm_xmx_mb" && -n "$cgroup_memory_limit_mb" ]] \
+       && (( constrained_jvm_xmx_mb >= cgroup_memory_limit_mb )); then
+      warn "-Xmx${constrained_jvm_xmx_mb}m >= cgroup ${cgroup_memory_limit_mb}MB: leaves no room for non-heap memory — the JVM will likely be OOM-killed. Set -Xmx well below ${cgroup_memory_limit_mb}MB."
+    fi
+  fi
+
+  # Named-profile entity-read-by-id runs are driven by a named execution profile +
   # its matching fixed contract; derive it so the recorded contract is honest.
-  if [[ "$scenario_id" == "entity-read-by-id" && -n "$execution_profile_id" ]]; then
+  # (Custom mode already minted its ad-hoc ids above.)
+  if [[ "$scenario_id" == "entity-read-by-id" && "$constrained_custom" != "yes" && -n "$execution_profile_id" ]]; then
     constrained_contract="$(jq -r --arg id "$execution_profile_id" '.fixed_contracts | to_entries[] | select(.value.execution_profile_id == $id) | .key' "$scenario_json" 2>/dev/null | head -1)"
   fi
 fi
@@ -983,6 +1073,12 @@ if [[ "$topology_mode" == "$TOPOLOGY_LOCAL" ]]; then
   if [[ "$execution_class" == "constrained" && "$execution_profile_id" == "runtime-constrained-128m-0p5vcpu-v1" ]]; then
     build_default="native"
   fi
+  # Same JVM-footprint reasoning for a custom constrained spec: a JVM build's
+  # ~120MB native floor OOMs a sub-192MB cgroup, so default tight customs to native.
+  if [[ "$constrained_custom" == "yes" && -n "$cgroup_memory_limit_mb" ]] \
+     && (( cgroup_memory_limit_mb < 192 )); then
+    build_default="native"
+  fi
   # Only entity-read-by-id dispatch actually drives --target-build (saga uses
   # --target-app; generic drivers hit a pre-launched target). Elsewhere keep the
   # target-name-derived value for the recorded profile without a misleading prompt.
@@ -1016,6 +1112,43 @@ if [[ "$is_saga" == "yes" ]]; then
     saga_auto_start_target="$(choose_option "Auto-start target app if health preflight fails?" "yes" yes no)"
   fi
   saga_skip_seed_verify="$(choose_option "Skip seed verification?" "no" yes no)"
+
+  # k6 load shape: keep the scenario's phase split, or override the phase durations
+  # (and optionally per-phase arrival rates + max VU pools). The saga k6.js honors
+  # K6_*_DURATION / K6_*_RATE / K6_*_VUS_* from __ENV; bench_run_k6 forwards every
+  # K6_* env var and bench_read_k6_defaults never overwrites an already-set one, so
+  # exporting these here cleanly overrides the k6.js/k6.env defaults for this run.
+  # Applies to local and WAN saga (k6 always runs locally) and to single + campaign
+  # dispatch (both inherit the exported env).
+  saga_k6_phase_mode="$(select_kv "k6 load shape (saga phase durations)" "default" \
+    default "default — k6.js phase split: 120s warmup / 180s measurement / 30s cooldown" \
+    custom  "custom  — enter your own phase durations (and optionally rates + VU pools)")"
+  if [[ "$saga_k6_phase_mode" == "custom" ]]; then
+    saga_k6_warmup_duration="$(prompt_k6_duration "k6 warmup phase duration (excluded from analysis)" "120s")"
+    saga_k6_measure_duration="$(prompt_k6_duration "k6 measurement phase duration (the analyzed window)" "180s")"
+    saga_k6_cooldown_duration="$(prompt_k6_duration "k6 cooldown phase duration" "30s")"
+    # MEASURE_START/COOLDOWN_START auto-recompute in the k6.js from the durations
+    # above (they are unset here), so the phase boundaries stay coherent.
+    export K6_WARMUP_DURATION="$saga_k6_warmup_duration"
+    export K6_MEASURE_DURATION="$saga_k6_measure_duration"
+    export K6_COOLDOWN_DURATION="$saga_k6_cooldown_duration"
+    if [[ "$(choose_option "Also customize per-phase arrival rates + max VU pools?" "no" yes no)" == "yes" ]]; then
+      saga_k6_warmup_rate="$(prompt_positive_int "k6 warmup arrival rate (iters/s)" "2")"
+      saga_k6_measure_rate="$(prompt_positive_int "k6 measurement arrival rate (iters/s)" "3")"
+      saga_k6_cooldown_rate="$(prompt_positive_int "k6 cooldown arrival rate (iters/s)" "$saga_k6_measure_rate")"
+      saga_k6_warmup_vus_max="$(prompt_positive_int "k6 warmup max VUs" "60")"
+      saga_k6_measure_vus_max="$(prompt_positive_int "k6 measurement max VUs" "100")"
+      saga_k6_cooldown_vus_max="$(prompt_positive_int "k6 cooldown max VUs" "$saga_k6_measure_vus_max")"
+      export K6_WARMUP_RATE="$saga_k6_warmup_rate"
+      export K6_MEASURE_RATE="$saga_k6_measure_rate"
+      export K6_COOLDOWN_RATE="$saga_k6_cooldown_rate"
+      # Pin preAllocatedVUs = maxVUs so k6 never grows the VU pool inside the
+      # window (mid-test VU allocation perturbs latency).
+      export K6_WARMUP_VUS_MAX="$saga_k6_warmup_vus_max";   export K6_WARMUP_VUS_PRE="$saga_k6_warmup_vus_max"
+      export K6_MEASURE_VUS_MAX="$saga_k6_measure_vus_max"; export K6_MEASURE_VUS_PRE="$saga_k6_measure_vus_max"
+      export K6_COOLDOWN_VUS_MAX="$saga_k6_cooldown_vus_max"; export K6_COOLDOWN_VUS_PRE="$saga_k6_cooldown_vus_max"
+    fi
+  fi
 fi
 
 # JFR (jcmd) recording is offered only where guided manages a local JVM target it
@@ -1137,7 +1270,16 @@ k6_workload_from_script() {
   env_dispatch_is_generic && [[ "$driver" == "k6" ]]
 }
 
-if workload_is_free; then
+if [[ "$constrained_custom" == "yes" ]]; then
+  # Custom constrained: the operator defines the workload (incl. measurement
+  # duration), and it is baked into the synthesized ad-hoc contract at dispatch.
+  # Constrained-appropriate defaults (cgroup-sized), not the roomy free defaults:
+  # the DB pool is sized to `connections`, so keep it small for a tight cgroup.
+  warmup_seconds="$(prompt_positive_int "workload.warmup_seconds (constrained)" "15")"
+  measurement_seconds="$(prompt_positive_int "workload.measurement_seconds (constrained)" "30")"
+  threads="$(prompt_positive_int "workload.threads (constrained)" "2")"
+  connections="$(prompt_positive_int "workload.connections (constrained; DB pool sized to this)" "16")"
+elif workload_is_free; then
   warmup_seconds="$(prompt_positive_int "workload.warmup_seconds" "60")"
   measurement_seconds="$(prompt_positive_int "workload.measurement_seconds" "120")"
   threads="$(prompt_positive_int "workload.threads" "4")"
@@ -1221,9 +1363,12 @@ if [[ "$execution_class" == "constrained" ]]; then
 fi
 mkdir -p "$output_dir"
 
-targets_json="$(jq -n '$ARGS.positional' --args "${targets[@]}")"
+targets_json="$(jq -n '$ARGS.positional' --args -- "${targets[@]}")"
 if [[ "${#jvm_flags[@]}" -gt 0 ]]; then
-  jvm_flags_json="$(jq -n '$ARGS.positional' --args "${jvm_flags[@]}")"
+  # `--args --` terminator: jq 1.8.1 otherwise treats a positional value that
+  # starts with '-' (e.g. -Djdk.virtualThreadScheduler.parallelism=1) as an
+  # unknown option and aborts. The terminator forces the rest to be positional.
+  jvm_flags_json="$(jq -n '$ARGS.positional' --args -- "${jvm_flags[@]}")"
 else
   jvm_flags_json="[]"
 fi
@@ -1280,6 +1425,16 @@ jq -n \
   --arg saga_auto_start_infra "$saga_auto_start_infra" \
   --arg saga_auto_start_target "$saga_auto_start_target" \
   --arg saga_skip_seed_verify "$saga_skip_seed_verify" \
+  --arg saga_k6_phase_mode "$saga_k6_phase_mode" \
+  --arg saga_k6_warmup_duration "$saga_k6_warmup_duration" \
+  --arg saga_k6_measure_duration "$saga_k6_measure_duration" \
+  --arg saga_k6_cooldown_duration "$saga_k6_cooldown_duration" \
+  --arg saga_k6_warmup_rate "$saga_k6_warmup_rate" \
+  --arg saga_k6_measure_rate "$saga_k6_measure_rate" \
+  --arg saga_k6_cooldown_rate "$saga_k6_cooldown_rate" \
+  --arg saga_k6_warmup_vus_max "$saga_k6_warmup_vus_max" \
+  --arg saga_k6_measure_vus_max "$saga_k6_measure_vus_max" \
+  --arg saga_k6_cooldown_vus_max "$saga_k6_cooldown_vus_max" \
   --arg enable_jfr "$enable_jfr" \
   --arg enable_os_sidecars "$enable_os_sidecars" \
   --arg enable_jfr_steady_state "$enable_jfr_steady_state" \
@@ -1288,6 +1443,9 @@ jq -n \
   --arg execution_profile_id "$execution_profile_id" \
   --arg cgroup_memory_limit_mb "$cgroup_memory_limit_mb" \
   --arg cgroup_cpu_quota_pct "$cgroup_cpu_quota_pct" \
+  --arg constrained_jvm_gc "$constrained_jvm_gc" \
+  --arg constrained_jvm_xms_mb "$constrained_jvm_xms_mb" \
+  --arg constrained_jvm_xmx_mb "$constrained_jvm_xmx_mb" \
   --arg cpu_affinity "$cpu_affinity" \
   --arg client_cpu_affinity "$client_cpu_affinity" \
   --arg wrk2_target_rps "$wrk2_target_rps" \
@@ -1380,7 +1538,17 @@ jq -n \
                   saga: {
                     auto_start_infra: ($saga_auto_start_infra == "yes"),
                     auto_start_target: ($saga_auto_start_target == "yes"),
-                    skip_seed_verify: ($saga_skip_seed_verify == "yes")
+                    skip_seed_verify: ($saga_skip_seed_verify == "yes"),
+                    k6_load_shape: ({ mode: $saga_k6_phase_mode }
+                      + (if $saga_k6_warmup_duration   != "" then {warmup_duration: $saga_k6_warmup_duration} else {} end)
+                      + (if $saga_k6_measure_duration  != "" then {measurement_duration: $saga_k6_measure_duration} else {} end)
+                      + (if $saga_k6_cooldown_duration != "" then {cooldown_duration: $saga_k6_cooldown_duration} else {} end)
+                      + (if $saga_k6_warmup_rate    != "" then {warmup_rate: ($saga_k6_warmup_rate|tonumber)} else {} end)
+                      + (if $saga_k6_measure_rate   != "" then {measurement_rate: ($saga_k6_measure_rate|tonumber)} else {} end)
+                      + (if $saga_k6_cooldown_rate  != "" then {cooldown_rate: ($saga_k6_cooldown_rate|tonumber)} else {} end)
+                      + (if $saga_k6_warmup_vus_max   != "" then {warmup_max_vus: ($saga_k6_warmup_vus_max|tonumber)} else {} end)
+                      + (if $saga_k6_measure_vus_max  != "" then {measurement_max_vus: ($saga_k6_measure_vus_max|tonumber)} else {} end)
+                      + (if $saga_k6_cooldown_vus_max != "" then {cooldown_max_vus: ($saga_k6_cooldown_vus_max|tonumber)} else {} end))
                   }
                 }
        else . end)
@@ -1395,6 +1563,13 @@ jq -n \
                    then {cgroup: (
                           (if $cgroup_memory_limit_mb != "" then {memory_limit_mb: ($cgroup_memory_limit_mb | tonumber)} else {} end)
                         + (if $cgroup_cpu_quota_pct != "" then {cpu_quota_pct: ($cgroup_cpu_quota_pct | tonumber)} else {} end)
+                        )}
+                   else {} end)
+              + (if ($constrained_jvm_gc != "" or $constrained_jvm_xms_mb != "" or $constrained_jvm_xmx_mb != "")
+                   then {constrained_jvm_overrides: (
+                          (if $constrained_jvm_gc != "" then {gc: $constrained_jvm_gc} else {} end)
+                        + (if $constrained_jvm_xms_mb != "" then {xms_mb: ($constrained_jvm_xms_mb | tonumber)} else {} end)
+                        + (if $constrained_jvm_xmx_mb != "" then {xmx_mb: ($constrained_jvm_xmx_mb | tonumber)} else {} end)
                         )}
                    else {} end)
        else . end)
@@ -1451,6 +1626,8 @@ echo "  output_dir         : $output_dir"
 if k6_workload_from_script; then
   echo "  workload           : VUs/arrival-rate/duration defined by scenario k6.js — threads/connections/measurement below are metadata only, NOT applied by k6"
   echo "  workload (metadata): warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections"
+elif [[ "$constrained_custom" == "yes" ]]; then
+  echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections (your values — honored, baked into ad-hoc constrained contract)"
 elif workload_is_free; then
   echo "  workload           : warmup=$warmup_seconds measurement=$measurement_seconds threads=$threads connections=$connections (your values — honored)"
 else
@@ -1470,6 +1647,14 @@ fi
 if [[ "$is_saga" == "yes" ]]; then
   echo "  graph_track        : $graph_track"
   echo "  saga               : auto_start_infra=$saga_auto_start_infra auto_start_target=$saga_auto_start_target skip_seed_verify=$saga_skip_seed_verify"
+  if [[ "$saga_k6_phase_mode" == "custom" ]]; then
+    echo "  k6 load shape      : custom — warmup=$saga_k6_warmup_duration measurement=$saga_k6_measure_duration cooldown=$saga_k6_cooldown_duration (K6_*_DURATION overrides; k6.js defaults superseded)"
+    if [[ -n "$saga_k6_measure_rate" ]]; then
+      echo "  k6 rate/VUs        : warmup=${saga_k6_warmup_rate}r/s/${saga_k6_warmup_vus_max}vu measurement=${saga_k6_measure_rate}r/s/${saga_k6_measure_vus_max}vu cooldown=${saga_k6_cooldown_rate}r/s/${saga_k6_cooldown_vus_max}vu (preAllocatedVUs pinned = maxVUs)"
+    fi
+  else
+    echo "  k6 load shape      : default (k6.js phase split: 120s warmup / 180s measurement / 30s cooldown)"
+  fi
 fi
 if jfr_supported; then
   echo "  jfr                : enable_jfr=$enable_jfr (recorded into the run dir)"
@@ -1484,6 +1669,7 @@ fi
 echo "  execution_class    : $execution_class"
 if [[ "$execution_class" == "constrained" ]]; then
   echo "  constrained        : profile=${execution_profile_id:-<custom>} mem=${cgroup_memory_limit_mb:-?}MB cpu=${cgroup_cpu_quota_pct:-?}% affinity=${cpu_affinity:-none}"
+  echo "  constrained jvm    : gc=${constrained_jvm_gc:-profile-default} xms=${constrained_jvm_xms_mb:-auto}MB xmx=${constrained_jvm_xmx_mb:-auto}MB (cgroup MaxRAM=${cgroup_memory_limit_mb:-?}MB)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -1667,30 +1853,161 @@ resolve_dispatch_base_url() {
   fi
 }
 
+# Synthesize an ad-hoc exploratory execution-profile + fixed contract for a custom
+# (non-named) constrained entity-read-by-id run. The constrained runner is
+# profile-driven by design: it derives the cgroup ceilings it verifies AND the JVM
+# overlay (caps so the JVM fits the ceiling) from a profile, and matches a fixed
+# contract. A bare mem/cpu pair has neither, so instead of bypassing that contract
+# we mint matching specs here. JVM ergonomics mirror the two canonical profiles:
+# sub-192MB gets the min-footprint overlay (serial GC, C1-only, capped
+# code-cache/metaspace, small heap — NON perf-representative), roomier limits keep
+# default heap ergonomics. Everything is exploratory / comparison_policy=forbidden
+# (constrained already forces descriptive_only). Specs are written into the run's
+# output dir as traceable artifacts; the canonical files are never touched.
+# Sets globals: ADHOC_PROFILES_JSON, ADHOC_SCENARIO_JSON.
+ADHOC_PROFILES_JSON=""
+ADHOC_SCENARIO_JSON=""
+write_adhoc_constrained_specs() {
+  local out_dir="$1" mem="$2" pct="$3" profile_id="$4" contract_id_adhoc="$5"
+  local c_threads="$6" c_connections="$7" c_warmup="$8" c_duration="$9"
+  local c_protocol="${10}" c_transport="${11}"
+  mkdir -p "$out_dir"
+
+  # LC_ALL=C: a fractional vCPU (e.g. 0.75) must serialize with a '.' decimal, not
+  # the locale's ',' (pl_PL etc.), or jq --argjson rejects it as invalid JSON.
+  local vcpu apc
+  vcpu="$(LC_ALL=C awk -v p="$pct" 'BEGIN { printf "%g", p/100 }')"
+  apc="$(awk -v p="$pct" 'BEGIN { n=int((p+99)/100); if (n<1) n=1; print n }')"
+
+  local jvm_json jit_repr
+  if (( mem < 192 )); then
+    # Min-footprint overlay (mirrors the 128MB profile). C2 arena allocation
+    # OOM-kills a tight cgroup, so cap to C1-only with a small heap.
+    local xmx xms
+    xmx="$(awk -v m="$mem" 'BEGIN { x=int(m/2); if (x<32) x=32; print x }')"
+    xms="$(awk -v x="$xmx" 'BEGIN { s=int(x/2); if (s<16) s=16; if (s>x) s=x; print s }')"
+    jit_repr="non_representative"
+    jvm_json="$(jq -n \
+      --argjson apc "$apc" --argjson max_ram "$mem" \
+      --argjson xms "$xms" --argjson xmx "$xmx" \
+      '{gc:"serial", active_processor_count:$apc, max_ram_mb:$max_ram,
+        tiered_stop_at_level:1, reserved_code_cache_mb:32, max_metaspace_mb:64,
+        xms_mb:$xms, xmx_mb:$xmx}')"
+  else
+    # Roomier: default tiered-JIT heap ergonomics (mirrors the 256MB profile).
+    jit_repr="representative"
+    jvm_json="$(jq -n --argjson apc "$apc" --argjson max_ram "$mem" \
+      '{gc:"serial", active_processor_count:$apc, max_ram_mb:$max_ram}')"
+  fi
+
+  local profile_json
+  profile_json="$(jq -n \
+    --arg id "$profile_id" --argjson mem "$mem" --argjson vcpu "$vcpu" \
+    --argjson jvm "$jvm_json" --arg jit "$jit_repr" \
+    '{execution_profile_id:$id, benchmark_family:"runtime-wrk",
+      profile_class:"constrained-runtime", status:"exploratory",
+      claim_scope:"descriptive_only", comparison_policy:"forbidden",
+      result_namespace:"results/constrained", required_track_id:"track-c",
+      cpu_limit:{vcpu:$vcpu, enforcement:"cgroup-required"},
+      memory_limit:{limit_mb:$mem, enforcement:"cgroup-required"},
+      jvm:$jvm, jit_representativeness:$jit,
+      required_evidence:["effective-cgroup-limits","jvm-flags","peak-memory","cpu-throttling"],
+      allowed_outcomes:["ok","oom_killed","readiness_timeout","limit_mismatch","startup_failed"],
+      note:"Ad-hoc operator-entered constrained spec generated by run-guided.sh. Exploratory only; not eligible for comparative, baseline, or historical regression workflows."}')"
+
+  ADHOC_PROFILES_JSON="$out_dir/adhoc-execution-profiles.json"
+  jq --argjson p "$profile_json" '.profiles += [$p]' "$EXEC_PROFILES_JSON" > "$ADHOC_PROFILES_JSON"
+
+  # Start from the smoke contract's shape, then overlay the operator's workload
+  # (threads/connections/warmup/duration) so the run honors the entered measurement
+  # length and concurrency. The constrained runner reads exactly these four knobs.
+  ADHOC_SCENARIO_JSON="$out_dir/adhoc-scenario-contract.json"
+  jq \
+    --arg cid "$contract_id_adhoc" --arg pid "$profile_id" \
+    --argjson threads "$c_threads" --argjson connections "$c_connections" \
+    --argjson warmup "$c_warmup" --argjson duration "$c_duration" \
+    --arg protocol "$c_protocol" --arg transport "$c_transport" \
+    '.fixed_contracts[$cid] = (
+       (.fixed_contracts.fixed_contract_runtime_h1_constrained_smoke_256m_1vcpu_v1
+        // .fixed_contracts.fixed_contract_runtime_h1_constrained_smoke_v1)
+       + {execution_profile_id:$pid,
+          threads:$threads, connections:$connections,
+          warmup_seconds:$warmup, duration_seconds:$duration,
+          protocol_mode:$protocol, transport_mode:$transport,
+          note:"Ad-hoc operator-entered constrained contract generated by run-guided.sh. Exploratory only; excluded from comparative, baseline, and regression workflows."})' \
+    "$scenario_json" > "$ADHOC_SCENARIO_JSON"
+}
+
 # ---- Constrained (cgroup/affinity): local, single, exploratory-only ----
 if [[ "$execution_class" == "constrained" ]]; then
   case "$scenario_id" in
     entity-read-by-id)
       if [[ -z "$execution_profile_id" ]]; then
-        echo "Constrained entity-read-by-id requires a named execution profile (the constrained runner is profile-driven; custom cgroup is not supported here)."
-        echo "Re-run and pick a named profile, or use saga for custom cgroup limits. Profile generated; not dispatched."
-        exit 0
+        echo "Constrained entity-read-by-id requires either a named execution profile or a custom mem/cpu spec; neither resolved. Profile generated; not dispatched." >&2
+        exit 3
       fi
       if [[ -z "$constrained_contract" ]]; then
         echo "No fixed contract maps to execution_profile_id='$execution_profile_id'. Profile generated; not dispatched." >&2
         exit 3
       fi
-      maybe_apply_netem
-      info "Dispatch: run-entity-read-by-id-constrained.sh (profile=$execution_profile_id contract=$contract_id affinity=${cpu_affinity:-none} launch_mode=$launch_mode)"
+      # Resolve the effective load driver up front. The entity base runner supports
+      # wrk/wrk2/h2load (k6 has no entity path); map none/k6 -> wrk.
+      constrained_entity_driver="$driver"
+      case "$constrained_entity_driver" in
+        ""|none) constrained_entity_driver="wrk" ;;
+        k6) warn "k6 has no entity-read-by-id runner path; constrained entity-read-by-id drives wrk/wrk2/h2load. Falling back to wrk."; constrained_entity_driver="wrk" ;;
+      esac
+      # Effective protocol: only h2load can carry H2; wrk/wrk2 are H1-only, so a
+      # requested h2 silently lands as H1 there. Compute the truth so the synthesized
+      # contract's labels and the recorded run don't claim H2 on an H1 wire.
+      eff_protocol="h1"
+      if [[ "$constrained_entity_driver" == "h2load" && "$protocol_mode" == "h2" ]]; then
+        eff_protocol="h2"
+      elif [[ "$protocol_mode" == "h2" ]]; then
+        warn "protocol_mode=h2 but driver '$constrained_entity_driver' is HTTP/1.1-only — the constrained run will be H1. Pick driver h2load for a real H2 constrained run."
+      fi
+      eff_transport="$(derive_effective_transport "$eff_protocol" "$tls_enabled")"
+
       erbid_constrained_cmd=(
         env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build"
         "$REPO_ROOT/scripts/run-entity-read-by-id-constrained.sh"
         --execution-profile-id "$execution_profile_id"
+      )
+      # Custom spec: synthesize the ad-hoc profile + contract and point the runner
+      # at them via --profiles-json/--scenario-json. The contract_id must be the
+      # ad-hoc one (constrained_contract), else the synthesized contract isn't found.
+      if [[ "$constrained_custom" == "yes" ]]; then
+        if [[ "$contract_id" != "$constrained_contract" ]]; then
+          warn "custom constrained: overriding entered contract_id '$contract_id' with the synthesized ad-hoc contract '$constrained_contract' (a custom spec has no pre-existing fixed contract)."
+          contract_id="$constrained_contract"
+        fi
+        write_adhoc_constrained_specs "$output_dir" "$cgroup_memory_limit_mb" "$cgroup_cpu_quota_pct" "$execution_profile_id" "$contract_id" \
+          "$threads" "$connections" "$warmup_seconds" "$measurement_seconds" "$eff_protocol" "$eff_transport"
+        warn "custom constrained spec: mem=${cgroup_memory_limit_mb}MB cpu=${cgroup_cpu_quota_pct}% workload=${threads}t/${connections}c warmup=${warmup_seconds}s measurement=${measurement_seconds}s driver=${constrained_entity_driver} protocol=${eff_protocol} transport=${eff_transport} → ad-hoc profile '$execution_profile_id' (exploratory, comparison-forbidden). Specs: $ADHOC_PROFILES_JSON , $ADHOC_SCENARIO_JSON"
+        (( cgroup_memory_limit_mb < 192 )) && warn "min-footprint JVM overlay applied (C1-only, capped heap/code-cache/metaspace): throughput is NOT perf-representative (recorded jit_representativeness=non_representative)."
+        erbid_constrained_cmd+=(--profiles-json "$ADHOC_PROFILES_JSON" --scenario-json "$ADHOC_SCENARIO_JSON")
+      fi
+      erbid_constrained_cmd+=(
         --contract-id "$contract_id"
         --target-runtime "$(map_entity_runtime "${targets[0]}")"
         --target-build "$runtime_mode"
         --output-dir "$output_dir"
+        --driver "$constrained_entity_driver"
+        --backend-mode "$(map_entity_backend_mode "${targets[0]}")"
       )
+      # Operator JVM-overlay overrides (GC / heap), forwarded only when set so the
+      # profile/auto-derived overlay stays the default.
+      [[ -n "$constrained_jvm_gc" ]]     && erbid_constrained_cmd+=(--jvm-gc "$constrained_jvm_gc")
+      [[ -n "$constrained_jvm_xms_mb" ]] && erbid_constrained_cmd+=(--jvm-xms-mb "$constrained_jvm_xms_mb")
+      [[ -n "$constrained_jvm_xmx_mb" ]] && erbid_constrained_cmd+=(--jvm-xmx-mb "$constrained_jvm_xmx_mb")
+      # h2load carries the H2 axis (wrk/wrk2 take none). h2 over a TLS-enabled run =>
+      # h2-over-TLS via ALPN; over cleartext => h2c.
+      [[ "$constrained_entity_driver" == "h2load" && "$eff_protocol" == "h2" ]] \
+        && erbid_constrained_cmd+=(--h2load-axis h2c)
+      [[ "$constrained_entity_driver" == "h2load" && "$eff_protocol" != "h2" ]] \
+        && erbid_constrained_cmd+=(--h2load-axis h1)
+      maybe_apply_netem
+      info "Dispatch: run-entity-read-by-id-constrained.sh (profile=$execution_profile_id contract=$contract_id driver=$constrained_entity_driver protocol=$eff_protocol transport=$eff_transport tls=$tls_enabled gc=${constrained_jvm_gc:-profile} xms=${constrained_jvm_xms_mb:-auto} xmx=${constrained_jvm_xmx_mb:-auto} affinity=${cpu_affinity:-none} launch_mode=$launch_mode custom=$constrained_custom)"
       [[ -n "$cpu_affinity" ]] && erbid_constrained_cmd+=(--cpu-affinity "$cpu_affinity")
       [[ "$enable_jfr" == "yes" ]] && erbid_constrained_cmd+=(--enable-jfr)
       "${erbid_constrained_cmd[@]}"
@@ -1839,8 +2156,15 @@ if [[ "$scenario_id" == "entity-read-by-id" && "$topology_mode" == "$TOPOLOGY_LO
     [[ "$protocol_mode" == "h2" ]] && warn "Requested protocol was h2, but wrk2 is HTTP/1.1 only — the latency run will be H1. State the protocol difference when placing it next to h2load throughput."
   fi
 
-  erbid_cmd=(
-    env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build"
+  # Forward the prompt's jvm_flags to the managed runner as QUARKUS_JAVA_OPTS (the
+  # entity runner honors it when building the target's `java` command). If the prompt
+  # was empty, an exported QUARKUS_JAVA_OPTS from the operator's shell still inherits
+  # through `env` and is honored downstream. Space-joined; JVM flags carry no spaces.
+  erbid_cmd=(env "BENCHMARK_SKIP_TARGET_BUILD=$skip_target_build")
+  if [[ "${#jvm_flags[@]}" -gt 0 ]]; then
+    erbid_cmd+=("QUARKUS_JAVA_OPTS=${jvm_flags[*]}")
+  fi
+  erbid_cmd+=(
     "$REPO_ROOT/scripts/run-entity-read-by-id.sh"
     --profile "$hardware_profile"
     --output-dir "$output_dir"

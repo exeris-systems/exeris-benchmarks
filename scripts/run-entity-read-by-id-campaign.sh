@@ -234,9 +234,9 @@ run_pairwise_runtime_campaign() {
   local -a pairs
 
   pairs=(
-    "exeris-benchmark-app-community-h1__spring-jvm-vt-tuned|exeris-benchmark-app-community-h1|spring-jvm-vt-tuned"
-    "exeris-benchmark-app-community-h1__quarkus-jvm-vt-tuned|exeris-benchmark-app-community-h1|quarkus-jvm-vt-tuned"
-    "spring-jvm-vt-tuned__quarkus-jvm-vt-tuned|spring-jvm-vt-tuned|quarkus-jvm-vt-tuned"
+    "exeris-community__spring-hibernate|exeris-community|spring-hibernate"
+    "exeris-community__quarkus-hibernate|exeris-community|quarkus-hibernate"
+    "spring-hibernate__quarkus-hibernate|spring-hibernate|quarkus-hibernate"
   )
 
   mkdir -p "$CAMPAIGN_DIR"

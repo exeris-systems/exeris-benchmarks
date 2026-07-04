@@ -33,7 +33,7 @@
     },
     "tool": {
       "type": "string",
-      "enum": ["jmh", "wrk", "wrk2", "h2load", "k6", "jazzer", "slowloris", "radamsa"]
+      "enum": ["jmh", "wrk", "wrk2", "h2load", "k6", "jazzer", "slowloris", "radamsa", "startup-probe"]
     },
     "env_ref": {
       "type": "string",
@@ -166,6 +166,7 @@
         "contract_id": { "type": "string", "description": "Fixed contract identifier from scenario.json fixed_contracts." },
         "track_id": { "type": "string", "description": "Track identifier (e.g. track-c)." },
         "result_namespace": { "type": "string", "description": "Relative path namespace for result artifact directory." },
+        "startup_iterations": { "type": "integer", "minimum": 1, "description": "Number of independent cold JVM launches aggregated by a cold-start/TTFR run. Each launch is a fresh process spawn; cold-start has high run-to-run variance so a single launch is not publishable." },
         "soak_duration_class": {
           "type": "string",
           "description": "Soak duration class. smoke=≤30s exploratory; guard=~10m; regression=~30m; contract=~2h.",
@@ -215,6 +216,84 @@
               "t_s": { "type": "number", "description": "Seconds since load start (bucket start)." },
               "rps": { "type": "number", "description": "Requests completed in this 1s bucket." },
               "phase": { "type": "string", "enum": ["warmup", "measurement", "cooldown", "unknown"], "description": "Phase tag for this bucket, when the driver emits a phase tag." }
+            }
+          }
+        }
+      }
+    },
+    "startup": {
+      "type": "object",
+      "description": "Cold-start and time-to-first-request (TTFR) measurements, aggregated over `iterations` independent JVM launches. t0 is the harness-owned process-spawn instant (the moment the launcher invokes the target's start command); 'ready' = first HTTP 200 from the health endpoint; 'first request' = first HTTP 2xx from the business endpoint after ready. startup_ms is a black-box spawn->health metric: 'ready' semantics differ per framework (Spring 'Started' vs Quarkus 'started' vs Exeris banner vs native-image), so cross-runtime rows MUST carry that caveat and must not be collapsed without it. Because cold-start has high run-to-run variance, a single launch is not publishable — report the aggregate.",
+      "required": ["iterations", "measure", "startup_ms", "ttfr_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "iterations": { "type": "integer", "minimum": 1, "description": "Number of independent cold JVM launches aggregated." },
+        "measure": {
+          "type": "string",
+          "enum": ["spawn-to-health", "spawn-to-first-request"],
+          "description": "Definition of the primary startup metric. spawn-to-health = t0 -> first /health 200 (black-box readiness); spawn-to-first-request = t0 -> first business 2xx."
+        },
+        "readiness_definition": {
+          "type": "string",
+          "description": "Free-text note on what 'ready' means for this target's framework (e.g. 'health endpoint 200 after Spring context refresh'). Carries the per-framework caveat into the artifact."
+        },
+        "health_endpoint": { "type": "string", "description": "URL polled for readiness (startup t1)." },
+        "first_request_endpoint": { "type": "string", "description": "Business endpoint whose first 2xx defines TTFR." },
+        "startup_ms": {
+          "$ref": "#/$defs/sample_stats",
+          "description": "Aggregate of t0->ready durations in milliseconds, over `iterations` launches."
+        },
+        "ttfr_ms": {
+          "$ref": "#/$defs/sample_stats",
+          "description": "Aggregate of ready->first-business-2xx durations in milliseconds (first-call penalty: lazy init, cold JIT, pool fill, class loading)."
+        },
+        "spawn_to_first_request_ms": {
+          "$ref": "#/$defs/sample_stats",
+          "description": "Aggregate of t0->first-business-2xx durations in milliseconds (startup + TTFR end to end)."
+        },
+        "peak_rss_mb": {
+          "$ref": "#/$defs/sample_stats",
+          "description": "Aggregate of peak resident set size (VmHWM, MiB) reached by the target process from spawn through the first business request, over `iterations` launches. VmHWM is a kernel high-water mark, so one read after the first request captures the window peak."
+        },
+        "cpu_to_first_request_s": {
+          "$ref": "#/$defs/sample_stats",
+          "description": "Aggregate of total CPU seconds (utime+stime from /proc/<pid>/stat) consumed by the target process from spawn to the first business 2xx, over `iterations` launches. This is CPU work-to-ready, not instantaneous utilization; divide by spawn_to_first_request_ms for effective cores."
+        },
+        "ttfr_curve": {
+          "type": "object",
+          "description": "First-request decay curve. After readiness each launch issues `requests` back-to-back requests on a reused (keepalive) connection; request #1 is the cold spike (connect + cold JIT + lazy init + pool fill) and the tail decays toward steady-state. Lets a reader see the warmup transient, not just the single spike (ttfr_ms).",
+          "additionalProperties": false,
+          "required": ["requests", "steady_ms", "curve_p50_ms"],
+          "properties": {
+            "requests": { "type": "integer", "minimum": 1, "description": "Requests issued per launch to trace the curve." },
+            "steady_ms": { "$ref": "#/$defs/sample_stats", "description": "Per-launch steady-state latency (median of the last 25% of the series), aggregated across launches." },
+            "spike_ratio_median": { "type": "number", "description": "Median over launches of request#1 latency / steady-state latency. 1.0 = no first-call penalty; higher = sharper spike." },
+            "settle_request_median": { "type": "number", "description": "Median over launches of the 1-based request index after which latency stays within 1.2x steady-state for the remainder. How many requests to 'warm up'." },
+            "curve_p50_ms": {
+              "type": "array",
+              "items": { "type": "number" },
+              "description": "Position-wise median latency (ms) across launches: curve_p50_ms[k] = median of request k+1 over all launches. The plottable decay curve."
+            }
+          }
+        },
+        "samples": {
+          "type": "array",
+          "description": "Per-iteration raw measurements, in launch order. Lets a reader recompute the aggregates and see variance instead of trusting a single number.",
+          "items": {
+            "type": "object",
+            "required": ["iteration", "startup_ms", "ttfr_ms"],
+            "additionalProperties": false,
+            "properties": {
+              "iteration": { "type": "integer", "minimum": 1 },
+              "startup_ms": { "type": ["number", "null"], "description": "t0 -> ready, milliseconds. null if the launch never became ready." },
+              "ttfr_ms": { "type": ["number", "null"], "description": "ready -> first business 2xx, milliseconds. null if not ready." },
+              "spawn_to_first_request_ms": { "type": ["number", "null"], "description": "t0 -> first business 2xx, milliseconds. null if not ready." },
+              "peak_rss_mb": { "type": ["number", "null"], "description": "Peak RSS (VmHWM, MiB) through first request. null if the pid could not be resolved." },
+              "cpu_to_first_request_s": { "type": ["number", "null"], "description": "CPU seconds (utime+stime) consumed to first request. null if the pid could not be resolved." },
+              "latency_series_ms": { "type": "array", "items": { "type": "number" }, "description": "Per-request latency (ms, curl time_total) for this launch's warmup sequence; [0] is the cold spike." },
+              "health_attempts": { "type": "integer", "minimum": 0, "description": "Health-poll attempts before first 200." },
+              "first_request_status": { "type": "integer", "description": "HTTP status of the first business response counted as success." },
+              "ready": { "type": "boolean", "description": "false if the launch never became ready within the readiness timeout (excluded from aggregates)." }
             }
           }
         }
@@ -286,6 +365,24 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Arbitrary labels, e.g. release-candidate, regression-investigation."
+    }
+  },
+  "$defs": {
+    "sample_stats": {
+      "type": "object",
+      "description": "Aggregate statistics over n independent samples. All values share the unit declared by the containing field name (e.g. *_ms = milliseconds).",
+      "required": ["n", "min", "median", "max"],
+      "additionalProperties": false,
+      "properties": {
+        "n": { "type": "integer", "minimum": 1, "description": "Number of samples contributing to these statistics." },
+        "min": { "type": "number" },
+        "median": { "type": "number" },
+        "p90": { "type": "number" },
+        "p99": { "type": "number" },
+        "max": { "type": "number" },
+        "mean": { "type": "number" },
+        "stdev": { "type": "number", "description": "Sample standard deviation (n-1)." }
+      }
     }
   }
 }

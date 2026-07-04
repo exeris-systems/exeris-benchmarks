@@ -36,7 +36,18 @@ bench_start_resource_sampler() {
         continue
       fi
 
-      epoch_ms="$(date +%s%3N)"
+      # NB: `date +%s%3N` is unreliable here — the %3N width is ignored AND the
+      # sub-second field is emitted without zero-padding, so a concatenated
+      # "%s%N" loses leading zeros (ns 054089824 -> "54089824"), shifting digits
+      # and corrupting the timestamp (18/17-digit rows). That silently turned
+      # this "epoch_ms" column into garbage and collapsed avg_cores_used /
+      # cpu_util to ~0 downstream. Read seconds and ns SEPARATELY and combine
+      # arithmetically — leading zeros don't change the integer ns value, so
+      # this is immune to the padding bug. 10# forces base-10 (avoids octal).
+      local _epoch_s _epoch_ns
+      read -r _epoch_s _epoch_ns < <(date +'%s %N')
+      [[ "$_epoch_ns" =~ ^[0-9]+$ ]] || _epoch_ns=0
+      epoch_ms=$(( _epoch_s * 1000 + 10#$_epoch_ns / 1000000 ))
       utime_ticks="${stat_fields[11]}"
       stime_ticks="${stat_fields[12]}"
       threads="${stat_fields[17]}"
@@ -123,8 +134,16 @@ bench_summarize_resource_samples() {
         cpu_delta  = last_cpu - first_cpu
         if (cpu_delta < 0) cpu_delta = 0
         cpu_secs   = (tps > 0) ? cpu_delta / tps : 0
-        elapsed_ms = last_epoch - first_epoch
-        elapsed_s  = (elapsed_ms > 0) ? elapsed_ms / 1000.0 : 0
+        # Normalize the epoch delta to seconds by timestamp magnitude, so the
+        # math is correct whether the column is s / ms / us / ns (the generator
+        # intends ms, but a platform `date` that ignores %3N yields ns — guard
+        # against both, and recover already-collected ns CSVs).
+        if      (first_epoch >= 1.0e18) epoch_div = 1.0e9   # nanoseconds
+        else if (first_epoch >= 1.0e15) epoch_div = 1.0e6   # microseconds
+        else if (first_epoch >= 1.0e12) epoch_div = 1.0e3   # milliseconds
+        else                            epoch_div = 1.0     # seconds
+        elapsed_raw = last_epoch - first_epoch
+        elapsed_s   = (elapsed_raw > 0) ? elapsed_raw / epoch_div : 0
         printf "%d %.6f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.6f\n",
           count,
           cpu_secs,

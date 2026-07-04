@@ -175,12 +175,12 @@ apply_fair_resource_profile() {
   local profile_path="${CAMPAIGN_OUTPUT_DIR}/resource-profile.json"
   local diagnostics_dir="${CAMPAIGN_OUTPUT_DIR}/diagnostics"
   local startup_options_manifest="${diagnostics_dir}/jvm-startup-options.json"
-  local exeris_safepoint_log="${diagnostics_dir}/exeris-benchmark-app-community-h1.safepoint.log"
-  local spring_safepoint_log="${diagnostics_dir}/spring-jvm-vt-tuned.safepoint.log"
-  local quarkus_safepoint_log="${diagnostics_dir}/quarkus-jvm-vt-tuned.safepoint.log"
-  local exeris_jfr_file="${diagnostics_dir}/exeris-benchmark-app-community-h1.jfr"
-  local spring_jfr_file="${diagnostics_dir}/spring-jvm-vt-tuned.jfr"
-  local quarkus_jfr_file="${diagnostics_dir}/quarkus-jvm-vt-tuned.jfr"
+  local exeris_safepoint_log="${diagnostics_dir}/exeris-community.safepoint.log"
+  local spring_safepoint_log="${diagnostics_dir}/spring-hibernate.safepoint.log"
+  local quarkus_safepoint_log="${diagnostics_dir}/quarkus-hibernate.safepoint.log"
+  local exeris_jfr_file="${diagnostics_dir}/exeris-community.jfr"
+  local spring_jfr_file="${diagnostics_dir}/spring-hibernate.jfr"
+  local quarkus_jfr_file="${diagnostics_dir}/quarkus-hibernate.jfr"
   local jfr_settings="${BENCH_JFR_SETTINGS}"
 
   validate_positive_integer "$BENCH_TOTAL_MEMORY_MB" "BENCH_TOTAL_MEMORY_MB" || return 1
@@ -274,17 +274,17 @@ apply_fair_resource_profile() {
   "jfr_settings": "$(printf '%s' "$jfr_settings" | json_escape)",
   "jfr_max_size_mb": ${BENCH_JFR_MAX_SIZE_MB},
   "targets": {
-    "exeris-benchmark-app-community-h1": {
+    "exeris-community": {
       "java_opts": "$(printf '%s' "$EXERIS_JAVA_OPTS" | json_escape)",
       "safepoint_log": "$(printf '%s' "$exeris_safepoint_log" | json_escape)",
       "jfr_file": "$(printf '%s' "$exeris_jfr_file" | json_escape)"
     },
-    "spring-jvm-vt-tuned": {
+    "spring-hibernate": {
       "java_opts": "$(printf '%s' "$SPRING_JAVA_OPTS" | json_escape)",
       "safepoint_log": "$(printf '%s' "$spring_safepoint_log" | json_escape)",
       "jfr_file": "$(printf '%s' "$spring_jfr_file" | json_escape)"
     },
-    "quarkus-jvm-vt-tuned": {
+    "quarkus-hibernate": {
       "java_opts": "$(printf '%s' "$QUARKUS_JAVA_OPTS" | json_escape)",
       "safepoint_log": "$(printf '%s' "$quarkus_safepoint_log" | json_escape)",
       "jfr_file": "$(printf '%s' "$quarkus_jfr_file" | json_escape)"
@@ -631,13 +631,13 @@ build_target_artifact() {
   local pom_path=""
 
   case "$target_id" in
-    exeris-benchmark-app-community-h1)
+    exeris-community)
       module_path="targets/exeris-community-app"
       ;;
-    spring-jvm-vt-tuned)
+    spring-hibernate)
       module_path="targets/spring-benchmark-app"
       ;;
-    quarkus-jvm-vt-tuned)
+    quarkus-hibernate)
       module_path="targets/quarkus-benchmark-app"
       ;;
     *)
@@ -664,9 +664,9 @@ prebuild_campaign_targets() {
   echo "PREBUILD CAMPAIGN TARGET ARTIFACTS"
   echo "============================================================"
 
-  build_target_artifact "exeris-benchmark-app-community-h1" || return 1
-  build_target_artifact "spring-jvm-vt-tuned" || return 1
-  build_target_artifact "quarkus-jvm-vt-tuned" || return 1
+  build_target_artifact "exeris-community" || return 1
+  build_target_artifact "spring-hibernate" || return 1
+  build_target_artifact "quarkus-hibernate" || return 1
 
   echo "============================================================"
   echo "PREBUILD COMPLETED"
@@ -814,13 +814,13 @@ if ! prebuild_campaign_targets; then
 fi
 
 # Pair 1 (AB/BA): Exeris vs Quarkus
-run_pair_block "1-exeris-vs-quarkus" "exeris-benchmark-app-community-h1" "quarkus-jvm-vt-tuned" "1" "9000" "9002"
+run_pair_block "1-exeris-vs-quarkus" "exeris-community" "quarkus-hibernate" "1" "9000" "9002"
 
 # Pair 3 (AB/BA): Exeris vs Spring
-run_pair_block "3-exeris-vs-spring" "exeris-benchmark-app-community-h1" "spring-jvm-vt-tuned" "3" "9000" "9001"
+run_pair_block "3-exeris-vs-spring" "exeris-community" "spring-hibernate" "3" "9000" "9001"
 
 # Pair 2 (AB/BA): Spring vs Quarkus
-run_pair_block "2-spring-vs-quarkus" "spring-jvm-vt-tuned" "quarkus-jvm-vt-tuned" "2" "9001" "9002"
+run_pair_block "2-spring-vs-quarkus" "spring-hibernate" "quarkus-hibernate" "2" "9001" "9002"
 
 echo ""
 echo "============================================================"

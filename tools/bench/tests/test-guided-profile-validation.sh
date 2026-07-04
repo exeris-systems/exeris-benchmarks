@@ -51,7 +51,7 @@ base_profile() {
     run_type: "exploratory",
     target_mode: "single",
     claim_scope: "descriptive_only",
-    targets: ["exeris-community-app"],
+    targets: ["exeris-community"],
     launch_mode: "prebuild",
     runtime_mode: "jvm"
   }'
@@ -106,13 +106,13 @@ assert_validator pass "saga-single-graph-track" \
 assert_validator pass "saga-multi-3-targets" \
   "$(base_profile | jq '.scenario_id = "e2e-shop-order-saga" | .protocol_mode = "h2"
         | .graph_track = "neo4j" | .target_mode = "multi"
-        | .targets = ["exeris-community-app","quarkus-app-axon","spring-app-axon"]')" \
+        | .targets = ["exeris-community","quarkus-hibernate","spring-hibernate"]')" \
   --dispatch-compatible
 
 # 7) Non-saga multi with 3 targets (dispatch-compatible) -> fail (exactly 2).
 assert_validator fail "multi-3-targets-nonsaga" \
   "$(base_profile | jq '.target_mode = "multi"
-        | .targets = ["exeris-community-app","spring-jvm-vt-tuned","quarkus-jvm-vt-tuned"]')" \
+        | .targets = ["exeris-community","spring-hibernate","quarkus-hibernate"]')" \
   --dispatch-compatible
 
 # 8) Community + H3 -> fail (Enterprise-only).
@@ -134,12 +134,40 @@ assert_validator pass "constrained-named-profile" \
 assert_validator fail "constrained-missing-limits" \
   "$(base_profile | jq '.execution_class = "constrained"')"
 
+# 11b) Constrained CUSTOM spec (ad-hoc execution_profile_id + explicit cgroup limit,
+# entity-read-by-id, local/single) -> pass. The id need not be a canonical named
+# profile; run-guided synthesizes an ad-hoc exploratory profile for custom limits.
+assert_validator pass "constrained-custom-cgroup" \
+  "$(base_profile | jq '.scenario_id = "entity-read-by-id"
+        | .execution_class = "constrained"
+        | .execution_profile_id = "runtime-constrained-custom-160m-75pct-v1"
+        | .cgroup = { memory_limit_mb: 160, cpu_quota_pct: 75 }')" \
+  --dispatch-compatible
+
+# 11c) Constrained with operator JVM overrides (gc/heap) recorded -> pass.
+assert_validator pass "constrained-jvm-overrides" \
+  "$(base_profile | jq '.scenario_id = "entity-read-by-id"
+        | .execution_class = "constrained"
+        | .execution_profile_id = "runtime-constrained-256m-1vcpu-v1"
+        | .cgroup = { memory_limit_mb: 256, cpu_quota_pct: 100 }
+        | .constrained_jvm_overrides = { gc: "g1", xms_mb: 96, xmx_mb: 160 }')" \
+  --dispatch-compatible
+
+# 11d) Unknown GC in the recorded overrides -> fail (schema enum).
+assert_validator fail "constrained-jvm-overrides-bad-gc" \
+  "$(base_profile | jq '.scenario_id = "entity-read-by-id"
+        | .execution_class = "constrained"
+        | .execution_profile_id = "runtime-constrained-256m-1vcpu-v1"
+        | .cgroup = { memory_limit_mb: 256, cpu_quota_pct: 100 }
+        | .constrained_jvm_overrides = { gc: "cms" }')" \
+  --dispatch-compatible
+
 # 12) Constrained + multi target -> fail (comparative forbidden).
 assert_validator fail "constrained-multi" \
   "$(base_profile | jq '.execution_class = "constrained"
         | .execution_profile_id = "runtime-constrained-256m-1vcpu-v1"
         | .target_mode = "multi"
-        | .targets = ["exeris-community-app","spring-jvm-vt-tuned"]')" \
+        | .targets = ["exeris-community","spring-hibernate"]')" \
   --dispatch-compatible
 
 # 13) Constrained + WAN (network) -> fail (local-only).

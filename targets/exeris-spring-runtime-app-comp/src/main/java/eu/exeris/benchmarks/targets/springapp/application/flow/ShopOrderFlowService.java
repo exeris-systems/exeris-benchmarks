@@ -116,6 +116,29 @@ public class ShopOrderFlowService {
         if (entry.isEmpty() || !entry.get().userId().equals(userId)) {
             return Optional.empty();
         }
-        return Optional.of(new OrderStatusView(orderId, entry.get().status(), entry.get().sagaId()));
+        return Optional.of(new OrderStatusView(orderId, toContractStatus(entry.get().status()), entry.get().sagaId()));
+    }
+
+    /**
+     * Maps the internal step-lambda status vocabulary onto the API-level status the
+     * e2e-shop-order-saga k6 contract polls for. The contract's terminal set is
+     * {@code COMPLETED} / {@code COMPENSATED} / {@code FAILED} (see
+     * {@code scenarios/e2e-shop-order-saga/k6.js} {@code TERMINAL_SAGA_STATUSES});
+     * the saga's compensation chain records {@code PAYMENT_REFUNDED} then the
+     * terminal {@code CANCELLED}, neither of which the poller recognizes as
+     * terminal — so without this mapping a compensated saga is polled to
+     * exhaustion and scored {@code saga_unresolved}. Mirrors
+     * {@code exeris-community-app}'s {@code RepositoryBackedBenchmarkUseCaseService.mapFallbackSagaStatus}
+     * so all targets expose an identical status surface. Non-terminal in-progress
+     * statuses ({@code SAGA_INITIATED}, {@code INVENTORY_RESERVED},
+     * {@code PAYMENT_PROCESSING}) pass through unchanged for the poller to keep polling.
+     */
+    private static String toContractStatus(String internalStatus) {
+        return switch (internalStatus) {
+            case "COMPLETED", "CONFIRMED" -> "COMPLETED";
+            case "CANCELLED", "PAYMENT_REFUNDED" -> "COMPENSATED";
+            case "FAILED" -> "FAILED";
+            default -> internalStatus;
+        };
     }
 }

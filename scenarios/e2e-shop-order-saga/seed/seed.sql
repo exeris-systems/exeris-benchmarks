@@ -321,7 +321,8 @@ CREATE INDEX IF NOT EXISTS idx_exeris_saga_state_parked
     ON exeris_saga_state (state, last_update);
 
 -- ============================================================================
--- AXON FRAMEWORK JPA EVENT STORE (used by spring-app-axon and quarkus-app-axon)
+-- AXON FRAMEWORK JPA EVENT STORE (used by the spring-hibernate and quarkus-hibernate saga
+-- targets, whose saga orchestration uses Axon Framework; see target_backend_support)
 -- Tables match Axon Framework 4.x JPA schema for PostgreSQL / Hibernate 6
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS domain_event_entry (

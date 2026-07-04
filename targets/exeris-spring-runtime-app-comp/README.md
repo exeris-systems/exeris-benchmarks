@@ -342,9 +342,10 @@ data. Community is unaffected because its saga step bodies use the kernel-native
   (descriptive; see the cross-track fairness caveats above).
 - **Saga terminal-state metrics** (`saga_success_rate`, compensation rate,
   end-to-end order completion): **not** benchmark-eligible until the flow-worker
-  VT scope fix lands. This is precisely why `spring-runtime-on-exeris-flow` is
+  VT scope fix lands. This is precisely why `spring-on-exeris` (formerly
+  `spring-runtime-on-exeris-flow`) is
   **excluded from `scenarios/e2e-shop-order-saga/comparative-pair-manifest.json`**
-  (compatible targets are the community-app + the Axon spring/quarkus targets) and
+  (compatible targets are `exeris-community` + the Axon spring/quarkus targets) and
   is flagged baseline-only in `tools/verify-target-asset-matrix.sh`. Saga runs
   against this target are emitted as `claim_scope: descriptive_only` /
   `exploratory`, never `comparison_eligible`.

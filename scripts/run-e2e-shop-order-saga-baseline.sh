@@ -25,7 +25,7 @@ Usage: run-e2e-shop-order-saga-baseline.sh [options]
 Options:
   --base-url <url>         Base URL for target app (default: https://localhost:8080)
   --contract-id <id>       Contract id (default: exeris_community_h2c_v1)
-  --target-app <name>      Target app label (default: exeris-e2e-community-h2)
+  --target-app <name>      Target app label (default: exeris-community)
   --auto-start-infra       Auto-start benchmark infra (Postgres + Neo4j) via docker compose (default)
   --no-auto-start-infra    Do not auto-start benchmark infra
   --auto-start-target      Auto-start target app if health preflight fails (default)
@@ -512,10 +512,10 @@ ensure_benchmark_infra() {
 }
 
 _BASE_URL_EXPLICIT="false"
-BASE_URL="https://localhost:8080"
+BASE_URL="http://localhost:9000"
 CURL_INSECURE_OPT=""
 CONTRACT_ID="exeris_community_h2c_v1"
-TARGET_APP="exeris-e2e-community-h2"
+TARGET_APP="exeris-community"
 TARGET_APP_LOG_FILE=""
 AUTO_START_INFRA="true"
 START_TARGET_ON_DEMAND="true"
@@ -645,10 +645,10 @@ done
 
 # Derive the path of the target process log file (fixed name from EXTERNAL_START_CMD) for failure capture.
 case "${TARGET_APP:-}" in
-  exeris-community-app|exeris-e2e-community-h2*)  TARGET_APP_LOG_FILE="/tmp/exeris-community-8080.log" ;;
+  exeris-community|exeris-community-app|exeris-e2e-community-h2*)  TARGET_APP_LOG_FILE="/tmp/exeris-community.log"  ;;
   exeris-community-app-locality)                  TARGET_APP_LOG_FILE="/tmp/exeris-locality-8080.log"  ;;
-  spring-app-axon|spring-*)                        TARGET_APP_LOG_FILE="/tmp/exeris-spring-9001.log"    ;;
-  quarkus-app-axon|quarkus-*)                      TARGET_APP_LOG_FILE="/tmp/exeris-quarkus-9002.log"   ;;
+  spring-on-exeris|spring-hibernate|spring-app-axon|spring-*)      TARGET_APP_LOG_FILE="/tmp/exeris-spring-9001.log"    ;;
+  quarkus-hibernate|quarkus-app-axon|quarkus-*)   TARGET_APP_LOG_FILE="/tmp/exeris-quarkus-9002.log"   ;;
   *)                                               TARGET_APP_LOG_FILE=""                               ;;
 esac
 
@@ -984,7 +984,13 @@ if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *s
       while true; do
         _line="$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}},{{.NetIO}},{{.BlockIO}},{{.PIDs}}' exeris-e2e-saga-axonserver 2>/dev/null || true)"
         [[ -z "$_line" ]] && { sleep 1; continue; }
-        _epoch_ms="$(date +%s%3N)"
+        # date +%s%3N is unreliable (ignores %3N width and drops leading zeros in
+        # the sub-second field, corrupting the timestamp) — read s and ns in one
+        # atomic call and combine arithmetically. See resource-sampler.sh.
+        _epoch_s=""; _epoch_ns=""
+        read -r _epoch_s _epoch_ns < <(date +'%s %N')
+        [[ "$_epoch_ns" =~ ^[0-9]+$ ]] || _epoch_ns=0
+        _epoch_ms=$(( _epoch_s * 1000 + 10#$_epoch_ns / 1000000 ))
         # Parse CPUPerc (strip %)
         _cpu="${_line%%,*}"; _cpu="${_cpu//%/}"
         _rest="${_line#*,}"

@@ -20,6 +20,10 @@
       "type": "string",
       "description": "Execution profile identifier (e.g. runtime-constrained-128m-0p5vcpu-v1)."
     },
+    "jit_representativeness": {
+      "type": "string",
+      "description": "Whether the JVM tier under this profile is perf-representative. 'representative' = full C2; a min-footprint profile (e.g. TieredStopAtLevel=1 to fit a 128MB cgroup) is NOT comparable for cross-target throughput and is labeled accordingly."
+    },
     "contract_id": {
       "type": "string",
       "description": "Fixed contract key from scenario.json fixed_contracts."
@@ -111,6 +115,16 @@
             "nr_throttled":  { "type": "integer", "minimum": 0 },
             "throttled_usec": { "type": "integer", "minimum": 0 }
           }
+        },
+        "memory_events": {
+          "type": "object",
+          "description": "Deltas of cgroup memory.events counters across the run (after - before). oom_kill > 0 is authoritative proof the kernel OOM-killer SIGKILLed a process in this scope, independent of exit code or target log strings.",
+          "properties": {
+            "oom_kill":       { "type": "integer", "minimum": 0, "description": "Processes the OOM-killer terminated in this cgroup/subtree during the run. > 0 drives outcome=oom_killed (or oom_after_measurement when the kill landed in teardown)." },
+            "oom":            { "type": "integer", "minimum": 0, "description": "Times an allocation could not be satisfied and the OOM-killer was invoked." },
+            "oom_group_kill": { "type": "integer", "minimum": 0, "description": "Times the whole cgroup was killed as a group (memory.oom.group). May stay 0 on kernels without the counter." },
+            "max":            { "type": "integer", "minimum": 0, "description": "Times usage hit memory.max and allocation was throttled/reclaimed at the limit." }
+          }
         }
       }
     },
@@ -140,8 +154,54 @@
     },
     "outcome": {
       "type": "string",
-      "description": "Canonical outcome classification.",
+      "description": "Canonical outcome classification. A teardown-phase OOM after a validated measurement keeps its measurement-derived outcome (e.g. ok) and is flagged via oom_after_measurement rather than being reclassified as oom_killed.",
       "enum": ["ok", "startup_failed", "oom_killed", "readiness_timeout", "limit_mismatch"]
+    },
+    "phase_reached": {
+      "type": "string",
+      "description": "Furthest productive phase the inner runner recorded in phase.state before exit/kill. 'unknown' when the marker file is absent (e.g. the runner died before writing it).",
+      "enum": ["unknown", "setup", "launch", "readiness", "warmup", "measure", "measure_complete"]
+    },
+    "failed_phase": {
+      "type": ["string", "null"],
+      "description": "Phase a failure/OOM is attributed to, or null on a clean run. teardown means the kill landed after the measurement window had already validated as a real result.",
+      "enum": ["setup", "launch", "readiness", "warmup", "measure", "teardown", null]
+    },
+    "oom_after_measurement": {
+      "type": "boolean",
+      "description": "true when a cgroup oom_kill was observed but the measurement window had already completed and validated (phase_reached=measure_complete). The result remains valid but is flagged as teardown-tainted."
+    },
+    "target_alive_at_teardown": {
+      "type": ["integer", "null"],
+      "description": "1 if the target process was still alive when the inner runner's cleanup began, 0 if it had already died during the run, null if unknown. Corroborates failed_phase: 0 with an OOM points at an in-run kill, 1 at a teardown kill.",
+      "enum": [0, 1, null]
+    },
+    "memory_failure_kind": {
+      "type": "string",
+      "description": "Diagnostic synthesis across all three sources. cgroup_oom_kill = kernel SIGKILL at memory.max (authoritative, from memory.events). jvm_native_oom = the JVM itself hit a native/heap OOM (hs_err OOM cause or heap OutOfMemoryError in the log) without a cgroup kill. jvm_crash = a non-OOM JVM fatal error (SIGSEGV/internal). none = no memory-failure signal. A cgroup kill outranks JVM-internal signals.",
+      "enum": ["none", "cgroup_oom_kill", "jvm_native_oom", "jvm_crash", "unknown"]
+    },
+    "crash_artifacts": {
+      "type": "object",
+      "description": "JVM-side fatal-error evidence produced by this run. Complements the kernel signal: a cgroup SIGKILL writes NO hs_err, so an hs_err here is a JVM-internal crash (SIGSEGV / native-OOM the JVM detected itself), which memory.events cannot see.",
+      "properties": {
+        "hs_err_present": { "type": "boolean", "description": "true if at least one hs_err_pid*.log newer than run start was found." },
+        "hs_err_paths":   { "type": "array", "items": { "type": "string" }, "description": "Paths (relative to the result dir) of hs_err logs copied into crash-artifacts/ for preservation." },
+        "hs_err_cause":   { "type": ["string", "null"], "description": "Fatal cause parsed from the first hs_err header (e.g. SIGSEGV, 'Out of Memory Error'). null when no hs_err." },
+        "replay_present": { "type": "boolean", "description": "true if a JIT compile-replay dump (replay_pid*.log) was produced." },
+        "core_present":   { "type": "boolean", "description": "true if a core dump was produced in the launch CWD." }
+      }
+    },
+    "dmesg_oom": {
+      "type": "object",
+      "description": "Best-effort kernel-ring-buffer corroboration of a cgroup OOM kill. NOT authoritative and frequently unavailable: under a --user systemd scope the buffer is usually unreadable (no CAP_SYSLOG), so available=false proves nothing — defer to memory.events.oom_kill.",
+      "properties": {
+        "available":          { "type": "boolean", "description": "true if dmesg was readable for this run." },
+        "oom_killer_invoked": { "type": ["boolean", "null"], "description": "true if OOM-killer lines matched, false if none matched, null when dmesg was unavailable." },
+        "matched_line_count": { "type": "integer", "minimum": 0, "description": "Number of OOM-related lines matched (capped sample)." },
+        "sample_lines":       { "type": "array", "items": { "type": "string" }, "description": "Up to 15 matched OOM-killer lines (tail), for triage." },
+        "note":               { "type": "string" }
+      }
     },
     "generated_at_utc": {
       "type": "string",

@@ -7,9 +7,14 @@ MATRIX_PATH="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
 
 # Runnable targets listed here are intentionally baseline-only and are not part
 # of any scenario comparative manifest.
+#   spring-on-exeris: saga terminal-state metrics ineligible (flow-worker VT outside
+#     compat provider scope); baseline request-path only.
+#   quarkus-tuned: pure-JDBC, tuned transport (native epoll + native BoringSSL TLS)
+#     counterpart of default-Quarkus quarkus-hibernate; app in flight, not yet promoted
+#     to a comparative-pair-manifest (quarkus-hibernate__quarkus-tuned) as comparison_eligible.
 JUSTIFIED_UNUSED_RUNNABLE_TARGETS=(
-  "exeris-e2e-community-h2"
-  "spring-runtime-on-exeris-flow"
+  "spring-on-exeris"
+  "quarkus-tuned"
 )
 
 fail_count=0

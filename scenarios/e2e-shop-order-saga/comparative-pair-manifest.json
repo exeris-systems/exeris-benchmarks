@@ -79,7 +79,7 @@
   },
   "compatible_targets": [
     {
-      "target_id": "exeris-community-app",
+      "target_id": "exeris-community",
       "tier": "community",
       "protocol_mode": "h2c",
       "transport_mode": "loopback-h2c",
@@ -91,7 +91,7 @@
       "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=exeris_community_h2c_v1. No cross-tier inference."
     },
     {
-      "target_id": "quarkus-app-axon",
+      "target_id": "quarkus-hibernate",
       "tier": "community",
       "protocol_mode": "h2c",
       "transport_mode": "loopback-h2c",
@@ -103,7 +103,7 @@
       "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=quarkus_axon_neo4j_v1. Axon Framework overhead ~3-5% (documented, expected)."
     },
     {
-      "target_id": "spring-app-axon",
+      "target_id": "spring-hibernate",
       "tier": "community",
       "protocol_mode": "h2c",
       "transport_mode": "loopback-h2c",
@@ -117,10 +117,10 @@
   ],
   "allowed_pairs": [
     {
-      "pair_id": "exeris-community-app__quarkus-app-axon",
-      "baseline": "exeris-community-app",
-      "candidate": "quarkus-app-axon",
-      "targets": ["exeris-community-app", "quarkus-app-axon"],
+      "pair_id": "exeris-community__quarkus-hibernate",
+      "baseline": "exeris-community",
+      "candidate": "quarkus-hibernate",
+      "targets": ["exeris-community", "quarkus-hibernate"],
       "tier": "community",
       "protocol_mode": "h2c",
       "transport_mode": "loopback-h2c",
@@ -136,10 +136,10 @@
       }
     },
     {
-      "pair_id": "exeris-community-app__spring-app-axon",
-      "baseline": "exeris-community-app",
-      "candidate": "spring-app-axon",
-      "targets": ["exeris-community-app", "spring-app-axon"],
+      "pair_id": "exeris-community__spring-hibernate",
+      "baseline": "exeris-community",
+      "candidate": "spring-hibernate",
+      "targets": ["exeris-community", "spring-hibernate"],
       "tier": "community",
       "protocol_mode": "h2c",
       "transport_mode": "loopback-h2c",
@@ -155,10 +155,10 @@
       }
     },
     {
-      "pair_id": "quarkus-app-axon__spring-app-axon",
-      "baseline": "quarkus-app-axon",
-      "candidate": "spring-app-axon",
-      "targets": ["quarkus-app-axon", "spring-app-axon"],
+      "pair_id": "quarkus-hibernate__spring-hibernate",
+      "baseline": "quarkus-hibernate",
+      "candidate": "spring-hibernate",
+      "targets": ["quarkus-hibernate", "spring-hibernate"],
       "tier": "community",
       "protocol_mode": "h2c",
       "transport_mode": "loopback-h2c",
@@ -176,7 +176,7 @@
   "forbidden_pairs": [
     {
       "reason": "Community vs Enterprise cross-tier — protocol fairness requires separate contracts",
-      "targets": ["exeris-community-app", "exeris-kernel-enterprise"]
+      "targets": ["exeris-community", "exeris-kernel-enterprise"]
     },
     {
       "reason": "Cross-protocol comparisons are out of scope (H1 vs H2C vs H3 must be segregated)",

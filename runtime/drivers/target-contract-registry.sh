@@ -23,16 +23,36 @@ target_registry_root() {
 }
 
 normalize_target_alias() {
+  # Frozen alias map: every legacy/historical target_id resolves to one of the 5
+  # canonical framework-centric ids. Protocol/tuning/native variants collapse to
+  # their physical app (protocol is now the run-guided override axis, not an id
+  # component). Kept so historical results/ rows under legacy ids still resolve;
+  # do not remove an alias once a published run used it.
   local raw_id="${1:-}"
   case "${raw_id}" in
-    enterprise) echo "exeris-kernel-enterprise" ;;
-    spring-benchmark-app|spring-runtime) echo "spring-jvm-vt-tuned" ;;
-    spring-app-axon) echo "spring-app-axon" ;;
-    spring-runtime-on-exeris-flow|spring-on-exeris-flow|exeris-spring-runtime-app-comp) echo "spring-runtime-on-exeris-flow" ;;
-    quarkus-benchmark-app|quarkus-runtime) echo "quarkus-jvm-vt-tuned" ;;
-    quarkus-app-axon) echo "quarkus-app-axon" ;;
-    exeris-community-app|exeris-e2e-community-h2c) echo "exeris-community-app" ;;
-    exeris-benchmark-app|exeris-runtime-h1) echo "exeris-benchmark-app-community-h1" ;;
+    enterprise|exeris-kernel-enterprise) echo "exeris-kernel-enterprise" ;;
+
+    # 1) Exeris Community (native kernel)
+    exeris-community|exeris-community-app|exeris-e2e-community-h2|exeris-e2e-community-h2c|\
+    exeris-benchmark-app-community-h1|exeris-benchmark-app|exeris-runtime-h1|\
+    exeris-native-community|exeris-runtime-community) echo "exeris-community" ;;
+
+    # 2) Spring Boot + Hibernate ORM
+    spring-hibernate|spring-jvm-vt-tuned|spring-benchmark-app|spring-runtime|\
+    spring-app-axon|spring-native-default) echo "spring-hibernate" ;;
+
+    # 3) Spring on Exeris (compat + Flow)
+    spring-on-exeris|spring-runtime-on-exeris-flow|spring-on-exeris-flow|\
+    spring-runtime-on-exeris|exeris-spring-runtime-app-comp) echo "spring-on-exeris" ;;
+
+    # 4) Quarkus + Hibernate ORM
+    quarkus-hibernate|quarkus-jvm-vt-tuned|quarkus-benchmark-app|quarkus-runtime|\
+    quarkus-app-axon|quarkus-native-default) echo "quarkus-hibernate" ;;
+
+    # 5) Quarkus + pure JDBC (no ORM), "tuned" transport: native epoll + native BoringSSL TLS
+    #    (contrast: quarkus-hibernate runs default Quarkus — JDK NIO + JSSE).
+    quarkus-tuned|quarkus-benchmark-app-tuned|quarkus-jdbc|quarkus-benchmark-app-jdbc) echo "quarkus-tuned" ;;
+
     *) echo "${raw_id}" ;;
   esac
 }

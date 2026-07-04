@@ -1,0 +1,143 @@
+{
+  "run_id": "cold-start-ttfr-20260626T103430Z-ef6f84e",
+  "target": "exeris-community",
+  "health_endpoint": "http://localhost:9000/health",
+  "first_request_endpoint": "http://localhost:9000/api/v1/users?id=1",
+  "samples": [
+    {
+      "iteration": 1,
+      "startup_ms": 850.794,
+      "ttfr_ms": 59.154,
+      "spawn_to_first_request_ms": 909.948,
+      "health_attempts": 13,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 2,
+      "startup_ms": 978.882,
+      "ttfr_ms": 59.326,
+      "spawn_to_first_request_ms": 1038.209,
+      "health_attempts": 15,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 3,
+      "startup_ms": 797.422,
+      "ttfr_ms": 64.940,
+      "spawn_to_first_request_ms": 862.362,
+      "health_attempts": 12,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 4,
+      "startup_ms": 855.225,
+      "ttfr_ms": 58.284,
+      "spawn_to_first_request_ms": 913.509,
+      "health_attempts": 13,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 5,
+      "startup_ms": 850.972,
+      "ttfr_ms": 63.681,
+      "spawn_to_first_request_ms": 914.653,
+      "health_attempts": 13,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 6,
+      "startup_ms": 917.489,
+      "ttfr_ms": 63.917,
+      "spawn_to_first_request_ms": 981.406,
+      "health_attempts": 14,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 7,
+      "startup_ms": 792.031,
+      "ttfr_ms": 58.220,
+      "spawn_to_first_request_ms": 850.251,
+      "health_attempts": 12,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 8,
+      "startup_ms": 853.662,
+      "ttfr_ms": 66.086,
+      "spawn_to_first_request_ms": 919.748,
+      "health_attempts": 13,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 9,
+      "startup_ms": 794.393,
+      "ttfr_ms": 61.942,
+      "spawn_to_first_request_ms": 856.335,
+      "health_attempts": 12,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 10,
+      "startup_ms": 861.395,
+      "ttfr_ms": 61.968,
+      "spawn_to_first_request_ms": 923.363,
+      "health_attempts": 13,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 11,
+      "startup_ms": 927.549,
+      "ttfr_ms": 62.122,
+      "spawn_to_first_request_ms": 989.671,
+      "health_attempts": 14,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 12,
+      "startup_ms": 795.245,
+      "ttfr_ms": 61.507,
+      "spawn_to_first_request_ms": 856.752,
+      "health_attempts": 12,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 13,
+      "startup_ms": 917.745,
+      "ttfr_ms": 60.466,
+      "spawn_to_first_request_ms": 978.212,
+      "health_attempts": 14,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 14,
+      "startup_ms": 854.823,
+      "ttfr_ms": 58.418,
+      "spawn_to_first_request_ms": 913.242,
+      "health_attempts": 13,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 15,
+      "startup_ms": 856.492,
+      "ttfr_ms": 63.907,
+      "spawn_to_first_request_ms": 920.400,
+      "health_attempts": 13,
+      "first_request_status": 200,
+      "ready": true
+    }
+  ]
+}

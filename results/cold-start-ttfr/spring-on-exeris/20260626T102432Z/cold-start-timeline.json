@@ -1,0 +1,53 @@
+{
+  "run_id": "cold-start-ttfr-20260626T102432Z-ef6f84e",
+  "target": "spring-on-exeris",
+  "health_endpoint": "http://localhost:9001/health",
+  "first_request_endpoint": "http://localhost:9001/api/v1/users?id=1",
+  "samples": [
+    {
+      "iteration": 1,
+      "startup_ms": 3727.729,
+      "ttfr_ms": 147.580,
+      "spawn_to_first_request_ms": 3875.310,
+      "health_attempts": 58,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 2,
+      "startup_ms": 3788.391,
+      "ttfr_ms": 160.612,
+      "spawn_to_first_request_ms": 3949.003,
+      "health_attempts": 59,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 3,
+      "startup_ms": 4019.562,
+      "ttfr_ms": 149.895,
+      "spawn_to_first_request_ms": 4169.457,
+      "health_attempts": 62,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 4,
+      "startup_ms": 3865.402,
+      "ttfr_ms": 160.816,
+      "spawn_to_first_request_ms": 4026.218,
+      "health_attempts": 60,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 5,
+      "startup_ms": 3731.266,
+      "ttfr_ms": 149.698,
+      "spawn_to_first_request_ms": 3880.963,
+      "health_attempts": 58,
+      "first_request_status": 200,
+      "ready": true
+    }
+  ]
+}

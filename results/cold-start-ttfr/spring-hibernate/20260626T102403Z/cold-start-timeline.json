@@ -1,0 +1,53 @@
+{
+  "run_id": "cold-start-ttfr-20260626T102403Z-ef6f84e",
+  "target": "spring-hibernate",
+  "health_endpoint": "http://localhost:9001/health",
+  "first_request_endpoint": "http://localhost:9001/api/v1/users?id=1",
+  "samples": [
+    {
+      "iteration": 1,
+      "startup_ms": 4643.864,
+      "ttfr_ms": 154.734,
+      "spawn_to_first_request_ms": 4798.598,
+      "health_attempts": 72,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 2,
+      "startup_ms": 4872.846,
+      "ttfr_ms": 152.180,
+      "spawn_to_first_request_ms": 5025.026,
+      "health_attempts": 75,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 3,
+      "startup_ms": 4643.898,
+      "ttfr_ms": 163.129,
+      "spawn_to_first_request_ms": 4807.027,
+      "health_attempts": 72,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 4,
+      "startup_ms": 4721.555,
+      "ttfr_ms": 159.330,
+      "spawn_to_first_request_ms": 4880.884,
+      "health_attempts": 73,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 5,
+      "startup_ms": 4780.812,
+      "ttfr_ms": 156.775,
+      "spawn_to_first_request_ms": 4937.586,
+      "health_attempts": 74,
+      "first_request_status": 200,
+      "ready": true
+    }
+  ]
+}

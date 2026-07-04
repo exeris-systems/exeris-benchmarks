@@ -1,0 +1,124 @@
+{
+  "schema_version": "1",
+  "run_id": "cold-start-ttfr-20260626T102403Z-ef6f84e",
+  "timestamp": "2026-06-26T10:24:03Z",
+  "scenario": "cold-start-ttfr",
+  "tool": "startup-probe",
+  "env_ref": "/home/arkstack/exeris-benchmarks/results/cold-start-ttfr/spring-hibernate/20260626T102403Z/env.json",
+  "transport_mode": "loopback-h1",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "tls": {
+    "enabled": false
+  },
+  "target": {
+    "repo": "exeris-benchmarks",
+    "commit_sha": "ef6f84e97d00639d52e0ac1ceaf19211fec0e40d",
+    "version": "spring-hibernate",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "runtime_family": "spring-boot",
+    "artifact_kind": "jvm-jar",
+    "execution_vm": "jvm",
+    "build_mode": "jit"
+  },
+  "run_config": {
+    "startup_iterations": 5
+  },
+  "metrics": {},
+  "startup": {
+    "iterations": 5,
+    "measure": "spawn-to-health",
+    "readiness_definition": "Black-box: first HTTP 200 from http://localhost:9001/health. 'ready' semantics are framework-specific (spring-boot); cross-runtime startup_ms rows must carry this caveat. First request over cleartext; startup_ms is transport-independent but ttfr_ms is not, so ttfr is only cross-target comparable between same-transport targets.",
+    "health_endpoint": "http://localhost:9001/health",
+    "first_request_endpoint": "http://localhost:9001/api/v1/users?id=1",
+    "startup_ms": {
+      "n": 5,
+      "min": 4643.864,
+      "max": 4872.846,
+      "median": 4721.555,
+      "p90": 4780.812,
+      "p99": 4780.812,
+      "mean": 4732.594999999999,
+      "stdev": 97.28495754740285
+    },
+    "ttfr_ms": {
+      "n": 5,
+      "min": 152.180,
+      "max": 163.129,
+      "median": 156.775,
+      "p90": 159.330,
+      "p99": 159.330,
+      "mean": 157.2296,
+      "stdev": 4.2174560222959
+    },
+    "spawn_to_first_request_ms": {
+      "n": 5,
+      "min": 4798.598,
+      "max": 5025.026,
+      "median": 4880.884,
+      "p90": 4937.586,
+      "p99": 4937.586,
+      "mean": 4889.8242,
+      "stdev": 94.62853604066795
+    },
+    "samples": [
+      {
+        "iteration": 1,
+        "startup_ms": 4643.864,
+        "ttfr_ms": 154.734,
+        "spawn_to_first_request_ms": 4798.598,
+        "health_attempts": 72,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 2,
+        "startup_ms": 4872.846,
+        "ttfr_ms": 152.180,
+        "spawn_to_first_request_ms": 5025.026,
+        "health_attempts": 75,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 3,
+        "startup_ms": 4643.898,
+        "ttfr_ms": 163.129,
+        "spawn_to_first_request_ms": 4807.027,
+        "health_attempts": 72,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 4,
+        "startup_ms": 4721.555,
+        "ttfr_ms": 159.330,
+        "spawn_to_first_request_ms": 4880.884,
+        "health_attempts": 73,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 5,
+        "startup_ms": 4780.812,
+        "ttfr_ms": 156.775,
+        "spawn_to_first_request_ms": 4937.586,
+        "health_attempts": 74,
+        "first_request_status": 200,
+        "ready": true
+      }
+    ]
+  },
+  "notes": "Cold-start + TTFR over independent JVM launches. t0 = harness-owned spawn instant. DB pre-running (app cold start only). Exploratory descriptive; not a guard/regression gate.",
+  "tags": [
+    "cold-start",
+    "ttfr",
+    "runtime-family:spring-boot"
+  ]
+}

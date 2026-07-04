@@ -76,3 +76,14 @@ comparative-audit.log
 **/target-b-pidfile
 **/sync-log.txt
 
+# Local-only artifacts — do not commit (triage 2026-07)
+# JVM-error reproduction toolkit: downloaded + built JDKs (multi-GB libjvm.so, tarballs)
+tools/jbs-repro/
+# JVM-error reproduction target (JDK Loom×C2 h2-over-TLS crash) — repro only, not a benchmark target
+targets/quarkus-benchmark-app-jdbc-jsse/
+# Giant raw k6 stream captures (100s of MB each)
+results/**/tools/k6/stream.json
+# Scratch / experiment scripts and summaries
+scripts/tmp-*.sh
+/REFACTORING-ARENA-TO-LOANEDUFFER-SUMMARY.md
+

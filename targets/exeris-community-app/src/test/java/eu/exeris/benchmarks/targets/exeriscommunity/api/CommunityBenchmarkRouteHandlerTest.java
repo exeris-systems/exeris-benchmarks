@@ -22,8 +22,8 @@ import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.TokenResponse;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.user.UserSummary;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.user.UserView;
 import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.graph.GraphUnavailableException;
+import eu.exeris.benchmarks.targets.exeriscommunity.security.BenchmarkJwtSecurityProvider;
 import eu.exeris.benchmarks.targets.exeriscommunity.security.BenchmarkTokenIssuer;
-import eu.exeris.kernel.community.security.CommunitySecurityProvider;
 import eu.exeris.kernel.core.security.SecurityInterceptor;
 import eu.exeris.kernel.spi.http.HttpMethod;
 import eu.exeris.kernel.spi.http.HttpRequest;
@@ -221,7 +221,7 @@ final class CommunityBenchmarkRouteHandlerTest {
         TestSupport.CapturingAllocator allocator = new TestSupport.CapturingAllocator();
         CommunityBenchmarkRouteHandler handler = new CommunityBenchmarkRouteHandler(
             new StaticUseCaseService(),
-            new SecurityInterceptor(new CommunitySecurityProvider(
+            new SecurityInterceptor(new BenchmarkJwtSecurityProvider(
                 Map.of(BenchmarkTokenIssuer.KID, issuer.publicKey()),
                 BenchmarkTokenIssuer.ISSUER,
                 BenchmarkTokenIssuer.AUD
@@ -280,7 +280,7 @@ final class CommunityBenchmarkRouteHandlerTest {
         TestSupport.CapturingAllocator allocator = new TestSupport.CapturingAllocator();
         CommunityBenchmarkRouteHandler handler = new CommunityBenchmarkRouteHandler(
             new StaticUseCaseService(),
-            new SecurityInterceptor(new CommunitySecurityProvider(
+            new SecurityInterceptor(new BenchmarkJwtSecurityProvider(
                 Map.of(BenchmarkTokenIssuer.KID, issuer.publicKey()),
                 BenchmarkTokenIssuer.ISSUER,
                 BenchmarkTokenIssuer.AUD
@@ -308,7 +308,7 @@ final class CommunityBenchmarkRouteHandlerTest {
         TestSupport.CapturingAllocator allocator = new TestSupport.CapturingAllocator();
         CommunityBenchmarkRouteHandler handler = new CommunityBenchmarkRouteHandler(
             new StaticUseCaseService(),
-            new SecurityInterceptor(new CommunitySecurityProvider(
+            new SecurityInterceptor(new BenchmarkJwtSecurityProvider(
                 Map.of(BenchmarkTokenIssuer.KID, issuer.publicKey()),
                 BenchmarkTokenIssuer.ISSUER,
                 BenchmarkTokenIssuer.AUD
@@ -342,7 +342,7 @@ final class CommunityBenchmarkRouteHandlerTest {
         TestSupport.CapturingAllocator allocator = new TestSupport.CapturingAllocator();
         CommunityBenchmarkRouteHandler handler = new CommunityBenchmarkRouteHandler(
             new StaticUseCaseService(),
-            new SecurityInterceptor(new CommunitySecurityProvider(
+            new SecurityInterceptor(new BenchmarkJwtSecurityProvider(
                 Map.of(BenchmarkTokenIssuer.KID, issuer.publicKey()),
                 BenchmarkTokenIssuer.ISSUER,
                 BenchmarkTokenIssuer.AUD
@@ -376,7 +376,7 @@ final class CommunityBenchmarkRouteHandlerTest {
         TestSupport.CapturingAllocator allocator = new TestSupport.CapturingAllocator();
         CommunityBenchmarkRouteHandler handler = new CommunityBenchmarkRouteHandler(
             new StaticUseCaseService(),
-            new SecurityInterceptor(new CommunitySecurityProvider(
+            new SecurityInterceptor(new BenchmarkJwtSecurityProvider(
                 Map.of(BenchmarkTokenIssuer.KID, issuer.publicKey()),
                 BenchmarkTokenIssuer.ISSUER,
                 BenchmarkTokenIssuer.AUD
@@ -403,7 +403,7 @@ final class CommunityBenchmarkRouteHandlerTest {
         TestSupport.CapturingAllocator allocator = new TestSupport.CapturingAllocator();
         CommunityBenchmarkRouteHandler handler = new CommunityBenchmarkRouteHandler(
             new StaticUseCaseService(),
-            new SecurityInterceptor(new CommunitySecurityProvider(
+            new SecurityInterceptor(new BenchmarkJwtSecurityProvider(
                 Map.of(BenchmarkTokenIssuer.KID, issuer.publicKey()),
                 BenchmarkTokenIssuer.ISSUER,
                 BenchmarkTokenIssuer.AUD
@@ -444,7 +444,7 @@ final class CommunityBenchmarkRouteHandlerTest {
 
     private static SecurityInterceptor testSecurityProvider() {
         BenchmarkTokenIssuer issuer = new BenchmarkTokenIssuer();
-        return new SecurityInterceptor(new CommunitySecurityProvider(
+        return new SecurityInterceptor(new BenchmarkJwtSecurityProvider(
             Map.of(BenchmarkTokenIssuer.KID, issuer.publicKey()),
             BenchmarkTokenIssuer.ISSUER,
             BenchmarkTokenIssuer.AUD

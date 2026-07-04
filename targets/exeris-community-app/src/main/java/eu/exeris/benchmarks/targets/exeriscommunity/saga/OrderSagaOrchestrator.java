@@ -1,6 +1,7 @@
 package eu.exeris.benchmarks.targets.exeriscommunity.saga;
 
 import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.events.DomainEventPublisher;
+import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.persistence.JdbcOutboxEventStore;
 import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.persistence.OrderRepository;
 import eu.exeris.kernel.spi.context.KernelProviders;
 import eu.exeris.kernel.spi.flow.FlowEngine;
@@ -14,7 +15,6 @@ import eu.exeris.kernel.spi.flow.model.FlowState;
 import eu.exeris.kernel.spi.flow.model.FlowStepAction;
 import eu.exeris.kernel.spi.persistence.PersistenceStatement;
 import eu.exeris.kernel.spi.persistence.TransactionalExecutor;
-import eu.exeris.kernel.community.persistence.jdbc.CommunityJdbcEventStore;
 import eu.exeris.kernel.spi.persistence.EventStore;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -116,7 +116,7 @@ public final class OrderSagaOrchestrator {
             }
             byte[] payloadBytes = paymentRequestedPayload(orderId).getBytes(StandardCharsets.UTF_8);
             executor.executeManaged(conn -> {
-                new CommunityJdbcEventStore(conn).append(new EventStore.OutboxEvent(
+                new JdbcOutboxEventStore(conn).append(new EventStore.OutboxEvent(
                     UUID.randomUUID(),
                     String.valueOf(orderId),
                     "ORDER",
@@ -140,7 +140,7 @@ public final class OrderSagaOrchestrator {
             byte[] payloadBytes = orderCompensatedPayload(orderId).getBytes(StandardCharsets.UTF_8);
             executor.executeManaged(conn -> {
                 updateStatus(conn, orderId, "PAYMENT_REFUNDED");
-                new CommunityJdbcEventStore(conn).append(new EventStore.OutboxEvent(
+                new JdbcOutboxEventStore(conn).append(new EventStore.OutboxEvent(
                     UUID.randomUUID(),
                     String.valueOf(orderId),
                     "ORDER",
@@ -160,7 +160,7 @@ public final class OrderSagaOrchestrator {
             byte[] payloadBytes = orderConfirmedPayload(orderId).getBytes(StandardCharsets.UTF_8);
             executor.executeManaged(conn -> {
                 updateStatus(conn, orderId, "CONFIRMED");
-                new CommunityJdbcEventStore(conn).append(new EventStore.OutboxEvent(
+                new JdbcOutboxEventStore(conn).append(new EventStore.OutboxEvent(
                     UUID.randomUUID(),
                     String.valueOf(orderId),
                     "ORDER",

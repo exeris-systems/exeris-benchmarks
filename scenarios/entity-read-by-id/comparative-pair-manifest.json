@@ -20,7 +20,7 @@
   "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
   "compatible_targets": [
     {
-      "target_id": "exeris-benchmark-app-community-h1",
+      "target_id": "exeris-community",
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
@@ -29,7 +29,7 @@
       "notes": "Comparison-eligible only for within-tier H1 (community, loopback-h1) under required_contract=fixed_contract_cross_runtime_h1_v1. No cross-tier inference."
     },
     {
-      "target_id": "spring-jvm-vt-tuned",
+      "target_id": "spring-hibernate",
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
@@ -38,7 +38,7 @@
       "notes": "Comparison-eligible only for within-tier H1 (community, loopback-h1) under required_contract=fixed_contract_cross_runtime_h1_v1. No cross-tier inference."
     },
     {
-      "target_id": "quarkus-jvm-vt-tuned",
+      "target_id": "quarkus-hibernate",
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
@@ -49,24 +49,24 @@
   ],
   "allowed_pairs": [
     {
-      "pair_id": "exeris-benchmark-app-community-h1__spring-jvm-vt-tuned",
-      "targets": ["exeris-benchmark-app-community-h1", "spring-jvm-vt-tuned"],
+      "pair_id": "exeris-community__spring-hibernate",
+      "targets": ["exeris-community", "spring-hibernate"],
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk"
     },
     {
-      "pair_id": "exeris-benchmark-app-community-h1__quarkus-jvm-vt-tuned",
-      "targets": ["exeris-benchmark-app-community-h1", "quarkus-jvm-vt-tuned"],
+      "pair_id": "exeris-community__quarkus-hibernate",
+      "targets": ["exeris-community", "quarkus-hibernate"],
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk"
     },
     {
-      "pair_id": "spring-jvm-vt-tuned__quarkus-jvm-vt-tuned",
-      "targets": ["spring-jvm-vt-tuned", "quarkus-jvm-vt-tuned"],
+      "pair_id": "spring-hibernate__quarkus-hibernate",
+      "targets": ["spring-hibernate", "quarkus-hibernate"],
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
@@ -76,7 +76,7 @@
   "forbidden_pairs": [
     {
       "reason": "Community vs Enterprise cross-tier — protocol fairness unverified",
-      "targets": ["exeris-benchmark-app-community-h1", "exeris-kernel-enterprise"]
+      "targets": ["exeris-community", "exeris-kernel-enterprise"]
     },
     {
       "reason": "Cross-protocol comparisons are out of scope for this backend mode pair",

@@ -40,35 +40,49 @@ Rules:
 - No marketing or superiority language.
 - Must match actual launch profile used in run artifacts.
 
-## Initial Target Set Labels
+## Canonical Target Set Labels
 
-The active allowed `target_id` set is:
+The active allowed `target_id` set is **framework-centric** and protocol-agnostic:
+each id names one physical app. Protocol (H1/H2/H2C) and TLS are an **override
+axis** resolved at run time (run-guided protocol+TLS toggle, saga runner), not an
+id component — `protocol_mode` in the asset matrix is only the fair-baseline
+default (community H1 loopback). Tuning/substrate are likewise not encoded in the
+id; native-image variants, when reintroduced, must use explicit native ids.
 
-Substrate must not be inferred from tuning labels; native-image targets must use explicit native `target_id` values.
+| `target_id` | `target_descriptor` | app dir |
+|---|---|---|
+| `exeris-community` | Exeris Community (native kernel) | `targets/exeris-community-app` |
+| `spring-hibernate` | Spring Boot + Hibernate ORM (JVM, virtual threads) | `targets/spring-benchmark-app` |
+| `spring-on-exeris` | Spring on Exeris (compatibility mode + Exeris Flow) | `targets/exeris-spring-runtime-app-comp` |
+| `quarkus-hibernate` | Quarkus + Hibernate ORM, default Quarkus transport (JDK NIO + JSSE), JVM, virtual threads | `targets/quarkus-benchmark-app` |
+| `quarkus-tuned` | Quarkus + pure JDBC (no ORM), tuned transport: native epoll + native BoringSSL TLS, JVM, virtual threads | `targets/quarkus-benchmark-app-tuned` |
 
-- `exeris-benchmark-app-community-h1`
-- `spring-jvm-vt-tuned`
-- `spring-native-default`
-- `quarkus-jvm-vt-tuned`
-- `quarkus-native-default`
+`quarkus-tuned` (legacy id `quarkus-jdbc`) differs from `quarkus-hibernate` on two
+axes: it runs a native network stack (native epoll transport + native BoringSSL TLS,
+on by default — the pure-Java JDK NIO + JSSE paths are runtime-selectable via
+`EXERIS_NETTY_NATIVE_TRANSPORT` / `EXERIS_TLS_NATIVE`), and it uses pure JDBC instead
+of Hibernate ORM (same SQL shapes, no ORM mapping layer), isolating ORM cost.
+`quarkus-hibernate` is the default-Quarkus baseline (JDK NIO + JSSE).
 
-Legacy, non-runnable historical `target_id` values retained only for auditability:
+### Legacy alias map (frozen)
 
-- `exeris-native-community`
-- `exeris-runtime-community`
+The pre-consolidation `target_id` values below resolve to a canonical id via
+`normalize_target_alias` in `runtime/drivers/target-contract-registry.sh`, so
+historical `results/` rows stay resolvable. Do not remove an alias once a
+published run used it.
 
-Suggested `target_descriptor` values:
+| Legacy `target_id` | Canonical |
+|---|---|
+| `exeris-benchmark-app-community-h1`, `exeris-community-app`, `exeris-e2e-community-h2`, `exeris-native-community`, `exeris-runtime-community` | `exeris-community` |
+| `spring-jvm-vt-tuned`, `spring-app-axon`, `spring-native-default` | `spring-hibernate` |
+| `spring-runtime-on-exeris-flow` | `spring-on-exeris` |
+| `quarkus-jvm-vt-tuned`, `quarkus-app-axon`, `quarkus-native-default` | `quarkus-hibernate` |
+| `quarkus-jdbc`, `quarkus-benchmark-app-jdbc` | `quarkus-tuned` |
 
-- `Exeris standalone benchmark app (Community, H1)`
-- `Spring Boot JVM + virtual threads (tuned)`
-- `Spring Boot native image`
-- `Quarkus JVM + virtual threads (tuned)`
-- `Quarkus native image`
-
-Legacy historical descriptors:
-
-- `Exeris native image (Community, legacy non-runnable)`
-- `Exeris runtime JVM (Community, legacy non-runnable)`
+A legacy id naming a saga comparator (e.g. `spring-app-axon`) carried Axon-Framework
+axis semantics. Those semantics are preserved as scenario-manifest metadata
+(`saga_framework`, `framework_difference`, `target_backend_support`), NOT in the
+id — the id names the physical app; the axis label lives in the contract.
 ## Runtime Target Contract Registry
 
 Runtime driver scripts resolve launch settings through `runtime/drivers/target-contract-registry.sh`.

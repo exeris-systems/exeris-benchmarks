@@ -18,8 +18,8 @@ import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.persistence.P
 import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.persistence.ProductRepository;
 import eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.persistence.UserRepository;
 import eu.exeris.benchmarks.targets.exeriscommunity.saga.OrderSagaOrchestrator;
+import eu.exeris.benchmarks.targets.exeriscommunity.security.BenchmarkJwtSecurityProvider;
 import eu.exeris.benchmarks.targets.exeriscommunity.security.BenchmarkTokenIssuer;
-import eu.exeris.kernel.community.security.CommunitySecurityProvider;
 import eu.exeris.kernel.core.http.routing.HttpRouter;
 import eu.exeris.kernel.core.persistence.TransactionOrchestrator;
 import eu.exeris.kernel.core.security.SecurityInterceptor;
@@ -91,7 +91,7 @@ public final class CommunityBenchmarkRuntimeLifecycle {
         }
 
         BenchmarkTokenIssuer tokenIssuer = new BenchmarkTokenIssuer();
-        CommunitySecurityProvider securityProvider = new CommunitySecurityProvider(
+        BenchmarkJwtSecurityProvider securityProvider = new BenchmarkJwtSecurityProvider(
             Map.of(BenchmarkTokenIssuer.KID, tokenIssuer.publicKey()),
             BenchmarkTokenIssuer.ISSUER,
             BenchmarkTokenIssuer.AUD

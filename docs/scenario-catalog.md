@@ -259,9 +259,9 @@ Use the fixed contract campaign path when promoting this scenario from explorato
 
 For cross-runtime pairwise comparisons (Community/H1/loopback only), use `fixed_contract_cross_runtime_h1_v1` and only allowed pairs from `scenarios/entity-read-by-id/comparative-pair-manifest.json`:
 
-- `exeris-benchmark-app-community-h1` vs `spring-jvm-vt-tuned`
-- `exeris-benchmark-app-community-h1` vs `quarkus-jvm-vt-tuned`
-- `spring-jvm-vt-tuned` vs `quarkus-jvm-vt-tuned`
+- `exeris-community` vs `spring-hibernate`
+- `exeris-community` vs `quarkus-hibernate`
+- `spring-hibernate` vs `quarkus-hibernate`
 
 1. Run `scripts/run-comparative.sh` with `--scenario-id entity-read-by-id` and `--contract-id fixed_contract_cross_runtime_h1_v1`.
 2. Validate both result bundles with `scripts/validate-comparative-readiness.sh`.
@@ -271,6 +271,40 @@ For cross-runtime pairwise comparisons (Community/H1/loopback only), use `fixed_
 Backend-mode intra-target runs tied to locality variants are outside the active/public scenario catalog scope.
 
 First dual-target comparative execution for this path, and any publishable cross-runtime comparison derived from it, remain pending until complete, claim-eligible run artifacts are captured and reviewed.
+
+---
+
+### cold-start-ttfr
+
+| Field | Value |
+|---|---|
+| Scenario ID | `cold-start-ttfr` |
+| Endpoint | `GET /api/v1/users?id=1` (first-request probe) + `/health` (readiness) |
+| Mode | `baseline-db` |
+| Tier | Community |
+| Driver | `startup-probe` (custom; `scripts/run-cold-start-ttfr.sh`) |
+| Transport | H1 (loopback) |
+
+Measures application **cold start** and **time-to-first-request**, over N independent JVM launches:
+
+| Metric | Definition |
+|---|---|
+| `startup_ms` | `t0` (process spawn) → first HTTP 200 from the health endpoint. Black-box cold start. |
+| `ttfr_ms` | ready (health 200) → first HTTP 2xx from the business endpoint. First-call penalty: lazy init, cold JIT, pool fill, class loading. |
+| `spawn_to_first_request_ms` | `t0` → first business 2xx (startup + TTFR end to end). |
+
+`t0` is captured by the runner immediately before it invokes the target's launch contract (`EXTERNAL_START_CMD`), so it includes shell fork + JVM exec identically across targets — the fairest cross-runtime black-box definition. Each launch is stopped and the port confirmed free before the next spawn, so every iteration is a genuine cold process.
+
+```bash
+# DB + backend deps MUST already be running (this measures app cold start only).
+./scripts/run-cold-start-ttfr.sh --target exeris-community --iterations 10
+./scripts/run-cold-start-ttfr.sh --target quarkus-hibernate --iterations 10 \
+  --first-request-path /api/v1/users/1
+```
+
+Artifacts (under `results/cold-start-ttfr/<target>/<ts>/`): `result.json` (aggregated `startup`/`ttfr_ms` stats — median/p90/p99 + per-iteration `samples`), `cold-start-timeline.json` (raw per-iteration), `env.json`.
+
+> **CAVEATS.** (1) **`exploratory` / descriptive only** — not a guard or regression gate. (2) Cold start has high run-to-run variance; report the aggregate, never a single launch. (3) **`ready` semantics differ per framework** (Spring `Started`, Quarkus `started`, Exeris banner, native-image) — `startup_ms` is a uniform black-box spawn→health metric and cross-runtime rows must carry that caveat. (4) `artifact_kind` matters: never frame native-image vs JIT cold start as apples-to-apples without the label. (5) JVM flags (AppCDS, tiered stop level, `AlwaysPreTouch`) materially move `startup_ms` and are captured in `env.json`. (6) `transport_mode=loopback-h1`: TTFR includes only loopback network cost.
 
 ---
 

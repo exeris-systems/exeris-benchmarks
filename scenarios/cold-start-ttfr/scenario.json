@@ -1,0 +1,38 @@
+{
+  "scenario_id": "cold-start-ttfr",
+  "version": "1",
+  "endpoint": "GET /api/v1/users?id=1",
+  "mode": "baseline-db",
+  "tier": "community",
+  "benchmark_family": "runtime",
+  "driver": ["custom-probe"],
+  "transport": ["h1"],
+  "loopback": true,
+  "loopback_caveat": "Startup and TTFR are measured against a loopback endpoint; transport_mode=loopback-h1 is mandatory. The first-request latency component (TTFR) includes only loopback network cost, not real network path.",
+  "claim_scope": "exploratory",
+  "comparison_axis": "within-tier",
+  "what_it_measures": {
+    "startup_ms": "Process-spawn (t0, harness-owned) -> first HTTP 200 from the health endpoint. Black-box cold start.",
+    "ttfr_ms": "First health 200 (ready) -> first HTTP 2xx from the business endpoint. The first-call penalty: lazy init, cold JIT, connection-pool fill, class loading.",
+    "spawn_to_first_request_ms": "t0 -> first business 2xx. Startup + TTFR end to end."
+  },
+  "method": {
+    "t0_definition": "Monotonic timestamp captured by the runner immediately before it invokes the target's EXTERNAL_START_CMD (the launch contract backgrounds the JVM and writes its PID). t0 therefore includes shell fork + JVM exec, identically across all targets.",
+    "iterations": 10,
+    "iterations_rationale": "Cold start has high run-to-run variance; a single launch is not publishable. Report median + p90/p99 over independent JVM launches.",
+    "health_poll_interval_ms": 50,
+    "ttfr_poll": "Tight back-to-back attempts with no sleep once ready; the first 2xx defines TTFR (= the latency of the first business call).",
+    "between_iterations": "Each launch is stopped via EXTERNAL_STOP_CMD and the port is confirmed free before the next spawn, so every iteration is a genuine cold process."
+  },
+  "preconditions": {
+    "database": "The target's database and any backend dependencies (Postgres/Neo4j) MUST already be running. This scenario measures application cold start only — it does not start or time the DB. A cold DB would contaminate startup_ms with DB warmup.",
+    "build": "The target jar must already be built; build time is out of scope."
+  },
+  "fairness_caveats": [
+    "'ready' semantics differ per framework (Spring 'Started', Quarkus 'started', Exeris banner, native-image). startup_ms is a uniform black-box spawn->health metric; cross-runtime rows must state this and must NOT be collapsed without the caveat.",
+    "artifact_kind matters: a native-image target starts in a fundamentally different regime than a JIT JVM. Never frame native vs JIT cold start as apples-to-apples without the artifact_kind label.",
+    "JVM flags (AppCDS, tiered-compilation stop level, -Xss, AlwaysPreTouch) materially move startup_ms; they are part of the launch contract and are captured in env.json.",
+    "This is an exploratory descriptive measurement, not a guard/regression gate."
+  ],
+  "result_namespace": "results/cold-start-ttfr"
+}

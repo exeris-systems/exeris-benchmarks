@@ -1,0 +1,53 @@
+{
+  "run_id": "cold-start-ttfr-20260626T102647Z-ef6f84e",
+  "target": "quarkus-hibernate",
+  "health_endpoint": "http://localhost:19002/health",
+  "first_request_endpoint": "http://localhost:19002/api/v1/users?id=1",
+  "samples": [
+    {
+      "iteration": 1,
+      "startup_ms": 1638.755,
+      "ttfr_ms": 271.565,
+      "spawn_to_first_request_ms": 1910.320,
+      "health_attempts": 25,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 2,
+      "startup_ms": 1649.702,
+      "ttfr_ms": 275.271,
+      "spawn_to_first_request_ms": 1924.973,
+      "health_attempts": 25,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 3,
+      "startup_ms": 1640.471,
+      "ttfr_ms": 270.597,
+      "spawn_to_first_request_ms": 1911.069,
+      "health_attempts": 25,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 4,
+      "startup_ms": 1642.479,
+      "ttfr_ms": 346.521,
+      "spawn_to_first_request_ms": 1989.000,
+      "health_attempts": 25,
+      "first_request_status": 200,
+      "ready": true
+    },
+    {
+      "iteration": 5,
+      "startup_ms": 1642.691,
+      "ttfr_ms": 284.986,
+      "spawn_to_first_request_ms": 1927.677,
+      "health_attempts": 25,
+      "first_request_status": 200,
+      "ready": true
+    }
+  ]
+}

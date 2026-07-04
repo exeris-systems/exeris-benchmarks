@@ -1,0 +1,187 @@
+{
+  "schema_version": "1",
+  "run_id": "cold-start-ttfr-20260626T104113Z-ef6f84e",
+  "timestamp": "2026-06-26T10:41:13Z",
+  "scenario": "cold-start-ttfr",
+  "tool": "startup-probe",
+  "env_ref": "results/cold-start-ttfr/exeris-community-nocrypto/20260626T104113Z-n8-res/env.json",
+  "transport_mode": "loopback-h1",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "tls": {
+    "enabled": false
+  },
+  "target": {
+    "repo": "exeris-benchmarks",
+    "commit_sha": "ef6f84e97d00639d52e0ac1ceaf19211fec0e40d",
+    "version": "exeris-community",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "runtime_family": "exeris",
+    "artifact_kind": "jvm-jar",
+    "execution_vm": "jvm",
+    "build_mode": "jit"
+  },
+  "run_config": {
+    "startup_iterations": 8
+  },
+  "metrics": {},
+  "startup": {
+    "iterations": 8,
+    "measure": "spawn-to-health",
+    "readiness_definition": "Black-box: first HTTP 200 from http://localhost:9000/health. 'ready' semantics are framework-specific (exeris); cross-runtime startup_ms rows must carry this caveat. First request over cleartext; startup_ms is transport-independent but ttfr_ms is not, so ttfr is only cross-target comparable between same-transport targets.",
+    "health_endpoint": "http://localhost:9000/health",
+    "first_request_endpoint": "http://localhost:9000/api/v1/users?id=1",
+    "startup_ms": {
+      "n": 8,
+      "min": 794.069,
+      "max": 923.490,
+      "median": 797.683,
+      "p90": 858.824,
+      "p99": 858.824,
+      "mean": 822.512625,
+      "stdev": 46.119286594462224
+    },
+    "ttfr_ms": {
+      "n": 8,
+      "min": 59.107,
+      "max": 66.632,
+      "median": 62.582,
+      "p90": 65.158,
+      "p99": 65.158,
+      "mean": 62.938625,
+      "stdev": 2.5440065104083374
+    },
+    "spawn_to_first_request_ms": {
+      "n": 8,
+      "min": 853.401,
+      "max": 987.512,
+      "median": 864.315,
+      "p90": 919.071,
+      "p99": 919.071,
+      "mean": 885.451,
+      "stdev": 46.202237861694215
+    },
+    "samples": [
+      {
+        "iteration": 1,
+        "startup_ms": 794.069,
+        "ttfr_ms": 61.557,
+        "spawn_to_first_request_ms": 855.626,
+        "peak_rss_mb": 173.8,
+        "cpu_to_first_request_s": 2.310,
+        "health_attempts": 12,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 2,
+        "startup_ms": 796.894,
+        "ttfr_ms": 65.158,
+        "spawn_to_first_request_ms": 862.052,
+        "peak_rss_mb": 180.5,
+        "cpu_to_first_request_s": 2.390,
+        "health_attempts": 12,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 3,
+        "startup_ms": 811.922,
+        "ttfr_ms": 64.204,
+        "spawn_to_first_request_ms": 876.126,
+        "peak_rss_mb": 167.0,
+        "cpu_to_first_request_s": 2.360,
+        "health_attempts": 12,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 4,
+        "startup_ms": 794.295,
+        "ttfr_ms": 59.107,
+        "spawn_to_first_request_ms": 853.401,
+        "peak_rss_mb": 172.8,
+        "cpu_to_first_request_s": 2.280,
+        "health_attempts": 12,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 5,
+        "startup_ms": 797.683,
+        "ttfr_ms": 66.632,
+        "spawn_to_first_request_ms": 864.315,
+        "peak_rss_mb": 171.5,
+        "cpu_to_first_request_s": 2.470,
+        "health_attempts": 12,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 6,
+        "startup_ms": 802.924,
+        "ttfr_ms": 62.582,
+        "spawn_to_first_request_ms": 865.505,
+        "peak_rss_mb": 169.1,
+        "cpu_to_first_request_s": 2.350,
+        "health_attempts": 12,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 7,
+        "startup_ms": 923.490,
+        "ttfr_ms": 64.022,
+        "spawn_to_first_request_ms": 987.512,
+        "peak_rss_mb": 173.4,
+        "cpu_to_first_request_s": 2.760,
+        "health_attempts": 14,
+        "first_request_status": 200,
+        "ready": true
+      },
+      {
+        "iteration": 8,
+        "startup_ms": 858.824,
+        "ttfr_ms": 60.247,
+        "spawn_to_first_request_ms": 919.071,
+        "peak_rss_mb": 174.0,
+        "cpu_to_first_request_s": 2.500,
+        "health_attempts": 13,
+        "first_request_status": 200,
+        "ready": true
+      }
+    ],
+    "peak_rss_mb": {
+      "n": 8,
+      "min": 167.0,
+      "max": 180.5,
+      "median": 172.8,
+      "p90": 174.0,
+      "p99": 174.0,
+      "mean": 172.7625,
+      "stdev": 3.983873742979314
+    },
+    "cpu_to_first_request_s": {
+      "n": 8,
+      "min": 2.280,
+      "max": 2.760,
+      "median": 2.360,
+      "p90": 2.500,
+      "p99": 2.500,
+      "mean": 2.4275,
+      "stdev": 0.15359966517820647
+    }
+  },
+  "notes": "Cold-start + TTFR over independent JVM launches. t0 = harness-owned spawn instant. DB pre-running (app cold start only). Exploratory descriptive; not a guard/regression gate.",
+  "tags": [
+    "cold-start",
+    "ttfr",
+    "runtime-family:exeris"
+  ]
+}

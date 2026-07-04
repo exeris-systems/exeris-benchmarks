@@ -115,43 +115,43 @@
     }
   },
   "target_backend_support": {
-    "exeris-community-app": [
+    "exeris-community": [
       "neo4j",
       "postgres-graph"
     ],
-    "quarkus-app-axon": [
+    "quarkus-hibernate": [
       "neo4j",
       "postgres-graph"
     ],
-    "spring-app-axon": [
+    "spring-hibernate": [
       "neo4j",
       "postgres-graph"
     ],
-    "spring-runtime-on-exeris-flow": [
+    "spring-on-exeris": [
       "neo4j",
       "postgres-graph"
     ]
   },
   "target_backend_support_status": {
-    "exeris-community-app": {
+    "exeris-community": {
       "neo4j": "eligible",
       "postgres-graph": "eligible",
       "pgq-pure": "eligible",
       "age-compat": "planned"
     },
-    "quarkus-app-axon": {
+    "quarkus-hibernate": {
       "neo4j": "eligible",
       "postgres-graph": "planned",
       "pgq-pure": "planned",
       "age-compat": "eligible"
     },
-    "spring-app-axon": {
+    "spring-hibernate": {
       "neo4j": "eligible",
       "postgres-graph": "planned",
       "pgq-pure": "planned",
       "age-compat": "eligible"
     },
-    "spring-runtime-on-exeris-flow": {
+    "spring-on-exeris": {
       "neo4j": "eligible",
       "postgres-graph": "planned",
       "pgq-pure": "planned",
@@ -192,7 +192,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h2c",
-      "target_app": "exeris-community-app",
+      "target_app": "exeris-community",
       "comparison_type": "cross-runtime-e2e-saga",
       "virtual_users": 100,
       "ramp_up_seconds": 60,
@@ -236,7 +236,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h2c",
-      "target_app": "quarkus-app-axon",
+      "target_app": "quarkus-hibernate",
       "framework": "quarkus",
       "saga_framework": "axon-framework",
       "graph_backend": "neo4j-bolt",
@@ -264,7 +264,7 @@
         "relative_error_pct_max": 15
       },
       "claim_scope": "coverage_limited_saga_engine_not_equivalent",
-      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community is NOT supported at this claim scope.",
       "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
       "comparison_class": "platform-natural-stack",
       "per_step_metric_claim_scope": {
@@ -283,7 +283,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h2c",
-      "target_app": "spring-app-axon",
+      "target_app": "spring-hibernate",
       "framework": "spring-boot",
       "saga_framework": "axon-framework",
       "graph_backend": "neo4j-bolt",
@@ -311,7 +311,7 @@
         "relative_error_pct_max": 15
       },
       "claim_scope": "coverage_limited_saga_engine_not_equivalent",
-      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community is NOT supported at this claim scope.",
       "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
       "comparison_class": "platform-natural-stack",
       "per_step_metric_claim_scope": {
@@ -330,7 +330,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h1",
-      "target_app": "spring-runtime-on-exeris-flow",
+      "target_app": "spring-on-exeris",
       "framework": "spring-boot",
       "framework_version": "3.5.14",
       "host_runtime": "exeris-spring-runtime",
@@ -361,8 +361,8 @@
         "relative_error_pct_max": 15
       },
       "claim_scope": "exploratory",
-      "claim_scope_note": "Compatibility-mode hosting: Spring MVC @RestController dispatch is overlaid on the Exeris ingress via ExerisCompatAutoConfiguration (ADR-011). Saga orchestration is exeris-spring-runtime-flow (4 forward steps: reserve-inventory, charge-payment, confirm-order, complete-order; 2 compensations: refund-payment, restore-inventory) — algorithmically the same Flow engine that exeris-community-app uses, NOT Axon Framework. Synchronous-insert variant: orders + order_items rows are persisted on the request thread before 202 ACCEPTED returns (idempotent under userId + ':' + cartId), so order_create_latency_ms includes JPA-path INSERT cost (unlike the Axon contract, whose request path was DB-write-free). Status poll reads from the JdbcFlowSnapshotStore-backed projection. JPA telemetry bypass disclosure (ADR-017 §6.4): every JPA Connection acquisition flows through the ExerisDataSource compat seam emitting JpaConnectionAcquired + JpaConnectionBound JFR events; cross-target JPA latency / allocation deltas vs kernel-native (exeris-community-app) or Hikari-pooled (spring-app-axon, quarkus-app-axon) targets must split 'compatibility seam overhead' from 'engine cost'. Protocol-mode mismatch with sibling contracts (this contract H1 plaintext; exeris_community_h2c_v1 and spring_boot_axon_neo4j_v1 are H2C) — direct latency comparison across protocol modes is NOT eligible at strict gate. event_backend = exeris-flow-jdbc-snapshot reflects that there is no external event store: Flow lifecycle state is durably checkpointed by JdbcFlowSnapshotStore (ADR-022), and the workload's outbox writes (in confirm step) target the existing exeris_outbox table directly via JDBC. Spring Boot 3.5.14 line pinned to host-runtime artifact (exeris-spring-runtime:0.5.0-SNAPSHOT) rather than blueprint's SB4 — bench-implementer divergence justified by host-runtime artifact reality (see target README §'Spring Boot matrix alignment').",
-      "workload_note": "saga_engine_identical_to_exeris_community: exeris-spring-runtime-flow uses the same Flow engine class as exeris-community-app. Hosting axes differ: web ingress = Spring MVC compat overlay on Exeris ingress (this contract) vs Exeris-native ExerisRequestHandler (exeris-community-app); JPA = ExerisDataSource compat seam (this contract) vs kernel-native QueryExecutor (exeris-community-app). order_id is a DB BIGSERIAL row id (synchronously persisted), matching exeris-community-app semantics and differing from the Axon contracts' AtomicLong saga correlation id. status_poll reads from JdbcFlowSnapshotStore projection.",
+      "claim_scope_note": "Compatibility-mode hosting: Spring MVC @RestController dispatch is overlaid on the Exeris ingress via ExerisCompatAutoConfiguration (ADR-011). Saga orchestration is exeris-spring-runtime-flow (4 forward steps: reserve-inventory, charge-payment, confirm-order, complete-order; 2 compensations: refund-payment, restore-inventory) — algorithmically the same Flow engine that exeris-community uses, NOT Axon Framework. Synchronous-insert variant: orders + order_items rows are persisted on the request thread before 202 ACCEPTED returns (idempotent under userId + ':' + cartId), so order_create_latency_ms includes JPA-path INSERT cost (unlike the Axon contract, whose request path was DB-write-free). Status poll reads from the JdbcFlowSnapshotStore-backed projection. JPA telemetry bypass disclosure (ADR-017 §6.4): every JPA Connection acquisition flows through the ExerisDataSource compat seam emitting JpaConnectionAcquired + JpaConnectionBound JFR events; cross-target JPA latency / allocation deltas vs kernel-native (exeris-community) or Hikari-pooled (spring-hibernate, quarkus-hibernate) targets must split 'compatibility seam overhead' from 'engine cost'. Protocol-mode mismatch with sibling contracts (this contract H1 plaintext; exeris_community_h2c_v1 and spring_boot_axon_neo4j_v1 are H2C) — direct latency comparison across protocol modes is NOT eligible at strict gate. event_backend = exeris-flow-jdbc-snapshot reflects that there is no external event store: Flow lifecycle state is durably checkpointed by JdbcFlowSnapshotStore (ADR-022), and the workload's outbox writes (in confirm step) target the existing exeris_outbox table directly via JDBC. Spring Boot 3.5.14 line pinned to host-runtime artifact (exeris-spring-runtime:0.5.0-SNAPSHOT) rather than blueprint's SB4 — bench-implementer divergence justified by host-runtime artifact reality (see target README §'Spring Boot matrix alignment').",
+      "workload_note": "saga_engine_identical_to_exeris_community: exeris-spring-runtime-flow uses the same Flow engine class as exeris-community. Hosting axes differ: web ingress = Spring MVC compat overlay on Exeris ingress (this contract) vs Exeris-native ExerisRequestHandler (exeris-community); JPA = ExerisDataSource compat seam (this contract) vs kernel-native QueryExecutor (exeris-community). order_id is a DB BIGSERIAL row id (synchronously persisted), matching exeris-community semantics and differing from the Axon contracts' AtomicLong saga correlation id. status_poll reads from JdbcFlowSnapshotStore projection.",
       "comparison_class": "algorithmic-isomorph-different-hosting",
       "equivalence_note": "Saga engine identical to exeris_community_h2c_v1 (both run exeris-spring-runtime-flow / Exeris FlowEngine). Differs on hosting axes only: web ingress (Spring MVC compat vs Exeris-native) and persistence path (ExerisDataSource compat seam vs kernel-native QueryExecutor). Against spring_boot_axon_neo4j_v1: same web framework family (Spring MVC), different saga engine (Flow vs Axon) and different host runtime (exeris-spring-runtime compat vs Spring-Boot-on-Tomcat). Both cross-contract comparisons are exploratory; protocol-mode mismatch (H1 here vs H2C on both peers) is the dominant disqualifier for strict-gate latency claims.",
       "per_step_metric_claim_scope": {
@@ -381,7 +381,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h2c",
-      "target_app": "exeris-community-app",
+      "target_app": "exeris-community",
       "comparison_type": "cross-runtime-e2e-saga",
       "virtual_users": 100,
       "ramp_up_seconds": 60,
@@ -419,7 +419,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h2c",
-      "target_app": "quarkus-app-axon",
+      "target_app": "quarkus-hibernate",
       "framework": "quarkus",
       "saga_framework": "axon-framework",
       "graph_backend": "pgq",
@@ -448,7 +448,7 @@
       },
       "maturity": "guard",
       "claim_scope": "coverage_limited",
-      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community is NOT supported at this claim scope.",
       "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
       "comparison_class": "platform-natural-stack"
     },
@@ -459,7 +459,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h2c",
-      "target_app": "spring-app-axon",
+      "target_app": "spring-hibernate",
       "framework": "spring-boot",
       "saga_framework": "axon-framework",
       "graph_backend": "pgq",
@@ -488,7 +488,7 @@
       },
       "maturity": "guard",
       "claim_scope": "coverage_limited",
-      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community is NOT supported at this claim scope.",
       "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
       "comparison_class": "platform-natural-stack"
     },
@@ -499,7 +499,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h2c",
-      "target_app": "exeris-community-app",
+      "target_app": "exeris-community",
       "comparison_type": "cross-runtime-e2e-saga",
       "virtual_users": 100,
       "ramp_up_seconds": 60,
@@ -539,7 +539,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h2c",
-      "target_app": "quarkus-app-axon",
+      "target_app": "quarkus-hibernate",
       "framework": "quarkus",
       "saga_framework": "axon-framework",
       "graph_backend": "apache-age",
@@ -570,7 +570,7 @@
       },
       "maturity": "planned",
       "claim_scope": "compatibility_only",
-      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community is NOT supported at this claim scope.",
       "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
       "comparison_class": "platform-natural-stack"
     },
@@ -581,7 +581,7 @@
       "benchmark_family": "runtime-k6-e2e",
       "jvm_class": "jvm",
       "transport_mode": "loopback-h2c",
-      "target_app": "spring-app-axon",
+      "target_app": "spring-hibernate",
       "framework": "spring-boot",
       "saga_framework": "axon-framework",
       "graph_backend": "apache-age",
@@ -612,7 +612,7 @@
       },
       "maturity": "planned",
       "claim_scope": "compatibility_only",
-      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community-app is NOT supported at this claim scope.",
+      "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community is NOT supported at this claim scope.",
       "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
       "comparison_class": "platform-natural-stack"
     }

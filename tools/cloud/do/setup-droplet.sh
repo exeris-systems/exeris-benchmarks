@@ -15,13 +15,19 @@
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
+# Fresh droplets run cloud-init + unattended-upgrades on first boot; both hold
+# the apt/dpkg locks. Wait for them instead of racing.
+APT=(apt-get -o DPkg::Lock::Timeout=600)
+
+echo "== waiting for cloud-init to finish first-boot work =="
+cloud-init status --wait >/dev/null 2>&1 || true
 
 echo "== apt packages =="
-apt-get update -q
-apt-get install -yq --no-install-recommends \
+"${APT[@]}" update -q
+"${APT[@]}" install -yq --no-install-recommends \
   build-essential libssl-dev zlib1g-dev unzip git jq gawk curl ca-certificates gnupg \
   nghttp2-client wrk postgresql-client sysstat util-linux uuid-runtime openssl maven
-apt-get install -yq "linux-tools-$(uname -r)" 2>/dev/null || apt-get install -yq linux-tools-generic
+"${APT[@]}" install -yq "linux-tools-$(uname -r)" 2>/dev/null || "${APT[@]}" install -yq linux-tools-generic
 
 echo "== JDK 26 (Temurin) =="
 if [[ ! -x /opt/jdk26/bin/java ]]; then
@@ -38,7 +44,7 @@ JAVA_HOME="/opt/jdk26"
 EOF
 
 echo "== Docker + compose v2 =="
-apt-get install -yq docker.io docker-compose-v2
+"${APT[@]}" install -yq docker.io docker-compose-v2
 systemctl enable --now docker
 
 echo "== wrk2 (source build; apt has only wrk) =="
@@ -56,8 +62,8 @@ if ! command -v k6 >/dev/null 2>&1; then
   curl -fsSL https://dl.k6.io/key.gpg | gpg --dearmor -o /etc/apt/keyrings/k6.gpg
   echo "deb [signed-by=/etc/apt/keyrings/k6.gpg] https://dl.k6.io/deb stable main" \
     > /etc/apt/sources.list.d/k6.list
-  apt-get update -q
-  apt-get install -yq k6
+  "${APT[@]}" update -q
+  "${APT[@]}" install -yq k6
 fi
 
 echo "== bench user (non-root runner) =="

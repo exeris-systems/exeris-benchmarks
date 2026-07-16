@@ -78,7 +78,11 @@ echo "== VPC =="
 VPC_UUID="$("$DOCTL" vpcs list --format ID,Name,Region --no-header \
   | awk -v r="$REGION" '$2=="exeris-bench" && $3==r {print $1; exit}')"
 if [[ -z "$VPC_UUID" ]]; then
-  VPC_UUID="$("$DOCTL" vpcs create --name exeris-bench --region "$REGION" --format ID --no-header)"
+  # `doctl vpcs create` has no --format flag; create, then re-list for the UUID.
+  "$DOCTL" vpcs create --name exeris-bench --region "$REGION" >/dev/null
+  VPC_UUID="$("$DOCTL" vpcs list --format ID,Name,Region --no-header \
+    | awk -v r="$REGION" '$2=="exeris-bench" && $3==r {print $1; exit}')"
+  [[ -n "$VPC_UUID" ]] || { echo "ERROR: VPC creation appeared to succeed but UUID not found" >&2; exit 1; }
   echo "VPC created: $VPC_UUID"
 else
   echo "VPC reused: $VPC_UUID"

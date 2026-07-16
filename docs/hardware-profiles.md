@@ -162,6 +162,53 @@ cross-architecture comparison runs.
 
 ---
 
+## cloud-vm-do-cpu-optimized
+
+DigitalOcean CPU-Optimized droplet (dedicated vCPUs) used as a **single-box campaign
+runner**: target JVM, databases, and load driver co-located on one droplet, separated
+by **disjoint taskset cpusets** exactly as described under `dev-isolated` →
+"Target-bound local measurement". Used for exploratory and cross-runtime campaign
+runs when a dedicated bare-metal perf box is not available. Provisioning tooling:
+`tools/cloud/do/`.
+
+| Field | Value |
+|---|---|
+| `profile_id` | `cloud-vm-do-cpu-optimized` |
+| CPU | Dedicated cloud vCPU (Intel 2.6 GHz+); model string **recorded exactly per run** |
+| Cores | Recorded exactly (e.g., 8 vCPU) |
+| RAM | Recorded exactly (e.g., 16 GB) |
+| Storage | Virtualized SSD/NVMe |
+| Network | loopback (driver and target co-located) |
+| CPU pinning | **Required** — disjoint `--cpu-affinity` / `--client-cpu-affinity` cpusets, both recorded per run |
+| OS | Ubuntu 24.04 LTS; kernel version recorded exactly (`uname -r`) |
+| CPU governor | Not controllable (hypervisor-managed) — recorded as such |
+| Notes | See trade-offs below |
+
+Example split on an 8 vCPU droplet (target gets the *smaller* budget so it saturates
+first): target `0-1`, driver `2-5`, OS + containers `6-7`.
+
+### Trade-offs (state them, do not hide them)
+
+- **Hypervisor present**: no turbo/governor control, no `isolcpus`, and residual
+  neighbor noise is possible despite dedicated vCPUs. Two droplets on the same slug
+  can land on different physical CPU models — record the CPU model per run and never
+  compare across differing models without calling it out.
+- **Loopback, same box** — all `dev-isolated` local-measurement caveats apply
+  (pinning removes core-stealing, not cache/memory-bandwidth sharing).
+- Running two campaigns in parallel on **two separate droplets** is fine (they share
+  nothing); running two campaigns on **one** droplet concurrently is not.
+- A driver-split variant over the VPC private network (low-level drivers with
+  `*_BASE_URL_OVERRIDE` against a target on a second droplet) is a **different
+  measurement class** — different network model, no local PID access for
+  resource/JFR sampling. Do not mix its numbers with single-box runs of this
+  profile without an explicit caveat.
+- What we trust here: **relative within-profile comparisons** (same droplet, same
+  pinning split, same run window). What we do not trust: absolute production
+  capacity claims, or promotion of numbers to `perf-box-amd64`-grade baselines.
+  Absolute publication claims require an explicit caveat.
+
+---
+
 ## docker-container
 
 Containerized target run. Used for compat/ and scenario/ benchmarks where

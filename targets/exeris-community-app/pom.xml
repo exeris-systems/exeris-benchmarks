@@ -19,7 +19,7 @@
     <maven.shade.plugin.version>3.6.0</maven.shade.plugin.version>
     <graalvm.buildtools.native.version>0.10.3</graalvm.buildtools.native.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <exeris.kernel.version>0.9.0</exeris.kernel.version>
+    <exeris.kernel.version>0.10.0</exeris.kernel.version>
   </properties>
 
   <dependencies>
@@ -40,20 +40,12 @@
       (META-INF/services/eu.exeris.kernel.spi.*Provider), so swapping community <-> enterprise is a
       one-line change here with zero source changes.
     -->
-<!--    <dependency>-->
-<!--      <groupId>eu.exeris</groupId>-->
-<!--      <artifactId>exeris-kernel-community</artifactId>-->
-<!--      <version>${exeris.kernel.version}</version>-->
-<!--      <scope>runtime</scope>-->
-<!--    </dependency>-->
-
     <dependency>
       <groupId>eu.exeris</groupId>
-      <artifactId>exeris-kernel-enterprise</artifactId>
-      <version>0.6.0-SNAPSHOT</version>
+      <artifactId>exeris-kernel-community</artifactId>
+      <version>${exeris.kernel.version}</version>
       <scope>runtime</scope>
     </dependency>
-
 
     <!-- JSON codec used directly by the app (route handler / JsonBodyEncoder). Previously supplied
          transitively by the edition jar; declared explicitly now that the edition is runtime-scoped,

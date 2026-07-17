@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkUseCaseService {
 
@@ -32,6 +33,15 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
     private final PrincipalRepository principalRepository;
     private final OrderSagaOrchestrator orderSagaOrchestrator;
     private final BenchmarkTokenIssuer tokenIssuer;
+
+    /**
+     * API-level orderId → DB (BIGSERIAL) order id. The CONTRACT-v2 section 3
+     * client-generated orderId is adopted verbatim as the public order identity;
+     * domain rows stay keyed on the DB id. In-process map — parity with the
+     * sibling stacks' in-memory projections; cross-restart status lookup by the
+     * client orderId is equally out of scope there.
+     */
+    private final ConcurrentHashMap<String, Long> dbOrderIdByApiOrderId = new ConcurrentHashMap<>();
 
     public RepositoryBackedBenchmarkUseCaseService(UserRepository userRepository,
                                                    GraphFriendsOfFriendsAdapter graphFriendsOfFriendsAdapter,
@@ -130,7 +140,7 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
     }
 
     @Override
-    public OrderResponse placeOrder(long userId, long cartId, String paymentMethod) {
+    public OrderResponse placeOrder(long userId, long cartId, String paymentMethod, String clientOrderId) {
         requireSaga();
         CartView cart = cartRepository.getCart(userId);
         if (cart.items().isEmpty()) {
@@ -140,26 +150,52 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
             throw new IllegalArgumentException("cart not found");
         }
 
-        long orderId = orderRepository.createOrderWithItems(userId, cart.items());
-        String sagaId = orderSagaOrchestrator.scheduleSaga(orderId, userId, paymentMethod);
+        long dbOrderId = orderRepository.createOrderWithItems(userId, cart.items());
+        // CONTRACT-v2 section 3: adopt the client-generated deterministic orderId
+        // verbatim as the API-level orderId — it is the input to the section 4.1
+        // payment-decline rule, so minting a server-side id here would break the
+        // "identical declined subset in every stack and every run" invariant.
+        // Blank/absent (pre-v2 clients) falls back to the decimal DB id.
+        String orderId = (clientOrderId == null || clientOrderId.isBlank())
+            ? Long.toString(dbOrderId)
+            : clientOrderId.trim();
+        dbOrderIdByApiOrderId.putIfAbsent(orderId, dbOrderId);
+        String sagaId = orderSagaOrchestrator.scheduleSaga(dbOrderId, orderId, userId, paymentMethod);
         return new OrderResponse(orderId, sagaId, "SAGA_INITIATED");
     }
 
     @Override
-    public OrderStatusResponse getOrderStatus(long orderId) {
+    public OrderStatusResponse getOrderStatus(String orderId) {
         requireSaga();
-        String dbStatus = orderRepository.getOrderStatus(orderId);
+        Long dbOrderId = resolveDbOrderId(orderId);
+        if (dbOrderId == null) {
+            throw new IllegalArgumentException("order not found");
+        }
+        String dbStatus = orderRepository.getOrderStatus(dbOrderId);
         if (dbStatus == null) {
             throw new IllegalArgumentException("order not found");
         }
 
-        String sagaId = orderRepository.getSagaId(orderId);
+        String sagaId = orderRepository.getSagaId(dbOrderId);
         String resolvedSagaId = (sagaId == null || sagaId.isBlank()) ? "PENDING" : sagaId;
 
-        String status = orderSagaOrchestrator.getSagaStatus(orderId);
+        String status = orderSagaOrchestrator.getSagaStatus(dbOrderId);
         String resolvedStatus = isSagaTerminal(status) ? status : mapFallbackSagaStatus(dbStatus);
 
         return new OrderStatusResponse(orderId, resolvedSagaId, resolvedStatus);
+    }
+
+    private Long resolveDbOrderId(String orderId) {
+        Long mapped = dbOrderIdByApiOrderId.get(orderId);
+        if (mapped != null) {
+            return mapped;
+        }
+        try {
+            // Pre-v2 clients poll by the decimal DB id directly.
+            return Long.parseLong(orderId);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     private static String mapFallbackSagaStatus(String dbStatus) {

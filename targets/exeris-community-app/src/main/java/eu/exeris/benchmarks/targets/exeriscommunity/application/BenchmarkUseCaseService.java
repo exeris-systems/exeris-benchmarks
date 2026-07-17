@@ -28,7 +28,7 @@ public interface BenchmarkUseCaseService {
 
     CartView getCart(long userId);
 
-    OrderResponse placeOrder(long userId, long cartId, String paymentMethod);
+    OrderResponse placeOrder(long userId, long cartId, String paymentMethod, String clientOrderId);
 
-    OrderStatusResponse getOrderStatus(long orderId);
+    OrderStatusResponse getOrderStatus(String orderId);
 }

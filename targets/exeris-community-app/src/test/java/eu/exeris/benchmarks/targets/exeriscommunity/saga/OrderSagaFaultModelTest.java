@@ -29,7 +29,8 @@ final class OrderSagaFaultModelTest {
 
     @Test
     void declineRuleSelectsKnownOrderIds() {
-        // Wire form is the decimal orderId string. First declined ids in [1..] under
+        // Decimal-string vectors (the pre-v2 fallback key when no client orderId is
+        // supplied). First declined ids in [1..] under
         // decline(orderId) := Long.remainderUnsigned(fnv1a64(orderId), 1000) < 30.
         assertTrue(OrderSagaOrchestrator.isDeclined("5"));
         assertTrue(OrderSagaOrchestrator.isDeclined("13"));
@@ -55,5 +56,22 @@ final class OrderSagaFaultModelTest {
         }
         assertEquals(3079, declined,
             "declined subset of decimal ids [1..100000] must be exact and run-stable");
+    }
+
+    @Test
+    void k6OrderIdPopulationMatchesHarnessOracle() {
+        // Same population the k6 harness issues (K6_ORDER_SEED default 'exeris-saga-v2',
+        // measurement scenario, dense index): tools/bench/lib/fnv1a64.py computes 312
+        // declines for indices 0..9999. The gate compares this exact integer against the
+        // observed compensation count — both sides must agree on the function, and the
+        // decline key must be the client-generated orderId adopted verbatim by the API.
+        int declined = 0;
+        for (int i = 0; i < 10_000; i++) {
+            if (OrderSagaOrchestrator.isDeclined("exeris-saga-v2-measurement-i" + i)) {
+                declined++;
+            }
+        }
+        assertEquals(312, declined,
+            "declined subset must match the fnv1a64.py oracle for the k6 orderId population");
     }
 }

@@ -80,7 +80,14 @@ public final class OrderSagaOrchestrator {
 
     private volatile FlowExecutionPlan plan;
     private record SagaKey(long most, long least) {}
-    private final ConcurrentHashMap<SagaKey, Long> orderIdCache = new ConcurrentHashMap<>();
+    /**
+     * DB (BIGSERIAL) order id plus the API-level orderId. {@code apiOrderId} is the
+     * CONTRACT-v2 section 3 client-generated seeded orderId adopted verbatim at order
+     * creation (decimal DB id only for pre-v2 clients that supply none) — it is the
+     * section 4.1 decline key; domain writes stay keyed on the DB id.
+     */
+    private record SagaOrder(long orderId, String apiOrderId) {}
+    private final ConcurrentHashMap<SagaKey, SagaOrder> orderIdCache = new ConcurrentHashMap<>();
 
     public OrderSagaOrchestrator(FlowEngine flowEngine,
                                   OrderRepository orderRepository,
@@ -100,10 +107,11 @@ public final class OrderSagaOrchestrator {
         }
 
         FlowStepAction reserveAction = ctx -> {
-            Long orderId = resolveOrderId(ctx);
-            if (orderId == null) {
+            SagaOrder order = resolveOrder(ctx);
+            if (order == null) {
                 return FlowOutcome.FAIL;
             }
+            long orderId = order.orderId();
             executor.executeManaged(conn -> {
                 try (PersistenceStatement stmt = conn.prepare(RESERVE_INVENTORY_SQL)) {
                     stmt.bindLong(0, orderId).executeUpdate();
@@ -114,10 +122,11 @@ public final class OrderSagaOrchestrator {
         };
 
         FlowStepAction reserveCompensation = ctx -> {
-            Long orderId = resolveOrderId(ctx);
-            if (orderId == null) {
+            SagaOrder order = resolveOrder(ctx);
+            if (order == null) {
                 return FlowOutcome.CONTINUE;
             }
+            long orderId = order.orderId();
             executor.executeManaged(conn -> {
                 try (PersistenceStatement stmt = conn.prepare(RESTORE_INVENTORY_SQL)) {
                     stmt.bindLong(0, orderId).executeUpdate();
@@ -128,10 +137,11 @@ public final class OrderSagaOrchestrator {
         };
 
         FlowStepAction paymentAction = ctx -> {
-            Long orderId = resolveOrderId(ctx);
-            if (orderId == null) {
+            SagaOrder order = resolveOrder(ctx);
+            if (order == null) {
                 return FlowOutcome.FAIL;
             }
+            long orderId = order.orderId();
             byte[] payloadBytes = paymentRequestedPayload(orderId).getBytes(StandardCharsets.UTF_8);
             executor.executeManaged(conn -> {
                 new JdbcOutboxEventStore(conn).append(new EventStore.OutboxEvent(
@@ -147,17 +157,18 @@ public final class OrderSagaOrchestrator {
             // CONTRACT-v2 section 4.1: deterministic business-terminal decline, selected
             // per-orderId (never per-attempt). FlowOutcome.FAIL routes to kernel-driven
             // LIFO compensation; a decline is never retried (section 5: zero retries).
-            if (shouldDeclinePayment(orderId)) {
+            if (shouldDeclinePayment(order.apiOrderId())) {
                 return FlowOutcome.FAIL;
             }
             return FlowOutcome.CONTINUE;
         };
 
         FlowStepAction paymentCompensation = ctx -> {
-            Long orderId = resolveOrderId(ctx);
-            if (orderId == null) {
+            SagaOrder order = resolveOrder(ctx);
+            if (order == null) {
                 return FlowOutcome.CONTINUE;
             }
+            long orderId = order.orderId();
             byte[] payloadBytes = orderCompensatedPayload(orderId).getBytes(StandardCharsets.UTF_8);
             executor.executeManaged(conn -> {
                 updateStatus(conn, orderId, "PAYMENT_REFUNDED");
@@ -174,10 +185,11 @@ public final class OrderSagaOrchestrator {
         };
 
         FlowStepAction confirmAction = ctx -> {
-            Long orderId = resolveOrderId(ctx);
-            if (orderId == null) {
+            SagaOrder order = resolveOrder(ctx);
+            if (order == null) {
                 return FlowOutcome.FAIL;
             }
+            long orderId = order.orderId();
             byte[] payloadBytes = orderConfirmedPayload(orderId).getBytes(StandardCharsets.UTF_8);
             executor.executeManaged(conn -> {
                 updateStatus(conn, orderId, "CONFIRMED");
@@ -194,8 +206,9 @@ public final class OrderSagaOrchestrator {
         };
 
         FlowStepAction emailAction = ctx -> {
-            Long orderId = resolveOrderId(ctx);
-            if (orderId != null) {
+            SagaOrder order = resolveOrder(ctx);
+            if (order != null) {
+                long orderId = order.orderId();
                 executor.executeManaged(conn -> updateStatus(conn, orderId, "COMPLETED"));
             }
             return FlowOutcome.COMPLETE;
@@ -228,13 +241,19 @@ public final class OrderSagaOrchestrator {
         this.plan = flowEngine.plans().compile(def);
     }
 
-    public String scheduleSaga(long orderId, long userId, String paymentMethod) {
+    /**
+     * @param orderId    DB (BIGSERIAL) order id keying the domain writes
+     * @param apiOrderId API-level orderId — the CONTRACT-v2 section 3 client-generated
+     *                   seeded orderId adopted verbatim at order creation; the section
+     *                   4.1 payment-decline key
+     */
+    public String scheduleSaga(long orderId, String apiOrderId, long userId, String paymentMethod) {
         UUID uuid  = UUID.randomUUID();
         long most  = uuid.getMostSignificantBits();
         long least = uuid.getLeastSignificantBits();
 
         orderRepository.updateSagaId(orderId, uuid.toString());
-        orderIdCache.put(new SagaKey(most, least), orderId);
+        orderIdCache.put(new SagaKey(most, least), new SagaOrder(orderId, apiOrderId));
 
         FlowContext ctx = new FlowContext() {
             @Override public long instanceIdMost()   { return most; }
@@ -280,17 +299,25 @@ public final class OrderSagaOrchestrator {
         };
     }
 
-    private Long resolveOrderId(FlowContext ctx) {
-        Long cached = orderIdCache.get(new SagaKey(ctx.instanceIdMost(), ctx.instanceIdLeast()));
+    private SagaOrder resolveOrder(FlowContext ctx) {
+        SagaOrder cached = orderIdCache.get(new SagaKey(ctx.instanceIdMost(), ctx.instanceIdLeast()));
         if (cached != null) return cached;
         UUID sagaId = new UUID(ctx.instanceIdMost(), ctx.instanceIdLeast());
-        return orderRepository.findOrderIdBySagaId(sagaId.toString());
+        Long orderId = orderRepository.findOrderIdBySagaId(sagaId.toString());
+        if (orderId == null) return null;
+        // Cache miss (cross-restart resumption): the client-generated API orderId lives
+        // only in the in-process cache — parity with the sibling stacks' in-memory
+        // projections, where cross-restart recovery is equally out of scope — so fall
+        // back to the decimal DB id as the decline key.
+        return new SagaOrder(orderId, Long.toString(orderId));
     }
 
-    private boolean shouldDeclinePayment(long orderId) {
-        // The decline key is the wire form of the orderId: the same decimal string the
-        // client receives in the order_id response field and polls status with.
-        return faultMode == FaultMode.TERMINAL && isDeclined(Long.toString(orderId));
+    private boolean shouldDeclinePayment(String apiOrderId) {
+        // The decline key is the API-level orderId: the CONTRACT-v2 section 3
+        // client-generated seeded orderId adopted verbatim at order creation — the same
+        // string the client receives in the order_id response field and polls status
+        // with (decimal DB id only for pre-v2 clients that supply none).
+        return faultMode == FaultMode.TERMINAL && isDeclined(apiOrderId);
     }
 
     /**

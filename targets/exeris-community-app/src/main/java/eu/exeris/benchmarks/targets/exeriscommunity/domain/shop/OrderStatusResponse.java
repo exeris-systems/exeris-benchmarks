@@ -2,4 +2,4 @@ package eu.exeris.benchmarks.targets.exeriscommunity.domain.shop;
 
 
 
-public record OrderStatusResponse(long orderId, String sagaId, String status) {}
+public record OrderStatusResponse(String orderId, String sagaId, String status) {}

@@ -115,6 +115,28 @@
         "quarkus-jdbc",
         "quarkus-benchmark-app-jdbc"
       ]
+    },
+    {
+      "target_id": "restate",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/restate-runtime.env",
+      "profile_id": "restate",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9004/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Restate durable-execution saga (JVM SDK 2.9, virtual threads) + pure JDBC",
+      "app_dir": "targets/restate-benchmark-app",
+      "default_protocol_note": "protocol_mode h1 is the fair-baseline declaration: the k6-facing facade (JDK com.sun.net.httpserver) speaks HTTP/1.1 only — an h1-vs-h2c protocol mismatch against the canonical saga contracts and therefore a strict-gate disqualifier, same class as spring-on-exeris. Deployment unit is this JVM (facade :9004 + Restate SDK endpoint :9084) plus an external restate-server (ingress :8080, admin :9070) started by the saga baseline as compose service benchmark-restate-server.",
+      "eligibility_note": "Saga-only target (e2e-shop-order-saga CONTRACT-v2; v2 request-response model — terminal outcome in the POST /api/v1/orders 200 body, status polling served but normally skipped by k6). Not yet referenced by any comparative-pair-manifest or scenario.json fixed_contract; wire both (plus tools/verify-target-asset-matrix.sh) before any comparative claim. Like the Axon stacks, part of the deployment unit (restate-server container exeris-e2e-saga-restate-server) runs outside the per-process resource sampler — whole-deployment footprint claims must attribute it separately (logs/restate-server-docker-stats.csv). Durability tier: restate-server 1.7 default is T2 fsync node-durable (RocksDB WAL fsync per commit batch); cross-tier comparisons forbidden per CONTRACT-v2 s8.",
+      "legacy_target_ids": [
+        "restate-benchmark-app"
+      ]
     }
   ]
 }

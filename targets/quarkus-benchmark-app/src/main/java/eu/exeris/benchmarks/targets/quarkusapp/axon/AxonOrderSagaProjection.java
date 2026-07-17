@@ -43,13 +43,17 @@ public class AxonOrderSagaProjection {
     /**
      * Maps raw {@code orders.status} values to the CONTRACT-v2 §3 outcome vocabulary
      * (COMPLETED | COMPENSATED | FAILED_UNRECOVERED) at the read layer only — the domain
-     * writes stay untouched so they remain identical across stacks. Mirrors the fallback
-     * mapping of the Exeris Flow targets; in-progress statuses pass through unchanged.
+     * writes stay untouched so they remain identical across stacks. In-progress statuses
+     * pass through unchanged. PAYMENT_REFUNDED is deliberately NOT mapped to COMPENSATED:
+     * it is a mid-compensation state (payment refunded, reservation restore pending), and
+     * surfacing it as terminal would let a poller observe COMPENSATED that can later
+     * regress to FAILED_UNRECOVERED if compensate-reservation exhausts its retry budget.
      */
     private static String toContractStatus(String dbStatus) {
         return switch (dbStatus) {
             case "CONFIRMED", "COMPLETED" -> "COMPLETED";
-            case "PAYMENT_REFUNDED", "CANCELLED" -> "COMPENSATED";
+            case "CANCELLED" -> "COMPENSATED";
+            case "PAYMENT_REFUNDED" -> "COMPENSATING";
             case "FAILED" -> "FAILED_UNRECOVERED";
             default -> dbStatus;
         };

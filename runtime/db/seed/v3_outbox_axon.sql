@@ -139,4 +139,38 @@ CREATE TABLE IF NOT EXISTS token_entry (
   CONSTRAINT pk_token_entry PRIMARY KEY (processor_name, segment)
 );
 
+-- Axon Framework 4.x JpaSagaStore tables — schema-completeness insurance, like
+-- domain_event_entry/snapshot_entry/token_entry above. A live probe (2026-07-17,
+-- Axon Server 2024.2.22 + Postgres 16.2, spring-benchmark-app) confirmed the
+-- Spring stack as wired today uses IN-MEMORY saga and token stores (zero JPA
+-- writes to these tables; pg_stat n_tup_ins = 0 across two completed sagas), so
+-- nothing exercises this DDL yet. If Axon's JPA autoconfiguration is ever
+-- re-enabled, JpaSagaStore engages and these definitions must match Hibernate 6:
+-- serialized_saga is OID (PostgreSQLDialect maps @Lob byte[] to oid, not bytea);
+-- association_value_entry_seq is the Hibernate 6 default sequence for
+-- @GeneratedValue AUTO (allocationSize 50 — INCREMENT must stay 50).
+CREATE TABLE IF NOT EXISTS saga_entry (
+  saga_id         VARCHAR(255) NOT NULL,
+  revision        VARCHAR(255),
+  saga_type       VARCHAR(255),
+  serialized_saga OID,
+  CONSTRAINT pk_saga_entry PRIMARY KEY (saga_id)
+);
+
+CREATE TABLE IF NOT EXISTS association_value_entry (
+  id                BIGINT       NOT NULL,
+  association_key   VARCHAR(255) NOT NULL,
+  association_value VARCHAR(255),
+  saga_id           VARCHAR(255) NOT NULL,
+  saga_type         VARCHAR(255),
+  CONSTRAINT pk_association_value_entry PRIMARY KEY (id)
+);
+
+CREATE SEQUENCE IF NOT EXISTS association_value_entry_seq START WITH 1 INCREMENT BY 50;
+
+CREATE INDEX IF NOT EXISTS idx_ave_type_key_value
+  ON association_value_entry (saga_type, association_key, association_value);
+CREATE INDEX IF NOT EXISTS idx_ave_saga_id_type
+  ON association_value_entry (saga_id, saga_type);
+
 COMMIT;

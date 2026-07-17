@@ -1,23 +1,21 @@
 package eu.exeris.benchmarks.targets.quarkusapp.axon;
 
 import eu.exeris.benchmarks.targets.quarkusapp.axon.command.CreateOrderCommand;
-import eu.exeris.benchmarks.targets.quarkusapp.axon.event.OrderSagaCompensatedEvent;
-import eu.exeris.benchmarks.targets.quarkusapp.axon.event.OrderSagaCompletedEvent;
-import eu.exeris.benchmarks.targets.quarkusapp.axon.event.OrderSagaInitiatedEvent;
-import eu.exeris.benchmarks.targets.quarkusapp.axon.event.PaymentDeclinedEvent;
 import eu.exeris.benchmarks.targets.quarkusapp.dto.OrderAcceptedView;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import org.axonframework.eventhandling.EventBus;
-import org.axonframework.eventhandling.GenericEventMessage;
-
+/**
+ * Imperative saga orchestration, command-dispatch only: the single CreateOrderCommand
+ * round-trip through Axon Server carries the whole saga; forward steps and backward
+ * recovery are invoked in-line. There is deliberately NO event-driven wiring here —
+ * an earlier revision published lifecycle events to a subscriber-less SimpleEventBus,
+ * which silently dropped them while looking load-bearing. Compensation correctness
+ * rests on the direct calls below, and nothing else.
+ */
 @ApplicationScoped
 public class AxonOrderSagaCommandHandler {
-
-    @Inject
-    EventBus eventBus;
 
     @Inject
     OrderSagaStepService stepService;
@@ -30,8 +28,6 @@ public class AxonOrderSagaCommandHandler {
         // nothing to recover backward from, so it propagates as an infrastructure failure.
         long dbOrderId = retryPolicy.get("insert-order",
                 () -> stepService.insertOrder(command.userId(), command.cartId(), command.sagaId()));
-        eventBus.publish(GenericEventMessage.asEventMessage(
-                new OrderSagaInitiatedEvent(command.orderId(), command.sagaId(), command.userId())));
 
         boolean inventoryReserved = false;
         boolean paymentRequested = false;
@@ -44,10 +40,8 @@ public class AxonOrderSagaCommandHandler {
             paymentRequested = true;
 
             if (!paymentAuthorized) {
-                // CONTRACT-v2 §4.1: business-terminal decline — explicitly modeled as an event
-                // and routed to saga compensation with zero retries (§5); never re-attempted.
-                eventBus.publish(GenericEventMessage.asEventMessage(
-                        new PaymentDeclinedEvent(command.orderId(), command.sagaId(), command.userId())));
+                // CONTRACT-v2 §4.1: business-terminal decline — routed directly to backward
+                // recovery with zero retries (§5); never re-attempted.
                 return compensate(command, dbOrderId, true, true);
             }
 
@@ -58,15 +52,16 @@ public class AxonOrderSagaCommandHandler {
             return compensate(command, dbOrderId, paymentRequested, inventoryReserved);
         }
 
-        eventBus.publish(GenericEventMessage.asEventMessage(
-                new OrderSagaCompletedEvent(command.orderId(), command.sagaId(), command.userId())));
         return new OrderAcceptedView(command.orderId(), "COMPLETED", command.sagaId());
     }
 
     /**
      * Backward recovery (CONTRACT-v2 §4.1/§5): compensations of the completed forward steps
-     * run in LIFO order — payment before inventory. Compensation-step retry-budget exhaustion
-     * routes to FAILED_UNRECOVERED (§5), counted separately by oracle O3.
+     * run in LIFO order — payment before inventory. Every path settles the order row at a
+     * terminal status so the polled projection converges with the synchronous outcome:
+     * CANCELLED on successful compensation (written by compensate-reservation, or by
+     * cancel-order when no reservation exists to restore), FAILED when a compensation step
+     * exhausts its retry budget (FAILED_UNRECOVERED, counted separately by oracle O3).
      */
     private OrderAcceptedView compensate(CreateOrderCommand command, long dbOrderId,
                                          boolean refundPayment, boolean restoreInventory) {
@@ -76,12 +71,16 @@ public class AxonOrderSagaCommandHandler {
             }
             if (restoreInventory) {
                 retryPolicy.run("compensate-reservation", () -> stepService.compensateReservation(dbOrderId));
+            } else {
+                // Nothing to restore, but the order row must still reach the CANCELLED
+                // terminal status — otherwise it rests at SAGA_INITIATED and the polled
+                // projection never terminates (oracle G3 drain scan).
+                retryPolicy.run("cancel-order", () -> stepService.cancelOrder(dbOrderId));
             }
         } catch (OrderSagaRetryPolicy.RetryExhaustedException compensationExhausted) {
+            stepService.markOrderFailed(dbOrderId);
             return new OrderAcceptedView(command.orderId(), "FAILED_UNRECOVERED", command.sagaId());
         }
-        eventBus.publish(GenericEventMessage.asEventMessage(
-                new OrderSagaCompensatedEvent(command.orderId(), command.sagaId(), command.userId())));
         return new OrderAcceptedView(command.orderId(), "COMPENSATED", command.sagaId());
     }
 }

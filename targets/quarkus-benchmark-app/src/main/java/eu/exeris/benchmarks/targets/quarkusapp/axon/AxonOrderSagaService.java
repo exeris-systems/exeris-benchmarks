@@ -5,6 +5,8 @@ import eu.exeris.benchmarks.targets.quarkusapp.dto.OrderAcceptedView;
 import eu.exeris.benchmarks.targets.quarkusapp.dto.OrderStatusView;
 import eu.exeris.benchmarks.targets.quarkusapp.service.ShopSagaStateService;
 
+import io.quarkus.runtime.Startup;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -18,6 +20,7 @@ import org.axonframework.common.Registration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
+@Startup
 @ApplicationScoped
 public class AxonOrderSagaService {
 
@@ -40,6 +43,13 @@ public class AxonOrderSagaService {
 
     private Registration commandSubscription;
 
+    /**
+     * The bean is {@code @Startup}-eager so the CreateOrderCommand registration with
+     * Axon Server is initiated during boot, not on the first POST /orders: a lazy bean
+     * combined with the non-awaited {@code AxonServerCommandBus.subscribe(..)} ack meant
+     * the first harness requests could race the server-side registration and fail with
+     * NoHandlerForCommandException.
+     */
     @PostConstruct
     @SuppressWarnings("unused")
     void subscribe() {

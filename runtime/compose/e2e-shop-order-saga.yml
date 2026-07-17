@@ -1,5 +1,6 @@
 # Infrastructure stack for e2e-shop-order-saga benchmark
-# Services: postgres:16.2 (with seed.sql), neo4j:5.16-community, axonserver:2024.2.22
+# Services: postgres:16.2 (with seed.sql), neo4j:5.16-community, axonserver:2024.2.22,
+#           restate:1.7.2 (started only for the restate target, like axonserver for spring/quarkus)
 # graph_track: neo4j | tier: community | transport: loopback-h2c
 # Usage: docker compose -f runtime/compose/e2e-shop-order-saga.yml up -d
 # Seed is loaded automatically via initdb on first start.
@@ -128,6 +129,35 @@ services:
       timeout: 10s
       retries: 36
       start_period: 20s
+
+  # Started ONLY for the restate target (run-e2e-shop-order-saga-baseline.sh
+  # detects *restate* in target_app/contract_id, mirroring the axonserver
+  # gating for spring/quarkus). Deployment-unit note: restate-server CPU/RSS is
+  # NOT captured by the per-process resource sampler — the baseline records
+  # docker stats for exeris-e2e-saga-restate-server separately, same policy as
+  # Axon Server above. Durability: restate-server 1.7 defaults to the
+  # replicated loglet with RocksDB WAL fsync per commit batch (CONTRACT-v2 s8
+  # tier T2, fsync node-durable — comparable with Postgres synchronous_commit=on).
+  # Do NOT set RESTATE_LOG_SERVER__ROCKSDB_DISABLE_WAL_FSYNC=true here without
+  # relabeling the run's durability tier.
+  # No container healthcheck: the image ships no shell/wget; the baseline polls
+  # the admin API (http://localhost:9070/health) from the host instead.
+  # host.docker.internal is required so the server can invoke the SDK endpoint
+  # (:9084) running in the target JVM on the host.
+  benchmark-restate-server:
+    image: docker.restate.dev/restatedev/restate:1.7.2
+    container_name: exeris-e2e-saga-restate-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"   # HTTP ingress
+      - "9070:9070"   # Admin API + web UI
+      - "9071:9071"
+    volumes:
+      # Anonymous volume ON PURPOSE: the baseline force-recreates this service
+      # with `rm -sf --volumes` per run so stale invocation journals from a
+      # previous run can never replay into the next one.
+      - /restate-data
 
 volumes:
   e2e-saga-pgdata:

@@ -339,6 +339,20 @@ configure_target_runtime_overrides() {
     unset EXERIS_GRAPH_NEO4J_DATABASE
   fi
 
+  # Restate deployment-unit env (CONTRACT-v2 s1: target JVM + external
+  # restate-server). Exported BEFORE target start so the app's startup
+  # self-registration and the baseline's post-readiness force-registration
+  # agree on the same endpoints. restate-server runs in Docker
+  # (benchmark-restate-server), so it calls back into the host-side SDK
+  # endpoint via host.docker.internal.
+  if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+    export RESTATE_SDK_PORT="${RESTATE_SDK_PORT:-9084}"
+    export RESTATE_INGRESS_URL="${RESTATE_INGRESS_URL:-http://localhost:8080}"
+    export RESTATE_ADMIN_URL="${RESTATE_ADMIN_URL:-http://localhost:9070}"
+    export RESTATE_SDK_ADVERTISED_URL="${RESTATE_SDK_ADVERTISED_URL:-http://host.docker.internal:${RESTATE_SDK_PORT}}"
+    export RESTATE_AUTO_REGISTER="${RESTATE_AUTO_REGISTER:-true}"
+  fi
+
   declared_protocol_mode="$(bench_derive_declared_protocol_mode "$TARGET_APP")"
   case "$declared_protocol_mode" in
     h1)
@@ -377,6 +391,7 @@ configure_target_runtime_overrides() {
   export SPRING_JAVA_OPTS="${SPRING_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
   export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
   export QUARKUS_JAVA_OPTS="${QUARKUS_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
+  export RESTATE_JAVA_OPTS="${RESTATE_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
 
   # Intentionally no -XX:MaxRAM / -XX:MaxRAMPercentage flags here.
   #
@@ -521,6 +536,34 @@ ensure_benchmark_infra() {
       sleep 2
     done
     sleep 1
+  fi
+
+  if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+    echo "Restate target detected (contract=${CONTRACT_ID}); starting benchmark-restate-server."
+    # Fresh journal per run (same policy as the axonserver force-recreate above):
+    # stale invocation journals from a previous run must not replay into this one.
+    docker compose -f "$BENCHMARK_COMPOSE_FILE" rm -sf --volumes benchmark-restate-server 2>/dev/null || true
+    if ! docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up -d --force-recreate benchmark-restate-server; then
+      echo "Warning: docker compose failed to start benchmark-restate-server; checking health anyway." >&2
+    fi
+    # The restate image has no shell/wget for a container healthcheck; poll the
+    # admin API from the host instead (readiness gate for the ingress as well).
+    local _restate_admin_url="${RESTATE_ADMIN_URL:-http://localhost:9070}"
+    local _restate_health_http="000"
+    echo "Waiting for restate-server admin API at ${_restate_admin_url}/health..."
+    for _restate_health_attempt in $(seq 1 30); do
+      _restate_health_http="$(curl -s -o /dev/null -w "%{http_code}" \
+        "${_restate_admin_url}/health" 2>/dev/null || echo "000")"
+      if [[ "$_restate_health_http" == "200" ]]; then
+        echo "  restate-server admin API healthy (HTTP ${_restate_health_http})."
+        break
+      fi
+      echo "  Attempt ${_restate_health_attempt}: admin health returned ${_restate_health_http}, retrying in 2s..."
+      sleep 2
+    done
+    if [[ "$_restate_health_http" != "200" ]]; then
+      echo "Warning: restate-server admin API did not become healthy; target self-registration and ingress calls may fail." >&2
+    fi
   fi
 }
 
@@ -678,6 +721,7 @@ case "${TARGET_APP:-}" in
   exeris-community-app-locality)                  TARGET_APP_LOG_FILE="/tmp/exeris-locality-8080.log"  ;;
   spring-on-exeris|spring-hibernate|spring-app-axon|spring-*)      TARGET_APP_LOG_FILE="/tmp/exeris-spring-9001.log"    ;;
   quarkus-hibernate|quarkus-app-axon|quarkus-*)   TARGET_APP_LOG_FILE="/tmp/exeris-quarkus-9002.log"   ;;
+  restate|restate-benchmark-app|restate-*)        TARGET_APP_LOG_FILE="/tmp/exeris-restate-9004.log"   ;;
   *)                                               TARGET_APP_LOG_FILE=""                               ;;
 esac
 
@@ -857,6 +901,8 @@ RESULT_JSON="$OUTPUT_DIR/result.json"
 RUNTIME_LOG_METADATA_JSON="$LOGS_DIR/runtime-log-metadata.json"
 AXON_STATS_CSV="$LOGS_DIR/axonserver-docker-stats.csv"
 AXON_STATS_PID=""
+RESTATE_STATS_CSV="$LOGS_DIR/restate-server-docker-stats.csv"
+RESTATE_STATS_PID=""
 # OS-level sidecars (opt-in via BENCH_OS_SIDECARS=1, default OFF). pidstat gives
 # per-thread %wait (C2 starvation) + context switches; mpstat gives per-CPU
 # %usr/%sys/%soft/%idle (network/softirq burn). See tools/bench/lib/os-sampler.sh.
@@ -880,6 +926,37 @@ if [[ "$FORCE_RESTART_TARGET" == "true" && -n "$START_TARGET_SCRIPT" ]]; then
   "$START_TARGET_SCRIPT" "$TARGET_APP" || echo "Warning: start-target.sh exited non-zero; bench_ensure_target_ready will perform authoritative health wait." >&2
 fi
 bench_ensure_target_ready "$BASE_URL" "$CURL_INSECURE_OPT" "$HEALTH_TIMEOUT_SECONDS" "$START_TARGET_ON_DEMAND" "$START_TARGET_SCRIPT" "$TARGET_APP"
+
+# Restate: ensure the SDK deployment is registered against the restate-server
+# admin API before k6 traffic. The target self-registers at startup
+# (RESTATE_AUTO_REGISTER), but that races the (force-recreated) server coming
+# up — a force=true POST here is idempotent and makes registration
+# deterministic post-readiness. The SDK endpoint (:9084) is already listening
+# once /health answers: it binds before the facade in the target's main().
+if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+  _restate_admin_url="${RESTATE_ADMIN_URL:-http://localhost:9070}"
+  _restate_sdk_url="${RESTATE_SDK_ADVERTISED_URL:-http://host.docker.internal:${RESTATE_SDK_PORT:-9084}}"
+  RESTATE_REGISTRATION_TXT="$LOGS_DIR/restate-registration.txt"
+  _restate_reg_http="000"
+  echo "Registering Restate deployment ${_restate_sdk_url} at ${_restate_admin_url}/deployments..."
+  for _restate_reg_attempt in $(seq 1 15); do
+    _restate_reg_http="$(curl -s -o "$RESTATE_REGISTRATION_TXT" -w "%{http_code}" \
+      -X POST "${_restate_admin_url}/deployments" \
+      -H 'content-type: application/json' \
+      --data "{\"uri\":\"${_restate_sdk_url}\",\"force\":true}" \
+      2>/dev/null || echo "000")"
+    if [[ "$_restate_reg_http" == "200" || "$_restate_reg_http" == "201" ]]; then
+      echo "  Restate deployment registered (HTTP ${_restate_reg_http})."
+      break
+    fi
+    echo "  Attempt ${_restate_reg_attempt}: deployment registration returned ${_restate_reg_http}, retrying in 2s..."
+    sleep 2
+  done
+  if [[ "$_restate_reg_http" != "200" && "$_restate_reg_http" != "201" ]]; then
+    echo "ERROR: Restate deployment registration failed (last HTTP ${_restate_reg_http}); OrderSaga would be uninvokable. See $RESTATE_REGISTRATION_TXT" >&2
+    exit 1
+  fi
+fi
 
 DECLARED_PROTOCOL_MODE="$(bench_derive_declared_protocol_mode "$TARGET_APP")"
 DECLARED_TRANSPORT_MODE="$(bench_derive_transport_mode "$DECLARED_PROTOCOL_MODE")"
@@ -980,74 +1057,101 @@ elif [[ "$ENABLE_JFR" == "true" ]]; then
   bench_start_jfr_recording "" "$LOGS_DIR" "$JFR_RECORDING_NAME" "$JFR_SETTINGS" || true
 fi
 
+# Sidecar docker-stats sampler (1 Hz). Used for deployment-unit sidecars
+# (Axon Server, restate-server) whose CPU/RSS is a separate container and
+# therefore NOT captured by the per-process resource sampler. Sets
+# _CONTAINER_STATS_SAMPLER_PID (the sampler runs as a direct child of this
+# shell so the post-run kill/wait semantics are unchanged).
+_CONTAINER_STATS_SAMPLER_PID=""
+_start_container_stats_sampler() {
+  local _stats_container="$1"
+  local _stats_csv="$2"
+  printf 'epoch_ms,cpu_pct,mem_usage_mb,mem_limit_mb,net_in_mb,net_out_mb,block_in_mb,block_out_mb,pids\n' > "$_stats_csv"
+  (
+    _mem_to_mb() {
+      local v="$1"
+      if [[ "$v" == *GiB ]]; then
+        awk -v n="${v%GiB}" 'BEGIN{printf "%.1f\n", n*1024}'
+      elif [[ "$v" == *MiB ]]; then
+        echo "${v%MiB}"
+      elif [[ "$v" == *kB ]]; then
+        awk -v n="${v%kB}" 'BEGIN{printf "%.3f\n", n/1024}'
+      else
+        echo "0"
+      fi
+    }
+    _io_to_mb() {
+      local v="$1"
+      if [[ "$v" == *GB ]]; then
+        awk -v n="${v%GB}" 'BEGIN{printf "%.1f\n", n*1024}'
+      elif [[ "$v" == *MB ]]; then
+        echo "${v%MB}"
+      elif [[ "$v" == *kB ]]; then
+        awk -v n="${v%kB}" 'BEGIN{printf "%.3f\n", n/1024}'
+      else
+        echo "0"
+      fi
+    }
+    while true; do
+      _line="$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}},{{.NetIO}},{{.BlockIO}},{{.PIDs}}' "$_stats_container" 2>/dev/null || true)"
+      [[ -z "$_line" ]] && { sleep 1; continue; }
+      # date +%s%3N is unreliable (ignores %3N width and drops leading zeros in
+      # the sub-second field, corrupting the timestamp) — read s and ns in one
+      # atomic call and combine arithmetically. See resource-sampler.sh.
+      _epoch_s=""; _epoch_ns=""
+      read -r _epoch_s _epoch_ns < <(date +'%s %N')
+      [[ "$_epoch_ns" =~ ^[0-9]+$ ]] || _epoch_ns=0
+      _epoch_ms=$(( _epoch_s * 1000 + 10#$_epoch_ns / 1000000 ))
+      # Parse CPUPerc (strip %)
+      _cpu="${_line%%,*}"; _cpu="${_cpu//%/}"
+      _rest="${_line#*,}"
+      # Parse MemUsage: "123MiB / 456GiB" → usage and limit in MB
+      _mem_field="${_rest%%,*}"; _rest="${_rest#*,}"
+      _mem_usage_raw="${_mem_field%% /*}"; _mem_limit_raw="${_mem_field##* / }"
+      _mem_u="$(_mem_to_mb "$_mem_usage_raw")"
+      _mem_l="$(_mem_to_mb "$_mem_limit_raw")"
+      # Parse NetIO: "1.2MB / 3.4MB"
+      _net_field="${_rest%%,*}"; _rest="${_rest#*,}"
+      _net_in_raw="${_net_field%% /*}"; _net_out_raw="${_net_field##* / }"
+      _net_in="$(_io_to_mb "$_net_in_raw")"
+      _net_out="$(_io_to_mb "$_net_out_raw")"
+      # Parse BlockIO: "1.2MB / 3.4MB"
+      _blk_field="${_rest%%,*}"; _pids="${_rest##*,}"
+      _blk_in_raw="${_blk_field%% /*}"; _blk_out_raw="${_blk_field##* / }"
+      _blk_in="$(_io_to_mb "$_blk_in_raw")"
+      _blk_out="$(_io_to_mb "$_blk_out_raw")"
+      printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+        "$_epoch_ms" "$_cpu" "$_mem_u" "$_mem_l" "$_net_in" "$_net_out" "$_blk_in" "$_blk_out" "$_pids" >> "$_stats_csv"
+      sleep 1
+    done
+  ) &
+  _CONTAINER_STATS_SAMPLER_PID="$!"
+}
+
 # Start Axon Server docker stats sampler (if axon contract detected)
 AXON_STATS_PID=""
 if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
   _axon_cid="$(docker inspect --format '{{.Id}}' exeris-e2e-saga-axonserver 2>/dev/null || true)"
   if [[ -n "$_axon_cid" ]]; then
-    printf 'epoch_ms,cpu_pct,mem_usage_mb,mem_limit_mb,net_in_mb,net_out_mb,block_in_mb,block_out_mb,pids\n' > "$AXON_STATS_CSV"
-    (
-      _mem_to_mb() {
-        local v="$1"
-        if [[ "$v" == *GiB ]]; then
-          awk -v n="${v%GiB}" 'BEGIN{printf "%.1f\n", n*1024}'
-        elif [[ "$v" == *MiB ]]; then
-          echo "${v%MiB}"
-        elif [[ "$v" == *kB ]]; then
-          awk -v n="${v%kB}" 'BEGIN{printf "%.3f\n", n/1024}'
-        else
-          echo "0"
-        fi
-      }
-      _io_to_mb() {
-        local v="$1"
-        if [[ "$v" == *GB ]]; then
-          awk -v n="${v%GB}" 'BEGIN{printf "%.1f\n", n*1024}'
-        elif [[ "$v" == *MB ]]; then
-          echo "${v%MB}"
-        elif [[ "$v" == *kB ]]; then
-          awk -v n="${v%kB}" 'BEGIN{printf "%.3f\n", n/1024}'
-        else
-          echo "0"
-        fi
-      }
-      while true; do
-        _line="$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}},{{.NetIO}},{{.BlockIO}},{{.PIDs}}' exeris-e2e-saga-axonserver 2>/dev/null || true)"
-        [[ -z "$_line" ]] && { sleep 1; continue; }
-        # date +%s%3N is unreliable (ignores %3N width and drops leading zeros in
-        # the sub-second field, corrupting the timestamp) — read s and ns in one
-        # atomic call and combine arithmetically. See resource-sampler.sh.
-        _epoch_s=""; _epoch_ns=""
-        read -r _epoch_s _epoch_ns < <(date +'%s %N')
-        [[ "$_epoch_ns" =~ ^[0-9]+$ ]] || _epoch_ns=0
-        _epoch_ms=$(( _epoch_s * 1000 + 10#$_epoch_ns / 1000000 ))
-        # Parse CPUPerc (strip %)
-        _cpu="${_line%%,*}"; _cpu="${_cpu//%/}"
-        _rest="${_line#*,}"
-        # Parse MemUsage: "123MiB / 456GiB" → usage and limit in MB
-        _mem_field="${_rest%%,*}"; _rest="${_rest#*,}"
-        _mem_usage_raw="${_mem_field%% /*}"; _mem_limit_raw="${_mem_field##* / }"
-        _mem_u="$(_mem_to_mb "$_mem_usage_raw")"
-        _mem_l="$(_mem_to_mb "$_mem_limit_raw")"
-        # Parse NetIO: "1.2MB / 3.4MB"
-        _net_field="${_rest%%,*}"; _rest="${_rest#*,}"
-        _net_in_raw="${_net_field%% /*}"; _net_out_raw="${_net_field##* / }"
-        _net_in="$(_io_to_mb "$_net_in_raw")"
-        _net_out="$(_io_to_mb "$_net_out_raw")"
-        # Parse BlockIO: "1.2MB / 3.4MB"
-        _blk_field="${_rest%%,*}"; _pids="${_rest##*,}"
-        _blk_in_raw="${_blk_field%% /*}"; _blk_out_raw="${_blk_field##* / }"
-        _blk_in="$(_io_to_mb "$_blk_in_raw")"
-        _blk_out="$(_io_to_mb "$_blk_out_raw")"
-        printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
-          "$_epoch_ms" "$_cpu" "$_mem_u" "$_mem_l" "$_net_in" "$_net_out" "$_blk_in" "$_blk_out" "$_pids" >> "$AXON_STATS_CSV"
-        sleep 1
-      done
-    ) &
-    AXON_STATS_PID="$!"
+    _start_container_stats_sampler exeris-e2e-saga-axonserver "$AXON_STATS_CSV"
+    AXON_STATS_PID="$_CONTAINER_STATS_SAMPLER_PID"
     echo "Axon Server docker stats sampler started (container: exeris-e2e-saga-axonserver, pid: ${AXON_STATS_PID})."
   else
     echo "Warning: exeris-e2e-saga-axonserver container not found; Axon Server stats will not be captured." >&2
+  fi
+fi
+
+# Start restate-server docker stats sampler (if restate target detected) —
+# same deployment-unit attribution policy as Axon Server above.
+RESTATE_STATS_PID=""
+if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+  _restate_cid="$(docker inspect --format '{{.Id}}' exeris-e2e-saga-restate-server 2>/dev/null || true)"
+  if [[ -n "$_restate_cid" ]]; then
+    _start_container_stats_sampler exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV"
+    RESTATE_STATS_PID="$_CONTAINER_STATS_SAMPLER_PID"
+    echo "restate-server docker stats sampler started (container: exeris-e2e-saga-restate-server, pid: ${RESTATE_STATS_PID})."
+  else
+    echo "Warning: exeris-e2e-saga-restate-server container not found; restate-server stats will not be captured." >&2
   fi
 fi
 
@@ -1100,6 +1204,13 @@ if [[ -n "$AXON_STATS_PID" ]]; then
   kill "$AXON_STATS_PID" >/dev/null 2>&1 || true
   wait "$AXON_STATS_PID" 2>/dev/null || true
   AXON_STATS_PID=""
+fi
+
+# Stop restate-server docker stats sampler
+if [[ -n "$RESTATE_STATS_PID" ]]; then
+  kill "$RESTATE_STATS_PID" >/dev/null 2>&1 || true
+  wait "$RESTATE_STATS_PID" 2>/dev/null || true
+  RESTATE_STATS_PID=""
 fi
 
 # Capture JFR dump and metadata after the run
@@ -1738,6 +1849,10 @@ echo "resource metrics: $RESOURCE_METRICS_JSON"
 if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]; then
   echo "axon server stats: $AXON_STATS_CSV"
   echo "Note: Axon Server CPU/RSS is in $AXON_STATS_CSV (separate process). Not included in resource-metrics.json."
+fi
+if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+  echo "restate server stats: $RESTATE_STATS_CSV"
+  echo "Note: restate-server CPU/RSS is in $RESTATE_STATS_CSV (separate container). Not included in resource-metrics.json."
 fi
 echo "logs dir: $LOGS_DIR"
 echo "jcmd diagnostics: $JCMD_DIAGNOSTICS_JSON"

@@ -11,8 +11,6 @@ import org.axonframework.commandhandling.CommandBus;
 import org.axonframework.commandhandling.SimpleCommandBus;
 import org.axonframework.commandhandling.gateway.CommandGateway;
 import org.axonframework.commandhandling.gateway.DefaultCommandGateway;
-import org.axonframework.eventhandling.EventBus;
-import org.axonframework.eventhandling.SimpleEventBus;
 import org.axonframework.serialization.Serializer;
 import org.axonframework.serialization.json.JacksonSerializer;
 
@@ -59,11 +57,9 @@ public class AxonBusConfig {
                 .build();
     }
 
-    @Produces
-    @Singleton
-    public EventBus eventBus() {
-        return SimpleEventBus.builder().build();
-    }
+    // Deliberately NO EventBus producer: this target's saga wiring is command-dispatch
+    // only. An earlier revision produced a subscriber-less SimpleEventBus whose published
+    // lifecycle events were silently dropped — dead wiring that looked load-bearing.
 
     @Produces
     @Singleton

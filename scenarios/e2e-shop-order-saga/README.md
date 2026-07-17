@@ -217,6 +217,33 @@ Saga steps internally:
 | Exeris Community | Flow (L4 native) | Graph (L2 native) | Events (L3 with transactional outbox) | ✅ Ready |
 | Quarkus | Axon Framework | Neo4j Bolt | Outbox Pattern + Kafka | ✅ Ready (requires Axon setup) |
 | Spring Boot | Axon Framework — **embedded handler path** | Neo4j Bolt | EventBus (SubscribingEventProcessor, embedded) | ✅ Ready — see pre-flight note below |
+| Restate (`--target-app restate`) | Restate durable execution (JVM SDK 2.9, journaled `Restate.run` steps + LIFO compensations) | Neo4j Bolt (or PGQ track) | restate-server journal (replicated loglet) + transactional outbox rows | ✅ Ready — baseline-only, see note below |
+
+### Restate Target — Deployment-Unit and Protocol Note
+
+Target app: `targets/restate-benchmark-app` (facade port **9004**, HTTP/1.1).
+The deployment unit is the target JVM **plus** an external `restate-server`
+v1.7 (compose service `benchmark-restate-server`: ingress :8080, admin :9070),
+started by `run-e2e-shop-order-saga-baseline.sh` only for restate runs — the
+same gating pattern as Axon Server for the Spring/Quarkus targets. The
+baseline polls the admin API for readiness and force-registers the SDK
+deployment post-readiness. `restate-server` CPU/RSS is a separate container,
+sampled to `logs/restate-server-docker-stats.csv` (not in
+`resource-metrics.json`).
+
+Caveats for any claim:
+- **h1 facade** vs h2c canonical contracts → protocol-mismatch strict-gate
+  disqualifier (same class as spring-on-exeris); baseline/descriptive runs only
+  until an h1-scoped or protocol-matched comparison is defined.
+- v2 request-response model: `POST /api/v1/orders` returns the **terminal**
+  saga outcome in the 200 body, so k6 skips status polling; the poll endpoint
+  is an in-memory sticky-terminal projection (`status_poll_comparison_excluded`).
+- Durability tier: restate-server default = fsync node-durable (T2, RocksDB WAL
+  fsync per commit batch). Declare the tier per run; cross-tier comparisons are
+  forbidden (CONTRACT-v2 §8).
+- Not yet wired as a `scenario.json` fixed contract / comparative-pair-manifest
+  row — the campaign runner cannot derive a restate contract id; invoke the
+  baseline directly with `--target-app restate`.
 
 ### Spring Boot Target — Embedded Handler Path (Pre-flight Note)
 

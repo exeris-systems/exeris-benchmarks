@@ -208,6 +208,43 @@ public class OrderSagaStepService {
     }
 
     /**
+     * Terminal CANCELLED write for the backward-recovery path with no inventory
+     * reservation to restore (reserve-inventory retry-budget exhaustion): the order row
+     * must still leave SAGA_INITIATED so the polled projection reaches a terminal
+     * outcome (oracle G3).
+     */
+    public void cancelOrder(long dbOrderId) {
+        try (Connection conn = dataSource.getConnection()) {
+            try (PreparedStatement ps = conn.prepareStatement(UPDATE_ORDER_SQL)) {
+                ps.setString(1, "CANCELLED");
+                ps.setLong(2, dbOrderId);
+                ps.executeUpdate();
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("cancelOrder failed for order " + dbOrderId, e);
+        }
+    }
+
+    /**
+     * Best-effort terminal FAILED write on compensation retry-budget exhaustion so the
+     * polled projection surfaces FAILED_UNRECOVERED consistently with the synchronous
+     * response. Never throws: the caller is already on the unrecovered path (§5) and the
+     * FAILED_UNRECOVERED outcome must not be masked by a failing status write.
+     */
+    public void markOrderFailed(long dbOrderId) {
+        try (Connection conn = dataSource.getConnection()) {
+            try (PreparedStatement ps = conn.prepareStatement(UPDATE_ORDER_SQL)) {
+                ps.setString(1, "FAILED");
+                ps.setLong(2, dbOrderId);
+                ps.executeUpdate();
+            }
+        } catch (Exception e) {
+            LOG.errorf(e, "markOrderFailed could not persist FAILED for order %d; "
+                    + "polled status may never reach FAILED_UNRECOVERED", dbOrderId);
+        }
+    }
+
+    /**
      * CONTRACT-v2 §4.1 business-terminal decline selection — per-orderId, not per-attempt:
      * {@code decline(orderId) := Long.remainderUnsigned(fnv1a64(orderId), 1000) < 30}, i.e.
      * exactly 3.0% of the deterministic orderId population, identical subset in every stack

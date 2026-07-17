@@ -89,7 +89,8 @@ public final class RestateBenchmarkApplication {
         }
 
         GraphShopService graphShopService = new GraphShopService(neo4jDriver, dataSource);
-        BearerTokenService tokenService = new BearerTokenService(env.get("EXERIS_AUTH_TOKEN_SECRET"));
+        // RS256 RSA-2048 keypair generated at boot — auth parity with the reference stacks.
+        BearerTokenService tokenService = new BearerTokenService();
         HttpApiServer facade = new HttpApiServer(
                 objectMapper,
                 tokenService,

@@ -24,7 +24,11 @@ Usage: run-e2e-shop-order-saga-baseline.sh [options]
 
 Options:
   --base-url <url>         Base URL for target app (default: https://localhost:8080)
-  --contract-id <id>       Contract id (default: exeris_community_h2c_v1)
+  --contract-id <id>       Contract id (default: exeris_community_h2c_v1).
+                           Restate runs MUST pass this explicitly with a
+                           restate-appropriate id: the h2c default is never
+                           stamped onto a restate (h1 facade) run — the runner
+                           aborts instead of mislabeling the artifacts.
   --target-app <name>      Target app label (default: exeris-community)
   --auto-start-infra       Auto-start benchmark infra (Postgres + Neo4j) via docker compose (default)
   --no-auto-start-infra    Do not auto-start benchmark infra
@@ -48,6 +52,18 @@ Options:
   --cgroup-memory-limit-mb <n>  Enforce OS-level memory limit on target (cgroup v2, MB). Empty = disabled.
   --cgroup-cpu-quota-pct <n>    Enforce OS-level CPU quota on target (cgroup v2, %). Empty = disabled.
   -h, --help               Show this help
+
+Environment (durability-tier declaration, CONTRACT-v2 s8):
+  The durability_tier stamped into run-metadata.json / result.json /
+  correctness-gate.json is a LABEL only — it changes no target behavior.
+  Cross-tier comparisons are forbidden (s8); relabel via these overrides when
+  the actual durability configuration differs (e.g. WAL fsync disabled -> T1):
+  RESTATE_DURABILITY_TIER_LABEL  Label for restate runs (default:
+                                 T2-fsync-node-durable — restate-server 1.7
+                                 default, RocksDB WAL fsync per commit batch).
+  BENCH_DURABILITY_TIER_LABEL    Label for all other targets (default:
+                                 T2-fsync-node-durable-postgres — Postgres-backed
+                                 saga state at synchronous_commit=on).
 EOF
 }
 
@@ -568,6 +584,7 @@ ensure_benchmark_infra() {
 }
 
 _BASE_URL_EXPLICIT="false"
+_CONTRACT_ID_EXPLICIT="false"
 BASE_URL="http://localhost:9000"
 CURL_INSECURE_OPT=""
 CONTRACT_ID="exeris_community_h2c_v1"
@@ -609,6 +626,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --contract-id)
       CONTRACT_ID="$2"
+      _CONTRACT_ID_EXPLICIT="true"
       shift 2
       ;;
     --target-app)
@@ -714,6 +732,51 @@ case "$FAULT_MODE" in
     exit 1
     ;;
 esac
+
+# Restate contract-id fail-closed check: restate is not a scenario.json fixed
+# contract, so the runner cannot derive a restate contract id — and the default
+# (exeris_community_h2c_v1) is an h2c contract while the restate facade is
+# HTTP/1.1. Stamping the h2c default onto a restate run would mislabel every
+# artifact (protocol axis + contract id), so abort instead of defaulting.
+if [[ "$TARGET_APP" == *restate* || "$CONTRACT_ID" == *restate* ]]; then
+  if [[ "$_CONTRACT_ID_EXPLICIT" != "true" ]]; then
+    echo "ERROR: restate run detected (target_app=${TARGET_APP}) but --contract-id was not passed; refusing to stamp the defaulted h2c contract id '${CONTRACT_ID}' onto a restate (h1 facade) run." >&2
+    echo "ERROR: pass --contract-id <restate-appropriate id> explicitly (see targets/restate-benchmark-app/README.md and CONTRACT-v2-IMPLEMENTATION.md, restate row)." >&2
+    exit 1
+  fi
+  if [[ "$CONTRACT_ID" != *restate* ]]; then
+    echo "ERROR: restate run detected (target_app=${TARGET_APP}) but --contract-id '${CONTRACT_ID}' is not a restate-appropriate id (must contain 'restate'); refusing to mislabel the run." >&2
+    echo "ERROR: pass --contract-id <restate-appropriate id> explicitly (see targets/restate-benchmark-app/README.md and CONTRACT-v2-IMPLEMENTATION.md, restate row)." >&2
+    exit 1
+  fi
+fi
+
+# CONTRACT-v2 s8 durability-tier declaration. The value is a LABEL stamped into
+# run-metadata.json / result.json / correctness-gate.json — it changes no target
+# behavior. restate-server 1.7 default = replicated loglet + RocksDB WAL fsync
+# per commit batch (T2 fsync node-durable); the Postgres-backed stacks persist
+# saga-relevant state through Postgres at synchronous_commit=on (same T2 tier,
+# Postgres-backed). Override the label (RESTATE_DURABILITY_TIER_LABEL /
+# BENCH_DURABILITY_TIER_LABEL) when the actual durability configuration differs;
+# cross-tier comparisons are forbidden (s8).
+if [[ "$TARGET_APP" == *restate* || "$CONTRACT_ID" == *restate* ]]; then
+  if [[ -n "${RESTATE_DURABILITY_TIER_LABEL:-}" ]]; then
+    DURABILITY_TIER="$RESTATE_DURABILITY_TIER_LABEL"
+    DURABILITY_TIER_SOURCE="env:RESTATE_DURABILITY_TIER_LABEL"
+  else
+    DURABILITY_TIER="T2-fsync-node-durable"
+    DURABILITY_TIER_SOURCE="default:restate-server-1.7-wal-fsync"
+  fi
+else
+  if [[ -n "${BENCH_DURABILITY_TIER_LABEL:-}" ]]; then
+    DURABILITY_TIER="$BENCH_DURABILITY_TIER_LABEL"
+    DURABILITY_TIER_SOURCE="env:BENCH_DURABILITY_TIER_LABEL"
+  else
+    DURABILITY_TIER="T2-fsync-node-durable-postgres"
+    DURABILITY_TIER_SOURCE="default:postgres-synchronous-commit-on"
+  fi
+fi
+echo "Durability tier label: ${DURABILITY_TIER} (source: ${DURABILITY_TIER_SOURCE}; label only, no behavior change)"
 
 # Derive the path of the target process log file (fixed name from EXTERNAL_START_CMD) for failure capture.
 case "${TARGET_APP:-}" in
@@ -1278,16 +1341,36 @@ GATE_ORDER_ID_FORMAT="{seed}-{scenario}-i{index}"
 GATE_ISSUED="$(jq -r '.metrics.saga_issued_total.count // empty' "$K6_SUMMARY_JSON" 2>/dev/null || true)"
 GATE_OBSERVED="$(jq -r '.metrics.saga_compensated_total.count // empty' "$K6_SUMMARY_JSON" 2>/dev/null || true)"
 
+# v2 capability marker: the driving k6 script declaring saga_issued_total is the
+# only derivable distinction between a legacy pre-v2 summary (documented
+# skip-with-WARN) and a v2-capable run whose gate inputs are broken (fails
+# closed, status=error). Target-build v2-ness is not independently derivable
+# here; the k6 script is the authority.
+GATE_V2_CAPABLE="false"
+if grep -q 'saga_issued_total' "$K6_SCRIPT" 2>/dev/null; then
+  GATE_V2_CAPABLE="true"
+fi
+
 # k6 omits zero-sample metrics from the summary export: a missing counter under
 # a v2 script (which declares saga_issued_total) means 0 issued, not "old script".
-if [[ -z "$GATE_ISSUED" && -f "$K6_SUMMARY_JSON" ]] && grep -q 'saga_issued_total' "$K6_SCRIPT" 2>/dev/null; then
+if [[ -z "$GATE_ISSUED" && -f "$K6_SUMMARY_JSON" && "$GATE_V2_CAPABLE" == "true" ]]; then
   GATE_ISSUED="0"
 fi
 
 if [[ ! -f "$K6_SUMMARY_JSON" ]]; then
-  GATE_REASON="k6 summary not found; correctness gate not evaluable"
+  if [[ "$GATE_V2_CAPABLE" == "true" ]]; then
+    GATE_STATUS="error"
+    GATE_REASON="k6 summary not found for a v2-capable k6 script; gate inputs missing — failing closed (this is not the documented pre-v2 legacy-summary skip)"
+  else
+    GATE_REASON="k6 summary not found; correctness gate not evaluable (pre-v2 k6 script)"
+  fi
 elif [[ -z "$GATE_ISSUED" ]]; then
-  GATE_REASON="k6 summary lacks the saga_issued_total counter (pre-CONTRACT-v2 k6 script); gate skipped"
+  if [[ "$GATE_V2_CAPABLE" == "true" ]]; then
+    GATE_STATUS="error"
+    GATE_REASON="saga_issued_total unreadable from k6 summary despite a v2-capable k6 script; failing closed"
+  else
+    GATE_REASON="k6 summary lacks the saga_issued_total counter (pre-CONTRACT-v2 k6 script); gate skipped"
+  fi
 else
   # With the v2 script present, an absent saga_compensated_total means zero
   # compensations were observed — exactly the v1 Axon defect class the gate
@@ -1300,7 +1383,8 @@ else
     # No orders issued → no declined subset → zero compensations expected.
     GATE_EXPECTED="0"
   elif ! command -v python3 >/dev/null 2>&1; then
-    GATE_REASON="python3 unavailable; expected declines not computable"
+    GATE_STATUS="error"
+    GATE_REASON="python3 unavailable; expected declines not computable — failing closed on a v2-capable run"
   else
     # Per-scenario issued counts and completed-iteration counts from the k6
     # NDJSON stream (--out json=). iterations > issued in any scenario means an
@@ -1376,7 +1460,7 @@ fi
 case "$GATE_STATUS" in
   pass)    echo "Correctness gate PASS: ${GATE_REASON}" ;;
   fail)    echo "ERROR: correctness gate FAIL: ${GATE_REASON}" >&2 ;;
-  error)   echo "WARN: correctness gate not evaluated (helper error): ${GATE_REASON}" >&2 ;;
+  error)   echo "ERROR: correctness gate ERROR (fails closed): ${GATE_REASON}" >&2 ;;
   skipped) echo "WARN: correctness gate SKIPPED: ${GATE_REASON}" >&2 ;;
 esac
 
@@ -1391,6 +1475,8 @@ jq -n \
   --arg pop_counts       "$GATE_POP_COUNTS" \
   --arg density_note     "$GATE_DENSITY_NOTE" \
   --arg fault_mode       "$FAULT_MODE" \
+  --arg durability_tier  "$DURABILITY_TIER" \
+  --arg durability_tier_source "$DURABILITY_TIER_SOURCE" \
   --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{
     schema_version:   "1",
@@ -1399,6 +1485,8 @@ jq -n \
     contract_ref:     "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
     decline_rule:     "fnv1a64(orderId) mod 1000 < 30 (unsigned, FNV-1a 64 over UTF-8 bytes)",
     fault_mode:       $fault_mode,
+    durability_tier:  $durability_tier,
+    durability_tier_source: $durability_tier_source,
     status:           $status,
     pass_fail:        (if $status == "pass" then "pass" elif $status == "fail" then "fail" else "not_evaluated" end),
     expected:         (if $expected == "" then null else ($expected | tonumber) end),
@@ -1419,6 +1507,10 @@ jq -n \
 
 if [[ "$GATE_STATUS" == "fail" ]]; then
   RUNNER_STATUS="compensation_mismatch"
+elif [[ "$GATE_STATUS" == "error" ]]; then
+  # Gate not evaluable on a v2-capable run (missing k6 metrics, helper crash,
+  # python3 unavailable, inconsistent artifacts) — fails closed, never silent.
+  RUNNER_STATUS="compensation_gate_error"
 elif [[ "$K6_EXIT_CODE" -eq 0 ]]; then
   RUNNER_STATUS="clean"
 else
@@ -1431,6 +1523,8 @@ jq -n \
   --arg target_app "$TARGET_APP" \
   --arg graph_track "$GRAPH_TRACK" \
   --arg fault_mode "$FAULT_MODE" \
+  --arg durability_tier "$DURABILITY_TIER" \
+  --arg durability_tier_source "$DURABILITY_TIER_SOURCE" \
   --arg correctness_gate_status "$GATE_STATUS" \
   --arg hardware_profile "$PROFILE" \
   --arg tier "community" \
@@ -1478,6 +1572,8 @@ jq -n \
     target_app: $target_app,
     graph_track: $graph_track,
     fault_mode: $fault_mode,
+    durability_tier: $durability_tier,
+    durability_tier_source: $durability_tier_source,
     hardware_profile: $hardware_profile,
     tier: $tier,
     benchmark_family: $benchmark_family,
@@ -1563,12 +1659,15 @@ jq -n \
     correctness_gate_status: $correctness_gate_status,
     rejection_codes:  (
       (if $correctness_gate_status == "fail" then ["compensation_mismatch"] else [] end)
+      + (if $correctness_gate_status == "error" then ["compensation_gate_error"] else [] end)
       + (if $hardware_profile != "perf-box-amd64" then ["non_canonical_hardware_profile"] else [] end)
       + (if $k6_exit_code != 0 then ["threshold_failure"] else [] end)
     ),
     reason: (
       if $correctness_gate_status == "fail"
       then "correctness gate failed: observed compensations != expected declines (CONTRACT-v2 s4.1); performance numbers excluded from headline tables"
+      elif $correctness_gate_status == "error"
+      then "correctness gate errored: CONTRACT-v2 s4.1 not evaluable on a v2-capable run (fails closed); performance numbers excluded from headline tables"
       elif $hardware_profile != "perf-box-amd64"
       then "not perf-box-amd64 hardware profile"
       elif $k6_exit_code != 0
@@ -1734,6 +1833,8 @@ if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_
       target_app:               $rm.target_app,
       graph_track:              $rm.graph_track,
       fault_mode:               $rm.fault_mode,
+      durability_tier:          $rm.durability_tier,
+      durability_tier_source:   $rm.durability_tier_source,
       tier:                     $rm.tier,
       benchmark_family:         $rm.benchmark_family,
       run_timestamp_utc:        $rm.run_timestamp_utc,
@@ -1873,9 +1974,17 @@ echo "Note: results are exploratory unless profile is perf-box-amd64."
 
 # Fail closed on the CONTRACT-v2 s4.1 correctness gate: a compensation-count
 # mismatch is a correctness bug (v1 "zero compensations" class), not a
-# statistical anomaly. Artifacts above are still written for post-mortem.
+# statistical anomaly. gate status=error (gate not evaluable on a v2-capable
+# run: missing k6 metrics, helper crash, python3 unavailable, inconsistent
+# artifacts) also fails closed — an unevaluated gate must never pass silently.
+# Only the documented pre-v2 legacy-summary skip remains a WARN. Artifacts
+# above are still written for post-mortem.
 if [[ "$GATE_STATUS" == "fail" ]]; then
   echo "ERROR: CONTRACT-v2 s4.1 correctness gate FAILED: observed_compensations=${GATE_OBSERVED} expected_declines=${GATE_EXPECTED} (issued=${GATE_ISSUED}, seed=${GATE_ORDER_SEED})." >&2
   echo "ERROR: run marked runner_status=compensation_mismatch; performance numbers from this run are excluded from headline tables. Details: $CORRECTNESS_GATE_JSON" >&2
   exit 3
+elif [[ "$GATE_STATUS" == "error" ]]; then
+  echo "ERROR: CONTRACT-v2 s4.1 correctness gate ERROR (fails closed): ${GATE_REASON}" >&2
+  echo "ERROR: run marked runner_status=compensation_gate_error; performance numbers from this run are excluded from headline tables. Details: $CORRECTNESS_GATE_JSON" >&2
+  exit 4
 fi

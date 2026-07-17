@@ -1,94 +1,94 @@
 package eu.exeris.benchmarks.targets.restateapp.application;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Base64;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPublicKey;
+import java.util.Date;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
- * Stateless HMAC-SHA256 bearer token: payload "uid=&lt;id&gt;;exp=&lt;epochSeconds&gt;"
- * base64url-encoded, dot, base64url signature. The k6 harness only
- * round-trips the token verbatim; this keeps the facade free of a JWT
- * dependency while still carrying and verifying the user identity.
+ * RS256 (RSA-2048) signed JWT issue/verify — auth-crypto parity with the
+ * reference stacks (quarkus-benchmark-app AuthTokenService, spring-benchmark-app
+ * SecurityConfig, exeris-community-app BenchmarkTokenIssuer): keypair generated
+ * at boot, token issued once on register, signature + expiry verified on every
+ * authenticated request. Claims surface matches the references: sub = principal
+ * UUID, iss, aud, exp (now + 1h), iat, and a {@code kid} header.
  *
- * The signing key is process-local and random per start (benchmark sessions
- * never outlive the target process), overridable via EXERIS_AUTH_TOKEN_SECRET
- * for multi-process setups.
+ * The keypair is per-instance (one instance is created at boot; the references
+ * use a static initializer — same generate-at-boot cost). Not for production use.
  */
 public final class BearerTokenService {
 
-    private static final Duration TOKEN_TTL = Duration.ofHours(1);
-    private static final Base64.Encoder B64_ENCODER = Base64.getUrlEncoder().withoutPadding();
-    private static final Base64.Decoder B64_DECODER = Base64.getUrlDecoder();
+    static final String KID = "benchmark-key-1";
+    static final String ISSUER = "https://benchmark.exeris.local";
+    static final String AUD = "exeris-benchmark";
 
-    private final SecretKeySpec key;
+    private final RSASSASigner signer;
+    private final JWSVerifier verifier;
 
-    public BearerTokenService(String secret) {
-        byte[] keyBytes = (secret == null || secret.isBlank())
-                ? randomKey()
-                : secret.getBytes(StandardCharsets.UTF_8);
-        this.key = new SecretKeySpec(keyBytes, "HmacSHA256");
+    public BearerTokenService() {
+        try {
+            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+            gen.initialize(2048);
+            KeyPair keyPair = gen.generateKeyPair();
+            this.signer = new RSASSASigner(keyPair.getPrivate());
+            this.verifier = new RSASSAVerifier((RSAPublicKey) keyPair.getPublic());
+        } catch (Exception e) {
+            throw new IllegalStateException("RSA-2048 keypair generation failed", e);
+        }
     }
 
-    public String issue(long userId) {
-        long expiresAt = Instant.now().plus(TOKEN_TTL).getEpochSecond();
-        String payload = "uid=" + userId + ";exp=" + expiresAt;
-        String encodedPayload = B64_ENCODER.encodeToString(payload.getBytes(StandardCharsets.UTF_8));
-        return encodedPayload + "." + B64_ENCODER.encodeToString(sign(encodedPayload));
+    public String issue(UUID principalId) {
+        try {
+            JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(KID).build();
+            Date now = new Date();
+            Date exp = new Date(now.getTime() + 3_600_000L);
+            JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(principalId.toString())
+                .issuer(ISSUER)
+                .audience(AUD)
+                .expirationTime(exp)
+                .issueTime(now)
+                .build();
+            SignedJWT jwt = new SignedJWT(header, claims);
+            jwt.sign(signer);
+            return jwt.serialize();
+        } catch (Exception e) {
+            throw new IllegalStateException("JWT issue failed", e);
+        }
     }
 
-    /** Returns the userId when the token is well-formed, correctly signed, and unexpired. */
-    public Optional<Long> verify(String token) {
+    /**
+     * Returns the principal UUID when the token parses, the RS256 signature
+     * verifies, and the token is unexpired — same checks as the quarkus
+     * reference authenticate path.
+     */
+    public Optional<UUID> verify(String token) {
         if (token == null || token.isBlank()) {
             return Optional.empty();
         }
-        int dot = token.indexOf('.');
-        if (dot <= 0 || dot == token.length() - 1) {
-            return Optional.empty();
-        }
-        String encodedPayload = token.substring(0, dot);
         try {
-            byte[] providedSignature = B64_DECODER.decode(token.substring(dot + 1));
-            if (!MessageDigest.isEqual(providedSignature, sign(encodedPayload))) {
+            SignedJWT jwt = SignedJWT.parse(token);
+            if (!jwt.verify(verifier)) {
                 return Optional.empty();
             }
-            String payload = new String(B64_DECODER.decode(encodedPayload), StandardCharsets.UTF_8);
-            long userId = -1L;
-            long expiresAt = -1L;
-            for (String part : payload.split(";")) {
-                if (part.startsWith("uid=")) {
-                    userId = Long.parseLong(part.substring(4));
-                } else if (part.startsWith("exp=")) {
-                    expiresAt = Long.parseLong(part.substring(4));
-                }
-            }
-            if (userId < 0 || expiresAt < Instant.now().getEpochSecond()) {
+            JWTClaimsSet claims = jwt.getJWTClaimsSet();
+            Date expiresAt = claims.getExpirationTime();
+            if (expiresAt == null || new Date().after(expiresAt)) {
                 return Optional.empty();
             }
-            return Optional.of(userId);
-        } catch (IllegalArgumentException | NullPointerException e) {
-            return Optional.empty();
-        }
-    }
-
-    private byte[] sign(String encodedPayload) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(key);
-            return mac.doFinal(encodedPayload.getBytes(StandardCharsets.UTF_8));
+            return Optional.of(UUID.fromString(claims.getSubject()));
         } catch (Exception e) {
-            throw new IllegalStateException("HmacSHA256 unavailable", e);
+            return Optional.empty();
         }
-    }
-
-    private static byte[] randomKey() {
-        byte[] keyBytes = new byte[32];
-        new SecureRandom().nextBytes(keyBytes);
-        return keyBytes;
     }
 }

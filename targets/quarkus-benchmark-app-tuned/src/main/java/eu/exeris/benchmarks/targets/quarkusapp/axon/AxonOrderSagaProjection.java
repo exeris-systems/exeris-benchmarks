@@ -48,10 +48,15 @@ public class AxonOrderSagaProjection {
      * it is a mid-compensation state (payment refunded, reservation restore pending), and
      * surfacing it as terminal would let a poller observe COMPENSATED that can later
      * regress to FAILED_UNRECOVERED if compensate-reservation exhausts its retry budget.
+     * CONFIRMED is NOT mapped to COMPLETED for the same reason: it is a mid-forward state
+     * (confirm-order done, complete-order pending), and surfacing it as terminal would let
+     * a poller observe COMPLETED that can later regress to COMPENSATED/FAILED_UNRECOVERED
+     * if complete-order exhausts its retry budget; it maps to non-terminal COMPLETING.
      */
     private static String toContractStatus(String dbStatus) {
         return switch (dbStatus) {
-            case "CONFIRMED", "COMPLETED" -> "COMPLETED";
+            case "COMPLETED" -> "COMPLETED";
+            case "CONFIRMED" -> "COMPLETING";
             case "CANCELLED" -> "COMPENSATED";
             case "PAYMENT_REFUNDED" -> "COMPENSATING";
             case "FAILED" -> "FAILED_UNRECOVERED";

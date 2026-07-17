@@ -249,13 +249,20 @@ public final class HttpApiServer {
         sendJson(exchange, 200, new OrderStatusView(orderId, status.get().status(), status.get().sagaId()));
     }
 
-    /** Returns the authenticated userId, or null after writing the 401 response. */
+    /**
+     * Returns the authenticated userId, or null after writing the 401 response.
+     * RS256 signature + expiry check, then the principal→user_id DB lookup —
+     * the same two-step auth cost every reference stack pays per request.
+     */
     private Long authenticate(HttpExchange exchange) throws IOException {
         String header = exchange.getRequestHeaders().getFirst("Authorization");
         if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
-            Optional<Long> userId = tokenService.verify(header.substring(7).trim());
-            if (userId.isPresent()) {
-                return userId.get();
+            Optional<UUID> principalId = tokenService.verify(header.substring(7).trim());
+            if (principalId.isPresent()) {
+                Optional<Long> userId = authTokenService.findUserId(principalId.get());
+                if (userId.isPresent()) {
+                    return userId.get();
+                }
             }
         }
         sendJson(exchange, 401, new ErrorResponse("unauthorized"));

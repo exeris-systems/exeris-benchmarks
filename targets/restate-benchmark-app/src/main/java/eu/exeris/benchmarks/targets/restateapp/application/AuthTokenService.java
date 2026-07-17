@@ -9,8 +9,12 @@ import java.util.UUID;
 
 /**
  * Registration path — mirrors spring-benchmark-app AuthTokenService: one
- * transaction inserting users + user_principals, then a bearer token issue.
- * A unique violation (retried username) surfaces as empty → HTTP 409.
+ * transaction inserting users + user_principals, then an RS256 JWT issue on
+ * the principal UUID. A unique violation (retried username) surfaces as
+ * empty → HTTP 409. {@link #findUserId(UUID)} is the per-request
+ * principal→user_id resolution every reference stack pays after JWT
+ * signature verification (quarkus FIND_USER_ID_SQL, spring
+ * UserIdJwtAuthenticationConverter, community PrincipalRepository).
  */
 public final class AuthTokenService {
 
@@ -19,6 +23,9 @@ public final class AuthTokenService {
 
     private static final String INSERT_PRINCIPAL_SQL =
         "INSERT INTO user_principals (principal_uuid, user_id) VALUES (?::uuid, ?)";
+
+    private static final String FIND_USER_ID_SQL =
+        "SELECT user_id FROM user_principals WHERE principal_uuid = ?::uuid";
 
     private final DataSource dataSource;
     private final BearerTokenService tokenService;
@@ -53,8 +60,24 @@ public final class AuthTokenService {
                 principalStmt.executeUpdate();
             }
             conn.commit();
-            String token = tokenService.issue(userId);
+            String token = tokenService.issue(principalId);
             return Optional.of(new RegisteredUser(Long.toString(userId), username, email, token));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    /** Per-request principal→user_id lookup — same DB cost as the reference stacks' auth path. */
+    public Optional<Long> findUserId(UUID principalId) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(FIND_USER_ID_SQL)) {
+            stmt.setString(1, principalId.toString());
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(rs.getLong(1));
+            }
         } catch (Exception e) {
             return Optional.empty();
         }

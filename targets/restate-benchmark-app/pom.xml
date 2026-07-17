@@ -22,6 +22,9 @@
     <postgresql.version>42.7.4</postgresql.version>
     <hikaricp.version>6.2.1</hikaricp.version>
     <neo4j.driver.version>5.28.8</neo4j.driver.version>
+    <!-- Same JWT library and version as quarkus-benchmark-app AuthTokenService
+         (RS256 auth parity across targets). -->
+    <nimbus.jose.jwt.version>10.9</nimbus.jose.jwt.version>
     <slf4j.version>2.0.16</slf4j.version>
     <junit.version>5.11.4</junit.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -62,10 +65,27 @@
       <artifactId>HikariCP</artifactId>
       <version>${hikaricp.version}</version>
     </dependency>
+    <!-- Shaded driver variant ON PURPOSE (same version as the reference stacks'
+         neo4j-java-driver 5.28.8): its Bolt transport needs the Netty 4.2 line,
+         while the Restate SDK's vertx-core h2c endpoint needs the 4.1 line —
+         one flat uber-jar cannot ship both. neo4j-java-driver-all relocates the
+         driver's Netty under org.neo4j.driver.internal.shaded.io.netty, so the
+         Bolt path works and vertx keeps its own unshaded Netty 4.1. Do NOT
+         switch back to plain neo4j-java-driver or pin a single io.netty version
+         across the jar: 4.1-only silently kills Bolt, 4.2-only breaks the h2c
+         deployment discovery (restate-server sees a broken pipe). -->
     <dependency>
       <groupId>org.neo4j.driver</groupId>
-      <artifactId>neo4j-java-driver</artifactId>
+      <artifactId>neo4j-java-driver-all</artifactId>
       <version>${neo4j.driver.version}</version>
+    </dependency>
+    <!-- RS256 RSA-2048 JWT issue/verify — auth-cost parity with the reference
+         stacks (quarkus AuthTokenService, spring SecurityConfig, community
+         BenchmarkTokenIssuer). -->
+    <dependency>
+      <groupId>com.nimbusds</groupId>
+      <artifactId>nimbus-jose-jwt</artifactId>
+      <version>${nimbus.jose.jwt.version}</version>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>

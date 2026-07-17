@@ -97,8 +97,9 @@ restate deployments register http://localhost:9084
   defaults `3` / `50` / `2`.
 - `EXERIS_SAGA_RETRY_JITTER` accepted but warn-and-ignored: Restate backoff is
   deterministic exponential with no jitter knob, which is the §5 requirement.
-- `EXERIS_AUTH_TOKEN_SECRET` optional HMAC secret for the bearer tokens
-  (random per process start when unset).
+- Bearer tokens are RS256 RSA-2048 JWTs with a keypair generated at boot
+  (parity with the quarkus/spring reference stacks — same algorithm, claims
+  surface, and per-boot key lifetime; no secret env var is read).
 
 ## Retry policy (CONTRACT-v2 §5)
 

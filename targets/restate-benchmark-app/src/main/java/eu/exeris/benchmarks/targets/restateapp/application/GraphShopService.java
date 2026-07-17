@@ -1,6 +1,8 @@
 package eu.exeris.benchmarks.targets.restateapp.application;
 
 import org.neo4j.driver.Driver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
@@ -11,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Graph-backed operations for the e2e-shop-order-saga scenario. Query shapes
@@ -28,6 +31,8 @@ import java.util.UUID;
  *   See runtime/db/seed/v4_pgq_graph.sql for DDL.
  */
 public final class GraphShopService {
+
+    private static final Logger log = LoggerFactory.getLogger(GraphShopService.class);
 
     private static final String RECOMMEND_CYPHER =
             "MATCH (u:User {id: $uid})<-[:PURCHASED_BY]-(bought:Product)-[:SIMILAR_TO]->(rec:Product) " +
@@ -60,10 +65,25 @@ public final class GraphShopService {
 
     private final Driver driver;
     private final DataSource dataSource;
+    private final AtomicBoolean neo4jFailureLogged = new AtomicBoolean();
+    private final AtomicBoolean pgqFailureLogged = new AtomicBoolean();
 
     public GraphShopService(Driver driver, DataSource dataSource) {
         this.driver = driver;
         this.dataSource = dataSource;
+    }
+
+    /**
+     * The empty-result fallback on backend failure is kept for parity with the
+     * spring reference GraphShopService, but a dead graph backend must be
+     * visible in the target log: ERROR once per backend on the first failure,
+     * subsequent failures stay silent (rate-limited to avoid flooding under load).
+     */
+    private void logBackendFailure(String backend, AtomicBoolean alreadyLogged, Exception e) {
+        if (alreadyLogged.compareAndSet(false, true)) {
+            log.error("{} graph backend failure — falling back to empty result "
+                    + "(parity fallback; further {} failures are suppressed)", backend, backend, e);
+        }
     }
 
     public List<Long> recommendedProductIds(long userId, int limit) {
@@ -72,7 +92,8 @@ public final class GraphShopService {
                 return session.run(RECOMMEND_CYPHER,
                                 Map.<String, Object>of("uid", userId, "limit", limit))
                         .list(r -> r.get("productId").asLong());
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                logBackendFailure("neo4j", neo4jFailureLogged, e);
                 return List.of();
             }
         }
@@ -86,7 +107,8 @@ public final class GraphShopService {
                     result.add(rs.getLong("product_id"));
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            logBackendFailure("pgq", pgqFailureLogged, e);
         }
         return result;
     }
@@ -96,7 +118,8 @@ public final class GraphShopService {
             try (var session = driver.session()) {
                 return session.run(CART_READ_CYPHER, Map.<String, Object>of("uid", userId))
                         .list(r -> r.get("productId").asLong());
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                logBackendFailure("neo4j", neo4jFailureLogged, e);
                 return List.of();
             }
         }
@@ -106,7 +129,8 @@ public final class GraphShopService {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) { /* consume rows */ }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            logBackendFailure("pgq", pgqFailureLogged, e);
         }
         return List.of();
     }
@@ -116,7 +140,8 @@ public final class GraphShopService {
             try (var session = driver.session()) {
                 session.run(CART_UPSERT_CYPHER,
                         Map.<String, Object>of("uid", userId, "pid", productId, "qty", quantity));
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                logBackendFailure("neo4j", neo4jFailureLogged, e);
             }
             return;
         }
@@ -127,7 +152,8 @@ public final class GraphShopService {
             ps.setDouble(3, quantity);
             ps.setString(4, "{\"quantity\":" + quantity + "}");
             ps.executeUpdate();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            logBackendFailure("pgq", pgqFailureLogged, e);
         }
     }
 

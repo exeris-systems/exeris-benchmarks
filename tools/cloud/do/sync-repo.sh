@@ -15,7 +15,9 @@ if ! git -C "$ROOT" diff --quiet HEAD 2>/dev/null; then
 fi
 
 echo "syncing $SHA -> $HOST:~/exeris-benchmarks"
-git -C "$ROOT" archive --format=tar.gz HEAD \
+# Force LF in the archive: on Windows core.autocrlf=true would smudge shell
+# scripts to CRLF, which breaks bash on the droplet (set: pipefail: invalid).
+git -C "$ROOT" -c core.autocrlf=false -c core.eol=lf archive --format=tar.gz HEAD \
   | ssh -o StrictHostKeyChecking=accept-new "$HOST" '
       rm -rf ~/exeris-benchmarks &&
       mkdir -p ~/exeris-benchmarks &&

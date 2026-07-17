@@ -83,6 +83,9 @@ chmod 440 /etc/sudoers.d/bench-docker
 echo "== Maven auth for eu.exeris GitHub Packages snapshots =="
 if [[ -n "${GITHUB_ACTOR:-}" && -n "${GITHUB_TOKEN:-}" ]]; then
   mkdir -p /home/bench/.m2
+  # Servers AND repositories: the target poms do not declare the GPR repos
+  # (only micro/jmh does), so the settings profile must supply them or
+  # resolution silently consults Maven Central only.
   cat > /home/bench/.m2/settings.xml <<EOF
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
   <servers>
@@ -97,6 +100,28 @@ if [[ -n "${GITHUB_ACTOR:-}" && -n "${GITHUB_TOKEN:-}" ]]; then
       <password>${GITHUB_TOKEN}</password>
     </server>
   </servers>
+  <profiles>
+    <profile>
+      <id>github-exeris</id>
+      <repositories>
+        <repository>
+          <id>github-exeris-kernel</id>
+          <url>https://maven.pkg.github.com/exeris-systems/exeris-kernel</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+        <repository>
+          <id>github-exeris-spring-runtime</id>
+          <url>https://maven.pkg.github.com/exeris-systems/exeris-spring-runtime</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+      </repositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>github-exeris</activeProfile>
+  </activeProfiles>
 </settings>
 EOF
   chmod 600 /home/bench/.m2/settings.xml

@@ -30,7 +30,7 @@ public class AxonOrderSagaProjection {
                 ps.setLong(2, uid);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
-                        return Optional.of(new OrderStatusView(orderId, rs.getString(1), rs.getString(2)));
+                        return Optional.of(new OrderStatusView(orderId, toContractStatus(rs.getString(1)), rs.getString(2)));
                     }
                 }
             }
@@ -38,5 +38,20 @@ public class AxonOrderSagaProjection {
             throw new RuntimeException("orderStatus query failed for orderId=" + orderId, e);
         }
         return Optional.empty();
+    }
+
+    /**
+     * Maps raw {@code orders.status} values to the CONTRACT-v2 §3 outcome vocabulary
+     * (COMPLETED | COMPENSATED | FAILED_UNRECOVERED) at the read layer only — the domain
+     * writes stay untouched so they remain identical across stacks. Mirrors the fallback
+     * mapping of the Exeris Flow targets; in-progress statuses pass through unchanged.
+     */
+    private static String toContractStatus(String dbStatus) {
+        return switch (dbStatus) {
+            case "CONFIRMED", "COMPLETED" -> "COMPLETED";
+            case "PAYMENT_REFUNDED", "CANCELLED" -> "COMPENSATED";
+            case "FAILED" -> "FAILED_UNRECOVERED";
+            default -> dbStatus;
+        };
     }
 }

@@ -3,28 +3,39 @@ package eu.exeris.benchmarks.targets.springapp.application.axon;
 import eu.exeris.benchmarks.targets.springapp.application.axon.command.CompensatePaymentCommand;
 import eu.exeris.benchmarks.targets.springapp.application.axon.command.ProcessPaymentCommand;
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentCompensatedEvent;
-import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentFailedEvent;
+import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentDeclinedEvent;
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentProcessedEvent;
 
 import org.axonframework.commandhandling.CommandHandler;
 import org.axonframework.eventhandling.EventBus;
 import org.axonframework.eventhandling.GenericEventMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.util.Locale;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Component
 public class PaymentService {
 
-    private enum FailureMode { RANDOM_SEEDED, ALWAYS_FAIL, NEVER_FAIL }
+    /**
+     * CONTRACT-v2 §4.1 fault mode: TERMINAL (default) applies the deterministic
+     * FNV-1a decline rule; OFF disables business-fault injection entirely.
+     */
+    private enum FaultMode { TERMINAL, OFF }
 
-    private static final String PAYMENT_FAIL_RATE_ENV = "EXERIS_SAGA_PAYMENT_FAIL_RATE";
-    private static final String FAILURE_MODE_ENV = "EXERIS_SAGA_FAILURE_MODE";
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
+    private static final String FAULT_MODE_ENV = "EXERIS_SAGA_FAULT_MODE";
+    // v1 probabilistic knobs — superseded by the CONTRACT-v2 §4.1 deterministic
+    // per-orderId decline rule. Ignored; a WARN is logged when either is set.
+    private static final String LEGACY_FAIL_RATE_ENV = "EXERIS_SAGA_PAYMENT_FAIL_RATE";
+    private static final String LEGACY_FAILURE_MODE_ENV = "EXERIS_SAGA_FAILURE_MODE";
 
     private static final String INSERT_OUTBOX_SQL =
             "INSERT INTO exeris_outbox (id, aggregate_id, aggregate_type, event_type, payload, occurred_at) " +
@@ -35,14 +46,14 @@ public class PaymentService {
 
     private final DataSource dataSource;
     private final EventBus eventBus;
-    private final double paymentFailureRate;
-    private final FailureMode failureMode;
+    private final FaultMode faultMode;
 
     public PaymentService(DataSource dataSource, EventBus eventBus) {
         this.dataSource = dataSource;
         this.eventBus = eventBus;
-        this.paymentFailureRate = parseDoubleOrDefault(System.getenv(PAYMENT_FAIL_RATE_ENV), 0.03d);
-        this.failureMode = parseFailureMode(System.getenv(FAILURE_MODE_ENV));
+        this.faultMode = parseFaultMode(System.getenv(FAULT_MODE_ENV));
+        warnIfLegacyKnobSet(LEGACY_FAIL_RATE_ENV);
+        warnIfLegacyKnobSet(LEGACY_FAILURE_MODE_ENV);
     }
 
     @CommandHandler
@@ -65,9 +76,13 @@ public class PaymentService {
         } catch (Exception e) {
             throw new RuntimeException("processPayment failed for saga " + cmd.sagaId(), e);
         }
-        if (shouldFailPayment()) {
+        // CONTRACT-v2 §4.1: deterministic per-orderId business decline. A decline is
+        // BUSINESS-TERMINAL — published as an explicitly modeled event (never thrown),
+        // so the command gateway's transient-fault retry scheduler (§5) can never see
+        // it: zero retries on decline, routed straight to saga compensation.
+        if (faultMode == FaultMode.TERMINAL && PaymentDeclineRule.isDeclined(cmd.orderId())) {
             eventBus.publish(GenericEventMessage.asEventMessage(
-                    new PaymentFailedEvent(cmd.sagaId(), cmd.orderId(), cmd.userId(), cmd.dbOrderId())));
+                    new PaymentDeclinedEvent(cmd.sagaId(), cmd.orderId(), cmd.userId(), cmd.dbOrderId())));
         } else {
             eventBus.publish(GenericEventMessage.asEventMessage(
                     new PaymentProcessedEvent(cmd.sagaId(), cmd.orderId(), cmd.userId(), cmd.dbOrderId())));
@@ -98,21 +113,21 @@ public class PaymentService {
                 new PaymentCompensatedEvent(cmd.sagaId(), cmd.orderId(), cmd.userId(), cmd.dbOrderId())));
     }
 
-    private boolean shouldFailPayment() {
-        return switch (failureMode) {
-            case ALWAYS_FAIL -> true;
-            case NEVER_FAIL -> false;
-            case RANDOM_SEEDED -> ThreadLocalRandom.current().nextDouble() < paymentFailureRate;
-        };
+    private static FaultMode parseFaultMode(String value) {
+        if (value == null || value.isBlank()) return FaultMode.TERMINAL;
+        try {
+            return FaultMode.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            log.warn("{}='{}' not recognized (expected terminal|off) — defaulting to terminal", FAULT_MODE_ENV, value);
+            return FaultMode.TERMINAL;
+        }
     }
 
-    private static double parseDoubleOrDefault(String value, double fallback) {
-        if (value == null || value.isBlank()) return fallback;
-        try { return Double.parseDouble(value.trim()); } catch (NumberFormatException e) { return fallback; }
-    }
-
-    private static FailureMode parseFailureMode(String value) {
-        if (value == null || value.isBlank()) return FailureMode.RANDOM_SEEDED;
-        try { return FailureMode.valueOf(value.trim().toUpperCase()); } catch (IllegalArgumentException e) { return FailureMode.RANDOM_SEEDED; }
+    private static void warnIfLegacyKnobSet(String envName) {
+        if (System.getenv(envName) != null) {
+            log.warn("{} is set but IGNORED: CONTRACT-v2 §4.1 replaced probabilistic payment failure with the "
+                    + "deterministic FNV-1a per-orderId decline rule (control via {}=terminal|off)",
+                    envName, FAULT_MODE_ENV);
+        }
     }
 }

@@ -14,6 +14,7 @@ bench_print_run_summary() {
   local jfr_enabled="false"  jfr_file=""
   local target_app="n/a"  graph_track="n/a"  hardware_profile="n/a"
   local k6_exit_code="n/a"
+  local fault_mode="n/a"  correctness_gate="n/a"
 
   if [[ -f "$run_metadata_json" ]] && command -v jq >/dev/null 2>&1; then
     scenario_id="$(            jq -r '.scenario_id             // "n/a"' "$run_metadata_json" 2>/dev/null || echo "n/a")"
@@ -34,13 +35,18 @@ bench_print_run_summary() {
     graph_track="$(            jq -r '.graph_track             // "n/a"' "$run_metadata_json" 2>/dev/null || echo "n/a")"
     hardware_profile="$(       jq -r '.hardware_profile // "n/a"'        "$run_metadata_json" 2>/dev/null || echo "n/a")"
     k6_exit_code="$(           jq -r '.k6_exit_code    // "n/a"'        "$run_metadata_json" 2>/dev/null || echo "n/a")"
+    fault_mode="$(             jq -r '.fault_mode              // "n/a"' "$run_metadata_json" 2>/dev/null || echo "n/a")"
+    correctness_gate="$(       jq -r '.correctness_gate_status // "n/a"' "$run_metadata_json" 2>/dev/null || echo "n/a")"
   fi
 
   local p99="n/a" p95="n/a" error_pct="n/a"
   local saga_rate="" saga_404="" saga_comp="" orders_s=""
+  local done_p50="" done_p99="" comp_p50="" comp_p99=""
+  local done_total="" comp_total=""
 
   if [[ -f "$k6_summary_json" ]] && command -v jq >/dev/null 2>&1; then
     local raw_p99 raw_p95 raw_rate raw_saga raw_404 raw_comp raw_orders
+    local raw_done_p50 raw_done_p99 raw_comp_p50 raw_comp_p99
     raw_p99="$(    jq -r '.metrics.http_req_duration["p(99)"]          // empty' "$k6_summary_json" 2>/dev/null || true)"
     raw_p95="$(    jq -r '.metrics.http_req_duration["p(95)"]          // empty' "$k6_summary_json" 2>/dev/null || true)"
     raw_rate="$(   jq -r '.metrics.http_req_failed.value               // empty' "$k6_summary_json" 2>/dev/null || true)"
@@ -48,6 +54,13 @@ bench_print_run_summary() {
     raw_404="$(    jq -r '.metrics.saga_poll_404_exhausted.count        // empty' "$k6_summary_json" 2>/dev/null || true)"
     raw_comp="$(   jq -r '.metrics.saga_compensated.value              // empty' "$k6_summary_json" 2>/dev/null || true)"
     raw_orders="$( jq -r '.metrics.orders_initiated.rate               // empty' "$k6_summary_json" 2>/dev/null || true)"
+    # Outcome-split saga latency (CONTRACT-v2 s8): COMPLETED vs COMPENSATED populations.
+    raw_done_p50="$(jq -r '.metrics.saga_completed_duration["p(50)"]   // .metrics.saga_completed_duration.med   // empty' "$k6_summary_json" 2>/dev/null || true)"
+    raw_done_p99="$(jq -r '.metrics.saga_completed_duration["p(99)"]   // empty' "$k6_summary_json" 2>/dev/null || true)"
+    raw_comp_p50="$(jq -r '.metrics.saga_compensated_duration["p(50)"] // .metrics.saga_compensated_duration.med // empty' "$k6_summary_json" 2>/dev/null || true)"
+    raw_comp_p99="$(jq -r '.metrics.saga_compensated_duration["p(99)"] // empty' "$k6_summary_json" 2>/dev/null || true)"
+    done_total="$(  jq -r '.metrics.saga_completed_total.count          // empty' "$k6_summary_json" 2>/dev/null || true)"
+    comp_total="$(  jq -r '.metrics.saga_compensated_total.count        // empty' "$k6_summary_json" 2>/dev/null || true)"
 
     [[ -n "$raw_p99"    ]] && p99="$(      awk -v v="$raw_p99"    'BEGIN { printf "%.2f", v }')"
     [[ -n "$raw_p95"    ]] && p95="$(      awk -v v="$raw_p95"    'BEGIN { printf "%.2f", v }')"
@@ -56,18 +69,28 @@ bench_print_run_summary() {
     [[ -n "$raw_404"    ]] && saga_404="$raw_404"
     [[ -n "$raw_comp"   ]] && saga_comp="$(awk -v v="$raw_comp"   'BEGIN { printf "%.2f", v * 100 }')"
     [[ -n "$raw_orders" ]] && orders_s="$( awk -v v="$raw_orders" 'BEGIN { printf "%.2f", v }')"
+    [[ -n "$raw_done_p50" ]] && done_p50="$(awk -v v="$raw_done_p50" 'BEGIN { printf "%.2f", v }')"
+    [[ -n "$raw_done_p99" ]] && done_p99="$(awk -v v="$raw_done_p99" 'BEGIN { printf "%.2f", v }')"
+    [[ -n "$raw_comp_p50" ]] && comp_p50="$(awk -v v="$raw_comp_p50" 'BEGIN { printf "%.2f", v }')"
+    [[ -n "$raw_comp_p99" ]] && comp_p99="$(awk -v v="$raw_comp_p99" 'BEGIN { printf "%.2f", v }')"
   fi
 
   local peak_rss_mb="n/a" cpu_s="n/a" cpu_util="n/a"
+  local host_cpus="" orders_s_core=""
 
   if [[ -f "$resource_metrics_json" ]] && command -v jq >/dev/null 2>&1; then
     local raw_rss raw_cpu raw_util
     raw_rss="$(  jq -r '.peak_rss_kb                    // empty' "$resource_metrics_json" 2>/dev/null || true)"
     raw_cpu="$(  jq -r '.cpu_time_seconds               // empty' "$resource_metrics_json" 2>/dev/null || true)"
     raw_util="$( jq -r '.cpu_util_percent_of_one_core   // empty' "$resource_metrics_json" 2>/dev/null || true)"
+    host_cpus="$(jq -r '.host_logical_cpus              // empty' "$resource_metrics_json" 2>/dev/null || true)"
     [[ -n "$raw_rss"  ]] && peak_rss_mb="$(awk -v v="$raw_rss"  'BEGIN { printf "%.1f", v / 1024 }')"
     [[ -n "$raw_cpu"  ]] && cpu_s="$(       awk -v v="$raw_cpu"  'BEGIN { printf "%.2f", v }')"
     [[ -n "$raw_util" ]] && cpu_util="$(    awk -v v="$raw_util" 'BEGIN { printf "%.2f", v }')"
+  fi
+
+  if [[ -n "$orders_s" && -n "$host_cpus" ]]; then
+    orders_s_core="$(awk -v o="$orders_s" -v c="$host_cpus" 'BEGIN { if (c > 0) printf "%.3f", o / c }')"
   fi
 
   local jfr_status
@@ -105,6 +128,8 @@ bench_print_run_summary() {
     "Protocol" "$protocol_mode" "$protocol_mode_declared" \
     "$protocol_mode_observed" "$protocol_mode_observed_k6"
   printf '  %-14s : %s\n' "Transport" "$transport_mode"
+  printf '  %-14s : %s   (CONTRACT-v2 s4 fault class)\n' "Fault mode" "$fault_mode"
+  printf '  %-14s : %s   (s4.1 exact compensation oracle)\n' "Correct. gate" "$correctness_gate"
   printf '%s\n' "$thin"
   printf '  %-14s : %s ms\n'  "k6 p99"     "$p99"
   printf '  %-14s : %s ms\n'  "k6 p95"     "$p95"
@@ -115,8 +140,16 @@ bench_print_run_summary() {
     printf '  %-14s : %s%%    (metric: saga_compensated)\n'       "Saga comp."    "$saga_comp"
   [[ -n "$saga_404" ]] && \
     printf '  %-14s : %s     (metric: saga_poll_404_exhausted)\n' "404 exhausted" "$saga_404"
+  [[ -n "$done_p50" || -n "$done_p99" ]] && \
+    printf '  %-14s : p50 %s ms  p99 %s ms  (n=%s, population: COMPLETED only)\n' \
+      "E2E completed" "${done_p50:-n/a}" "${done_p99:-n/a}" "${done_total:-n/a}"
+  [[ -n "$comp_p50" || -n "$comp_p99" ]] && \
+    printf '  %-14s : p50 %s ms  p99 %s ms  (n=%s, population: COMPENSATED only)\n' \
+      "E2E compens." "${comp_p50:-n/a}" "${comp_p99:-n/a}" "${comp_total:-n/a}"
   [[ -n "$orders_s" ]] && \
     printf '  %-14s : %s     (metric: orders_initiated)\n'        "Orders/s"      "$orders_s"
+  [[ -n "$orders_s_core" ]] && \
+    printf '  %-14s : %s     (orders_initiated / %s host logical cpus)\n' "Orders/s/core" "$orders_s_core" "$host_cpus"
   printf '  %-14s : %s\n' "k6 exit code" "$k6_exit_code"
   printf '%s\n' "$thin"
   printf '  %-14s : %s MB\n' "Peak RSS"  "$peak_rss_mb"

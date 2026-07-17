@@ -68,6 +68,11 @@ public class AxonBusConfig {
     @Produces
     @Singleton
     public CommandGateway commandGateway(CommandBus commandBus) {
+        // CONTRACT-v2 §5: deliberately NO RetryScheduler. The gateway dispatches the whole
+        // saga, so gateway-level retry would re-run completed forward steps (duplicate
+        // effects, oracle O1) and could re-attempt a §4.1 business-terminal decline.
+        // Transient-fault retry is configured explicitly per step in OrderSagaRetryPolicy
+        // (3 attempts total / 50 ms initial backoff / factor 2 / no jitter).
         return DefaultCommandGateway.builder().commandBus(commandBus).build();
     }
 }

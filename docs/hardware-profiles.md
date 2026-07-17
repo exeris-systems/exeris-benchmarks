@@ -209,6 +209,27 @@ first): target `0-1`, driver `2-5`, OS + containers `6-7`.
 
 ---
 
+## cloud-vm-do-shared
+
+DigitalOcean Basic (shared vCPU) droplet — the fallback class when CPU-Optimized
+sizes are not unlocked on the account. Same tooling and topology options as
+`cloud-vm-do-cpu-optimized`, but vCPUs are **shared with neighbors**: steal time
+is possible and unmeasurable in advance. **Exploratory-only**: soak/drift runs and
+relative trends within a single run window. Never comparison-eligible, never a
+baseline source.
+
+| Field | Value |
+|---|---|
+| `profile_id` | `cloud-vm-do-shared` |
+| CPU | Shared cloud vCPU (e.g. `s-4vcpu-8gb-intel`); model + steal-time recorded per run |
+| Cores | Recorded exactly |
+| RAM | Recorded exactly |
+| Network | loopback or VPC private subnet (recorded; axes as in `cloud-vm-do-cpu-optimized`) |
+| OS | Ubuntu 24.04 LTS; kernel recorded exactly |
+| Notes | `vmstat` steal sample captured by `capture-env.sh`; claims limited to descriptive/trend statements |
+
+---
+
 ## docker-container
 
 Containerized target run. Used for compat/ and scenario/ benchmarks where

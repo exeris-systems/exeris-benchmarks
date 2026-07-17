@@ -84,12 +84,14 @@ public class ShopOrderFlowInputRegistry {
     }
 
     /**
-     * Per-API-order projection entry. The API exposes a UUID-string {@code orderId}
-     * but the DB row uses a {@code bigint} id; the pre-migration Axon projection
-     * kept the API-level status indexed by the UUID. We replicate the same
-     * surface here, driven by step-lambda updates rather than EventBus handlers,
-     * so {@code GET /api/v1/orders/{orderId}/status} can resolve the API-level
-     * status without an extra DB round-trip per status read.
+     * Per-API-order projection entry. The API exposes a string {@code orderId}
+     * (the CONTRACT-v2 client-generated deterministic id, or a server UUID for
+     * pre-v2 clients) but the DB row uses a {@code bigint} id; the pre-migration
+     * Axon projection kept the API-level status indexed the same way. We
+     * replicate the same surface here, driven by step-lambda updates rather
+     * than EventBus handlers, so {@code GET /api/v1/orders/{orderId}/status}
+     * can resolve the API-level status without an extra DB round-trip per
+     * status read.
      */
     public record StatusEntry(String userId, String status, String sagaId) {
         public StatusEntry {

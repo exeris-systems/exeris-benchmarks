@@ -192,8 +192,13 @@ EXERIS_DB_PASSWORD=benchmark \
 EXERIS_PORT=8080 \
 EXERIS_DB_POOL_MIN_SIZE=4 \
 EXERIS_DB_POOL_MAX_SIZE=16 \
-java -jar target/spring-benchmark-app-1.0.0-SNAPSHOT.jar
+java --enable-preview -jar target/spring-benchmark-app-1.0.0-SNAPSHOT.jar
 ```
+
+`--enable-preview` is required: the `eu.exeris` 0.5.0-SNAPSHOT artifacts (and
+therefore this target's own class files) are preview-flagged Java SE 26
+class files, matching `exeris-community-app` and the launch scripts
+(`scripts/run-entity-read-by-id.sh`, `tools/cloud/do/RUNBOOK.md`).
 
 Targets are launched externally; the harness only synchronizes readiness via
 `targets/launcher-sync-wrapper.sh`. Do not start this target from inside the
@@ -236,12 +241,36 @@ harness scripts.
   `EXERIS_GRAPH_NEO4J_PASSWORD` / `EXERIS_GRAPH_NEO4J_DATABASE` /
   `EXERIS_GRAPH_NEO4J_POOL_MAX_SIZE` — Neo4j-backend tunables.
 
-### Saga simulation (preserved from PaymentService)
+### Saga fault injection (CONTRACT-v2 §4.1)
 
-- `EXERIS_SAGA_FAILURE_MODE` — `RANDOM_SEEDED` (default), `ALWAYS_FAIL`, or
-  `NEVER_FAIL`. Drives the compensation path of the flow.
-- `EXERIS_SAGA_PAYMENT_FAIL_RATE` — double in `[0, 1]`, default `0.03`. Only
-  consulted when `FAILURE_MODE=RANDOM_SEEDED`.
+- `EXERIS_SAGA_FAULT_MODE` — `terminal` (default) or `off`. Under `terminal`,
+  a payment is *declined* deterministically per orderId —
+  `Long.remainderUnsigned(fnv1a64(orderId), 1000) < 30` over the UTF-8 bytes
+  of the client-generated orderId string (FNV-1a 64-bit, offset basis
+  `0xcbf29ce484222325`, prime `0x100000001b3`) — exactly 3.0% of the
+  deterministic orderId population, identical in every stack and every run.
+  A decline is business-terminal: routed to LIFO compensation, never retried
+  (§5). `off` disables fault injection entirely.
+- `EXERIS_SAGA_FAILURE_MODE` / `EXERIS_SAGA_PAYMENT_FAIL_RATE` — **ignored**
+  (CONTRACT-v1 probabilistic knobs, superseded by the deterministic rule).
+  Setting either logs a WARN at startup so stale runner configs are caught.
+
+#### Retry configuration (CONTRACT-v2 §5 / §9c disclosure)
+
+- **Terminal decline: zero retries.** The `charge-payment` step returns
+  `FlowOutcome.FAIL`, which the kernel routes straight to `COMPENSATING` —
+  the retry budget is never consulted for a business-terminal outcome.
+- **Transient faults: `FlowDefinitionBuilder.maxRetries(2)`** is set
+  explicitly in `ShopOrderFlowDefinition` (1 initial + 2 retries = the §5
+  3-attempt budget; defaults are not trusted). Two SPI gaps are disclosed in
+  the flow definition's inline TODO: (a) the pinned backoff shape
+  (exponential, initial 50 ms, factor 2, no jitter) is not expressible in
+  `exeris-kernel-spi` 0.5.0-SNAPSHOT (no backoff hook on the builder), and
+  (b) the kernel core flow runtime currently routes thrown step exceptions
+  straight to compensation without consulting `maxRetries`, so budget
+  enforcement must be re-verified when §4.2 transient injection lands.
+  Transient-fault injection itself is out of scope in this phase; `fault=transient`
+  runs cannot be claimed against this target until both gaps are closed upstream.
 
 ### Status label (replaces the dropped axon mode)
 

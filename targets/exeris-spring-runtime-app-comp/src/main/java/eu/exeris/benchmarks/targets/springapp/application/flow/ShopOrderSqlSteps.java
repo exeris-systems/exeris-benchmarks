@@ -119,16 +119,20 @@ public class ShopOrderSqlSteps {
 
     /**
      * Flow step 1 forward: charge payment. Returns {@code true} on success
-     * (status set to {@code PAYMENT_PROCESSING}) or {@code false} on simulated
-     * failure (status stays {@code PAYMENT_PROCESSING} but the lambda will return
-     * {@code FlowOutcome.FAIL} to trigger reverse compensation).
+     * (status set to {@code PAYMENT_PROCESSING}) or {@code false} on a
+     * CONTRACT-v2 section 4.1 deterministic decline (status stays
+     * {@code PAYMENT_PROCESSING} but the lambda will return
+     * {@code FlowOutcome.FAIL} to trigger reverse compensation). The decline is
+     * selected per-{@code orderId} — the client-visible orderId string, hashed
+     * by {@link PaymentFailureSimulator#shouldDecline} — never per-attempt, and
+     * is business-terminal: zero retries (section 5).
      *
      * <p>The on-disk vocabulary ({@code PAYMENT_PROCESSING} on both success and
      * failure) matches the pre-migration projection — the kernel-side
      * compensation tracks the in-memory flow state independently of the
      * persisted {@code orders.status} column.
      */
-    public boolean chargePayment(long dbOrderId, String sagaId) {
+    public boolean chargePayment(long dbOrderId, String orderId, String sagaId) {
         try (Connection conn = dataSource.getConnection()) {
             conn.setAutoCommit(false);
             String payload = "{\"order_id\":" + dbOrderId + ",\"event\":\"PAYMENT_REQUESTED\"}";
@@ -149,7 +153,7 @@ public class ShopOrderSqlSteps {
         } catch (Exception e) {
             throw new RuntimeException("chargePayment failed for saga " + sagaId, e);
         }
-        return !paymentFailureSimulator.shouldFailOnce();
+        return !paymentFailureSimulator.shouldDecline(orderId);
     }
 
     /**

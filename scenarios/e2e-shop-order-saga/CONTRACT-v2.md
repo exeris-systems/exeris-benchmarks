@@ -85,6 +85,18 @@ separated fault classes:
   Normative rule: `decline(orderId) := (stableHash64(orderId) mod 1000) < 30`
   → exactly 3.0% of the deterministic orderId population, identical subset
   in every stack and every run.
+
+> **Implementation note (normative — v2.0 pinned algorithm).**
+> `stableHash64` is pinned to **FNV-1a 64-bit**: offset basis
+> `0xcbf29ce484222325`, prime `0x100000001b3`, applied to the **UTF-8
+> bytes** of the `orderId` string
+> (`h = offset_basis; for each byte b: h = (h XOR b) * prime`, all
+> arithmetic in unsigned 64-bit with wrap-around multiplication), and
+> `mod 1000` evaluated on the **unsigned** 64-bit result. Every stack and
+> every harness/verifier component (k6 generator, gate tooling) MUST use
+> this exact function; a signed interpretation of the hash or of the
+> modulo is non-conformant.
+
 - **Required behavior:** the stack MUST route this outcome to backward
   recovery (compensation), never to retry.
 - **Per-stack mapping:**
@@ -211,7 +223,8 @@ stack's favor.
 ## 11. Change log
 
 - **2.0** — deterministic per-orderId terminal fault (§4.1) replacing
-  per-attempt probabilistic injection; transient faults separated (§4.2);
+  per-attempt probabilistic injection; `stableHash64` pinned to FNV-1a
+  64-bit (§4.1 implementation note); transient faults separated (§4.2);
   pinned retry policy (§5); exact compensation oracle (§7 O2); latency
   split by outcome population (§8); deployment-unit definition and
   setup-time metric (§1, §8); G3 cancel/kill disclosure (§6); durability

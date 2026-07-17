@@ -47,15 +47,20 @@ Structural requirements (normative in v2):
   reservation), not journal rollbacks.
 - Domain persistence performed by steps MUST be identical across stacks
   (same writes, same datastore, same schema). A stack may not skip domain
-  writes that another stack performs. **Resolved in v2.0:** Neo4j is the
-  shared domain datastore for all stacks; every stack (including Restate,
-  inside `ctx.run`, and Exeris) performs the same domain writes against the
-  same Neo4j instance class and schema.
+  writes that another stack performs. **Resolved in v2.0 (amended
+  2026-07-17, maintainer-approved):** Postgres is the shared DOMAIN
+  datastore for all stacks; every stack (including Restate, inside
+  `ctx.run`, and Exeris) performs the same domain writes (orders/
+  order_items, inventory reserve/restore, outbox, compensation updates)
+  against the same Postgres instance class and schema. Neo4j is the shared
+  READ-SIDE recommendation graph: it serves the recommendation step
+  identically on every stack, is seeded identically from the Postgres seed
+  baseline before each run, and is never written to by any saga step.
 - **Graph driver pinned:** all cross-stack comparison runs use the Neo4j
-  driver. The Exeris graph capability's driver swap (pgq ↔ neo4j) is
-  explicitly OUT OF SCOPE for comparison tables; it may be reported as a
-  separate Exeris-only experiment under this contract's workload, clearly
-  labeled as such.
+  driver for the read-side recommendation path. The Exeris graph
+  capability's driver swap (pgq ↔ neo4j) is explicitly OUT OF SCOPE for
+  comparison tables; it may be reported as a separate Exeris-only
+  experiment under this contract's workload, clearly labeled as such.
 
 ## 3. Order identity and request model
 

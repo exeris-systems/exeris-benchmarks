@@ -99,10 +99,11 @@ Until the corresponding rows move to `implemented-now`:
    kernel SPI and budget enforcement is unverified. Retry *behavior* under
    transient faults is unverified on every stack.
 
-## PROPOSED AMENDMENT (NOT APPLIED) — CONTRACT-v2.md §2 domain-datastore wording
+## AMENDMENT APPLIED — CONTRACT-v2.md §2 domain-datastore wording
 
-**Status: proposal only, awaiting maintainer sign-off. `CONTRACT-v2.md` is
-unchanged; do not treat the wording below as normative.**
+**Status: maintainer-approved and APPLIED to `CONTRACT-v2.md` §2 on
+2026-07-17. The record below is kept for provenance; the contract text is
+now the normative source.**
 
 Contradiction found in review: contract §2 states *"Neo4j is the shared domain
 datastore for all stacks; every stack ... performs the same domain writes

@@ -773,7 +773,7 @@ run_pair_block() {
       echo "Skipping step [$STEP_COUNTER/$TOTAL_STEPS] [RUN $(printf '%02d' "$run_num")] pair ${pair_label} (ab) due to target health recovery failure"
       failed_steps=$((failed_steps + 1))
     else
-      run_benchmark "$pair_name" "$target_a" "$target_b" "ab" "$STEP_COUNTER" "$run_num" "$scenario_diag_dir" || ((failed_steps++))
+      run_benchmark "$pair_name" "$target_a" "$target_b" "ab" "$STEP_COUNTER" "$run_num" "$scenario_diag_dir" || failed_steps=$((failed_steps + 1))
     fi
 
     STEP_COUNTER=$((STEP_COUNTER + 1))
@@ -781,7 +781,7 @@ run_pair_block() {
       echo "Skipping step [$STEP_COUNTER/$TOTAL_STEPS] [RUN $(printf '%02d' "$run_num")] pair ${pair_label} (ba) due to target health recovery failure"
       failed_steps=$((failed_steps + 1))
     else
-      run_benchmark "$pair_name" "$target_a" "$target_b" "ba" "$STEP_COUNTER" "$run_num" "$scenario_diag_dir" || ((failed_steps++))
+      run_benchmark "$pair_name" "$target_a" "$target_b" "ba" "$STEP_COUNTER" "$run_num" "$scenario_diag_dir" || failed_steps=$((failed_steps + 1))
     fi
 
     if [[ $run_num -lt "${BENCH_RUNS_PER_PAIR:-20}" ]]; then

@@ -36,7 +36,7 @@ echo "== apt packages =="
 "${APT[@]}" update -q
 "${APT[@]}" install -yq --no-install-recommends \
   build-essential libssl-dev zlib1g-dev unzip git jq gawk curl ca-certificates gnupg \
-  nghttp2-client wrk postgresql-client sysstat util-linux uuid-runtime openssl maven
+  nghttp2-client wrk postgresql-client sysstat util-linux uuid-runtime openssl maven python3 python3-jsonschema
 # perf: Debian ships it as `linux-perf`; Ubuntu as `linux-tools-<kernel>`/generic.
 if [[ "$DISTRO_ID" == "debian" ]]; then
   "${APT[@]}" install -yq linux-perf 2>/dev/null || true

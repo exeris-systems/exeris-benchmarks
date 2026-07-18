@@ -94,6 +94,15 @@ set -uo pipefail
 [[ -r /etc/perf-box.conf ]] && . /etc/perf-box.conf
 BOOST="${PERF_BOX_BOOST:-off}"; THP="${PERF_BOX_THP:-madvise}"; CSTATE="${PERF_BOX_CSTATE:-default}"
 
+# amd-pstate ACTIVE mode (amd-pstate-epp, default on modern Ryzen) exposes no
+# boost toggle and no base_frequency. Switch to PASSIVE first: that exposes
+# /sys/.../cpufreq/boost (so boost-off caps clocks to base) and hands control to
+# the traditional governors (which then reset to schedutil — the governor block
+# below puts it back to performance). Must run at every boot (this script does).
+if [[ "$(cat /sys/devices/system/cpu/amd_pstate/status 2>/dev/null)" == "active" ]]; then
+  echo passive > /sys/devices/system/cpu/amd_pstate/status 2>/dev/null || true
+fi
+
 # governor -> performance (all CPUs)
 if command -v cpupower >/dev/null 2>&1; then
   cpupower frequency-set -g performance >/dev/null 2>&1 || true

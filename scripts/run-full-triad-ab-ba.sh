@@ -736,7 +736,7 @@ run_pair_block() {
   echo "Targets: A=${target_a}, B=${target_b}"
   echo "============================================================"
 
-  for run_num in {1..20}; do
+  for run_num in $(seq 1 "${BENCH_RUNS_PER_PAIR:-20}"); do
     local run_base_dir="${CAMPAIGN_OUTPUT_DIR}/${pair_name}/run$(printf '%02d' "$run_num")"
     local scenario_diag_dir="${run_base_dir}/logs/scenario-diagnostics"
     local startup_sequence_dir="${run_base_dir}/startup-sequence"
@@ -745,7 +745,7 @@ run_pair_block() {
 
     echo ""
     echo "------------------------------------------------------------"
-    echo "PAIR ${pair_label} | RUN $(printf '%02d' "$run_num")/20"
+    echo "PAIR ${pair_label} | RUN $(printf '%02d' "$run_num")/${BENCH_RUNS_PER_PAIR:-20}"
     echo "Output base: ${run_base_dir}"
     echo "------------------------------------------------------------"
 
@@ -784,7 +784,7 @@ run_pair_block() {
       run_benchmark "$pair_name" "$target_a" "$target_b" "ba" "$STEP_COUNTER" "$run_num" "$scenario_diag_dir" || ((failed_steps++))
     fi
 
-    if [[ $run_num -lt 20 ]]; then
+    if [[ $run_num -lt "${BENCH_RUNS_PER_PAIR:-20}" ]]; then
       echo "Cooldown 10s before next run in pair block ${pair_label}..."
       sleep 10
     fi

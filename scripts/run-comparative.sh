@@ -2570,7 +2570,10 @@ banner "STAGE 5: Sequential Measurement"
 # NOTE: This stage is intentionally sequential so operators can switch between
 # target-a and target-b processes between measurements when running externally.
 
-BENCH_COMMIT_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+# Prefer a live git rev-parse; fall back to .synced-commit-sha (written by
+# tools/cloud/do/sync-repo.sh, since `git archive` ships no .git to a remote box);
+# finally an explicit BENCH_COMMIT_SHA override.
+BENCH_COMMIT_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || cat "$REPO_ROOT/.synced-commit-sha" 2>/dev/null || echo "${BENCH_COMMIT_SHA:-unknown}")"
 JDK_VERSION_DETECTED="$(java -version 2>&1 | awk -F '"' '/version/ {print $2; exit}' || true)"
 if [[ -z "$JDK_VERSION_DETECTED" ]]; then
   JDK_VERSION_DETECTED="unknown"

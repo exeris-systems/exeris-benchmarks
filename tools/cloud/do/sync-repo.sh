@@ -9,6 +9,7 @@ set -euo pipefail
 HOST="${1:?usage: sync-repo.sh user@host}"
 ROOT="$(git rev-parse --show-toplevel)"
 SHA="$(git -C "$ROOT" rev-parse --short HEAD)"
+FULL_SHA="$(git -C "$ROOT" rev-parse HEAD)"
 
 if ! git -C "$ROOT" diff --quiet HEAD 2>/dev/null; then
   echo "WARNING: uncommitted changes exist — only committed HEAD ($SHA) is synced." >&2
@@ -24,5 +25,6 @@ git -C "$ROOT" -c core.autocrlf=false -c core.eol=lf archive --format=tar.gz HEA
       tar xz -C ~/exeris-benchmarks &&
       cd ~/exeris-benchmarks &&
       find . -name "*.sh" -exec chmod +x {} + &&
+      echo '"'"$FULL_SHA"'"' > .synced-commit-sha &&
       echo "synced into ~/exeris-benchmarks"'
 echo "done ($SHA)"

@@ -241,8 +241,21 @@ apply_fair_resource_profile() {
   # BENCH_JFR_STEADY_STATE=1 uses env/jfr-steady-state.jfc; BENCH_JFR_EXTRA_SETTINGS
   # overrides with a custom overlay. See docs/methodology.md.
   if [[ -n "${BENCH_JFR_EXTRA_SETTINGS:-}" ]]; then
-    jfr_settings="${jfr_settings},settings=${BENCH_JFR_EXTRA_SETTINGS}"
-    echo "Steady-state JFR overlay (custom): ${BENCH_JFR_EXTRA_SETTINGS}"
+    # The value is spliced verbatim into each target's StartFlightRecording
+    # settings=, and JFR resolves a relative path against the TARGET JVM's CWD
+    # (a target module dir, not the repo root) — so a bare 'env/foo.jfc' would
+    # silently fail to load there. Absolutize against REPO_ROOT and verify it
+    # exists, mirroring the vthread/steady overlays above.
+    local extra_jfc="${BENCH_JFR_EXTRA_SETTINGS}"
+    if [[ "$extra_jfc" != /* ]]; then
+      extra_jfc="${REPO_ROOT}/${extra_jfc}"
+    fi
+    if [[ ! -f "$extra_jfc" ]]; then
+      echo "ERROR: BENCH_JFR_EXTRA_SETTINGS set but overlay file not found: ${extra_jfc}" >&2
+      return 1
+    fi
+    jfr_settings="${jfr_settings},settings=${extra_jfc}"
+    echo "Steady-state JFR overlay (custom): ${extra_jfc}"
   elif [[ "${BENCH_JFR_STEADY_STATE:-0}" == "1" ]]; then
     local steady_jfc="${REPO_ROOT}/env/jfr-steady-state.jfc"
     if [[ ! -f "$steady_jfc" ]]; then

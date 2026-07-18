@@ -69,6 +69,18 @@ LOADGEN_CPU_AFFINITY="${LOADGEN_CPU_AFFINITY:-}"
 PERF_STAT_REQUIRED="${BENCHMARK_REQUIRE_PERF_STAT:-0}"
 PERF_STAT_CAPTURE_REQUESTED="${BENCHMARK_CAPTURE_PERF_STAT:-0}"
 
+# Protocol-as-run-axis (additive). A fixed_contract MAY omit protocol_mode/transport_mode
+# (protocol-agnostic); when omitted, the effective protocol comes from this run axis.
+# When a contract pins protocol_mode (legacy), the pin wins and the axis may not override it.
+# Reuse the existing downstream env name BENCH_PROTOCOL_MODE_OVERRIDE (tools/bench/lib/protocol.sh,
+# run-guided.sh) for continuity, plus a friendly BENCH_PROTOCOL_MODE alias.
+PROTOCOL_MODE_AXIS="${BENCH_PROTOCOL_MODE_OVERRIDE:-${BENCH_PROTOCOL_MODE:-}}"
+TRANSPORT_MODE_AXIS="${BENCH_TRANSPORT_MODE:-}"
+# Driver-capability allowlist: the wrk comparative driver serves cleartext HTTP/1.1 only
+# (honesty guard mirroring run-guided.sh). Effective protocols outside this set fail closed
+# until an h2-capable comparative driver is wired. One-line widening point when that lands.
+COMPARATIVE_DRIVER_PROTOCOL_ALLOWLIST="${BENCH_COMPARATIVE_PROTOCOL_ALLOWLIST:-h1}"
+
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
@@ -83,6 +95,8 @@ while [[ $# -gt 0 ]]; do
     --warmup-seconds)     WARMUP_SECONDS="$2";      shift 2 ;;
     --threads)            THREADS="$2";             shift 2 ;;
     --connections)        CONNECTIONS="$2";         shift 2 ;;
+    --protocol-mode)      PROTOCOL_MODE_AXIS="$2";  shift 2 ;;
+    --transport-mode)     TRANSPORT_MODE_AXIS="$2"; shift 2 ;;
     --dry-run)            DRY_RUN=1;                shift 1 ;;
     *) echo "ERROR: Unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -1908,7 +1922,19 @@ fi
 
 CANONICAL_UNORDERED_TARGETS="$(printf '%s\n%s\n' "$TARGET_A_CANONICAL" "$TARGET_B_CANONICAL" | sort | paste -sd ',' -)"
 CANONICAL_UNORDERED_TARGETS_ID="${CANONICAL_UNORDERED_TARGETS/,/__}"
-PAIR_ID="${BENCHMARK_PAIR_ID:-${SCENARIO_ID}-${CONTRACT_ID}-${CANONICAL_UNORDERED_TARGETS_ID}}"
+# Protocol-as-run-axis PAIR_ID isolation (additive). PAIR_ID is built here, BEFORE the full
+# protocol resolution below. For a PINNED contract the protocol is implied by the contract id
+# (h1_* etc.), so PAIR_ID must stay byte-identical (the live _h1_v2 run). For an AGNOSTIC
+# contract the id carries no protocol, so PAIR_ID gains an effective-protocol segment to keep
+# h1 and h2 of the same agnostic contract in separate AB/BA groups + aggregation buckets. This
+# is a cheap key-construction pre-read only; the fail-closed axis validation happens below.
+_PAIR_CONTRACT_PROTO="$(jq -r --arg c "$CONTRACT_ID" '.fixed_contracts[$c].protocol_mode // empty' "$SCENARIO_JSON")"
+_PAIR_PROTO_SEG=""
+if [[ -z "$_PAIR_CONTRACT_PROTO" ]]; then
+  _PAIR_EFF="${PROTOCOL_MODE_AXIS:-${BENCH_PROTOCOL_MODE_OVERRIDE:-${BENCH_PROTOCOL_MODE:-}}}"
+  [[ -n "$_PAIR_EFF" ]] && _PAIR_PROTO_SEG="-${_PAIR_EFF}"
+fi
+PAIR_ID="${BENCHMARK_PAIR_ID:-${SCENARIO_ID}-${CONTRACT_ID}${_PAIR_PROTO_SEG}-${CANONICAL_UNORDERED_TARGETS_ID}}"
 PAIR_ORDER="${BENCHMARK_PAIR_ORDER:-ab}"
 if [[ "$PAIR_ORDER" != "ab" && "$PAIR_ORDER" != "ba" ]]; then
   echo "CONFIG_ERROR: invalid BENCHMARK_PAIR_ORDER='${PAIR_ORDER}' (expected: ab or ba)" >&2
@@ -2220,6 +2246,80 @@ if [[ "$TARGET_A_PROTOCOL_MODE" != "$TARGET_B_PROTOCOL_MODE" ]]; then
   exit 64
 fi
 
+# ---------------------------------------------------------------------------
+# Protocol-as-run-axis resolution (additive; runs AFTER the native A==B check
+# above so the overwrite in step (vi) cannot neuter that check — the native
+# values are still authoritative for A==B agreement here).
+#   contract pin wins → else run axis → else FAIL CLOSED.
+# For a legacy pinned h1 contract with no axis: EFFECTIVE=h1, every guard passes,
+# and step (vi) is an h1→h1 no-op — byte-identical to pre-refactor behavior.
+# ---------------------------------------------------------------------------
+CONTRACT_PROTOCOL_MODE="$(jq -r --arg c "$CONTRACT_ID" \
+  '.fixed_contracts[$c].protocol_mode // empty' "$SCENARIO_JSON")"
+CONTRACT_TRANSPORT_MODE="$(jq -r --arg c "$CONTRACT_ID" \
+  '.fixed_contracts[$c].transport_mode // empty' "$SCENARIO_JSON")"
+
+# (i) effective protocol: contract pin wins; else axis; else FAIL CLOSED.
+if [[ -n "$CONTRACT_PROTOCOL_MODE" ]]; then
+  if [[ -n "$PROTOCOL_MODE_AXIS" && "$PROTOCOL_MODE_AXIS" != "$CONTRACT_PROTOCOL_MODE" ]]; then
+    echo "CONFIG_ERROR: protocol axis conflict — contract '${CONTRACT_ID}' pins protocol_mode=${CONTRACT_PROTOCOL_MODE} but run axis supplied ${PROTOCOL_MODE_AXIS}; a pinned contract may not be overridden [rejection_code=PROTOCOL_AXIS_CONFLICT]" >&2
+    exit 64
+  fi
+  EFFECTIVE_PROTOCOL_MODE="$CONTRACT_PROTOCOL_MODE"
+  CONTRACT_PROTOCOL_AGNOSTIC=false
+elif [[ -n "$PROTOCOL_MODE_AXIS" ]]; then
+  EFFECTIVE_PROTOCOL_MODE="$PROTOCOL_MODE_AXIS"
+  CONTRACT_PROTOCOL_AGNOSTIC=true
+else
+  echo "CONFIG_ERROR: contract '${CONTRACT_ID}' is protocol-agnostic and no protocol axis was supplied; pass --protocol-mode <h1|h2|h2c|h3> or set BENCH_PROTOCOL_MODE_OVERRIDE [rejection_code=PROTOCOL_AXIS_MISSING]" >&2
+  exit 64
+fi
+
+# (ii) enum-validate the effective protocol (mirror target-contract-registry.sh enum case).
+case "$EFFECTIVE_PROTOCOL_MODE" in
+  h1|h2|h2c|h3) ;;
+  *) echo "CONFIG_ERROR: invalid effective protocol_mode='${EFFECTIVE_PROTOCOL_MODE}' (expected h1|h2|h2c|h3) [rejection_code=PROTOCOL_ENUM_INVALID]" >&2; exit 64 ;;
+esac
+
+# (iii) effective transport: axis override, else contract pin, else loopback-<p>
+#       (h2c collapses to loopback-h2 per transport enum + run-guided.sh convention).
+if [[ -n "$TRANSPORT_MODE_AXIS" ]]; then
+  EFFECTIVE_TRANSPORT_MODE="$TRANSPORT_MODE_AXIS"
+elif [[ -n "$CONTRACT_TRANSPORT_MODE" ]]; then
+  EFFECTIVE_TRANSPORT_MODE="$CONTRACT_TRANSPORT_MODE"
+elif [[ "$EFFECTIVE_PROTOCOL_MODE" == "h2c" ]]; then
+  EFFECTIVE_TRANSPORT_MODE="loopback-h2"
+else
+  EFFECTIVE_TRANSPORT_MODE="loopback-${EFFECTIVE_PROTOCOL_MODE}"
+fi
+
+# (iv) driver-capability honesty guard — do NOT mint a label-only non-h1 wrk claim.
+#      Scoped to AXIS-derived protocols only. A contract that explicitly PINS its
+#      protocol is the operator's deliberate, pre-existing choice, so a legacy pinned
+#      non-h1 contract keeps working exactly as it did before this refactor. (A pinned
+#      h1 passes anyway — h1 is in the allowlist.) Only an agnostic contract steered by
+#      the run axis into a protocol the wrk driver cannot serve is refused here.
+if [[ "$CONTRACT_PROTOCOL_AGNOSTIC" == true ]]; then
+  case " $COMPARATIVE_DRIVER_PROTOCOL_ALLOWLIST " in
+    *" $EFFECTIVE_PROTOCOL_MODE "*) ;;
+    *) echo "CONFIG_ERROR: effective protocol_mode=${EFFECTIVE_PROTOCOL_MODE} is not served by the wrk comparative driver (allowlist='${COMPARATIVE_DRIVER_PROTOCOL_ALLOWLIST}'); the wrk comparative path drives cleartext HTTP/1.1 only — refusing a label-only claim [rejection_code=PROTOCOL_DRIVER_UNSUPPORTED]" >&2; exit 64 ;;
+  esac
+fi
+
+# (v) tie the effective protocol to the resolved targets' native protocol. The native
+#     A==B check above already guarantees the two targets agree; assert that shared native
+#     protocol equals the effective protocol so an axis value can never silently diverge
+#     from what the targets actually serve.
+if [[ "$TARGET_A_PROTOCOL_MODE" != "$EFFECTIVE_PROTOCOL_MODE" ]]; then
+  echo "CONFIG_ERROR: effective protocol_mode=${EFFECTIVE_PROTOCOL_MODE} does not match resolved target-native protocol=${TARGET_A_PROTOCOL_MODE} for '${TARGET_A}'; the run axis may not relabel a target's native protocol [rejection_code=PROTOCOL_TARGET_MISMATCH]" >&2
+  exit 64
+fi
+
+# (vi) make the effective protocol authoritative for ALL downstream stamps/keys/echoes
+#      (echo, per-target result stamping, pair_fingerprint, axis label all inherit this).
+TARGET_A_PROTOCOL_MODE="$EFFECTIVE_PROTOCOL_MODE"
+TARGET_B_PROTOCOL_MODE="$EFFECTIVE_PROTOCOL_MODE"
+
 TARGET_A_TIER="$(jq -r '.tier' <<<"$TARGET_A_CONTRACT_JSON")"
 TARGET_B_TIER="$(jq -r '.tier' <<<"$TARGET_B_CONTRACT_JSON")"
 if [[ "$TARGET_A_TIER" != "$TARGET_B_TIER" ]]; then
@@ -2355,6 +2455,20 @@ if [[ "$SCENARIO_ID" == "entity-read-by-id" ]]; then
   if [[ -n "$expected_connections" && "$CONNECTIONS" != "$expected_connections" ]]; then
     echo "CONFIG_ERROR: immutable scenario contract knob mismatch scenario_id=${SCENARIO_ID} contract_id=${CONTRACT_ID} knob=connections expected=${expected_connections} actual=${CONNECTIONS}" >&2
     exit 64
+  fi
+  # Protocol-as-run-axis immutable-knob audit line (parity with the knobs above). Uses the
+  # EFFECTIVE protocol resolved earlier: pinned ⇒ effective must equal the pin; agnostic ⇒
+  # the axis must have supplied a non-empty protocol (already fail-closed at resolution).
+  if [[ -n "$CONTRACT_PROTOCOL_MODE" ]]; then
+    if [[ "$EFFECTIVE_PROTOCOL_MODE" != "$CONTRACT_PROTOCOL_MODE" ]]; then
+      echo "CONFIG_ERROR: immutable scenario contract knob mismatch scenario_id=${SCENARIO_ID} contract_id=${CONTRACT_ID} knob=protocol_mode expected=${CONTRACT_PROTOCOL_MODE} actual=${EFFECTIVE_PROTOCOL_MODE}" >&2
+      exit 64
+    fi
+  else
+    if [[ -z "$EFFECTIVE_PROTOCOL_MODE" ]]; then
+      echo "CONFIG_ERROR: immutable scenario contract knob missing scenario_id=${SCENARIO_ID} contract_id=${CONTRACT_ID} knob=protocol_mode (protocol-agnostic contract requires --protocol-mode / BENCH_PROTOCOL_MODE_OVERRIDE)" >&2
+      exit 64
+    fi
   fi
 fi
 
@@ -2786,9 +2900,13 @@ parse_wrk_to_result() {
   local outdir resource_json jfr_json runtime_log_json jfr_start_json
   env_ref="$(jq -r '.env_file' <<<"$target_contract_json")"
   tier="$(jq -r '.tier' <<<"$target_contract_json")"
-  protocol_mode="$(jq -r '.protocol_mode' <<<"$target_contract_json")"
-  transport_mode="loopback-${protocol_mode}"
-  
+  # Prefer the EFFECTIVE protocol/transport resolved for this run (protocol-as-run-axis);
+  # fall back to the target-native contract value if ever called before resolution. On the
+  # real path EFFECTIVE_* is always set; for a legacy h1 pin this yields h1/loopback-h1,
+  # byte-identical to the pre-refactor derivation.
+  protocol_mode="${EFFECTIVE_PROTOCOL_MODE:-$(jq -r '.protocol_mode' <<<"$target_contract_json")}"
+  transport_mode="${EFFECTIVE_TRANSPORT_MODE:-loopback-${protocol_mode}}"
+
   # Load resource metrics and JFR metadata from sidecars
   outdir="$(dirname "$outfile")"
   if [[ -f "${outdir}/resource-metrics.json" ]]; then
@@ -2988,6 +3106,8 @@ parse_wrk_to_result() {
       threads:          $threads,
       connections:      $connections,
       contract_id:      $contract_id,
+      protocol_mode:    $protocol_mode,
+      transport_mode:   $transport_mode,
       track_id:         $track_id,
       pair_id:          $pair_id,
       pair_order:       $pair_order,
@@ -3270,19 +3390,26 @@ build_target_entry() {
   local rfile="$1"
   local target_id="$2"
 
-  # Load maturity info from pair manifest
+  # Load maturity/tier from pair manifest; source protocol/transport from the EFFECTIVE value
+  # stamped into the result file (protocol-as-run-axis) rather than the manifest's advisory
+  # h1 default — the aggregation fingerprint keys on this field, so a manifest default of h1
+  # would silently blend an agnostic h2 run into h1. Fail closed rather than defaulting.
   local maturity tier protocol transport
   maturity="$(jq -r --arg t "$target_id" '.compatible_targets[] | select(.target_id==$t) | .maturity_level // "unknown"' "$PAIR_MANIFEST")"
   tier="$(jq -r --arg t "$target_id" '.compatible_targets[] | select(.target_id==$t) | .tier // "community"' "$PAIR_MANIFEST")"
-  protocol="$(jq -r --arg t "$target_id" '.compatible_targets[] | select(.target_id==$t) | .protocol_mode // "h1"' "$PAIR_MANIFEST")"
-  transport="$(jq -r --arg t "$target_id" '.compatible_targets[] | select(.target_id==$t) | .transport_mode // "loopback-h1"' "$PAIR_MANIFEST")"
+  protocol="$(jq -r '.target.protocol // empty' "$rfile")"
+  transport="$(jq -r '.transport_mode // empty' "$rfile")"
+  if [[ -z "$protocol" || -z "$transport" ]]; then
+    echo "CONFIG_ERROR: result '${rfile}' missing effective .target.protocol/.transport_mode for build_target_entry — refusing to default to h1 [rejection_code=RESULT_PROTOCOL_MISSING]" >&2
+    exit 64
+  fi
 
   jq -n \
     --arg target_id     "$target_id" \
     --arg maturity      "${maturity:-unknown}" \
     --arg tier          "${tier:-community}" \
-    --arg protocol_mode "${protocol:-h1}" \
-    --arg transport     "${transport:-loopback-h1}" \
+    --arg protocol_mode "$protocol" \
+    --arg transport     "$transport" \
     --slurpfile result  "$rfile" \
   '{
     target_id:      $target_id,
@@ -3313,7 +3440,7 @@ PAIR_FINGERPRINT_JSON="$(jq -n \
   --arg contract_id "$CONTRACT_ID" \
   --arg tier "$TARGET_A_TIER" \
   --arg protocol_mode "$TARGET_A_PROTOCOL_MODE" \
-  --arg transport_mode "loopback-${TARGET_A_PROTOCOL_MODE}" \
+  --arg transport_mode "$EFFECTIVE_TRANSPORT_MODE" \
   --arg workload_profile_key "$WORKLOAD_PROFILE_KEY" \
   --arg t1 "$TARGET_A" \
   --arg t2 "$TARGET_B" \
@@ -3410,7 +3537,7 @@ echo -e "  ${GREEN}✓${NC} comparative-result.json written: ${COMPARATIVE_OUT}"
   echo "| composite_score | ${COMPOSITE} |"
   echo "| interpretation  | **${INTERP}** |"
   echo ""
-  echo "> Axis labels: tier=${TARGET_A_TIER} | protocol_mode=${TARGET_A_PROTOCOL_MODE} | transport_mode=loopback-${TARGET_A_PROTOCOL_MODE} | benchmark_family=runtime | track_id=${TRACK_ID}"
+  echo "> Axis labels: tier=${TARGET_A_TIER} | protocol_mode=${TARGET_A_PROTOCOL_MODE} | transport_mode=${EFFECTIVE_TRANSPORT_MODE} | benchmark_family=runtime | track_id=${TRACK_ID}"
   echo ""
   echo "_Generated by run-comparative.sh — Phase 6.3_"
 } > "$REPORT_MD"

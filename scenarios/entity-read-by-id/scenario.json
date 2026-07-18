@@ -376,6 +376,42 @@
         "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
       },
       "capability_note": "Longer-window capability variant of _v1: identical workload (threads/connections/payload/protocol/seed), only warmup=300s + measurement=900s for steady-state p99.9 stability on a dedicated perf-box. NOT comparable across v1 (120s) and v2 (900s) windows — contract_id is the isolation key."
+    },
+    "fixed_contract_cross_runtime_v1": {
+      "tier": "community",
+      "benchmark_family": "runtime-wrk",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "capability_note": "Protocol-agnostic: no protocol_mode/transport_mode. Effective protocol is supplied by the run axis (--protocol-mode / BENCH_PROTOCOL_MODE_OVERRIDE); fail-closed if absent. Workload is byte-identical to fixed_contract_cross_runtime_h1_v1; only the wire protocol is a run axis. Isolation key is (contract_id, effective_protocol), not contract_id alone — h1 and h2 results of this contract never blend (enforced by G3 + the aggregation fingerprint's protocol_mode field).",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_cross_runtime_v2": {
+      "tier": "community",
+      "benchmark_family": "runtime-wrk",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 300,
+      "duration_seconds": 900,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "capability_note": "Protocol-agnostic long-window variant: workload byte-identical to fixed_contract_cross_runtime_h1_v2 (warmup=300s, measurement=900s); effective protocol supplied by the run axis (--protocol-mode / BENCH_PROTOCOL_MODE_OVERRIDE), fail-closed if absent. NOT comparable across v1 (120s) and v2 (900s) windows — (contract_id, effective_protocol) is the isolation key.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
     }
   },
   "measurement_windows": {

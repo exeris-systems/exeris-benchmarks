@@ -7,7 +7,8 @@
     "fixed_contract_cross_runtime_h1_v1",
     "fixed_contract_cross_runtime_h1_iso_budget_sweep_v1",
     "fixed_contract_cross_runtime_h1_iso_budget_sweep_t8_v1",
-    "fixed_contract_cross_runtime_h1_franz_like_v1"
+    "fixed_contract_cross_runtime_h1_franz_like_v1",
+    "fixed_contract_cross_runtime_h1_v2"
   ],
   "comparison_axis": {
     "type": "runtime_pairwise",
@@ -50,7 +51,10 @@
   "allowed_pairs": [
     {
       "pair_id": "exeris-community__spring-hibernate",
-      "targets": ["exeris-community", "spring-hibernate"],
+      "targets": [
+        "exeris-community",
+        "spring-hibernate"
+      ],
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
@@ -58,7 +62,10 @@
     },
     {
       "pair_id": "exeris-community__quarkus-hibernate",
-      "targets": ["exeris-community", "quarkus-hibernate"],
+      "targets": [
+        "exeris-community",
+        "quarkus-hibernate"
+      ],
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
@@ -66,7 +73,10 @@
     },
     {
       "pair_id": "spring-hibernate__quarkus-hibernate",
-      "targets": ["spring-hibernate", "quarkus-hibernate"],
+      "targets": [
+        "spring-hibernate",
+        "quarkus-hibernate"
+      ],
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
@@ -76,11 +86,18 @@
   "forbidden_pairs": [
     {
       "reason": "Community vs Enterprise cross-tier — protocol fairness unverified",
-      "targets": ["exeris-community", "exeris-kernel-enterprise"]
+      "targets": [
+        "exeris-community",
+        "exeris-kernel-enterprise"
+      ]
     },
     {
       "reason": "Cross-protocol comparisons are out of scope for this backend mode pair",
-      "protocol_modes": ["h1", "h2", "h3"]
+      "protocol_modes": [
+        "h1",
+        "h2",
+        "h3"
+      ]
     }
   ],
   "measurement_windows": {

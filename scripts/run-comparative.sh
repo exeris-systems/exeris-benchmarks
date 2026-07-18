@@ -2540,13 +2540,13 @@ if [[ "$SCENARIO_ID" == "entity-read-by-id" ]]; then
 # ============================================================
 " | tee -a "$sync_log"
   
-  if ! diagnose_endpoint "$FIRST_TARGET_ID" "$FIRST_TARGET_PORT" "$SCENARIO_ENDPOINT_PATH" "$local_diag_log_first"; then
+  if ! diagnose_endpoint "$FIRST_TARGET_ID" "$FIRST_TARGET_HEALTH_URL" "$SCENARIO_ENDPOINT_PATH" "$local_diag_log_first"; then
     echo "CONFIG_ERROR: endpoint preflight failed target_id=${FIRST_TARGET_ID} path=${SCENARIO_ENDPOINT_PATH} diagnostic_log=${local_diag_log_first} likely_cause=wrong external process/version on port ${FIRST_TARGET_PORT}" >&2
     echo "ERROR: refusing to continue Stage 4 after failed endpoint diagnostic for target_id=${FIRST_TARGET_ID}" >&2
     exit 1
   fi
 
-  if ! diagnose_endpoint "$SECOND_TARGET_ID" "$SECOND_TARGET_PORT" "$SCENARIO_ENDPOINT_PATH" "$local_diag_log_second"; then
+  if ! diagnose_endpoint "$SECOND_TARGET_ID" "$SECOND_TARGET_HEALTH_URL" "$SCENARIO_ENDPOINT_PATH" "$local_diag_log_second"; then
     echo "CONFIG_ERROR: endpoint preflight failed target_id=${SECOND_TARGET_ID} path=${SCENARIO_ENDPOINT_PATH} diagnostic_log=${local_diag_log_second} likely_cause=wrong external process/version on port ${SECOND_TARGET_PORT}" >&2
     echo "ERROR: refusing to continue Stage 4 after failed endpoint diagnostic for target_id=${SECOND_TARGET_ID}" >&2
     exit 1

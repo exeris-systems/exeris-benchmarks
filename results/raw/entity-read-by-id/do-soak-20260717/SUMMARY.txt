@@ -1,0 +1,44 @@
+  █ TOTAL RESULTS 
+
+    checks_total.......: 25973957 299.999485/s
+    checks_succeeded...: 100.00%  25973957 out of 25973957
+    checks_failed......: 0.00%    0 out of 25973957
+
+    ✓ users read: status 200
+    ✓ health: status 200
+    ✓ db ping: status 200
+
+    CUSTOM
+    db_ping_latency_ms.............: avg=1.46ms   min=670.5µs  med=1.26ms   max=207.69ms p(90)=1.79ms p(95)=2.25ms p(99)=5.86ms 
+    errors.........................: 0.00%    0 out of 25973957
+    health_latency_ms..............: avg=959.78µs min=401.36µs med=801.92µs max=210.19ms p(90)=1.13ms p(95)=1.45ms p(99)=4.69ms 
+    users_cold_requests............: 4675945  54.007215/s
+    users_hot_requests.............: 18700009 215.985306/s
+    users_read_cold_latency_ms.....: avg=4.16ms   min=1.98ms   med=3.82ms   max=252.35ms p(90)=5.49ms p(95)=6.53ms p(99)=11.23ms
+    users_read_hot_latency_ms......: avg=4.16ms   min=1.93ms   med=3.82ms   max=276.9ms  p(90)=5.49ms p(95)=6.53ms p(99)=11.25ms
+    users_read_latency_ms..........: avg=4.16ms   min=1.93ms   med=3.82ms   max=276.9ms  p(90)=5.49ms p(95)=6.53ms p(99)=11.24ms
+
+    HTTP
+    http_req_duration..............: avg=3.87ms   min=401.36µs med=3.7ms    max=276.9ms  p(90)=5.37ms p(95)=6.38ms p(99)=10.93ms
+      { expected_response:true }...: avg=3.87ms   min=401.36µs med=3.7ms    max=276.9ms  p(90)=5.37ms p(95)=6.38ms p(99)=10.93ms
+    http_req_failed................: 0.00%    0 out of 25973957
+    http_reqs......................: 25973957 299.999485/s
+
+    EXECUTION
+    dropped_iterations.............: 46       0.000531/s
+    iteration_duration.............: avg=4.21ms   min=531.31µs med=4.04ms   max=279.08ms p(90)=5.76ms p(95)=6.77ms p(99)=11.33ms
+    iterations.....................: 25973957 299.999485/s
+    vus............................: 2        min=0             max=30 
+    vus_max........................: 103      min=100           max=103
+
+    NETWORK
+    data_received..................: 215 GB   2.5 MB/s
+    data_sent......................: 2.3 GB   27 kB/s
+
+
+
+
+running (1d00h03m00.0s), 000/103 VUs, 25973957 complete and 0 interrupted iterations
+warmup      ✓ [ 100% ] 000/050 VUs  2m0s     300.00 iters/s
+measurement ✓ [ 100% ] 000/053 VUs  24h0m0s  300.00 iters/s
+cooldown    ✓ [ 100% ] 000/050 VUs  1m0s     300.00 iters/s

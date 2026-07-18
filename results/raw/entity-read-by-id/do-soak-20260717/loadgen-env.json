@@ -1,0 +1,50 @@
+{
+  "schema_version": "1",
+  "captured_at": "2026-07-17T06:23:32Z",
+  "hardware_profile": "cloud-vm-do-shared",
+  "cpu": {
+    "model": "DO-Premium-Intel",
+    "physical_cores": 4,
+    "logical_threads": 4,
+    "architecture": "x86_64",
+    "cpu_governor": "unknown"
+  },
+  "memory_gb": 7.8,
+  "os": {
+    "name": "Linux",
+    "version": "6.8.0-124-generic"
+  },
+  "kernel": "6.8.0-124-generic",
+  "os_scheduler": "eevdf",
+  "jdk": {
+    "vendor": "temurin",
+    "vendor_raw": "Eclipse Adoptium",
+    "version": "openjdk version \"26.0.1\" 2026-04-21",
+    "major_version": 26
+  },
+  "jvm_flags": [],
+  "malloc_arena_max": "not_set",
+  "cgroup": {
+    "version": "v2",
+    "cpu_quota_us": "unknown",
+    "cpu_period_us": "unknown",
+    "cpuset": "0-3",
+    "memory_limit": "unknown"
+  },
+  "cgroup_v2_available": false,
+  "cgroup_memory_current_bytes": 0,
+  "cgroup_memory_wss_bytes": 0,
+  "cpu_steal_pct_sample": 0.00,
+  "cpu_steal_advisory": true,
+  "benchmark_tool": {
+    "name": "k6",
+    "version": "k6 v2.0.0 (commit/8c3be52cc1, go1.26.3, linux/amd64)"
+  },
+  "toolchain": {
+    "wrk": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+    "wrk2": "wrk 4.0.0 [epoll] Copyright (C) 2012 Will Glozer",
+    "h2load": "h2load nghttp2/1.59.0",
+    "k6": "k6 v2.0.0 (commit/8c3be52cc1, go1.26.3, linux/amd64)",
+    "jmh": "1.37"
+  }
+}

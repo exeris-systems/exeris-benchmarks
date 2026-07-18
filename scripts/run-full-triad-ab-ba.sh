@@ -532,6 +532,23 @@ force_free_port() {
   return 1
 }
 
+# Tear down BOTH targets of a pair once the pair block is done. A pair's target
+# JVMs keep their JDBC connection pools open for the whole block; if they are
+# left running, the NEXT pair's prepare_scenario_infrastructure psql hits the
+# shared Postgres 'sorry, too many clients already' ceiling (max_connections)
+# because the previous pair's pools are still connected. Stopping here releases
+# those connections before the next pair's infra setup, and leaves a clean box
+# after the last pair. stop-target is by id (graceful); force_free_port is the
+# hard port-based backstop in case stop-target does not fully reap the JVM.
+stop_pair_targets() {
+  local ta=$1 ta_port=$2 tb=$3 tb_port=$4
+  echo "  [teardown] Stopping pair targets ${ta} (:${ta_port}) and ${tb} (:${tb_port}) to release DB connections..."
+  "$TARGET_STOP_SCRIPT" "$ta" >/dev/null 2>&1 || true
+  "$TARGET_STOP_SCRIPT" "$tb" >/dev/null 2>&1 || true
+  force_free_port "$ta" "$ta_port" || true
+  force_free_port "$tb" "$tb_port" || true
+}
+
 ensure_target_on_endpoint() {
   local target_id=$1
   local port=$2
@@ -789,6 +806,12 @@ run_pair_block() {
       sleep 10
     fi
   done
+
+  # Release this pair's target JVMs (and their Postgres connection pools) before
+  # the next pair block's prepare_scenario_infrastructure runs, and leave the box
+  # clean after the final pair. Without this, connections leak across pairs and
+  # the second/third pair's infra-setup psql fails with 'too many clients'.
+  stop_pair_targets "$target_a" "$target_a_port" "$target_b" "$target_b_port"
 }
 
 mkdir -p "$CAMPAIGN_OUTPUT_DIR"

@@ -130,6 +130,11 @@ if [[ -r /sys/devices/system/cpu/cpufreq/boost ]]; then
   [[ "$(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null)" == "1" ]] && CPU_TURBO_BOOST="true" || CPU_TURBO_BOOST="false"
 elif [[ -r /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then
   [[ "$(cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null)" == "0" ]] && CPU_TURBO_BOOST="true" || CPU_TURBO_BOOST="false"
+elif [[ -r /sys/devices/system/cpu/cpu0/cpufreq/base_frequency ]]; then
+  # amd-pstate active mode: boost on iff scaling_max_freq exceeds base_frequency.
+  _bf="$(cat /sys/devices/system/cpu/cpu0/cpufreq/base_frequency 2>/dev/null)"
+  _sm="$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null)"
+  if [[ -n "$_bf" && -n "$_sm" ]]; then [[ "$_sm" -gt "$_bf" ]] && CPU_TURBO_BOOST="true" || CPU_TURBO_BOOST="false"; fi
 fi
 CPU_ISOLATED="$(cat /sys/devices/system/cpu/isolated 2>/dev/null || echo '')"
 

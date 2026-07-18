@@ -105,10 +105,19 @@ fi
 
 # boost/turbo
 want=1; [[ "$BOOST" == "off" ]] && want=0
-if [[ -w /sys/devices/system/cpu/cpufreq/boost ]]; then          # amd_pstate / acpi-cpufreq
+if [[ -w /sys/devices/system/cpu/cpufreq/boost ]]; then          # acpi-cpufreq / amd-pstate passive
   echo "$want" > /sys/devices/system/cpu/cpufreq/boost 2>/dev/null || true
 elif [[ -w /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then # intel_pstate (inverted)
   echo "$(( want ^ 1 ))" > /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null || true
+elif [[ -r /sys/devices/system/cpu/cpu0/cpufreq/base_frequency ]]; then
+  # amd-pstate ACTIVE mode (amd-pstate-epp) has no boost toggle; boost is the
+  # headroom between base_frequency and cpuinfo_max_freq. Cap scaling_max_freq
+  # to base to disable boost (deterministic clocks), or to cpuinfo_max to allow it.
+  for pol in /sys/devices/system/cpu/cpu*/cpufreq; do
+    if [[ "$want" == "0" ]]; then cap="$(cat "$pol/base_frequency" 2>/dev/null)"
+    else cap="$(cat "$pol/cpuinfo_max_freq" 2>/dev/null)"; fi
+    [[ -n "$cap" && -w "$pol/scaling_max_freq" ]] && echo "$cap" > "$pol/scaling_max_freq" 2>/dev/null || true
+  done
 fi
 
 # transparent huge pages
@@ -148,6 +157,11 @@ read_boost() {
     [[ "$(cat /sys/devices/system/cpu/cpufreq/boost)" == "1" ]] && echo true || echo false
   elif [[ -r /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then
     [[ "$(cat /sys/devices/system/cpu/intel_pstate/no_turbo)" == "0" ]] && echo true || echo false
+  elif [[ -r /sys/devices/system/cpu/cpu0/cpufreq/base_frequency ]]; then
+    # amd-pstate active: boost is on iff scaling_max_freq exceeds base_frequency.
+    local b s; b="$(cat /sys/devices/system/cpu/cpu0/cpufreq/base_frequency)"
+    s="$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
+    [[ -n "$b" && -n "$s" && "$s" -gt "$b" ]] && echo true || echo false
   else echo unknown; fi
 }
 GOV="$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo unknown)"

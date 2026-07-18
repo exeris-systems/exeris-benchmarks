@@ -57,7 +57,12 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/register", "/health", "/actuator/**").permitAll()
+                        // /db/ping is a DB-connectivity readiness probe (like /health), hit by the
+                        // comparative harness Stage-4 preflight. It is served unauthenticated by
+                        // exeris-community-app and quarkus-benchmark-app; permit it here too so the
+                        // entity-read-by-id readiness gate is apples-to-apples and Spring is not the
+                        // only runtime forcing an auth filter on an infra probe.
+                        .requestMatchers("/api/v1/auth/register", "/health", "/actuator/**", "/db/ping").permitAll()
                         // GET /api/v1/users is unauthenticated in the reference exeris-community-app
                         // (CommunityBenchmarkRouteHandler.handleUsers — no SecurityInterceptor) and in
                         // quarkus-benchmark-app; permit it here so the entity-read-by-id read benchmark

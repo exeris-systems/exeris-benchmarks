@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  jfr-no-exeris-telemetry.jfc — override overlay: disable ALL eu.exeris.* custom
+  JFR events during a comparative measurement.
+
+  WHY: the campaign starts JFR with `settings=profile`, which (by JFR's
+  default-enable policy for application events) CAPTURES Exeris's own kernel
+  telemetry events. A live entity run emitted ~56.8M eu.exeris.persistence.*
+  events (5-6 per request, ~2 GB) — asymmetric CPU/recording overhead borne ONLY
+  by the Exeris target (Spring/Quarkus have no equivalent), and it also capped
+  the 2 GB recording so the actual jdk.ExecutionSample CPU profile was drowned
+  out. EXERIS_TELEMETRY_JFR_ENABLED=false does NOT gate the emission (the
+  persistence layer commits the events regardless; the campaign recording having
+  them enabled is enough to make them fire).
+
+  Chain this AFTER the profile config so these disables win, e.g. via
+  BENCH_JFR_EXTRA_SETTINGS=env/jfr-no-exeris-telemetry.jfc (run-full-triad-ab-ba.sh
+  appends `settings=<this>` to the StartFlightRecording chain).
+
+  Effect: exeris runs with zero application-telemetry JFR overhead (fair vs
+  Spring/Quarkus) and the recording holds a clean jdk.* CPU/allocation profile.
+  Bootstrap/one-shot events (KernelStart, etc.) are listed too for completeness;
+  they are near-zero-cost but kept off so the recording is purely jdk.*.
+-->
+<configuration version="2.0"
+               label="No Exeris application telemetry"
+               description="Disables eu.exeris.* custom JFR events; chain after settings=profile.">
+  <event name="eu.exeris.kernel.bootstrap.ConfigSettingsResolved"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.bootstrap.KernelBootReady"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.bootstrap.KernelStart"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.bootstrap.SubsystemInitialized"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.bootstrap.SubsystemStarted"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.ResourceArbiterDecision"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.crypto.OpenSslLoad"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.http.AggregateBufferForcedRelease"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.http.AggregateBufferHeld"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.http.routing.HttpRouterRegisteredEvent"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.transport.ConnectionEstablished"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.transport.StreamAccepted"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.transport.StreamLifecycle"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.http.CommunityHttpLifecycle"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.AdmissionDecision"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.AdmissionStage"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.BootstrapSelected"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.ConnectionAcquire"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.EngineBootstrap"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.RequestSessionLifecycle"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.TransactionLifecycle"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.telemetry.JfrCommitDrop"><setting name="enabled">false</setting></event>
+</configuration>

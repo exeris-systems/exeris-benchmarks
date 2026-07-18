@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# setup-droplet.sh — Provision an Ubuntu 24.04 droplet as a single-box
-# exeris-benchmarks campaign runner (target + DBs + driver co-located,
-# separated by disjoint taskset cpusets).
+# setup-droplet.sh — Provision a Linux box (Ubuntu DO droplet OR Debian/Ubuntu
+# bare metal, e.g. a Hetzner installimage box) as a single-box exeris-benchmarks
+# campaign runner (target + DBs + driver co-located, separated by disjoint
+# taskset cpusets). Distro-aware: Debian and Ubuntu are both supported.
+# For a bare-metal perf-box, follow with tools/perf-box/setup-perf-box.sh.
 #
 # Installs: JDK 26 (Temurin), Maven, Docker + compose v2, wrk, wrk2 (source),
 # h2load (nghttp2-client), k6, psql client, sysstat (pidstat/mpstat), perf,
@@ -19,7 +21,15 @@ export DEBIAN_FRONTEND=noninteractive
 # the apt/dpkg locks. Wait for them instead of racing.
 APT=(apt-get -o DPkg::Lock::Timeout=600)
 
-echo "== waiting for cloud-init to finish first-boot work =="
+# Distro detection: Ubuntu (DO droplets) vs Debian (Hetzner installimage default).
+# Package names and the Docker install path differ between them.
+# shellcheck disable=SC1091
+. /etc/os-release
+DISTRO_ID="${ID:-ubuntu}"
+DISTRO_CODENAME="${VERSION_CODENAME:-}"
+echo "== distro: $DISTRO_ID $DISTRO_CODENAME =="
+
+echo "== waiting for cloud-init to finish first-boot work (absent on bare metal) =="
 cloud-init status --wait >/dev/null 2>&1 || true
 
 echo "== apt packages =="
@@ -27,7 +37,12 @@ echo "== apt packages =="
 "${APT[@]}" install -yq --no-install-recommends \
   build-essential libssl-dev zlib1g-dev unzip git jq gawk curl ca-certificates gnupg \
   nghttp2-client wrk postgresql-client sysstat util-linux uuid-runtime openssl maven
-"${APT[@]}" install -yq "linux-tools-$(uname -r)" 2>/dev/null || "${APT[@]}" install -yq linux-tools-generic
+# perf: Debian ships it as `linux-perf`; Ubuntu as `linux-tools-<kernel>`/generic.
+if [[ "$DISTRO_ID" == "debian" ]]; then
+  "${APT[@]}" install -yq linux-perf 2>/dev/null || true
+else
+  "${APT[@]}" install -yq "linux-tools-$(uname -r)" 2>/dev/null || "${APT[@]}" install -yq linux-tools-generic 2>/dev/null || true
+fi
 
 echo "== JDK 26 (Temurin) =="
 if [[ ! -x /opt/jdk26/bin/java ]]; then
@@ -43,8 +58,19 @@ PATH="/opt/jdk26/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bi
 JAVA_HOME="/opt/jdk26"
 EOF
 
-echo "== Docker + compose v2 =="
-"${APT[@]}" install -yq docker.io docker-compose-v2
+echo "== Docker CE + compose v2 (official repo) =="
+# Debian's docker.io is 20.10 WITHOUT the compose v2 plugin (the saga stack needs
+# `docker compose`). Install docker-ce + docker-compose-plugin from Docker's
+# official apt repo — works identically on Debian and Ubuntu.
+if ! command -v docker >/dev/null 2>&1; then
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL "https://download.docker.com/linux/${DISTRO_ID}/gpg" -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${DISTRO_ID} ${DISTRO_CODENAME} stable" \
+    > /etc/apt/sources.list.d/docker.list
+  "${APT[@]}" update -q
+  "${APT[@]}" install -yq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+fi
 systemctl enable --now docker
 
 echo "== wrk2 (source build; apt has only wrk) =="

@@ -690,8 +690,8 @@ run_benchmark() {
     --target-b "$target_b"
     --scenario-id "$SCENARIO_ID"
     --contract-id "$BENCH_CONTRACT_ID"
-    --warmup-seconds "$WARMUP_SECONDS"
-    --measurement-seconds "$MEASUREMENT_SECONDS"
+    --warmup-seconds "${WARMUP_SECONDS:-60}"
+    --measurement-seconds "${MEASUREMENT_SECONDS:-120}"
     --output-dir "$output_subdir"
   )
 

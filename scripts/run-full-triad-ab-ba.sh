@@ -670,6 +670,9 @@ build_target_artifact() {
     quarkus-hibernate)
       module_path="targets/quarkus-benchmark-app"
       ;;
+    quarkus-tuned)
+      module_path="targets/quarkus-benchmark-app-tuned"
+      ;;
     *)
       echo "ERROR: No Maven module mapping defined for target ${target_id}"
       return 1
@@ -694,9 +697,20 @@ prebuild_campaign_targets() {
   echo "PREBUILD CAMPAIGN TARGET ARTIFACTS"
   echo "============================================================"
 
-  build_target_artifact "exeris-community" || return 1
-  build_target_artifact "spring-hibernate" || return 1
-  build_target_artifact "quarkus-hibernate" || return 1
+  # Build exactly the targets referenced by the effective pair set (deduped),
+  # so a non-default BENCH_TRIAD_PAIRS (e.g. the quarkus-focused triad with
+  # quarkus-tuned) builds the right modules and skips unused ones.
+  local entry _name _ta _tb _label _pa _pb t
+  declare -A _built=()
+  for entry in "${TRIAD_PAIRS[@]}"; do
+    IFS=':' read -r _name _ta _tb _label _pa _pb <<< "$entry"
+    for t in "$_ta" "$_tb"; do
+      if [[ -z "${_built[$t]:-}" ]]; then
+        _built[$t]=1
+        build_target_artifact "$t" || return 1
+      fi
+    done
+  done
 
   echo "============================================================"
   echo "PREBUILD COMPLETED"
@@ -844,19 +858,31 @@ echo "============================================================"
 
 failed_steps=0
 
+# Effective pair list — each entry: "name:target_a:target_b:label:port_a:port_b".
+# Default = the canonical exeris / spring / quarkus-hibernate triad (unchanged).
+# Override with BENCH_TRIAD_PAIRS (';'-separated entries, same field order) to run
+# a different set, e.g. the quarkus-focused triad (exeris vs quarkus-tuned, plus the
+# ORM/transport decomposition):
+#   BENCH_TRIAD_PAIRS="1-exeris-vs-quarkus-tuned:exeris-community:quarkus-tuned:1:9000:9003;2-exeris-vs-quarkus-hibernate:exeris-community:quarkus-hibernate:2:9000:9002;3-quarkus-hibernate-vs-tuned:quarkus-hibernate:quarkus-tuned:3:9002:9003"
+if [[ -n "${BENCH_TRIAD_PAIRS:-}" ]]; then
+  IFS=';' read -ra TRIAD_PAIRS <<< "$BENCH_TRIAD_PAIRS"
+else
+  TRIAD_PAIRS=(
+    "1-exeris-vs-quarkus:exeris-community:quarkus-hibernate:1:9000:9002"
+    "3-exeris-vs-spring:exeris-community:spring-hibernate:3:9000:9001"
+    "2-spring-vs-quarkus:spring-hibernate:quarkus-hibernate:2:9001:9002"
+  )
+fi
+
 if ! prebuild_campaign_targets; then
   echo "ERROR: Campaign aborted due to prebuild failure"
   exit 1
 fi
 
-# Pair 1 (AB/BA): Exeris vs Quarkus
-run_pair_block "1-exeris-vs-quarkus" "exeris-community" "quarkus-hibernate" "1" "9000" "9002"
-
-# Pair 3 (AB/BA): Exeris vs Spring
-run_pair_block "3-exeris-vs-spring" "exeris-community" "spring-hibernate" "3" "9000" "9001"
-
-# Pair 2 (AB/BA): Spring vs Quarkus
-run_pair_block "2-spring-vs-quarkus" "spring-hibernate" "quarkus-hibernate" "2" "9001" "9002"
+for _entry in "${TRIAD_PAIRS[@]}"; do
+  IFS=':' read -r _pname _pta _ptb _plabel _ppa _ppb <<< "$_entry"
+  run_pair_block "$_pname" "$_pta" "$_ptb" "$_plabel" "$_ppa" "$_ppb"
+done
 
 echo ""
 echo "============================================================"

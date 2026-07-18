@@ -143,6 +143,18 @@ record `backend_network_mode` (`host` vs `bridge`). Bridge/NAT adds an asymmetri
 tax across stacks of differing DB-chattiness — a fairness hazard, not hygiene. See
 `docs/methodology.md` → "Backend container networking is a fairness gate".
 
+### Single-box loopback topology (recorded, not a violation)
+
+A dedicated bare-metal box that runs the driver, target, and backends **on one
+machine** (loopback) still qualifies as `perf-box-amd64` for CPU/memory
+determinism — loopback is a *more* deterministic path than the direct-L2 network
+above (no wire), fully consistent with "what we trust: relative within-profile
+comparisons". It is recorded, not hidden: the setup writes `perf-box-state.json`
+with `topology: single-box-loopback` and `capture-env.sh` fills `turbo_boost` +
+`isolated_cpus`. Provisioning + tuning: `tools/perf-box/`. Do NOT present
+single-box loopback numbers as network-path capacity, and keep driver/target
+cpusets disjoint (pinning discipline in `tools/perf-box/README.md`).
+
 ---
 
 ## perf-box-arm64

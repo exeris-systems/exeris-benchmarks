@@ -121,6 +121,17 @@ PHYSICAL_CORES="$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || sysctl -n hw
 LOGICAL_THREADS="$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 0)"
 ARCH="$(uname -m)"
 CPU_GOVERNOR="$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo 'unknown')"
+# Turbo/boost + isolcpus: readable only on bare metal (a hypervisor hides them),
+# so they stay unknown/empty on cloud VMs and are populated for perf-box-amd64.
+# The `perf-box-amd64` profile pins boost off for latency baselines — recording
+# it makes a boost-on vs boost-off mislabel impossible to hide.
+CPU_TURBO_BOOST="unknown"
+if [[ -r /sys/devices/system/cpu/cpufreq/boost ]]; then
+  [[ "$(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null)" == "1" ]] && CPU_TURBO_BOOST="true" || CPU_TURBO_BOOST="false"
+elif [[ -r /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then
+  [[ "$(cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null)" == "0" ]] && CPU_TURBO_BOOST="true" || CPU_TURBO_BOOST="false"
+fi
+CPU_ISOLATED="$(cat /sys/devices/system/cpu/isolated 2>/dev/null || echo '')"
 
 # Memory
 MEM_GB="$(LC_ALL=C awk '/MemTotal/{printf "%.1f", $2/1024/1024}' /proc/meminfo 2>/dev/null || \
@@ -264,6 +275,8 @@ jq -n \
   --argjson logical_threads "$(normalize_integer_json "$LOGICAL_THREADS")" \
   --arg arch "$ARCH" \
   --arg cpu_governor "$CPU_GOVERNOR" \
+  --arg cpu_turbo_boost "$CPU_TURBO_BOOST" \
+  --arg cpu_isolated "$CPU_ISOLATED" \
   --argjson memory_gb "$(normalize_number_json "$MEM_GB")" \
   --arg os_name "$OS_NAME" \
   --arg os_version "$OS_VERSION" \
@@ -295,13 +308,15 @@ jq -n \
     schema_version: $schema_version,
     captured_at: $captured_at,
     hardware_profile: $hardware_profile,
-    cpu: {
+    cpu: ({
       model: $cpu_model,
       physical_cores: $physical_cores,
       logical_threads: $logical_threads,
       architecture: $arch,
       cpu_governor: $cpu_governor
-    },
+    }
+    + (if $cpu_turbo_boost != "unknown" then { turbo_boost: ($cpu_turbo_boost == "true") } else {} end)
+    + (if $cpu_isolated != "" then { isolated_cpus: $cpu_isolated } else {} end)),
     memory_gb: $memory_gb,
     os: { name: $os_name, version: $os_version },
     kernel: $kernel,

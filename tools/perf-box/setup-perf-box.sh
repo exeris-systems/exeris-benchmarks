@@ -51,7 +51,11 @@ if [[ "${1:-}" == "--reset" ]]; then
 fi
 
 # ---- fairness guard: bare metal only ---------------------------------------
-VIRT="$(systemd-detect-virt 2>/dev/null || echo unknown)"
+# NB: systemd-detect-virt EXITS 1 when it reports "none" (bare metal). A naive
+# `... || echo unknown` would APPEND "unknown" to the real "none" stdout and
+# false-trip this guard on real hardware — capture stdout, ignore the exit code.
+VIRT="$(systemd-detect-virt 2>/dev/null || true)"
+[[ -z "$VIRT" ]] && VIRT="unknown"
 if [[ "$VIRT" != "none" ]]; then
   echo "ERROR: systemd-detect-virt reports '$VIRT' — this is NOT bare metal." >&2
   echo "       perf-box tuning (governor/boost/C-states) is meaningless under a" >&2

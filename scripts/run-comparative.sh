@@ -2554,10 +2554,10 @@ if [[ "$SCENARIO_ID" == "entity-read-by-id" ]]; then
   
   echo "Diagnostic files saved. Now attempting to wait for endpoints..." | tee -a "$sync_log"
   
-  wait_for_target_endpoint_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_PORT" "/db/ping" 60 "stage4-preflight-db-ping-${FIRST_TARGET_SLOT}"
-  wait_for_target_endpoint_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_PORT" "$SCENARIO_ENDPOINT_PATH" 60 "stage4-preflight-entity-read-${FIRST_TARGET_SLOT}"
-  wait_for_target_endpoint_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_PORT" "/db/ping" 60 "stage4-preflight-db-ping-${SECOND_TARGET_SLOT}"
-  wait_for_target_endpoint_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_PORT" "$SCENARIO_ENDPOINT_PATH" 60 "stage4-preflight-entity-read-${SECOND_TARGET_SLOT}"
+  wait_for_target_endpoint_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_HEALTH_URL" "/db/ping" 60 "stage4-preflight-db-ping-${FIRST_TARGET_SLOT}"
+  wait_for_target_endpoint_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_HEALTH_URL" "$SCENARIO_ENDPOINT_PATH" 60 "stage4-preflight-entity-read-${FIRST_TARGET_SLOT}"
+  wait_for_target_endpoint_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_HEALTH_URL" "/db/ping" 60 "stage4-preflight-db-ping-${SECOND_TARGET_SLOT}"
+  wait_for_target_endpoint_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_HEALTH_URL" "$SCENARIO_ENDPOINT_PATH" 60 "stage4-preflight-entity-read-${SECOND_TARGET_SLOT}"
 fi
 
 echo -e "  ${GREEN}✓${NC} Stage 4 complete."

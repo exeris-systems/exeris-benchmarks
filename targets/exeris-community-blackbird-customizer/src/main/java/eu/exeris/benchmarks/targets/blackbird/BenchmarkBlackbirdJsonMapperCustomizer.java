@@ -32,5 +32,8 @@ public final class BenchmarkBlackbirdJsonMapperCustomizer implements JsonMapperC
         // appliesTo defaults to every scope; HTTP_RESPONSE_ENCODE (exchange.respond) is the only hot
         // one for entity-read-by-id, so the measured effect isolates the response-encode accessor path.
         builder.addModule(new BlackbirdModule());
+        // Bootstrap-only breadcrumb (once per scope, never on the request path) so a run's startup log
+        // proves the Blackbird arm was actually active — i.e. the experiment is not a silent no-op.
+        System.err.println("[exeris-blackbird] applied Jackson-3 BlackbirdModule to JSON scope " + scope);
     }
 }

@@ -534,6 +534,11 @@ final class CommunityBenchmarkRouteHandlerTest {
         }
 
         @Override
+        public UserSummary findUserById(String id) {
+            return new UserSummary(id, "user-" + id);
+        }
+
+        @Override
         public List<UserSummary> findFriendsOfFriendsWithoutInterests(UUID userId, int limit) {
             return List.of(new UserSummary(UUID.randomUUID().toString(), "fof-user"));
         }
@@ -584,6 +589,11 @@ final class CommunityBenchmarkRouteHandlerTest {
         @Override
         public List<UserView> findTopUsersWithDetails(int userLimit, int friendLimit, int interestLimit) {
             return List.of();
+        }
+
+        @Override
+        public UserSummary findUserById(String id) {
+            return new UserSummary(id, "user-" + id);
         }
 
         @Override

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.exeris.benchmarks</groupId>
+  <artifactId>exeris-community-blackbird-customizer</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>Exeris :: Benchmarks :: Community Blackbird JSON-Mapper Customizer</name>
+  <description>
+    ADR-052 JsonMapperCustomizer that adds the Jackson-3 Blackbird module (invokedynamic property
+    accessors) to the Community HTTP_RESPONSE_ENCODE mapper — the serialization "faster path"
+    experiment for the megamorphic MethodHandle invokeExact cost profiled on 2026-07-19.
+
+    Kept in a SEPARATE module (not exeris-community-app) so the app stays edition-agnostic: only
+    THIS module imports eu.exeris.kernel.community.*. The exeris-blackbird target adds this uber-jar
+    to the launch classpath (its ServiceLoader presence = the Blackbird arm); exeris-default launches
+    the pristine app jar alone. Both run kernel 0.10.1 → isolates the Blackbird delta on CPU/req.
+
+    Shading bundles Blackbird's own classes; community + tools.jackson.databind/core are `provided`
+    (resolved at runtime from the app's shaded jar — versions match, kernel 0.10.1 BOM = jackson 3.1.1),
+    so no duplicate kernel/databind on the classpath.
+  </description>
+
+  <properties>
+    <java.version>26</java.version>
+    <maven.compiler.release>${java.version}</maven.compiler.release>
+    <exeris.kernel.version>0.10.1</exeris.kernel.version>
+    <jackson.version>3.1.1</jackson.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- The seam interface lives here; provided = compile-only, supplied at runtime by app.jar. -->
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-community</artifactId>
+      <version>${exeris.kernel.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <!-- JsonMapper.Builder API; provided by app.jar at runtime (same 3.1.1). -->
+    <dependency>
+      <groupId>tools.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <!-- The module under test — bundled into the uber-jar (this is what the customizer adds). -->
+    <dependency>
+      <groupId>tools.jackson.module</groupId>
+      <artifactId>jackson-module-blackbird</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.12.1</version>
+        <configuration>
+          <release>${java.version}</release>
+          <enablePreview>true</enablePreview>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <shadedArtifactAttached>false</shadedArtifactAttached>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -27,6 +27,25 @@
       ]
     },
     {
+      "target_id": "exeris-blackbird",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/exeris-community-blackbird.env",
+      "profile_id": "exeris-blackbird",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9005/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Exeris Community + ADR-052 Blackbird JSON-mapper customizer (same 0.10.1 app jar + customizer uber-jar on the launch classpath; Jackson-3 invokedynamic response-encode accessors)",
+      "app_dir": "targets/exeris-community-app",
+      "eligibility_note": "Within-exeris serialization-accessor A/B only (paired exeris-community__exeris-blackbird). Same exeris-community-app jar (kernel 0.10.1); the exeris-community-blackbird-customizer uber-jar is added to the launch classpath (ADR-052 ServiceLoader seam). Isolates Blackbird invokedynamic accessors vs the default megamorphic MethodHandle on the response-encode path. NOT a cross-runtime target; report only as a within-exeris tuning delta.",
+      "legacy_target_ids": []
+    },
+    {
       "target_id": "spring-hibernate",
       "tier": "community",
       "protocol_mode": "h1",

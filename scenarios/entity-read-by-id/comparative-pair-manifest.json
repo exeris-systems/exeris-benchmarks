@@ -69,6 +69,15 @@
       "maturity": "candidate",
       "claim_scope": "comparison_eligible",
       "notes": "COMPATIBILITY-mode target: the same Spring MVC + JPA app hosted on the Exeris ingress (ExerisCompatDispatcher, ADR-011) instead of Tomcat. Request-path endpoints only (the compat request-scope bug is fixed; saga is NOT eligible). PURE-vs-COMPAT is a mandatory separation axis: this is compat, never blend with pure-mode rows (native Exeris / Tomcat Spring / Quarkus) without the explicit compat caveat. CONFIDENTIALITY: excluded from the public docs path (CLAUDE.md); measurements are Community + Compatibility + H1, internal-only publication. Comparison-eligible within-tier H1 for the spring-hibernate__spring-on-exeris pair, which isolates the Exeris compat-ingress cost vs native Tomcat for one identical Spring app."
+    },
+    {
+      "target_id": "exeris-blackbird",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "The SAME exeris-community-app jar (kernel 0.10.1) with the ADR-052 Blackbird JsonMapperCustomizer uber-jar added to the launch classpath — Jackson-3 invokedynamic property accessors replacing the default megamorphic MethodHandle on the response-encode path. Comparison-eligible within-tier H1 ONLY for the exeris-community__exeris-blackbird pair; it is a WITHIN-EXERIS serialization-accessor A/B (both arms identical except Blackbird), NOT a cross-runtime target. Its default arm (exeris-community on 0.10.1) also cross-checks the 0.10.0 aggregate baseline (ADR-052 seam is default byte-identical)."
     }
   ],
   "allowed_pairs": [
@@ -140,6 +149,18 @@
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
       "axis_note": "COMPATIBILITY-COST pair (Pure-vs-Compat axis): the same Spring MVC + JPA app, same iso-2048 heap, differing ONLY in the HTTP ingress — native Tomcat (spring-hibernate, pure) vs Exeris compatibility ingress (spring-on-exeris, compat). Quantifies the Exeris compat-seam overhead. Internal-only publication: spring-on-exeris is excluded from the public docs path; never frame as a pure-mode number."
+    },
+    {
+      "pair_id": "exeris-community__exeris-blackbird",
+      "targets": [
+        "exeris-community",
+        "exeris-blackbird"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "WITHIN-EXERIS serialization-accessor A/B (NOT cross-runtime): identical exeris-community-app on kernel 0.10.1, differing ONLY in the ADR-052 Blackbird customizer (default Jackson-3 MethodHandle accessors vs invokedynamic). Isolates whether Blackbird cuts the ~20% BeanPropertyWriter.get/invokeExact response-encode CPU measured 2026-07-19. Report as a within-exeris tuning delta, never as an exeris-vs-X number."
     }
   ],
   "forbidden_pairs": [

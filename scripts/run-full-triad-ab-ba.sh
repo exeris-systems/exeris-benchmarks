@@ -664,6 +664,17 @@ build_target_artifact() {
     exeris-community)
       module_path="targets/exeris-community-app"
       ;;
+    exeris-blackbird)
+      # Same app jar as exeris-community (kernel 0.10.1) PLUS the ADR-052 Blackbird customizer
+      # uber-jar, added to the launch classpath by runtime/drivers/env/exeris-community-blackbird.env.
+      # Build the customizer module first, then fall through to build the shared app jar.
+      echo "[PREBUILD] Building blackbird customizer (targets/exeris-community-blackbird-customizer)..."
+      if ! mvn -q -f "targets/exeris-community-blackbird-customizer/pom.xml" -DskipTests package; then
+        echo "[PREBUILD] ERROR: Build failed for blackbird customizer"
+        return 1
+      fi
+      module_path="targets/exeris-community-app"
+      ;;
     spring-hibernate)
       module_path="targets/spring-benchmark-app"
       ;;

@@ -673,6 +673,9 @@ build_target_artifact() {
     quarkus-tuned)
       module_path="targets/quarkus-benchmark-app-tuned"
       ;;
+    spring-on-exeris)
+      module_path="targets/exeris-spring-runtime-app-comp"
+      ;;
     *)
       echo "ERROR: No Maven module mapping defined for target ${target_id}"
       return 1

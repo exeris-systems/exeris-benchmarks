@@ -9,6 +9,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 COMPOSE_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-db.yml"
+DB_TUNED_OVERRIDE="${REPO_ROOT}/runtime/compose/entity-read-by-id-db.tuned.yml"
+# BENCH_DB_TUNED=1 layers the tuned-PG override (host networking + PG cpuset isolation)
+# ON TOP of the base compose, for the SEPARATE tuned-PG baseline. Default off keeps the
+# stock (bridge, unpinned) path byte-identical so prior baselines stay reproducible.
+# All compose invocations below use "${COMPOSE_FILE_ARGS[@]}" so a mid-setup
+# force-recreate / restart cannot silently drop the override back to bridge.
+COMPOSE_FILE_ARGS=(-f "$COMPOSE_FILE")
+if [[ "${BENCH_DB_TUNED:-0}" == "1" ]]; then
+  if [[ -f "$DB_TUNED_OVERRIDE" ]]; then
+    COMPOSE_FILE_ARGS+=(-f "$DB_TUNED_OVERRIDE")
+    echo "  [infra] BENCH_DB_TUNED=1 -> tuned-PG override (host-net + cpuset): ${DB_TUNED_OVERRIDE}" >&2
+  else
+    echo "ERROR: BENCH_DB_TUNED=1 but override compose not found: ${DB_TUNED_OVERRIDE}" >&2
+    exit 1
+  fi
+fi
 SEED_APPLY_SCRIPT="${REPO_ROOT}/runtime/db/seed/seed-apply.sh"
 VERIFY_SCRIPT="${REPO_ROOT}/scenarios/entity-read-by-id/seed/verify-seed.sh"
 CAPTURE_DB_DIAGNOSTICS_SCRIPT="${REPO_ROOT}/scenarios/entity-read-by-id/capture-db-diagnostics.sh"
@@ -99,7 +115,7 @@ restart_managed_container_for_slot_recovery() {
 
   echo "  [infra] Restarting managed DB container for slot recovery..." >&2
   if [[ "$COMPOSE_AVAILABLE" -eq 1 ]]; then
-    if ! $DOCKER_COMPOSE -f "$COMPOSE_FILE" restart benchmark-db >/dev/null 2>&1; then
+    if ! $DOCKER_COMPOSE "${COMPOSE_FILE_ARGS[@]}" restart benchmark-db >/dev/null 2>&1; then
       echo "  [infra] Compose restart failed during slot recovery (best-effort)." >&2
       return 1
     fi
@@ -152,7 +168,7 @@ wait_for_db_ready() {
 start_or_create_managed_container() {
   if [[ "$COMPOSE_AVAILABLE" -eq 1 ]]; then
     echo "  [infra] Starting benchmark DB..."
-    $DOCKER_COMPOSE -f "$COMPOSE_FILE" up -d
+    $DOCKER_COMPOSE "${COMPOSE_FILE_ARGS[@]}" up -d
     return 0
   fi
 
@@ -169,12 +185,19 @@ start_or_create_managed_container() {
     docker start "$DB_CONTAINER_NAME" >/dev/null
   else
     echo "  [infra] Creating benchmark DB container (${DB_CONTAINER_NAME})..."
+    # Tuned-PG (BENCH_DB_TUNED=1): host networking + cpuset isolation (mirrors the compose
+    # override). Stock: published port on the bridge network. Host mode ignores -p, so the
+    # two are mutually exclusive.
+    local _run_net_args=(-p 5432:5432)
+    if [[ "${BENCH_DB_TUNED:-0}" == "1" ]]; then
+      _run_net_args=(--network host --cpuset-cpus "${BENCH_DB_CPUSET:-4-7,12-15}")
+    fi
     docker run -d \
       --name "$DB_CONTAINER_NAME" \
       -e POSTGRES_DB=benchmark_db \
       -e POSTGRES_USER=benchmark \
       -e POSTGRES_PASSWORD=benchmark \
-      -p 5432:5432 \
+      "${_run_net_args[@]}" \
       -v "${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql:/docker-entrypoint-initdb.d/01-pg-stat-statements-init.sql" \
       postgres:16.2 \
       -c "max_connections=${EXPECTED_PG_MAX_CONNECTIONS}" \
@@ -198,9 +221,9 @@ heal_managed_container_once() {
   echo "  [infra] Managed DB container not ready after initial wait; state=${state} health=${health}. Attempting one recovery..."
 
   if [[ "$COMPOSE_AVAILABLE" -eq 1 ]]; then
-    if ! $DOCKER_COMPOSE -f "$COMPOSE_FILE" restart benchmark-db >/dev/null 2>&1; then
+    if ! $DOCKER_COMPOSE "${COMPOSE_FILE_ARGS[@]}" restart benchmark-db >/dev/null 2>&1; then
       echo "  [infra] Compose restart failed; forcing one container recreate..."
-      $DOCKER_COMPOSE -f "$COMPOSE_FILE" up -d --force-recreate benchmark-db >/dev/null
+      $DOCKER_COMPOSE "${COMPOSE_FILE_ARGS[@]}" up -d --force-recreate benchmark-db >/dev/null
     fi
     return 0
   fi
@@ -261,7 +284,7 @@ normalize_pg_memory_to_bytes() {
 reconcile_managed_db_settings_once() {
   if [[ "$COMPOSE_AVAILABLE" -eq 1 ]]; then
     echo "  [infra] Recreating managed benchmark DB once to enforce launch flags..."
-    $DOCKER_COMPOSE -f "$COMPOSE_FILE" up -d --force-recreate benchmark-db >/dev/null
+    $DOCKER_COMPOSE "${COMPOSE_FILE_ARGS[@]}" up -d --force-recreate benchmark-db >/dev/null
     return 0
   fi
 

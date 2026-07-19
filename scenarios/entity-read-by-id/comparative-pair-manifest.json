@@ -11,7 +11,9 @@
     "fixed_contract_cross_runtime_h1_v2",
     "fixed_contract_cross_runtime_v1",
     "fixed_contract_cross_runtime_v2",
-    "fixed_contract_cross_runtime_h1_debug"
+    "fixed_contract_cross_runtime_h1_debug",
+    "fixed_contract_cross_runtime_h1_single_read_v1",
+    "fixed_contract_cross_runtime_h1_single_read_debug"
   ],
   "comparison_axis": {
     "type": "runtime_pairwise",
@@ -58,6 +60,15 @@
       "maturity": "candidate",
       "claim_scope": "comparison_eligible",
       "notes": "Pure-JDBC (Agroal + PreparedStatement, NO Hibernate/ORM) + native-epoll transport. Comparison-eligible within-tier H1 (community, loopback-h1). AXIS CAVEAT: differs from quarkus-hibernate on TWO axes at once — relational data-access (pure-JDBC vs Hibernate ORM) and Netty transport (native epoll vs JDK NIO); vs exeris-community the persistence layer is matched (both no-ORM) so the pair isolates runtime/transport efficiency. Reports must state these axes, not frame it as a bare quarkus number."
+    },
+    {
+      "target_id": "spring-on-exeris",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "COMPATIBILITY-mode target: the same Spring MVC + JPA app hosted on the Exeris ingress (ExerisCompatDispatcher, ADR-011) instead of Tomcat. Request-path endpoints only (the compat request-scope bug is fixed; saga is NOT eligible). PURE-vs-COMPAT is a mandatory separation axis: this is compat, never blend with pure-mode rows (native Exeris / Tomcat Spring / Quarkus) without the explicit compat caveat. CONFIDENTIALITY: excluded from the public docs path (CLAUDE.md); measurements are Community + Compatibility + H1, internal-only publication. Comparison-eligible within-tier H1 for the spring-hibernate__spring-on-exeris pair, which isolates the Exeris compat-ingress cost vs native Tomcat for one identical Spring app."
     }
   ],
   "allowed_pairs": [
@@ -117,6 +128,18 @@
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
       "axis_note": "Same runtime (Quarkus), differs on data-access (Hibernate ORM vs pure-JDBC) + transport (JDK NIO vs native epoll): quantifies the ORM+transport delta within Quarkus, the decomposition context for exeris-vs-quarkus-tuned."
+    },
+    {
+      "pair_id": "spring-hibernate__spring-on-exeris",
+      "targets": [
+        "spring-hibernate",
+        "spring-on-exeris"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "COMPATIBILITY-COST pair (Pure-vs-Compat axis): the same Spring MVC + JPA app, same iso-2048 heap, differing ONLY in the HTTP ingress — native Tomcat (spring-hibernate, pure) vs Exeris compatibility ingress (spring-on-exeris, compat). Quantifies the Exeris compat-seam overhead. Internal-only publication: spring-on-exeris is excluded from the public docs path; never frame as a pure-mode number."
     }
   ],
   "forbidden_pairs": [

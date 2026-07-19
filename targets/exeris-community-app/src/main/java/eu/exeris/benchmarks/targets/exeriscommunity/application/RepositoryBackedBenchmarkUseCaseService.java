@@ -74,6 +74,11 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
     }
 
     @Override
+    public UserSummary findUserById(String id) {
+        return userRepository.findById(id).orElse(null);
+    }
+
+    @Override
     public List<UserSummary> findFriendsOfFriendsWithoutInterests(UUID userId, int limit) {
         List<UUID> orderedIds = graphFriendsOfFriendsAdapter.findSecondDegreeNeighborIds(userId, limit);
         return userRepository.findUsersWithoutInterestsByOrderedIds(orderedIds, limit);

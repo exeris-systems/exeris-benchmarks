@@ -1,5 +1,6 @@
 package eu.exeris.benchmarks.targets.quarkusapp.service;
 
+import eu.exeris.benchmarks.targets.quarkusapp.dto.UserSummary;
 import eu.exeris.benchmarks.targets.quarkusapp.dto.UserView;
 import eu.exeris.benchmarks.targets.quarkusapp.repository.UserRepository;
 
@@ -22,5 +23,10 @@ public class UserService {
     @Transactional(Transactional.TxType.REQUIRED)
     public List<UserView> findFrozenContractUsers() {
         return userRepository.findTopUsersWithDetails(USERS_LIMIT, FRIENDS_LIMIT, INTERESTS_LIMIT);
+    }
+
+    @Transactional(Transactional.TxType.REQUIRED)
+    public UserSummary findUserById(long id) {
+        return userRepository.findUserById(id);
     }
 }

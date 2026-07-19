@@ -1,5 +1,6 @@
 package eu.exeris.benchmarks.targets.quarkusapp.controller;
 
+import eu.exeris.benchmarks.targets.quarkusapp.dto.UserSummary;
 import eu.exeris.benchmarks.targets.quarkusapp.dto.UserView;
 import eu.exeris.benchmarks.targets.quarkusapp.service.UserService;
 
@@ -8,7 +9,9 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 import java.util.List;
 
@@ -24,5 +27,16 @@ public class UserResource {
     @Path("/users")
     public List<UserView> readUsers() {
         return userService.findFrozenContractUsers();
+    }
+
+    // Lightweight single-row read (runtime-bound scenario): GET /api/v1/user?id=N -> {id, username}.
+    @GET
+    @Path("/user")
+    public Response readUser(@QueryParam("id") long id) {
+        UserSummary user = userService.findUserById(id);
+        if (user == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.ok(user).build();
     }
 }

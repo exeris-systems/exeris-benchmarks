@@ -18,6 +18,8 @@ public interface BenchmarkUseCaseService {
 
     List<UserView> findTopUsersWithDetails(int userLimit, int friendLimit, int interestLimit);
 
+    UserSummary findUserById(String id);
+
     List<UserSummary> findFriendsOfFriendsWithoutInterests(UUID userId, int limit);
 
     TokenResponse register(String username, String email, String password);

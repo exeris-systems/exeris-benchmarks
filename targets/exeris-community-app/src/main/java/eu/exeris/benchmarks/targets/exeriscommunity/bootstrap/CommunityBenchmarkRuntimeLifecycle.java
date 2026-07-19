@@ -117,6 +117,7 @@ public final class CommunityBenchmarkRuntimeLifecycle {
                 .route(HttpMethod.GET, "/plaintext",    routeHandler::handlePlaintext)
                 .route(HttpMethod.GET, "/db/ping",      routeHandler::handleDbPing)
                 .route(HttpMethod.GET, "/api/v1/users", routeHandler::handleUsers)
+                .route(HttpMethod.GET, "/api/v1/user",  routeHandler::handleUserById)
                 .route(HttpMethod.GET, "/api/v1/graph/friends-of-friends/without-interests",
                     routeHandler::handleFriendsOfFriendsWithoutInterests)
                 .route(HttpMethod.POST, "/api/v1/auth/register", routeHandler::handleRegister)

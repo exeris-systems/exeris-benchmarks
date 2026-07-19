@@ -108,6 +108,28 @@ public final class CommunityBenchmarkRouteHandler {
         }
     }
 
+    // Lightweight single-row read (runtime-bound scenario): GET /api/v1/user?id=N -> {id, username}.
+    // Mirrors handleUsers but reads one row by PK, so throughput reflects the runtime +
+    // pool + JSON serialization path rather than Postgres.
+    public void handleUserById(HttpExchange exchange) {
+        Map<String, String> queryParams = parseQueryParams(exchange.request().path());
+        String id = queryParams.get("id");
+        if (id == null || id.isBlank()) {
+            exchange.respond(HttpStatus.BAD_REQUEST);
+            return;
+        }
+        try {
+            UserSummary user = useCaseService.findUserById(id);
+            if (user == null) {
+                exchange.respond(HttpStatus.NOT_FOUND);
+                return;
+            }
+            exchange.respond(HttpStatus.OK, user);
+        } catch (RuntimeException exception) {
+            exchange.respond(HttpStatus.SERVICE_UNAVAILABLE);
+        }
+    }
+
     public void handleFriendsOfFriendsWithoutInterests(HttpExchange exchange) {
         Map<String, String> queryParams = parseQueryParams(exchange.request().path());
         UUID userId = parseRequiredUuid(queryParams.get("userId"));

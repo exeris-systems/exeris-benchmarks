@@ -35,6 +35,12 @@ public class UserRepository {
     private static final String TOP_USERS_SQL =
             "SELECT id, username FROM users ORDER BY id ASC LIMIT ?";
 
+    // Single-row indexed read (PK lookup) for the lightweight runtime-bound scenario:
+    // trivial DB cost (~microseconds) so throughput reflects the runtime + connection
+    // pool + JSON serialization path, not Postgres. Kept identical across targets.
+    private static final String USER_BY_ID_SQL =
+            "SELECT id, username FROM users WHERE id = ?";
+
     private static final String PING_SQL = "SELECT 1";
 
     @Inject
@@ -67,6 +73,23 @@ public class UserRepository {
             return views;
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to read top users with details", exception);
+        }
+    }
+
+    public UserSummary findUserById(long id) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(USER_BY_ID_SQL)) {
+            statement.setLong(1, id);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return new UserSummary(
+                            Long.toString(resultSet.getLong("id")),
+                            resultSet.getString("username"));
+                }
+                return null;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to read user by id", exception);
         }
     }
 

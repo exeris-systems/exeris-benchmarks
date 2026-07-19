@@ -1,0 +1,42 @@
+# entity-read-by-id-db.tuned.yml — OPT-IN "tuned-PG isolation" override.
+#
+# Apply ON TOP of entity-read-by-id-db.yml (after, so it wins):
+#
+#   docker compose -f entity-read-by-id-db.yml -f entity-read-by-id-db.tuned.yml up -d
+#
+# infra-setup.sh applies it automatically when BENCH_DB_TUNED=1.
+#
+# WHY — evidence-driven, see docs/methodology.md + the 2026-07-19 diagnosis. On this
+# perf-box the entity-read-by-id workload (GET /api/v1/users = 3 SQL queries/request:
+# top-10 users + two windowed friends/interests aggregates) is DB-CPU-bound: EXPLAIN
+# ANALYZE shows every query already optimal (index-only scans, 0 heap fetches, fully
+# cache-resident, in-memory sub-ms), yet Postgres consumes ~9.4 cores under the fixed
+# 128-connection load. That is INHERENT query-execution cost, not a config deficit, so
+# shared_buffers / work_mem are deliberately left at the stock values (256MB / 8MB) —
+# tuning them changes nothing here and would only muddy the comparison. The two levers
+# that DO matter are captured below:
+#
+#   1. network_mode: host — removes the Docker bridge/NAT hop. The harness itself warns
+#      that bridge/NAT "taxes chattier stacks asymmetrically" (run-comparative.sh); for
+#      a fair CROSS-STACK claim the DB must not sit behind NAT. (ports: from the base are
+#      ignored under host mode — expected "Published ports are discarded" warning; PG
+#      binds 5432 directly on the host where every target reaches it.)
+#
+#   2. cpuset — confine Postgres to its OWN physical cores so it cannot steal cycles from
+#      the runtime's pinned cores. Default 4-7,12-15 = cores 4,5,6,7 (both SMT threads) =
+#      4 physical cores, EXCLUSIVE of the server pin (0-1,8-9 = 2 phys) and the loadgen
+#      pin (2-3,10-11 = 2 phys). Full 8-core partition, no overlap → the oversubscription
+#      measured with unpinned PG (host load 30-48 on 16 threads) is eliminated and the
+#      runtime's per-core throughput is measured on truly dedicated cores. Pair this with
+#      BENCH_SERVER_CPU_AFFINITY=0-1,8-9 and BENCH_LOADGEN_CPU_AFFINITY=2-3,10-11.
+#
+# TRADE-OFF (document, do not hide): confining PG to 4 physical cores (it wanted ~9.4
+# logical unconfined) can lower the absolute DB ceiling, but removes the contention
+# confound so the ceiling is now clean and identical for every target. Host networking
+# moves away from a production-shaped network. State both in any claim; results are a
+# SEPARATE "tuned-PG" baseline — never mixed with stock-PG (bridge, unpinned) runs.
+
+services:
+  benchmark-db:
+    network_mode: host
+    cpuset: "4-7,12-15"

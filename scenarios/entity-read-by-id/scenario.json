@@ -432,6 +432,46 @@
         "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
       },
       "debug_note": "Short-window debug contract for reproducing harness bugs fast. NOT for eligible results."
+    },
+    "fixed_contract_cross_runtime_h1_single_read_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/user?id=1",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 300,
+      "duration_seconds": 900,
+      "payload_profile": "single-user-by-id-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      },
+      "capability_note": "RUNTIME-BOUND lightweight variant: single-row indexed read (GET /api/v1/user?id=1 -> {id, username}) instead of the 3-query 10x10x10 aggregate. DB cost is trivial + cache-resident by design (one hot PK row), so throughput reflects the runtime + connection pool + JSON serialization path rather than Postgres. Complements the aggregate contracts, which the 2026-07-19 diagnosis showed are DB-CPU-bound (PG ~9.4 cores; exeris/quarkus both saturate ~11k so their gap is at the margin). Fixed id=1 removes DB-side variance; the response is byte-identical across targets. NOT comparable to aggregate or _v1/_v2 contracts (different endpoint/payload) — contract_id is the isolation key. Intended for the tuned-PG baseline (BENCH_DB_TUNED=1: host-net + PG cpuset)."
+    },
+    "fixed_contract_cross_runtime_h1_single_read_debug": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/user?id=1",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 5,
+      "duration_seconds": 15,
+      "payload_profile": "single-user-by-id-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      },
+      "debug_note": "Short-window debug variant of the single-row runtime-bound read. NOT for eligible results."
     }
   },
   "measurement_windows": {

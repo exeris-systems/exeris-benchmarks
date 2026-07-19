@@ -24,4 +24,14 @@ public class UserPanacheRepository implements PanacheRepository<UserEntity> {
         }
         return users;
     }
+
+    // Single-row PK read through the ORM (entity load + map) — the Hibernate counterpart
+    // of the pure-JDBC target's WHERE id=? read; the ORM entity-hydration cost is the point.
+    public UserSummary findUserById(long id) {
+        UserEntity entity = findById(id);
+        if (entity == null) {
+            return null;
+        }
+        return new UserSummary(Long.toString(entity.getId()), entity.getUsername());
+    }
 }

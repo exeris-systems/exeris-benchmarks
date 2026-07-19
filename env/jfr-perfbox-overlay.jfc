@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  jfr-perfbox-overlay.jfc — combined comparative overlay for the perf-box tuned-PG
+  campaigns. Merges the two overlays that the run harness treats as mutually exclusive
+  (BENCH_JFR_EXTRA_SETTINGS wins over BENCH_JFR_STEADY_STATE), so a definitive
+  comparison_eligible run gets BOTH properties in one recording:
+
+    1. DISABLE all eu.exeris.* custom kernel telemetry (from jfr-no-exeris-telemetry.jfc)
+       — fairness: without this the Exeris target alone captures millions of its own
+       telemetry events (~56.8M / 2 GB on a live entity run), an asymmetric CPU/recording
+       tax Spring/Quarkus never pay, which also drowns out the jdk.ExecutionSample CPU
+       profile. EXERIS_TELEMETRY_JFR_ENABLED=false does NOT gate emission — disabling the
+       events in the recording config is what stops them.
+
+    2. ENABLE the three HotSpot compiler events (from jfr-steady-state.jfc) — steady-state
+       proof: jdk.CompilerStatistics + jdk.CompilerQueueUtilization (period 1s) and
+       jdk.Compilation (threshold 100ms). A run is only "warm" if the C2 queue is empty and
+       compileCount is flat across the measurement window (the 2026-06-20 report showed
+       Quarkus still compiling after 5 min of warmup — so this is proven, not assumed).
+
+  Both are purely additive relative to `settings=profile`: (1) only disables eu.exeris.*
+  events, (2) only enables compiler events; everything else is the base profile config.
+  Community/open-core telemetry only — no Enterprise/H3 data — safe under `public` mode
+  (the resulting raw .jfr still follows publish-report.sh publication-mode gating).
+
+  Usage: BENCH_JFR_EXTRA_SETTINGS=env/jfr-perfbox-overlay.jfc (the triad splices it as
+  ...,settings=profile,settings=<abs path>/env/jfr-perfbox-overlay.jfc).
+-->
+<configuration version="2.0"
+               label="Exeris Perf-Box Comparative (telemetry-off + steady-state)"
+               description="Disable eu.exeris.* telemetry AND enable C2 compiler events; merge on top of profile."
+               provider="exeris-benchmarks">
+
+  <!-- (1) fairness: disable all eu.exeris.* custom kernel telemetry -->
+  <event name="eu.exeris.kernel.bootstrap.ConfigSettingsResolved"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.bootstrap.KernelBootReady"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.bootstrap.KernelStart"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.bootstrap.SubsystemInitialized"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.bootstrap.SubsystemStarted"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.ResourceArbiterDecision"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.crypto.OpenSslLoad"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.http.AggregateBufferForcedRelease"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.http.AggregateBufferHeld"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.http.routing.HttpRouterRegisteredEvent"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.transport.ConnectionEstablished"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.transport.StreamAccepted"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.core.transport.StreamLifecycle"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.http.CommunityHttpLifecycle"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.AdmissionDecision"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.AdmissionStage"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.BootstrapSelected"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.ConnectionAcquire"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.EngineBootstrap"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.RequestSessionLifecycle"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.persistence.TransactionLifecycle"><setting name="enabled">false</setting></event>
+  <event name="eu.exeris.kernel.telemetry.JfrCommitDrop"><setting name="enabled">false</setting></event>
+
+  <!-- (2) steady-state proof: additive HotSpot compiler telemetry -->
+  <event name="jdk.CompilerStatistics">
+    <setting name="enabled">true</setting>
+    <setting name="period">1 s</setting>
+  </event>
+  <event name="jdk.CompilerQueueUtilization">
+    <setting name="enabled">true</setting>
+    <setting name="period">1 s</setting>
+  </event>
+  <event name="jdk.Compilation">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">100 ms</setting>
+    <setting name="stackTrace">false</setting>
+  </event>
+
+</configuration>

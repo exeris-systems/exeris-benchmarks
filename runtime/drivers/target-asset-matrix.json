@@ -24,7 +24,8 @@
         "exeris-benchmark-app-community-h1",
         "exeris-native-community",
         "exeris-runtime-community"
-      ]
+      ],
+      "mode": "pure"
     },
     {
       "target_id": "exeris-blackbird",
@@ -43,7 +44,88 @@
       "descriptor": "Exeris Community + ADR-052 Blackbird JSON-mapper customizer (same 0.10.1 app jar + customizer uber-jar on the launch classpath; Jackson-3 invokedynamic response-encode accessors)",
       "app_dir": "targets/exeris-community-app",
       "eligibility_note": "Within-exeris serialization-accessor A/B only (paired exeris-community__exeris-blackbird). Same exeris-community-app jar (kernel 0.10.1); the exeris-community-blackbird-customizer uber-jar is added to the launch classpath (ADR-052 ServiceLoader seam). Isolates Blackbird invokedynamic accessors vs the default megamorphic MethodHandle on the response-encode path. NOT a cross-runtime target; report only as a within-exeris tuning delta.",
-      "legacy_target_ids": []
+      "legacy_target_ids": [],
+      "mode": "pure"
+    },
+    {
+      "target_id": "exeris-k0101",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/exeris-k0101.env",
+      "profile_id": "exeris-k0101",
+      "compose_file": "",
+      "jar_path": "targets/_staging/exeris-community-app-k0.10.1.jar",
+      "health_url": "http://localhost:9010/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Serialisation-matrix arm 1: exeris-community-app pinned to kernel 0.10.1, default Jackson-3 MethodHandle accessors, pre-SegmentSink encode",
+      "app_dir": "targets/exeris-community-app",
+      "eligibility_note": "WITHIN-EXERIS 2x2 serialisation matrix only (kernel version x Blackbird accessor). Built with -Dexeris.kernel.version=0.10.1 and launched from a version-staged jar so the arms cannot overwrite one another. Never report as a cross-runtime number.",
+      "legacy_target_ids": [],
+      "mode": "pure"
+    },
+    {
+      "target_id": "exeris-k0101-bb",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/exeris-k0101-bb.env",
+      "profile_id": "exeris-k0101-bb",
+      "compose_file": "",
+      "jar_path": "targets/_staging/exeris-community-app-k0.10.1.jar",
+      "health_url": "http://localhost:9011/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Serialisation-matrix arm 2: kernel 0.10.1 + ADR-052 Blackbird customizer (invokedynamic accessors), pre-SegmentSink encode",
+      "app_dir": "targets/exeris-community-app",
+      "eligibility_note": "WITHIN-EXERIS 2x2 serialisation matrix only. Same staged jar as exeris-k0101; the customizer uber-jar on the launch classpath is the ONLY difference. Leaf is valid only if the bootstrap breadcrumb '[exeris-blackbird] applied Jackson-3 BlackbirdModule' appears, proving the arm is not a silent no-op.",
+      "legacy_target_ids": [],
+      "mode": "pure"
+    },
+    {
+      "target_id": "exeris-k0102",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/exeris-k0102.env",
+      "profile_id": "exeris-k0102",
+      "compose_file": "",
+      "jar_path": "targets/_staging/exeris-community-app-k0.10.2.jar",
+      "health_url": "http://localhost:9012/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Serialisation-matrix arm 3: exeris-community-app pinned to kernel 0.10.2 (encode/allocation batch), default Jackson-3 MethodHandle accessors",
+      "app_dir": "targets/exeris-community-app",
+      "eligibility_note": "WITHIN-EXERIS 2x2 serialisation matrix only. Differs from exeris-k0101 by the WHOLE v0.10.1..v0.10.2 range, not by SegmentSink alone: #241 response streaming plus #244 buffer-release accounting (#242 request-body streaming is inert for GET workloads). Label the contrast '0.10.2 encode/allocation batch', never 'SegmentSink'.",
+      "legacy_target_ids": [],
+      "mode": "pure"
+    },
+    {
+      "target_id": "exeris-k0102-bb",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/exeris-k0102-bb.env",
+      "profile_id": "exeris-k0102-bb",
+      "compose_file": "",
+      "jar_path": "targets/_staging/exeris-community-app-k0.10.2.jar",
+      "health_url": "http://localhost:9013/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Serialisation-matrix arm 4: kernel 0.10.2 encode/allocation batch + ADR-052 Blackbird customizer",
+      "app_dir": "targets/exeris-community-app",
+      "eligibility_note": "WITHIN-EXERIS 2x2 serialisation matrix only. The arm where an accessor/encode interaction would show: removing encode allocation raises the relative share of accessor cost, so Blackbird may pay more here than on 0.10.1. Same customizer jar as exeris-k0101-bb (seam byte-identical across the two kernel versions). Requires the same bootstrap-breadcrumb assertion.",
+      "legacy_target_ids": [],
+      "mode": "pure"
     },
     {
       "target_id": "spring-hibernate",
@@ -66,7 +148,8 @@
         "spring-jvm-vt-tuned",
         "spring-app-axon",
         "spring-native-default"
-      ]
+      ],
+      "mode": "pure"
     },
     {
       "target_id": "spring-on-exeris",
@@ -88,7 +171,8 @@
       "legacy_target_ids": [
         "spring-runtime-on-exeris-flow",
         "exeris-spring-runtime-app-comp"
-      ]
+      ],
+      "mode": "compat"
     },
     {
       "target_id": "quarkus-hibernate",
@@ -111,7 +195,8 @@
         "quarkus-jvm-vt-tuned",
         "quarkus-app-axon",
         "quarkus-native-default"
-      ]
+      ],
+      "mode": "pure"
     },
     {
       "target_id": "quarkus-tuned",
@@ -133,7 +218,8 @@
       "legacy_target_ids": [
         "quarkus-jdbc",
         "quarkus-benchmark-app-jdbc"
-      ]
+      ],
+      "mode": "pure"
     },
     {
       "target_id": "restate",
@@ -155,7 +241,8 @@
       "eligibility_note": "Saga-only target (e2e-shop-order-saga CONTRACT-v2; v2 request-response model — terminal outcome in the POST /api/v1/orders 200 body, status polling served but normally skipped by k6). Not yet referenced by any comparative-pair-manifest or scenario.json fixed_contract; wire both (plus tools/verify-target-asset-matrix.sh) before any comparative claim. Like the Axon stacks, part of the deployment unit (restate-server container exeris-e2e-saga-restate-server) runs outside the per-process resource sampler — whole-deployment footprint claims must attribute it separately (logs/restate-server-docker-stats.csv). Durability tier: restate-server 1.7 default is T2 fsync node-durable (RocksDB WAL fsync per commit batch); cross-tier comparisons forbidden per CONTRACT-v2 s8.",
       "legacy_target_ids": [
         "restate-benchmark-app"
-      ]
+      ],
+      "mode": "pure"
     }
   ]
 }

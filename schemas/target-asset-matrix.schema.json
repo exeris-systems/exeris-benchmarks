@@ -29,7 +29,8 @@
           "health_url",
           "asset_state",
           "eligibility_class",
-          "missing_assets"
+          "missing_assets",
+          "mode"
         ],
         "properties": {
           "target_id": {
@@ -81,6 +82,34 @@
           },
           "non_runnable_reason": {
             "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["pure", "compat", "native", "jdbc-bridge", "baseline-db"],
+            "description": "Pure-vs-Compatibility identity of the target. REQUIRED because Pure-vs-Compat is a mandatory separation axis: a result artefact that cannot state which side of it a target sits on cannot be labelled correctly in any report. Enum matches benchmark-result.schema.json target.mode so the value flows through untranslated. Historically run-comparative.sh defaulted every target to 'compat' from a single per-PAIR variable, which mislabelled all pure targets and made the spring-hibernate (pure) vs spring-on-exeris (compat) pair structurally impossible to label at all."
+          },
+          "descriptor": {
+            "type": "string",
+            "description": "Human-readable identity of the target."
+          },
+          "app_dir": {
+            "type": "string",
+            "description": "Repo-relative source directory of the target application."
+          },
+          "eligibility_note": {
+            "type": "string",
+            "description": "Scoping caveats: which pairs this target may appear in and how its numbers may be reported."
+          },
+          "default_protocol_note": {
+            "type": "string",
+            "description": "Explains why protocol_mode carries the value it does when the target supports several."
+          },
+          "legacy_target_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Previous identifiers for this target, kept so historical results remain resolvable."
           }
         },
         "allOf": [

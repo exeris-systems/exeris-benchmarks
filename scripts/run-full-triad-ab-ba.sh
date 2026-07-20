@@ -659,6 +659,10 @@ build_target_artifact() {
   local target_id=$1
   local module_path=""
   local pom_path=""
+  # Empty for every pre-existing target: build with the module pom's own exeris.kernel.version
+  # and leave the artifact where it lands. Non-empty only for the serialisation-matrix arms,
+  # which pin a kernel version and stage the jar under a version-qualified name.
+  local kernel_version=""
 
   case "$target_id" in
     exeris-community)
@@ -672,6 +676,27 @@ build_target_artifact() {
       if ! mvn -q -f "targets/exeris-community-blackbird-customizer/pom.xml" -DskipTests package; then
         echo "[PREBUILD] ERROR: Build failed for blackbird customizer"
         return 1
+      fi
+      module_path="targets/exeris-community-app"
+      ;;
+    exeris-k0101|exeris-k0101-bb|exeris-k0102|exeris-k0102-bb)
+      # Serialisation-matrix arms (2x2: kernel version x Blackbird accessor). Same app module as
+      # exeris-community, but built against a PINNED kernel version and staged under a
+      # version-qualified name. Without the pin+stage, prebuild would build every target in turn
+      # and the 0.10.2 build would overwrite the 0.10.1 jar at the identical path — every arm would
+      # then launch whichever version was built last. Four campaigns, one runtime, no error raised.
+      case "$target_id" in
+        exeris-k0101*) kernel_version="0.10.1" ;;
+        exeris-k0102*) kernel_version="0.10.2" ;;
+      esac
+      if [[ "$target_id" == *-bb ]]; then
+        # Seam verified identical between v0.10.1 and v0.10.2 (zero commits touching
+        # */community/json/*), so ONE customizer jar serves both versions.
+        echo "[PREBUILD] Building blackbird customizer for ${target_id}..."
+        if ! mvn -q -f "targets/exeris-community-blackbird-customizer/pom.xml" -DskipTests package; then
+          echo "[PREBUILD] ERROR: Build failed for blackbird customizer"
+          return 1
+        fi
       fi
       module_path="targets/exeris-community-app"
       ;;
@@ -695,11 +720,43 @@ build_target_artifact() {
 
   pom_path="${module_path}/pom.xml"
 
-  echo "[PREBUILD] Building ${target_id} from module ${module_path}..."
-  if ! mvn -q -f "$pom_path" -DskipTests package; then
+  local staged_jar=""
+  if [[ -n "$kernel_version" ]]; then
+    staged_jar="targets/_staging/exeris-community-app-k${kernel_version}.jar"
+    # exeris-kXXXX and exeris-kXXXX-bb share one jar (the customizer is a classpath toggle, not a
+    # different build), so the second arm of a version reuses the first arm's artifact. Keyed on
+    # what THIS campaign built, never on file existence — a leftover jar from an earlier run must
+    # not be silently reused, which is exactly the stale-artifact failure this task exists to prevent.
+    if [[ " ${PREBUILT_KERNEL_VERSIONS:-} " == *" ${kernel_version} "* ]]; then
+      echo "[PREBUILD] Reusing artifact staged earlier in this campaign: ${staged_jar}"
+      echo "[PREBUILD] Build completed for ${target_id}"
+      return 0
+    fi
+  fi
+
+  local -a mvn_args=(-q -f "$pom_path" -DskipTests package)
+  if [[ -n "$kernel_version" ]]; then
+    mvn_args+=("-Dexeris.kernel.version=${kernel_version}")
+    echo "[PREBUILD] Building ${target_id} from module ${module_path} (kernel pinned to ${kernel_version})..."
+  else
+    echo "[PREBUILD] Building ${target_id} from module ${module_path}..."
+  fi
+
+  if ! mvn "${mvn_args[@]}"; then
     echo "[PREBUILD] ERROR: Build failed for ${target_id} using module-local pom ${pom_path}; missing root reactor is intentionally avoided"
     return 1
   fi
+
+  if [[ -n "$staged_jar" ]]; then
+    mkdir -p targets/_staging
+    if ! cp -f "${module_path}/target/exeris-community-app-1.0.0-SNAPSHOT.jar" "$staged_jar"; then
+      echo "[PREBUILD] ERROR: Could not stage ${target_id} artifact to ${staged_jar}"
+      return 1
+    fi
+    PREBUILT_KERNEL_VERSIONS="${PREBUILT_KERNEL_VERSIONS:-} ${kernel_version}"
+    echo "[PREBUILD] Staged ${target_id} -> ${staged_jar} (kernel ${kernel_version})"
+  fi
+
   echo "[PREBUILD] Build completed for ${target_id}"
 
   return 0

@@ -78,6 +78,42 @@
       "maturity": "candidate",
       "claim_scope": "comparison_eligible",
       "notes": "The SAME exeris-community-app jar (kernel 0.10.1) with the ADR-052 Blackbird JsonMapperCustomizer uber-jar added to the launch classpath — Jackson-3 invokedynamic property accessors replacing the default megamorphic MethodHandle on the response-encode path. Comparison-eligible within-tier H1 ONLY for the exeris-community__exeris-blackbird pair; it is a WITHIN-EXERIS serialization-accessor A/B (both arms identical except Blackbird), NOT a cross-runtime target. Its default arm (exeris-community on 0.10.1) also cross-checks the 0.10.0 aggregate baseline (ADR-052 seam is default byte-identical)."
+    },
+    {
+      "target_id": "exeris-k0101",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "2x2 serialisation-matrix arm 1: exeris-community-app built with -Dexeris.kernel.version=0.10.1 and launched from a version-staged jar, default Jackson-3 MethodHandle accessors. Comparison-eligible ONLY inside the within-exeris matrix pairs; never a cross-runtime number."
+    },
+    {
+      "target_id": "exeris-k0101-bb",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "2x2 serialisation-matrix arm 2: same staged 0.10.1 jar as exeris-k0101 plus the ADR-052 Blackbird customizer on the launch classpath. A leaf counts only if the bootstrap breadcrumb proves the customizer applied. Within-exeris matrix pairs only."
+    },
+    {
+      "target_id": "exeris-k0102",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "2x2 serialisation-matrix arm 3: kernel pinned to 0.10.2, default accessors. Its contrast with exeris-k0101 covers the WHOLE v0.10.1..v0.10.2 encode/allocation batch (#241 + #244), not SegmentSink alone — label it that way. Within-exeris matrix pairs only."
+    },
+    {
+      "target_id": "exeris-k0102-bb",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "2x2 serialisation-matrix arm 4: kernel 0.10.2 plus Blackbird. The arm carrying the accessor-by-encode interaction. Same customizer jar as arm 2 (seam byte-identical across v0.10.1 and v0.10.2). Within-exeris matrix pairs only."
     }
   ],
   "allowed_pairs": [
@@ -161,6 +197,54 @@
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
       "axis_note": "WITHIN-EXERIS serialization-accessor A/B (NOT cross-runtime): identical exeris-community-app on kernel 0.10.1, differing ONLY in the ADR-052 Blackbird customizer (default Jackson-3 MethodHandle accessors vs invokedynamic). Isolates whether Blackbird cuts the ~20% BeanPropertyWriter.get/invokeExact response-encode CPU measured 2026-07-19. Report as a within-exeris tuning delta, never as an exeris-vs-X number."
+    },
+    {
+      "pair_id": "exeris-k0101__exeris-k0101-bb",
+      "targets": [
+        "exeris-k0101",
+        "exeris-k0101-bb"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "2x2 serialisation matrix, ACCESSOR lever at the OLD encode path (arm1 vs arm2). Same staged 0.10.1 jar; only the Blackbird customizer's classpath presence differs. Within-exeris tuning delta only."
+    },
+    {
+      "pair_id": "exeris-k0102__exeris-k0102-bb",
+      "targets": [
+        "exeris-k0102",
+        "exeris-k0102-bb"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "2x2 serialisation matrix, ACCESSOR lever at the NEW encode path (arm3 vs arm4). Same staged 0.10.2 jar; only the Blackbird customizer differs. Comparing this delta against exeris-k0101__exeris-k0101-bb gives the interaction. Within-exeris tuning delta only."
+    },
+    {
+      "pair_id": "exeris-k0101__exeris-k0102",
+      "targets": [
+        "exeris-k0101",
+        "exeris-k0102"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "2x2 serialisation matrix, ENCODE lever at DEFAULT accessors (arm1 vs arm3). Measures the whole v0.10.1..v0.10.2 encode/allocation batch (#241 response streaming + #244 buffer-release accounting; #242 is inert for GET), NOT SegmentSink in isolation. Label accordingly. Within-exeris version delta only."
+    },
+    {
+      "pair_id": "exeris-k0101-bb__exeris-k0102-bb",
+      "targets": [
+        "exeris-k0101-bb",
+        "exeris-k0102-bb"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "2x2 serialisation matrix, ENCODE lever at BLACKBIRD accessors (arm2 vs arm4). The second, independent route to the interaction: (arm4-arm2)-(arm3-arm1) must agree with (arm4-arm3)-(arm2-arm1). Disagreement means one arm is not what it claims to be. Within-exeris version delta only."
     }
   ],
   "forbidden_pairs": [

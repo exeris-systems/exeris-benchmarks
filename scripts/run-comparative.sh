@@ -2674,6 +2674,43 @@ if [[ "$SCENARIO_ID" == "entity-read-by-id" ]]; then
   wait_for_target_endpoint_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_HEALTH_URL" "$SCENARIO_ENDPOINT_PATH" 60 "stage4-preflight-entity-read-${SECOND_TARGET_SLOT}"
 fi
 
+# ------------------------------------------------------------------------------------------
+# Artifact-identity assertion (fail-closed).
+#
+# Readiness proves SOMETHING is serving the port. It does not prove it is the build we meant.
+# The serialisation-matrix arms are all produced from one Maven module and kept apart only by a
+# version-staged jar plus a customizer on the classpath; if either mechanism regresses, all four
+# arms launch the same runtime, every gate passes, and the campaign reports four different numbers
+# for one binary. Asserting here costs a preflight failure instead of a full campaign of numbers
+# attributed to the wrong build.
+# ------------------------------------------------------------------------------------------
+#
+# Gated by BENCH_ASSERT_LAUNCH (default 0) ONLY until the verifier has been exercised on the perf
+# box. It depends on `ss -ltnp` output and /proc, neither of which can be tested from the Windows
+# dev environment, and it is fail-closed — an unverified assumption here would abort every campaign
+# including multi-hour sweeps. The serialisation-matrix launcher sets BENCH_ASSERT_LAUNCH=1
+# explicitly, so the arms that actually need the guarantee get it. Flip the default to 1 once a
+# real run has shown it passing on targets already known to be correct.
+LAUNCH_VERIFIER="${REPO_ROOT}/tools/verify-target-launch.sh"
+if [[ "${BENCH_ASSERT_LAUNCH:-0}" != "1" ]]; then
+  echo "NOTE: artifact-identity assertion disabled (BENCH_ASSERT_LAUNCH != 1)."
+elif [[ -f "$LAUNCH_VERIFIER" ]]; then
+  for _tv_pair in "${FIRST_TARGET_ID}|${FIRST_TARGET_HEALTH_URL}" "${SECOND_TARGET_ID}|${SECOND_TARGET_HEALTH_URL}"; do
+    _tv_id="${_tv_pair%%|*}"
+    _tv_url="${_tv_pair#*|}"
+    _tv_port="$(printf '%s' "$_tv_url" | sed -E 's#.*:([0-9]+).*#\1#')"
+    # Log path conventions differ per env file; match on the port, which every arm-specific log
+    # carries. Absent log => the verifier reports the breadcrumb as NOT asserted rather than passing.
+    _tv_log="$(ls -1t /tmp/exeris-*"${_tv_port}"*.log 2>/dev/null | head -1)"
+    if ! bash "$LAUNCH_VERIFIER" "$_tv_id" "$_tv_port" "$_tv_log"; then
+      echo "ERROR: launch verification failed for ${_tv_id} — refusing to measure an unidentified artifact." >&2
+      exit 1
+    fi
+  done
+else
+  echo "WARN: ${LAUNCH_VERIFIER} not found; artifact identity NOT asserted for this run." >&2
+fi
+
 echo -e "  ${GREEN}✓${NC} Stage 4 complete."
 
 # ============================================================
@@ -2942,6 +2979,21 @@ parse_wrk_to_result() {
   latency_mean_ms="$(grep -oP '^\s+Latency\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
   total_requests="$(grep -oP '(\d+) requests' "$wrk_raw" | head -1 | grep -oP '^\d+' || echo "0")"
   total_errors="$(grep -oP 'Non-2xx or 3xx responses:\s+\K\d+' "$wrk_raw" || echo "0")"
+  # Socket errors are reported by wrk on a SEPARATE line and were previously not parsed at all.
+  # total_errors above counts only non-2xx/3xx RESPONSES; a request that timed out never produced
+  # a response and so was invisible — a run drowning in timeouts reported error_rate_pct 0.0000.
+  # That matters most exactly where the memory sweep is heading: under a tight memory.max, timeouts
+  # and dropped connections are the expected failure mode, not 503s.
+  # wrk line format: "  Socket errors: connect 0, read 0, write 0, timeout 0"
+  socket_err_connect="$(grep -oP 'Socket errors:.*?connect\s+\K\d+' "$wrk_raw" || echo "0")"
+  socket_err_read="$(grep -oP 'Socket errors:.*?read\s+\K\d+' "$wrk_raw" || echo "0")"
+  socket_err_write="$(grep -oP 'Socket errors:.*?write\s+\K\d+' "$wrk_raw" || echo "0")"
+  socket_err_timeout="$(grep -oP 'Socket errors:.*?timeout\s+\K\d+' "$wrk_raw" || echo "0")"
+  for _sv in socket_err_connect socket_err_read socket_err_write socket_err_timeout; do
+    printf -v "$_sv" '%s' "$(printf '%s' "${!_sv}" | tr -cd '0-9')"
+    [[ -n "${!_sv}" ]] || printf -v "$_sv" '%s' "0"
+  done
+  socket_err_total="$(( socket_err_connect + socket_err_read + socket_err_write + socket_err_timeout ))"
   total_requests_sanitized="$(printf '%s' "$total_requests" | tr -cd '0-9')"
   total_errors_sanitized="$(printf '%s' "$total_errors" | tr -cd '0-9')"
   if [[ -z "$total_requests_sanitized" ]]; then
@@ -2999,6 +3051,18 @@ parse_wrk_to_result() {
     error_rate_pct="$(LC_ALL=C awk -v e="$total_err_final" -v t="$total_req_final" 'BEGIN { if (t > 0) printf "%.4f", (e / t) * 100; else printf "0.0000" }')"
   fi
 
+  # Combined failure view. error_rate_pct counts only non-2xx/3xx RESPONSES; requests that never
+  # completed (timeouts, dropped connections) are absent from BOTH its numerator and wrk's
+  # "N requests" denominator, so a badly failing run can report 0.0000. The denominator below adds
+  # the non-completing requests back, so the rate reflects offered load rather than served load.
+  # This is the figure an eligibility gate should act on.
+  local failed_requests_total=$(( total_err_final + socket_err_total ))
+  local failed_request_denominator=$(( total_req_final + socket_err_total ))
+  local failed_request_rate_pct="0"
+  if [[ "$failed_request_denominator" -gt 0 ]]; then
+    failed_request_rate_pct="$(LC_ALL=C awk -v e="$failed_requests_total" -v t="$failed_request_denominator" 'BEGIN { printf "%.4f", (e / t) * 100 }')"
+  fi
+
   local p50_us p75_us p90_us p95_us p99_us
   p50_us="$(to_us "$p50")"
   p75_us="$(to_us "$p75")"
@@ -3017,6 +3081,13 @@ parse_wrk_to_result() {
   error_rate_pct_json="$(normalize_json_number "$error_rate_pct")"
   total_requests_json="$(normalize_json_number "$total_req_final")"
   total_errors_json="$(normalize_json_number "$total_err_final")"
+  socket_err_connect_json="$(normalize_json_number "$socket_err_connect")"
+  socket_err_read_json="$(normalize_json_number "$socket_err_read")"
+  socket_err_write_json="$(normalize_json_number "$socket_err_write")"
+  socket_err_timeout_json="$(normalize_json_number "$socket_err_timeout")"
+  socket_err_total_json="$(normalize_json_number "$socket_err_total")"
+  failed_requests_total_json="$(normalize_json_number "$failed_requests_total")"
+  failed_request_rate_pct_json="$(normalize_json_number "$failed_request_rate_pct")"
   duration_seconds_json="$(normalize_json_number "$MEASUREMENT_SECONDS")"
   warmup_seconds_json="$(normalize_json_number "$WARMUP_SECONDS")"
   threads_json="$(normalize_json_number "$THREADS")"
@@ -3029,6 +3100,48 @@ parse_wrk_to_result() {
   local drift_obs_latency="${BENCHMARK_DRIFT_OBS_LATENCY_PCT:-0}"
   local drift_max_throughput="${BENCHMARK_DRIFT_MAX_THROUGHPUT_PCT:-0}"
   local drift_obs_throughput="${BENCHMARK_DRIFT_OBS_THROUGHPUT_PCT:-0}"
+
+  # ----------------------------------------------------------------------------------------
+  # Pure-vs-Compat is a mandatory separation axis, so a target's mode must come from the
+  # target's OWN registry entry. The legacy TARGET_MODE is a single variable shared by BOTH
+  # targets of a pair and defaults to "compat", which (a) mislabelled every pure target and
+  # (b) made the spring-hibernate (pure) vs spring-on-exeris (compat) pair — the one pair the
+  # axis exists for — structurally impossible to label correctly. Keep it only as a fallback.
+  # ----------------------------------------------------------------------------------------
+  local resolved_target_mode="$TARGET_MODE"
+  local _mode_matrix="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
+  if [[ -f "$_mode_matrix" ]]; then
+    local _matrix_mode
+    _matrix_mode="$(jq -r --arg id "$target_id" \
+      '.targets[] | select(.target_id == $id) | .mode // empty' "$_mode_matrix" 2>/dev/null)"
+    if [[ -n "$_matrix_mode" ]]; then
+      resolved_target_mode="$_matrix_mode"
+    else
+      echo "WARN: target '${target_id}' declares no mode in target-asset-matrix.json; falling back to '${TARGET_MODE}' — the Pure-vs-Compat label for this result is NOT authoritative." >&2
+    fi
+  fi
+
+  # ----------------------------------------------------------------------------------------
+  # Build provenance. Every target in a campaign records the same commit_sha — the BENCHMARKS
+  # repo SHA — which says nothing about which application build produced the numbers. That is
+  # fatal for the serialisation matrix, whose four arms come from ONE Maven module and differ
+  # only by the pinned kernel version: without per-target artefact identity the four results are
+  # indistinguishable in the artefacts.
+  #
+  # The identity is already computed per target into the sibling runtime-log-metadata.json
+  # (resolved_jar_path, jar_sha256, jar_size_bytes). Lift it into the target block, where reports
+  # and comparisons actually read from. A different kernel version yields a different jar and
+  # therefore a different sha256, so the arms become self-identifying without any new mechanism.
+  # ----------------------------------------------------------------------------------------
+  local _prov_meta="$(dirname "$outfile")/runtime-log-metadata.json"
+  local target_jar_sha256="" target_jar_path=""
+  if [[ -f "$_prov_meta" ]]; then
+    target_jar_sha256="$(jq -r '.jar_sha256 // empty' "$_prov_meta" 2>/dev/null)"
+    target_jar_path="$(jq -r '.resolved_jar_path // empty' "$_prov_meta" 2>/dev/null)"
+  fi
+  if [[ -z "$target_jar_sha256" ]]; then
+    echo "WARN: no jar_sha256 for target '${target_id}' (${_prov_meta}); this result carries NO build provenance and cannot be attributed to a specific artefact." >&2
+  fi
 
   jq -n \
     --arg schema_version      "1" \
@@ -3048,9 +3161,11 @@ parse_wrk_to_result() {
     --arg pair_order          "$pair_order" \
     --arg pair_slot           "$pair_slot" \
     --arg jvm_class           "$JVM_CLASS" \
-    --arg target_mode         "$TARGET_MODE" \
+    --arg target_mode         "$resolved_target_mode" \
     --argjson payload_size_bytes "$(normalize_json_number "$PAYLOAD_SIZE_BYTES")" \
     --arg benchmark_commit_sha "$BENCH_COMMIT_SHA" \
+    --arg target_jar_path     "$target_jar_path" \
+    --arg target_jar_sha256   "$target_jar_sha256" \
     --arg jdk_vendor          "$JDK_VENDOR_DETECTED" \
     --arg jdk_version         "$JDK_VERSION_DETECTED" \
     --arg benchmark_tool_version "$WRK_VERSION_DETECTED" \
@@ -3077,6 +3192,13 @@ parse_wrk_to_result() {
     --argjson error_rate_pct  "$error_rate_pct_json" \
     --argjson total_requests  "$total_requests_json" \
     --argjson total_errors    "$total_errors_json" \
+    --argjson socket_err_connect "$socket_err_connect_json" \
+    --argjson socket_err_read "$socket_err_read_json" \
+    --argjson socket_err_write "$socket_err_write_json" \
+    --argjson socket_err_timeout "$socket_err_timeout_json" \
+    --argjson socket_err_total "$socket_err_total_json" \
+    --argjson failed_requests_total "$failed_requests_total_json" \
+    --argjson failed_request_rate_pct "$failed_request_rate_pct_json" \
     --argjson duration_seconds "$duration_seconds_json" \
     --argjson warmup_seconds  "$warmup_seconds_json" \
     --argjson threads         "$threads_json" \
@@ -3098,7 +3220,11 @@ parse_wrk_to_result() {
       repo:     $target_id,
       protocol: $protocol_mode,
       mode:     $target_mode,
-      commit_sha: $benchmark_commit_sha
+      commit_sha: $benchmark_commit_sha,
+      build_provenance: {
+        artifact_path:   $target_jar_path,
+        artifact_sha256: $target_jar_sha256
+      }
     },
     run_config: {
       duration_seconds: $duration_seconds,
@@ -3163,7 +3289,16 @@ parse_wrk_to_result() {
       latency_p99_us:  $latency_p99_us,
       error_rate_pct:  $error_rate_pct,
       total_requests:  $total_requests,
-      total_errors:    $total_errors
+      total_errors:    $total_errors,
+      socket_errors: {
+        connect: $socket_err_connect,
+        read:    $socket_err_read,
+        write:   $socket_err_write,
+        timeout: $socket_err_timeout,
+        total:   $socket_err_total
+      },
+      failed_requests_total:   $failed_requests_total,
+      failed_request_rate_pct: $failed_request_rate_pct
     },
     claim_scope:             $claim_scope,
     runner_status:           "success",
@@ -3257,6 +3392,91 @@ if [[ -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" && -x "$GATE_SCRIPT" ]]; then
     echo -e "  ${GREEN}✓${NC} Post-flight gate validation passed."
     echo "  Gate report: ${GATE_CSV}"
 
+    # ------------------------------------------------------------------------------------
+    # Failure-rate eligibility gate.
+    #
+    # A run in which a meaningful share of the offered load did not succeed is not a valid
+    # basis for comparison however clean its other gates are — and the bias runs in the
+    # FLATTERING direction: cheap failures (fast admission-control 503s, dropped connections)
+    # cost almost no CPU and complete almost instantly, so they inflate throughput and deflate
+    # latency. A target that fails 10% of requests can look faster than one that serves them.
+    # Fail closed rather than leave this to interpretation.
+    # ------------------------------------------------------------------------------------
+    MAX_FAILED_REQUEST_RATE_PCT="${BENCH_MAX_FAILED_REQUEST_RATE_PCT:-2}"
+    fr_a="$(jq -r '.metrics.failed_request_rate_pct // 0' "$RESULT_A_PATH" 2>/dev/null || echo 0)"
+    fr_b="$(jq -r '.metrics.failed_request_rate_pct // 0' "$RESULT_B_PATH" 2>/dev/null || echo 0)"
+    fr_exceeded="$(LC_ALL=C awk -v a="$fr_a" -v b="$fr_b" -v m="$MAX_FAILED_REQUEST_RATE_PCT" \
+      'BEGIN { print ((a+0 > m+0) || (b+0 > m+0)) ? "1" : "0" }')"
+
+    if [[ "$fr_exceeded" == "1" ]]; then
+      echo -e "${RED}ERROR${NC}: failed-request rate exceeds ${MAX_FAILED_REQUEST_RATE_PCT}% (target-a=${fr_a}%, target-b=${fr_b}%) — run is NOT comparison-eligible." >&2
+      echo '["FAILED_REQUEST_RATE_EXCEEDED"]' > "$REJECTION_CODES_JSON"
+      jq -n \
+        --arg claim_status "non_eligible" \
+        --arg reason "failed_request_rate_exceeded" \
+        --arg track_id "$TRACK_ID" \
+        --arg pair_id "$PAIR_ID" \
+        --arg pair_order "$PAIR_ORDER" \
+        --argjson rejection_codes '["FAILED_REQUEST_RATE_EXCEEDED"]' \
+        --arg fr_a "$fr_a" \
+        --arg fr_b "$fr_b" \
+        --arg threshold "$MAX_FAILED_REQUEST_RATE_PCT" \
+        '{
+          claim_status: $claim_status,
+          reason: $reason,
+          track_id: $track_id,
+          pair_id: $pair_id,
+          pair_order: $pair_order,
+          rejection_codes: $rejection_codes,
+          failed_request_rate_pct: {
+            target_a: $fr_a,
+            target_b: $fr_b,
+            threshold_pct: $threshold
+          }
+        }' > "$CLAIM_STATUS_JSON"
+      exit 64
+    fi
+
+    # ------------------------------------------------------------------------------------
+    # Closed-loop percentile eligibility.
+    #
+    # A closed-loop driver at saturation does not measure latency. With no think-time the
+    # in-flight count EQUALS the connection count, so reported percentiles are queue-depth
+    # divided by throughput (Little's law) — a property of the harness, not the server.
+    # This lab documented exactly that failure mode in results/reports/2026-06-20 (h2load
+    # p50 146 ms against a real ~3 ms service time) and then walked into it anyway with wrk
+    # at saturation: 128 connections / 83691 rps = 1.53 ms mean, which is what the "latency"
+    # column was reporting.
+    #
+    # Scope restriction, NOT a run failure: throughput and resource metrics are unaffected by
+    # queueing and remain valid — saturation is precisely what measures max throughput well.
+    # Only the percentiles become non-publishable.
+    # ------------------------------------------------------------------------------------
+    CLOSED_LOOP_UTIL_LIMIT="${BENCH_CLOSED_LOOP_UTIL_LIMIT:-0.90}"
+    server_cpu_count=0
+    if [[ -n "${SERVER_CPU_AFFINITY:-}" ]]; then
+      server_cpu_count="$(LC_ALL=C awk -v s="$SERVER_CPU_AFFINITY" 'BEGIN{
+        n=0; c=split(s,parts,",");
+        for(i=1;i<=c;i++){ if(parts[i]~/-/){ split(parts[i],r,"-"); n+=r[2]-r[1]+1 } else if(parts[i]!=""){ n++ } }
+        print n }')"
+    fi
+    util_a="$(jq -r '.run_config.resource_metrics.avg_cores_used // 0' "$RESULT_A_PATH" 2>/dev/null || echo 0)"
+    util_b="$(jq -r '.run_config.resource_metrics.avg_cores_used // 0' "$RESULT_B_PATH" 2>/dev/null || echo 0)"
+    percentiles_publishable="true"
+    percentile_reason="below_saturation_or_unknown_affinity"
+    if [[ "${server_cpu_count:-0}" -gt 0 ]]; then
+      if [[ "$(LC_ALL=C awk -v a="$util_a" -v b="$util_b" -v n="$server_cpu_count" -v lim="$CLOSED_LOOP_UTIL_LIMIT" \
+            'BEGIN{ print ((a/n > lim) || (b/n > lim)) ? "1" : "0" }')" == "1" ]]; then
+        percentiles_publishable="false"
+        percentile_reason="closed_loop_driver_at_saturation"
+        echo -e "  ${YELLOW:-}NOTE${NC:-}: pinned-cpuset utilisation exceeds ${CLOSED_LOOP_UTIL_LIMIT} with a closed-loop driver."
+        echo "        Latency percentiles from this run are queue-depth/throughput artefacts and are marked"
+        echo "        NON-PUBLISHABLE. Throughput, CPU-per-request and RSS remain valid."
+      else
+        percentile_reason="below_saturation"
+      fi
+    fi
+
     jq -n \
       --arg claim_status "comparison_eligible" \
       --arg reason "all_gates_passed" \
@@ -3264,13 +3484,34 @@ if [[ -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" && -x "$GATE_SCRIPT" ]]; then
       --arg pair_id "$PAIR_ID" \
       --arg pair_order "$PAIR_ORDER" \
       --argjson rejection_codes '[]' \
+      --arg fr_a "$fr_a" \
+      --arg fr_b "$fr_b" \
+      --arg threshold "$MAX_FAILED_REQUEST_RATE_PCT" \
+      --argjson percentiles_publishable "$percentiles_publishable" \
+      --arg percentile_reason "$percentile_reason" \
+      --arg util_a "$util_a" \
+      --arg util_b "$util_b" \
+      --arg server_cpus "$server_cpu_count" \
       '{
         claim_status: $claim_status,
         reason: $reason,
         track_id: $track_id,
         pair_id: $pair_id,
         pair_order: $pair_order,
-        rejection_codes: $rejection_codes
+        rejection_codes: $rejection_codes,
+        failed_request_rate_pct: {
+          target_a: $fr_a,
+          target_b: $fr_b,
+          threshold_pct: $threshold
+        },
+        latency_percentile_eligibility: {
+          publishable: $percentiles_publishable,
+          reason: $percentile_reason,
+          cores_used_target_a: $util_a,
+          cores_used_target_b: $util_b,
+          pinned_cpus: $server_cpus,
+          note: "Closed-loop percentiles at saturation are queue-depth/throughput, not service time. Throughput and resource metrics are unaffected."
+        }
       }' > "$CLAIM_STATUS_JSON"
   fi
 else

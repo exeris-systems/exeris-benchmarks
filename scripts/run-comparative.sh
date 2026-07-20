@@ -2874,16 +2874,40 @@ run_wrk_target() {
 
   echo "  Running measurement for ${target_id} (${MEASUREMENT_SECONDS}s)..."
   elapsed=0
+  # ------------------------------------------------------------------------------------------
+  # Driver selection.
+  #
+  # closed (default) — wrk drives the target to saturation. That measures MAX THROUGHPUT and
+  #   resource cost well, and its latency percentiles badly: with no think-time the in-flight
+  #   count equals the connection count, so reported latency is queue-depth / throughput
+  #   (Little's law), a property of the harness rather than the server.
+  # open — wrk2 at a fixed offered rate. The only mode whose percentiles mean service time.
+  #   See results/reports/2026-06-20 and the latency_percentile_eligibility gate in Stage 7.
+  # ------------------------------------------------------------------------------------------
+  local -a driver_cmd
+  if [[ "${BENCH_DRIVER_MODE:-closed}" == "open" ]]; then
+    if [[ -z "${BENCH_OFFERED_RPS:-}" ]]; then
+      echo "ERROR: BENCH_DRIVER_MODE=open requires BENCH_OFFERED_RPS (the fixed arrival rate)." >&2
+      return 1
+    fi
+    if ! command -v wrk2 >/dev/null 2>&1; then
+      echo "ERROR: BENCH_DRIVER_MODE=open requires wrk2 in PATH." >&2
+      return 1
+    fi
+    echo "  Driver: wrk2 OPEN loop, fixed offered rate ${BENCH_OFFERED_RPS} rps"
+    driver_cmd=(wrk2 -t"${THREADS}" -c"${CONNECTIONS}" -d"${MEASUREMENT_SECONDS}s" \
+                -R"${BENCH_OFFERED_RPS}" --latency "$endpoint_url")
+  else
+    driver_cmd=(wrk -t"${THREADS}" -c"${CONNECTIONS}" -d"${MEASUREMENT_SECONDS}s" --latency \
+                --script "${REPO_ROOT}/runtime/drivers/wrk-p95.lua" "$endpoint_url")
+  fi
+
   if [[ "$perf_stat_enabled" == "1" ]]; then
     echo "  Capturing perf stat for ${target_id}: ${perf_stat_file}"
     "${wrk_cmd_prefix[@]}" perf stat "${perf_stat_args[@]}" -- \
-      wrk -t"${THREADS}" -c"${CONNECTIONS}" -d"${MEASUREMENT_SECONDS}s" --latency \
-      --script "${REPO_ROOT}/runtime/drivers/wrk-p95.lua" \
-      "$endpoint_url" > "${outdir}/wrk-raw.txt" 2>&1 &
+      "${driver_cmd[@]}" > "${outdir}/wrk-raw.txt" 2>&1 &
   else
-    "${wrk_cmd_prefix[@]}" wrk -t"${THREADS}" -c"${CONNECTIONS}" -d"${MEASUREMENT_SECONDS}s" --latency \
-      --script "${REPO_ROOT}/runtime/drivers/wrk-p95.lua" \
-      "$endpoint_url" > "${outdir}/wrk-raw.txt" 2>&1 &
+    "${wrk_cmd_prefix[@]}" "${driver_cmd[@]}" > "${outdir}/wrk-raw.txt" 2>&1 &
   fi
   wrk_pid=$!
   while kill -0 "$wrk_pid" 2>/dev/null; do
@@ -3005,11 +3029,26 @@ parse_wrk_to_result() {
 
   # Parse latency distribution lines (Thread Stats section may include percentile table)
   # Support both "50.00%" and "50%" formats; wrk2 outputs explicit percentile columns; plain wrk may not — default to 0 for missing
-  p50="$(grep -oP '50(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
-  p75="$(grep -oP '75(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
-  p90="$(grep -oP '90(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
-  p99="$(grep -oP '99(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
-  p95="$(grep -oP '95(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
+  # Percentile patterns accept BOTH driver formats. Closed-loop wrk (plus wrk-p95.lua) prints
+  # "50%" or "50.00%"; wrk2's HdrHistogram block prints "50.000%". Widening the optional-zeros
+  # group to (?:\.0+)? covers both, so no parser branch is needed for these five.
+  # head -1 matters for wrk2, whose block also carries 99.900% / 99.990% / 99.999%.
+  p50="$(grep -oP '50(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  p75="$(grep -oP '75(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  p90="$(grep -oP '90(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  p99="$(grep -oP '99(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  p95="$(grep -oP '95(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  # wrk2 prints 50/75/90/99/99.9/99.99/99.999/100 in its summary block but NOT 95, so fall back
+  # to the Detailed Percentile spectrum, whose Value column is bare milliseconds:
+  #        6.575     0.950000       700819        20.00
+  if [[ -z "$p95" || "$p95" == "0us" ]]; then
+    local _p95_ms
+    _p95_ms="$(grep -oP '^\s+\K[\d.]+(?=\s+0\.950000\s)' "$wrk_raw" | head -1 || true)"
+    [[ -n "$_p95_ms" ]] && p95="${_p95_ms}ms"
+  fi
+  # p99.9 is only available from wrk2; closed-loop runs leave it at 0 and it is reported as
+  # absent rather than as a measured zero.
+  p999="$(grep -oP '99\.9(?:0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
 
   # Use existing repo to_us convention — inline awk conversion
   to_us() {
@@ -3063,7 +3102,19 @@ parse_wrk_to_result() {
     failed_request_rate_pct="$(LC_ALL=C awk -v e="$failed_requests_total" -v t="$failed_request_denominator" 'BEGIN { printf "%.4f", (e / t) * 100 }')"
   fi
 
-  local p50_us p75_us p90_us p95_us p99_us
+  # Driver provenance. Which loop produced these numbers decides whether the percentiles mean
+  # service time at all, so it belongs in the artefact rather than in the operator's memory.
+  # Rate attainment is the open-loop saturation signal: wrk2 that cannot sustain its offered
+  # rate has hit a wall, and a throughput figure alone hides that.
+  local driver_mode="${BENCH_DRIVER_MODE:-closed}"
+  local offered_rps="${BENCH_OFFERED_RPS:-0}"
+  local rate_attainment_pct="0"
+  if [[ "$driver_mode" == "open" && "$offered_rps" != "0" ]]; then
+    rate_attainment_pct="$(LC_ALL=C awk -v a="$rps_final" -v o="$offered_rps" 'BEGIN { if (o > 0) printf "%.2f", (a / o) * 100; else printf "0" }')"
+  fi
+
+  local p50_us p75_us p90_us p95_us p99_us p999_us
+  p999_us="$(to_us "$p999")"
   p50_us="$(to_us "$p50")"
   p75_us="$(to_us "$p75")"
   p90_us="$(to_us "$p90")"
@@ -3078,6 +3129,9 @@ parse_wrk_to_result() {
   latency_p90_us_json="$(normalize_json_number "$p90_us")"
   latency_p95_us_json="$(normalize_json_number "$p95_us")"
   latency_p99_us_json="$(normalize_json_number "$p99_us")"
+  latency_p999_us_json="$(normalize_json_number "$p999_us")"
+  rate_attainment_pct_json="$(normalize_json_number "$rate_attainment_pct")"
+  offered_rps_json="$(normalize_json_number "$offered_rps")"
   error_rate_pct_json="$(normalize_json_number "$error_rate_pct")"
   total_requests_json="$(normalize_json_number "$total_req_final")"
   total_errors_json="$(normalize_json_number "$total_err_final")"
@@ -3199,6 +3253,10 @@ parse_wrk_to_result() {
     --argjson socket_err_total "$socket_err_total_json" \
     --argjson failed_requests_total "$failed_requests_total_json" \
     --argjson failed_request_rate_pct "$failed_request_rate_pct_json" \
+    --argjson latency_p999_us "$latency_p999_us_json" \
+    --arg driver_mode         "$driver_mode" \
+    --argjson offered_rps     "$offered_rps_json" \
+    --argjson rate_attainment_pct "$rate_attainment_pct_json" \
     --argjson duration_seconds "$duration_seconds_json" \
     --argjson warmup_seconds  "$warmup_seconds_json" \
     --argjson threads         "$threads_json" \
@@ -3246,6 +3304,12 @@ parse_wrk_to_result() {
       },
       jvm_class:        $jvm_class,
       mode:             $target_mode,
+      driver: {
+        mode:                $driver_mode,
+        offered_rps:         $offered_rps,
+        rate_attainment_pct: $rate_attainment_pct,
+        note: "closed = wrk at saturation: throughput and resource metrics valid, percentiles are queue-depth/throughput. open = wrk2 at a fixed arrival rate: percentiles are service time."
+      },
       payload_size_bytes: $payload_size_bytes,
       drift_snapshot: {
         required_metadata_present: $drift_required_metadata_present,
@@ -3298,7 +3362,8 @@ parse_wrk_to_result() {
         total:   $socket_err_total
       },
       failed_requests_total:   $failed_requests_total,
-      failed_request_rate_pct: $failed_request_rate_pct
+      failed_request_rate_pct: $failed_request_rate_pct,
+      latency_p999_us:         $latency_p999_us
     },
     claim_scope:             $claim_scope,
     runner_status:           "success",
@@ -3464,7 +3529,26 @@ if [[ -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" && -x "$GATE_SCRIPT" ]]; then
     util_b="$(jq -r '.run_config.resource_metrics.avg_cores_used // 0' "$RESULT_B_PATH" 2>/dev/null || echo 0)"
     percentiles_publishable="true"
     percentile_reason="below_saturation_or_unknown_affinity"
-    if [[ "${server_cpu_count:-0}" -gt 0 ]]; then
+    if [[ "${BENCH_DRIVER_MODE:-closed}" == "open" ]]; then
+      # Open-loop percentiles measure service time however loaded the target is — that is the
+      # entire point of a fixed arrival rate, and gating them on utilisation would suppress
+      # exactly the measurements this mode exists to produce. What DOES invalidate them is the
+      # generator failing to sustain the offered rate: the target saturated and the run
+      # degenerated back into a closed loop, so the numbers are queue depth again.
+      MIN_RATE_ATTAINMENT_PCT="${BENCH_MIN_RATE_ATTAINMENT_PCT:-95}"
+      att_a="$(jq -r '.run_config.driver.rate_attainment_pct // 0' "$RESULT_A_PATH" 2>/dev/null || echo 0)"
+      att_b="$(jq -r '.run_config.driver.rate_attainment_pct // 0' "$RESULT_B_PATH" 2>/dev/null || echo 0)"
+      if [[ "$(LC_ALL=C awk -v a="$att_a" -v b="$att_b" -v m="$MIN_RATE_ATTAINMENT_PCT" \
+            'BEGIN { print ((a+0 < m+0) || (b+0 < m+0)) ? "1" : "0" }')" == "1" ]]; then
+        percentiles_publishable="false"
+        percentile_reason="open_loop_rate_not_sustained"
+        echo "  NOTE: the generator did not sustain its offered rate (target-a=${att_a}%, target-b=${att_b}%,"
+        echo "        floor ${MIN_RATE_ATTAINMENT_PCT}%). The run degenerated toward a closed loop, so its"
+        echo "        percentiles are queue depth again and are marked NON-PUBLISHABLE."
+      else
+        percentile_reason="open_loop_fixed_rate"
+      fi
+    elif [[ "${server_cpu_count:-0}" -gt 0 ]]; then
       if [[ "$(LC_ALL=C awk -v a="$util_a" -v b="$util_b" -v n="$server_cpu_count" -v lim="$CLOSED_LOOP_UTIL_LIMIT" \
             'BEGIN{ print ((a/n > lim) || (b/n > lim)) ? "1" : "0" }')" == "1" ]]; then
         percentiles_publishable="false"
@@ -3489,6 +3573,7 @@ if [[ -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" && -x "$GATE_SCRIPT" ]]; then
       --arg threshold "$MAX_FAILED_REQUEST_RATE_PCT" \
       --argjson percentiles_publishable "$percentiles_publishable" \
       --arg percentile_reason "$percentile_reason" \
+      --arg gate_driver_mode "${BENCH_DRIVER_MODE:-closed}" \
       --arg util_a "$util_a" \
       --arg util_b "$util_b" \
       --arg server_cpus "$server_cpu_count" \
@@ -3507,6 +3592,7 @@ if [[ -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" && -x "$GATE_SCRIPT" ]]; then
         latency_percentile_eligibility: {
           publishable: $percentiles_publishable,
           reason: $percentile_reason,
+          driver_mode: $gate_driver_mode,
           cores_used_target_a: $util_a,
           cores_used_target_b: $util_b,
           pinned_cpus: $server_cpus,

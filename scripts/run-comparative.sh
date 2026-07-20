@@ -2685,14 +2685,14 @@ fi
 # attributed to the wrong build.
 # ------------------------------------------------------------------------------------------
 #
-# Gated by BENCH_ASSERT_LAUNCH (default 0) ONLY until the verifier has been exercised on the perf
-# box. It depends on `ss -ltnp` output and /proc, neither of which can be tested from the Windows
-# dev environment, and it is fail-closed — an unverified assumption here would abort every campaign
-# including multi-hour sweeps. The serialisation-matrix launcher sets BENCH_ASSERT_LAUNCH=1
-# explicitly, so the arms that actually need the guarantee get it. Flip the default to 1 once a
-# real run has shown it passing on targets already known to be correct.
+# ON BY DEFAULT since 2026-07-20, after a debug-contract run exercised it end-to-end on the perf
+# box against targets already known to be correct: both arms of a two-instance exeris pair passed
+# artifact identity, and the customizer arm passed the classpath and bootstrap-breadcrumb checks.
+# It depends on `ss -ltnp` and /proc, so it cannot be tested from the Windows dev environment —
+# that is why it shipped gated. Set BENCH_ASSERT_LAUNCH=0 to disable it for a run that genuinely
+# cannot satisfy it (e.g. a target launched outside the harness).
 LAUNCH_VERIFIER="${REPO_ROOT}/tools/verify-target-launch.sh"
-if [[ "${BENCH_ASSERT_LAUNCH:-0}" != "1" ]]; then
+if [[ "${BENCH_ASSERT_LAUNCH:-1}" != "1" ]]; then
   echo "NOTE: artifact-identity assertion disabled (BENCH_ASSERT_LAUNCH != 1)."
 elif [[ -f "$LAUNCH_VERIFIER" ]]; then
   for _tv_pair in "${FIRST_TARGET_ID}|${FIRST_TARGET_HEALTH_URL}" "${SECOND_TARGET_ID}|${SECOND_TARGET_HEALTH_URL}"; do

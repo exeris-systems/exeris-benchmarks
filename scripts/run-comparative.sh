@@ -3193,6 +3193,26 @@ parse_wrk_to_result() {
     target_jar_sha256="$(jq -r '.jar_sha256 // empty' "$_prov_meta" 2>/dev/null)"
     target_jar_path="$(jq -r '.resolved_jar_path // empty' "$_prov_meta" 2>/dev/null)"
   fi
+  # Fallback for targets launched via -cp rather than -jar. The harness derives
+  # runtime-log-metadata.json's jar fields by parsing `-jar <path>` out of EXTERNAL_START_CMD,
+  # so any target using `-cp app.jar:customizer.jar <MainClass>` — every Blackbird arm — records
+  # an empty path and empty sha. That would leave the 0.10.1-bb vs 0.10.2-bb pair with NO
+  # provenance on EITHER side: precisely the contrast where telling the two builds apart in the
+  # artefacts matters most. Fall back to the matrix's jar_path, which is the same authoritative
+  # source the launch assertion checks the live process against.
+  if [[ -z "$target_jar_sha256" ]]; then
+    local _prov_matrix="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
+    local _matrix_jar=""
+    if [[ -f "$_prov_matrix" ]]; then
+      _matrix_jar="$(jq -r --arg id "$target_id" \
+        '.targets[] | select(.target_id == $id) | .jar_path // ""' "$_prov_matrix" 2>/dev/null)"
+    fi
+    if [[ -n "$_matrix_jar" && -f "${REPO_ROOT}/${_matrix_jar}" ]]; then
+      target_jar_path="${REPO_ROOT}/${_matrix_jar}"
+      target_jar_sha256="$(sha256sum "${REPO_ROOT}/${_matrix_jar}" 2>/dev/null | awk '{print $1}')"
+      echo "  Build provenance for '${target_id}' resolved from the matrix jar_path (target launches via -cp, not -jar)."
+    fi
+  fi
   if [[ -z "$target_jar_sha256" ]]; then
     echo "WARN: no jar_sha256 for target '${target_id}' (${_prov_meta}); this result carries NO build provenance and cannot be attributed to a specific artefact." >&2
   fi

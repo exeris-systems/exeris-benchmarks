@@ -1,0 +1,18 @@
+=== ENDPOINT DIAGNOSTIC ===
+Target: exeris-community
+URL: http://localhost:9000/api/v1/user?id=1
+Timestamp: 2026-07-21T08:15:00.037Z
+
+Attempting curl request...
+
+HTTP Status Code: 200
+Response (first 500 chars):
+---
+HTTP/1.1 200 OK
+content-type: application/json
+Content-Length: 30
+Connection: keep-alive
+
+{"id":"1","username":"user_1"}
+
+---

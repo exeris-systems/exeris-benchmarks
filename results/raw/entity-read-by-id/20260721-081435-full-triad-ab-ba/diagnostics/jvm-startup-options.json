@@ -1,0 +1,27 @@
+{
+  "generated_at_utc": "2026-07-21T08:14:35Z",
+  "diagnostics_enabled": true,
+  "require_perf_stat": 0,
+  "loadgen_cpu_affinity": "2-3,10-11",
+  "native_memory_tracking_enabled": true,
+  "native_memory_tracking_level": "summary",
+  "jfr_settings": "profile",
+  "jfr_max_size_mb": 512,
+  "targets": {
+    "exeris-community": {
+      "java_opts": "-Xms256m -Xmx256m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Xlog:safepoint=debug:file=results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/exeris-community.safepoint.log:time,level,tags -XX:StartFlightRecording=filename=results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/exeris-community.jfr,settings=profile,maxsize=512m,dumponexit=true",
+      "safepoint_log": "results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/exeris-community.safepoint.log",
+      "jfr_file": "results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/exeris-community.jfr"
+    },
+    "spring-hibernate": {
+      "java_opts": "-Xms1280m -Xmx1280m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Xlog:safepoint=debug:file=results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/spring-hibernate.safepoint.log:time,level,tags -XX:StartFlightRecording=filename=results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/spring-hibernate.jfr,settings=profile,maxsize=512m,dumponexit=true",
+      "safepoint_log": "results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/spring-hibernate.safepoint.log",
+      "jfr_file": "results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/spring-hibernate.jfr"
+    },
+    "quarkus-hibernate": {
+      "java_opts": "-Xms1280m -Xmx1280m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Xlog:safepoint=debug:file=results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/quarkus-hibernate.safepoint.log:time,level,tags -XX:StartFlightRecording=filename=results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/quarkus-hibernate.jfr,settings=profile,maxsize=512m,dumponexit=true",
+      "safepoint_log": "results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/quarkus-hibernate.safepoint.log",
+      "jfr_file": "results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/diagnostics/quarkus-hibernate.jfr"
+    }
+  }
+}

@@ -28,6 +28,7 @@ JVM_GC_OVERRIDE_CLI="${JVM_GC_OVERRIDE_CLI:-}"
 JVM_XMS_MB_CLI="${JVM_XMS_MB_CLI:-}"
 JVM_XMX_MB_CLI="${JVM_XMX_MB_CLI:-}"
 CPU_AFFINITY="${CPU_AFFINITY:-}"
+CLIENT_CPU_AFFINITY="${CLIENT_CPU_AFFINITY:-}"
 ENABLE_JFR="${BENCHMARK_ENABLE_JFR:-false}"
 JFR_SETTINGS="${BENCHMARK_JFR_SETTINGS:-profile}"
 BENCHMARK_SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
@@ -111,6 +112,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --cpu-affinity)
       CPU_AFFINITY="$2"
+      shift 2
+      ;;
+    --client-cpu-affinity)
+      CLIENT_CPU_AFFINITY="$2"
       shift 2
       ;;
     --enable-jfr)
@@ -275,6 +280,9 @@ ensure_constrained_scope() {
   [[ -n "$JVM_XMX_MB_CLI" ]]        && relaunch_args+=(--jvm-xmx-mb "$JVM_XMX_MB_CLI")
   if [[ -n "$CPU_AFFINITY" ]]; then
     relaunch_args+=(--cpu-affinity "$CPU_AFFINITY")
+  fi
+  if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then
+    relaunch_args+=(--client-cpu-affinity "$CLIENT_CPU_AFFINITY")
   fi
   if [[ "$ENABLE_JFR" == "true" ]]; then
     relaunch_args+=(--enable-jfr --jfr-settings "$JFR_SETTINGS")
@@ -610,6 +618,12 @@ if [[ -n "$CPU_AFFINITY" ]]; then
   # Base runner pins the target app to this cpuset via taskset (server-side pin,
   # orthogonal to the scope CPUQuota).
   LAUNCH_COMMAND+=("--cpu-affinity" "$CPU_AFFINITY")
+fi
+if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then
+  # Base runner pins the load driver (wrk/h2load) to this cpuset via taskset, kept
+  # disjoint from the target pin so the load generator cannot steal cycles from the
+  # measured process — protecting the constrained RSS + CPU/req readings.
+  LAUNCH_COMMAND+=("--client-cpu-affinity" "$CLIENT_CPU_AFFINITY")
 fi
 if [[ "$ENABLE_JFR" == "true" ]]; then
   LAUNCH_COMMAND+=("--enable-jfr" "--jfr-settings" "$JFR_SETTINGS")

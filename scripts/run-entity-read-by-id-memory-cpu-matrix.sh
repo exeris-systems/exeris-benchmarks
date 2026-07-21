@@ -84,7 +84,12 @@ PROFILES_JSON="${REPO_ROOT}/runtime/profiles/entity-read-by-id-memory-cpu-sweep-
 SCENARIO_JSON="${REPO_ROOT}/scenarios/entity-read-by-id/memory-cpu-sweep-scenario.json"
 
 REPEATS="${MATRIX_REPEATS:-3}"
+# Target/client CPU pins. Left EMPTY by default so the sweep auto-derives a per-point
+# disjoint partition from each point's vCPU (see matrix_affinity_for_vcpu). Setting
+# either var forces a manual override of that pin for EVERY point (advanced; you own
+# keeping target and client disjoint).
 CPU_AFFINITY="${MATRIX_CPU_AFFINITY:-}"
+CLIENT_CPU_AFFINITY="${MATRIX_CLIENT_CPU_AFFINITY:-}"
 HARDWARE_PROFILE="${BENCHMARK_HARDWARE_PROFILE:-perf-box-amd64}"
 DB_POOL_SIZE="${MATRIX_DB_POOL_SIZE:-16}"
 SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
@@ -145,6 +150,7 @@ while [[ $# -gt 0 ]]; do
     --output-dir) CAMPAIGN_DIR="$2"; shift 2 ;;
     --repeats) REPEATS="$2"; shift 2 ;;
     --cpu-affinity) CPU_AFFINITY="$2"; shift 2 ;;
+    --client-cpu-affinity) CLIENT_CPU_AFFINITY="$2"; shift 2 ;;
     --profiles-json) PROFILES_JSON="$2"; shift 2 ;;
     --scenario-json) SCENARIO_JSON="$2"; shift 2 ;;
     --hardware-profile) HARDWARE_PROFILE="$2"; shift 2 ;;
@@ -212,6 +218,34 @@ arms_for_point() { # $1=mem $2=vcpu -> prints one ARM_* spec per line
   printf '%s\n' "$ARM_COMMUNITY" "$ARM_QUARKUS_TUNED"
   if [[ "$1" == "1024" && "$2" == "4" ]]; then
     printf '%s\n' "$ARM_QUARKUS_HIBERNATE"   # single reference measurement
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Per-point CPU partition (tuned-PG isolation) on this 16-logical / 8-physical
+# box. Postgres is externally pinned to 4-7,12-15 (4 phys) and reused across every
+# point (BENCHMARK_ALLOW_EXTERNAL_DB). The target app and the load driver each get a
+# taskset pin, sized to the point's vCPU and kept DISJOINT so wrk can never steal
+# cycles from the measured process — the constrained RSS + CPU/req readings are the
+# durable output and must be uncontaminated.
+#
+#   vCPU <= 4 : target 0-1,8-9 (2 phys / 4 logical; the scope CPUQuota caps actual use
+#               at the point's vCPU), loadgen 2-3,10-11 (2 phys). Target, loadgen, and
+#               DB are all mutually disjoint — the SAME clean partition as the 2026-07
+#               tuned-PG comparative triad. This covers the entire 5-point memory curve
+#               plus the 2-vCPU cut (6 of 7 points).
+#   vCPU = 8  : the target needs 4 physical cores -> 0-3,8-11 (8 logical), which swallows
+#               the loadgen's 2-3,10-11. On an 8-phys box there is no fourth disjoint
+#               partition, so at THIS ONE point the load driver co-locates on the DB
+#               cpuset (4-7,12-15). Target cores stay isolated (RSS + CPU/req remain
+#               clean); only throughput is DB+loadgen-contention-bounded here. Recorded
+#               per-point as affinity_note="loadgen-colocated-with-db", never hidden.
+matrix_affinity_for_vcpu() { # $1=vcpu -> prints "<target_cpuset>\t<client_cpuset>\t<note>"
+  local vcpu="$1"
+  if [[ "$vcpu" -le 4 ]]; then
+    printf '0-1,8-9\t2-3,10-11\tdisjoint\n'
+  else
+    printf '0-3,8-11\t4-7,12-15\tloadgen-colocated-with-db\n'
   fi
 }
 
@@ -291,6 +325,7 @@ collect_run_record() {
   local profile_id="${11}" contract_id="${12}"
   local xmx_mb="${13}" heap_frac="${14}" xmx_source="${15}"
   local telemetry_subsystem="${16}" telemetry_jfr="${17}" exeris_subsystems="${18}"
+  local target_cpuset="${19}" client_cpuset="${20}" affinity_note="${21}"
   local result_json evidence_json resource_json
   result_json="$(read_json_or_empty "$run_dir/result.json")"
   evidence_json="$(read_json_or_empty "$run_dir/constrained-execution-evidence.json")"
@@ -309,6 +344,8 @@ collect_run_record() {
     --arg xmx_mb "$xmx_mb" --arg heap_frac "$heap_frac" --arg xmx_source "$xmx_source" \
     --arg telemetry_subsystem "$telemetry_subsystem" --arg telemetry_jfr "$telemetry_jfr" \
     --arg exeris_subsystems "$exeris_subsystems" \
+    --arg target_cpuset "$target_cpuset" --arg client_cpuset "$client_cpuset" \
+    --arg affinity_note "$affinity_note" \
     '
     ($result.metrics.total_requests // null) as $tr
     | ($resource.cpu_time_seconds // null) as $cpu
@@ -353,6 +390,14 @@ collect_run_record() {
           exeris_telemetry_jfr_enabled:
             (if $telemetry_jfr == "false" then false
              elif $telemetry_jfr == "n/a" then null else true end)
+        },
+        cpu_partition: {
+          target_cpuset: $target_cpuset,
+          loadgen_cpuset: $client_cpuset,
+          db_cpuset: "4-7,12-15",
+          affinity_note: $affinity_note,
+          loadgen_disjoint_from_target: ($affinity_note | test("disjoint")),
+          note: "DB externally pinned to 4-7,12-15 (reused, tuned-PG). target+loadgen disjoint for vCPU<=4; at vCPU=8 loadgen co-locates with the DB cpuset so throughput is DB+loadgen-bound there while target RSS+CPU/req stay isolated."
         },
         rps: ($result.metrics.throughput_rps // null),
         total_requests: $tr,
@@ -443,7 +488,8 @@ jq -n \
   --arg hardware_profile "$HARDWARE_PROFILE" \
   --arg profiles_json "$PROFILES_JSON" \
   --arg scenario_json "$SCENARIO_JSON" \
-  --arg cpu_affinity "${CPU_AFFINITY:-none}" \
+  --arg cpu_affinity_target_override "${CPU_AFFINITY:-none}" \
+  --arg cpu_affinity_client_override "${CLIENT_CPU_AFFINITY:-none}" \
   --argjson repeats "$REPEATS" \
   --argjson db_pool_size "$DB_POOL_SIZE" \
   --argjson skip_target_build "$SKIP_TARGET_BUILD" \
@@ -486,7 +532,14 @@ jq -n \
       endpoint: "GET /api/v1/user?id=1",
       repeats: $repeats,
       repeat_ordering: "interleaved (repeat is the outer loop)",
-      cpu_affinity: $cpu_affinity,
+      cpu_partition_policy: {
+        model: "per-point disjoint tuned-PG partition derived from each point vCPU (matrix_affinity_for_vcpu)",
+        db_cpuset: "4-7,12-15 (externally pinned, reused across all points)",
+        vcpu_le_4: "target 0-1,8-9 / loadgen 2-3,10-11 (fully disjoint; = 2026-07 tuned-PG triad partition)",
+        vcpu_eq_8: "target 0-3,8-11 / loadgen 4-7,12-15 (loadgen co-located with DB; target isolated, throughput DB-bound at this point only)",
+        target_override: (if $cpu_affinity_target_override == "none" then null else $cpu_affinity_target_override end),
+        client_override: (if $cpu_affinity_client_override == "none" then null else $cpu_affinity_client_override end)
+      },
       skip_target_build: $skip_target_build,
       profiles_json: $profiles_json,
       scenario_json: $scenario_json
@@ -533,7 +586,13 @@ echo "[matrix] manifest     : $MANIFEST_FILE"
 echo "[matrix] points=7 arms=exeris-community,quarkus-tuned (+quarkus-hibernate @1024/4) repeats=$REPEATS interleaved dry_run=$DRY_RUN"
 echo "[matrix] gc=parallel db_pool=${DB_POOL_SIZE} (min==max) warmup=120s duration=300s 128c/4t endpoint=GET /api/v1/user?id=1"
 echo "[matrix] heap: community=${HEAP_FRAC_COMMUNITY} quarkus=${HEAP_FRAC_QUARKUS} of memory.max (per-arm --jvm-xmx-mb); exeris telemetry OFF for community"
-[[ -n "$CPU_AFFINITY" ]] && echo "[matrix] cpu_affinity=$CPU_AFFINITY (server pin; ensure it spans >= each point's vCPU)"
+echo "[matrix] cpu partition (per-point, tuned-PG): DB=4-7,12-15 (external, reused); vCPU<=4 -> target 0-1,8-9 / loadgen 2-3,10-11 (disjoint); vCPU=8 -> target 0-3,8-11 / loadgen 4-7,12-15 (loadgen co-located w/ DB, target isolated)"
+if [[ -n "$CPU_AFFINITY" ]]; then
+  echo "[matrix] WARN: target pin OVERRIDDEN for every point -> $CPU_AFFINITY (ensure it spans >= each point vCPU and stays disjoint from loadgen)"
+fi
+if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then
+  echo "[matrix] WARN: loadgen pin OVERRIDDEN for every point -> $CLIENT_CPU_AFFINITY (ensure disjoint from target)"
+fi
 
 # -----------------------------------------------------------------------------
 # Interleaved run loop: repeat OUTER so each (point,arm) sample is spread in time.
@@ -542,6 +601,13 @@ run_count=0
 for r in $(seq 1 "$REPEATS"); do
   for point in "${POINTS[@]}"; do
     IFS='|' read -r mem vcpu axis profile_id contract_id <<< "$point"
+
+    # Per-point disjoint CPU partition (see matrix_affinity_for_vcpu). Manual overrides
+    # apply to every point if the operator set them.
+    IFS=$'\t' read -r target_cpuset client_cpuset affinity_note < <(matrix_affinity_for_vcpu "$vcpu")
+    if [[ -n "$CPU_AFFINITY" ]]; then target_cpuset="$CPU_AFFINITY"; affinity_note="${affinity_note}+target-override"; fi
+    if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then client_cpuset="$CLIENT_CPU_AFFINITY"; affinity_note="${affinity_note}+client-override"; fi
+
     while IFS= read -r arm_spec; do
       [[ -z "$arm_spec" ]] && continue
       IFS='|' read -r arm_id target_runtime xmx_key frac_key jar_glob <<< "$arm_spec"
@@ -585,11 +651,11 @@ for r in $(seq 1 "$REPEATS"); do
           --jvm-xmx-mb "$xmx_mb"
           --output-dir "$run_dir"
       )
-      [[ -n "$CPU_AFFINITY" ]] && cmd+=(--cpu-affinity "$CPU_AFFINITY")
+      cmd+=(--cpu-affinity "$target_cpuset" --client-cpu-affinity "$client_cpuset")
 
       run_count=$((run_count + 1))
       echo
-      echo "[matrix] === run ${run_count}: point=${mem}m/${vcpu}vcpu arm=${arm_id} repeat=${r}/${REPEATS} xmx=${xmx_mb}m (${xmx_source}) subsystems=${exeris_subsystems} telemetry=${telemetry_subsystem} ==="
+      echo "[matrix] === run ${run_count}: point=${mem}m/${vcpu}vcpu arm=${arm_id} repeat=${r}/${REPEATS} xmx=${xmx_mb}m (${xmx_source}) subsystems=${exeris_subsystems} telemetry=${telemetry_subsystem} target_cpus=${target_cpuset} loadgen_cpus=${client_cpuset} (${affinity_note}) ==="
       if [[ "$DRY_RUN" == "1" ]]; then
         printf '[matrix][dry-run] %q ' "${cmd[@]}"; echo
         continue
@@ -612,7 +678,7 @@ for r in $(seq 1 "$REPEATS"); do
       collect_run_record "$mem" "$vcpu" "$axis" "$arm_id" "$target_runtime" "$r" \
         "$run_dir" "$rc" "$pg_rss_kb" "$pg_rss_source" "$profile_id" "$contract_id" \
         "$xmx_mb" "$heap_frac" "$xmx_source" "$telemetry_subsystem" "$telemetry_jfr" \
-        "$exeris_subsystems" \
+        "$exeris_subsystems" "$target_cpuset" "$client_cpuset" "$affinity_note" \
         >> "$RUNS_JSONL"
       echo "[matrix] recorded: rc=${rc} xmx=${xmx_mb}m subsystems=${exeris_subsystems} pg_rss_kb=${pg_rss_kb} -> $run_dir"
     done < <(arms_for_point "$mem" "$vcpu")

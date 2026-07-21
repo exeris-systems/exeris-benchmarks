@@ -162,6 +162,7 @@
         "payload_file": { "type": "string" },
         "payload_size_bytes": { "type": "integer" },
         "backend_network_mode": { "type": "string", "enum": ["host", "bridge"], "description": "Container network mode of stateful backends (Postgres/Neo4j/Axon). 'bridge' adds an asymmetric NAT tax across stacks of differing DB-chattiness; pin and record it for cross-stack comparisons. See docs/methodology.md." },
+        "endpoint_path": { "type": "string", "description": "HTTP path the load driver actually requested (e.g. /api/v1/users for the 10x10x10 aggregate read, or /api/v1/user?id=1 for the runtime-bound single-row read). Recorded so the run's endpoint is self-evident from the artifact rather than implied by scenario id + contract." },
         "execution_profile_id": { "type": "string", "description": "Execution profile identifier (e.g. runtime-constrained-128m-0p5vcpu-v1)." },
         "contract_id": { "type": "string", "description": "Fixed contract identifier from scenario.json fixed_contracts." },
         "track_id": { "type": "string", "description": "Track identifier (e.g. track-c)." },

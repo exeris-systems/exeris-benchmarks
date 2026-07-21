@@ -126,6 +126,20 @@ H2LOAD_H2C_MAX_CONCURRENT_STREAMS="${H2LOAD_H2C_MAX_CONCURRENT_STREAMS:-10}"
 TLS_ENABLED="${BENCHMARK_TLS_ENABLED:-0}"
 if [[ "$TLS_ENABLED" == "1" ]]; then TARGET_SCHEME="https"; CURL_INSECURE_OPT="-k"; else TARGET_SCHEME="http"; CURL_INSECURE_OPT=""; fi
 BASE_URL="${BASE_URL:-${TARGET_SCHEME}://localhost:${TARGET_PORT}}"
+# Endpoint path the load driver actually requests. Defaults to the aggregate read
+# (/api/v1/users) - byte-identical to the historical hard-coded behavior, so every
+# existing caller is unchanged. The constrained single-read matrix sets
+# ENTITY_READ_ENDPOINT_PATH=/api/v1/user?id=1 (the constrained wrapper derives it
+# from the fixed contract's `endpoint`), so preflight, warmup, and the measurement
+# window all hit the same path. For wrk the request path is chosen inside wrk.lua,
+# so it is forwarded via WRK_REQUEST_PATH (the command-line URL only pins host:port
+# for wrk); h2load and the curl preflight use the path in the URL directly.
+ENTITY_READ_ENDPOINT_PATH="${ENTITY_READ_ENDPOINT_PATH:-/api/v1/users}"
+case "$ENTITY_READ_ENDPOINT_PATH" in
+  /*) ;;
+  *) echo "ERROR: ENTITY_READ_ENDPOINT_PATH must be an absolute path starting with '/' (got: '$ENTITY_READ_ENDPOINT_PATH')" >&2; exit 1 ;;
+esac
+export WRK_REQUEST_PATH="$ENTITY_READ_ENDPOINT_PATH"
 SCENARIO_DIR="scenarios/entity-read-by-id"
 DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
 # Backend container network mode (fairness gate). entity-read-by-id is a CROSS-STACK
@@ -1346,7 +1360,7 @@ preflight_deadline=$(( SECONDS + ENTITY_READ_PREFLIGHT_READY_SECONDS ))
 preflight_attempts=0
 while :; do
   preflight_attempts=$(( preflight_attempts + 1 ))
-  if bench_run_endpoint_preflight "$BASE_URL/api/v1/users" "$PREFLIGHT_BODY_FILE" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
+  if bench_run_endpoint_preflight "$BASE_URL$ENTITY_READ_ENDPOINT_PATH" "$PREFLIGHT_BODY_FILE" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
     preflight_ok=1
     break
   fi
@@ -1358,13 +1372,13 @@ while :; do
 done
 if [[ "$preflight_ok" -ne 1 ]]; then
   echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (after ${preflight_attempts} attempt(s) over ${ENTITY_READ_PREFLIGHT_READY_SECONDS}s)"
-  echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/users (status=$BENCH_PREFLIGHT_HTTP_CODE)" >&2
+  echo "ERROR: endpoint preflight failed for $BASE_URL$ENTITY_READ_ENDPOINT_PATH (status=$BENCH_PREFLIGHT_HTTP_CODE)" >&2
   echo "ERROR: preflight response body saved at $PREFLIGHT_BODY_FILE" >&2
   exit 1
 fi
 echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (ready after ${preflight_attempts} attempt(s))"
 
-echo "[step 6/9] Payload preflight preview (/api/v1/users):"
+echo "[step 6/9] Payload preflight preview ($ENTITY_READ_ENDPOINT_PATH):"
 bench_print_preflight_payload_preview "$PREFLIGHT_BODY_FILE" 512
 
 if [[ "$TARGET_APP_STARTED" -eq 1 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
@@ -1408,9 +1422,9 @@ fi
 mark_run_phase warmup
 echo "[step 6/9] Warmup ($WARMUP, driver=$DRIVER)..."
 if [[ "$DRIVER" == "h2load" ]]; then
-  h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$WARMUP_SECONDS" "$BASE_URL/api/v1/users" > /dev/null 2>&1 || true
+  h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$WARMUP_SECONDS" "$BASE_URL$ENTITY_READ_ENDPOINT_PATH" > /dev/null 2>&1 || true
 else
-  wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL/api/v1/users" > /dev/null || true
+  wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL$ENTITY_READ_ENDPOINT_PATH" > /dev/null || true
 fi
 
 # Step 6.5: Reset pg_stat_statements counters before measurement
@@ -1480,7 +1494,7 @@ if [[ "$DRIVER" == "wrk2" ]]; then
   set +e
   LOAD_OUT=$(
     WRK_BASE_URL_OVERRIDE="$BASE_URL" \
-    WRK_PATH_OVERRIDE="/api/v1/users" \
+    WRK_PATH_OVERRIDE="$ENTITY_READ_ENDPOINT_PATH" \
     WRK2_THREADS_OVERRIDE="$THREADS" \
     WRK2_CONNECTIONS_OVERRIDE="$CONNECTIONS" \
     WRK2_DURATION_OVERRIDE="$DURATION" \
@@ -1504,9 +1518,9 @@ else
     # percentiles h2load itself omits can be computed offline. See
     # tools/aggregate-h2load-latency.sh (closed-loop / coordinated-omission caveat).
     H2LOAD_LOG_FILE="$OUTPUT_DIR/h2load-requests.log"
-    LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" --log-file="$H2LOAD_LOG_FILE" "$BASE_URL/api/v1/users")
+    LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" --log-file="$H2LOAD_LOG_FILE" "$BASE_URL$ENTITY_READ_ENDPOINT_PATH")
   else
-    LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
+    LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL$ENTITY_READ_ENDPOINT_PATH")
   fi
 
   # Pin the load driver to a cpuset disjoint from the target (--cpu-affinity) so the driver does not
@@ -1791,12 +1805,14 @@ RUN_CONFIG_JSON=$(jq -n \
   --argjson threads "$THREADS" \
   --argjson connections "$CONNECTIONS" \
   --arg backend_network_mode "${BACKEND_NETWORK_MODE:-bridge}" \
+  --arg endpoint_path "$ENTITY_READ_ENDPOINT_PATH" \
   '{
     duration_seconds: $duration_seconds,
     warmup_seconds: $warmup_seconds,
     threads: $threads,
     connections: $connections,
-    backend_network_mode: $backend_network_mode
+    backend_network_mode: $backend_network_mode,
+    endpoint_path: $endpoint_path
   }')
 
 METRICS_JSON=$(jq -n \

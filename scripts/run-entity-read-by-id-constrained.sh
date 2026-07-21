@@ -293,10 +293,23 @@ ensure_constrained_scope() {
     BENCHMARK_CONSTRAINED_DB_POOL_MIN_SIZE="${CONSTRAINED_DB_POOL_MIN_SIZE}"
     BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE="${CONSTRAINED_DB_POOL_MAX_SIZE}"
     BENCHMARK_CONSTRAINED_DB_CONNECTION_TIMEOUT_MS="${CONSTRAINED_DB_CONNECTION_TIMEOUT_MS}"
+    ENTITY_READ_ENDPOINT_PATH="${ENTITY_READ_ENDPOINT_PATH}"
   )
+  # These vars are all fairness-defining and must survive the systemd-run relaunch:
+  #  - DB_HOST_NETWORK / BENCH_BACKEND_NETWORK / BENCH_DB_TUNED: backend container
+  #    network mode is a comparison fairness gate (docs/methodology.md) so a host-net
+  #    Postgres choice can never silently degrade to bridge/NAT.
+  #  - EXERIS_SUBSYSTEMS: subsystem selection (e.g. dropping the unused crypto
+  #    subsystem in a plaintext sweep) is a footprint/fairness control; it must not
+  #    revert to the http,persistence,crypto default after relaunch.
+  #  - EXERIS_ENABLE_TELEMETRY_SUBSYSTEM / EXERIS_TELEMETRY_JFR_ENABLED: Exeris-only
+  #    overhead toggles; an explicit =false must not be inherited-on.
+  # Forwarded only-if-set, so runtimes/arms that don't set them are unaffected.
   local v
   for v in BENCHMARK_TLS_ENABLED EXERIS_SSL_ENABLED EXERIS_TRANSPORT_CERT_PATH \
-           EXERIS_TRANSPORT_KEY_PATH BENCH_PROTOCOL_MODE_OVERRIDE; do
+           EXERIS_TRANSPORT_KEY_PATH BENCH_PROTOCOL_MODE_OVERRIDE \
+           DB_HOST_NETWORK BENCH_BACKEND_NETWORK BENCH_DB_TUNED \
+           EXERIS_SUBSYSTEMS EXERIS_ENABLE_TELEMETRY_SUBSYSTEM EXERIS_TELEMETRY_JFR_ENABLED; do
     [[ -n "${!v:-}" ]] && env_passthrough+=("${v}=${!v}")
   done
 
@@ -327,6 +340,28 @@ THREADS="$(jq -r '.threads' <<<"$CONTRACT_JSON")"
 CONNECTIONS="$(jq -r '.connections' <<<"$CONTRACT_JSON")"
 WARMUP_SECONDS="$(jq -r '.warmup_seconds' <<<"$CONTRACT_JSON")"
 DURATION_SECONDS="$(jq -r '.duration_seconds' <<<"$CONTRACT_JSON")"
+# Request path the base runner should drive. Derived from the contract's "GET /path"
+# endpoint (last whitespace field, mirroring run-comparative.sh's
+# extract_endpoint_path_from_method_endpoint), defaulting to the aggregate read so
+# every pre-existing constrained contract (endpoint "GET /api/v1/users") is byte-for-
+# byte unchanged. The single-read matrix contracts carry "GET /api/v1/user?id=1", so
+# without this forward the base runner would silently measure the aggregate under a
+# single-read label. Exported (inherited by the base runner) and passed through the
+# systemd-run relaunch below.
+CONTRACT_ENDPOINT="$(jq -r '.endpoint // empty' <<<"$CONTRACT_JSON")"
+if [[ -n "$CONTRACT_ENDPOINT" ]]; then
+  ENTITY_READ_ENDPOINT_PATH="$(awk '{print $NF}' <<<"$CONTRACT_ENDPOINT")"
+else
+  ENTITY_READ_ENDPOINT_PATH="/api/v1/users"
+fi
+case "$ENTITY_READ_ENDPOINT_PATH" in
+  /*) ;;
+  *)
+    echo "ERROR: Contract '$CONTRACT_ID' endpoint '$CONTRACT_ENDPOINT' did not yield an absolute request path (got: '$ENTITY_READ_ENDPOINT_PATH')" >&2
+    exit 1
+    ;;
+esac
+export ENTITY_READ_ENDPOINT_PATH
 # Size the pool to the contract's offered concurrency. Do NOT defer to an ambient
 # EXERIS_DB_POOL_* (a sourced runtime env file, e.g. exeris-community-runtime.env,
 # sets EXERIS_DB_POOL_MAX_SIZE=256): inheriting 256 into a 128M/0.5vCPU cgroup

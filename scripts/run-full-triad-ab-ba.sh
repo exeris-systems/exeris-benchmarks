@@ -45,7 +45,14 @@ BENCH_CONNECTIONS=${BENCH_CONNECTIONS:-}
 BENCH_THREADS=${BENCH_THREADS:-}
 BENCH_ENABLE_SAFEPOINT_DIAGNOSTICS=${BENCH_ENABLE_SAFEPOINT_DIAGNOSTICS:-1}
 BENCH_JFR_SETTINGS=${BENCH_JFR_SETTINGS:-profile}
-BENCH_JFR_MAX_SIZE_MB=${BENCH_JFR_MAX_SIZE_MB:-512}
+# COMPLETENESS (BUG 4b): the diagnostic JFR is a size-rotated recording (maxsize). At 512MB
+# it kept only a tail (~39s light / ~3.5min heavy) — an incomplete slice of the measurement
+# window. Default raised so the FULL window is retained without rotation, yielding a COMPLETE
+# recording for every arm. This is a non-rotating CEILING, not a fixed file size: the dump is
+# still only the actual recorded data (~2-3GB/target light, <1GB heavy), so heavy runs are
+# unchanged. Env-overridable. NOTE: complete light recordings are ~2-3GB each — ensure disk
+# headroom across the campaign (or lower BENCH_RUNS_PER_PAIR) since every leaf dumps per target.
+BENCH_JFR_MAX_SIZE_MB=${BENCH_JFR_MAX_SIZE_MB:-6144}
 BENCH_JFR_VTHREAD_PINNED=${BENCH_JFR_VTHREAD_PINNED:-0}
 BENCH_ENABLE_NATIVE_MEMORY_TRACKING=${BENCH_ENABLE_NATIVE_MEMORY_TRACKING:-1}
 BENCH_NATIVE_MEMORY_TRACKING_LEVEL=${BENCH_NATIVE_MEMORY_TRACKING_LEVEL:-summary}
@@ -210,6 +217,14 @@ apply_fair_resource_profile() {
   export EXERIS_DB_POOL_MAX_SIZE="$BENCH_DB_POOL_MAX_SIZE"
   export SERVER_CPU_AFFINITY="$BENCH_SERVER_CPU_AFFINITY"
   export LOADGEN_CPU_AFFINITY="$BENCH_LOADGEN_CPU_AFFINITY"
+
+  # FAIRNESS (BUG 4a): the Exeris telemetry subsystem (and its telemetry-JFR emission) is an
+  # Exeris-only overhead that spring/quarkus do not pay; enabling it on the Exeris arm would
+  # bias the cross-runtime comparison. Env defaults are already false, but enforce it here so
+  # an inherited/exported truthy value cannot defeat it. Unconditional (overrides any inherited
+  # value); harmless no-op for the spring/quarkus arms, which ignore these vars.
+  export EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false
+  export EXERIS_TELEMETRY_JFR_ENABLED=false
   export EXERIS_JAVA_OPTS="-Xms${BENCH_EXERIS_HEAP_MB}m -Xmx${BENCH_EXERIS_HEAP_MB}m -XX:MaxRAM=${BENCH_TOTAL_MEMORY_MB}m"
   export SPRING_JAVA_OPTS="-Xms${BENCH_SPRING_HEAP_MB}m -Xmx${BENCH_SPRING_HEAP_MB}m -XX:MaxRAM=${BENCH_TOTAL_MEMORY_MB}m"
   export QUARKUS_JAVA_OPTS="-Xms${BENCH_QUARKUS_HEAP_MB}m -Xmx${BENCH_QUARKUS_HEAP_MB}m -XX:MaxRAM=${BENCH_TOTAL_MEMORY_MB}m"
@@ -286,6 +301,9 @@ apply_fair_resource_profile() {
   "native_memory_tracking_level": "$(printf '%s' "$BENCH_NATIVE_MEMORY_TRACKING_LEVEL" | json_escape)",
   "jfr_settings": "$(printf '%s' "$jfr_settings" | json_escape)",
   "jfr_max_size_mb": ${BENCH_JFR_MAX_SIZE_MB},
+  "jfr_recording_complete_non_rotated": true,
+  "exeris_telemetry_subsystem_enabled": false,
+  "exeris_telemetry_jfr_enabled": false,
   "targets": {
     "exeris-community": {
       "java_opts": "$(printf '%s' "$EXERIS_JAVA_OPTS" | json_escape)",
@@ -317,6 +335,8 @@ EOF
   "db_pool_min": ${BENCH_DB_POOL_MIN_SIZE},
   "db_pool_max": ${BENCH_DB_POOL_MAX_SIZE},
   "require_perf_stat": ${BENCH_REQUIRE_PERF_STAT},
+  "exeris_telemetry_subsystem_enabled": false,
+  "exeris_telemetry_jfr_enabled": false,
   "server_cpu_affinity": "${SERVER_CPU_AFFINITY}",
   "loadgen_cpu_affinity": "$(printf '%s' "$LOADGEN_CPU_AFFINITY" | json_escape)",
   "native_memory_tracking_enabled": ${native_memory_tracking_enabled},

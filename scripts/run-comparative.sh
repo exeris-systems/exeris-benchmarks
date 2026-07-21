@@ -37,6 +37,16 @@ source "$READINESS_LIB"
 # shellcheck source=/dev/null
 source "$TARGET_CONTRACT_REGISTRY"
 
+# OS-level sidecar samplers (mpstat/pidstat). Optional: used for the per-target DB-CPU
+# sampler over the Postgres cpuset during the measurement window (fine-grained 1s cadence,
+# independent of any host sar cron). Degrades to a no-op when the library or the sampling
+# tools are absent.
+OS_SAMPLER_LIB="${REPO_ROOT}/tools/bench/lib/os-sampler.sh"
+if [[ -f "$OS_SAMPLER_LIB" ]]; then
+  # shellcheck source=/dev/null
+  source "$OS_SAMPLER_LIB"
+fi
+
 # Color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -121,6 +131,19 @@ SCENARIO_DIAGNOSTICS_DIR="${BENCH_SCENARIO_DIAGNOSTICS_DIR:-${OUTPUT_DIR}/logs/s
 SCENARIO_DB_DIAGNOSTICS_HOOK="${REPO_ROOT}/scenarios/${SCENARIO_ID}/capture-db-diagnostics.sh"
 POST_MEASUREMENT_DIAGNOSTICS_ATTEMPTED=0
 MEASUREMENT_STAGE_STARTED=0
+
+# Scenario-specific pg_stat_statements helpers (optional). When present, run_wrk_target
+# brackets each target's measurement window with a per-target baseline/final snapshot and
+# emits a delta — so pg_stat attribution is per leaf/per target and cannot be clobbered by
+# the next leaf's reset (the shared post-measurement snapshot alone could not do this).
+SCENARIO_PGSS_WRAPPER="${REPO_ROOT}/scenarios/${SCENARIO_ID}/pg_stat_statements-wrapper.sh"
+PGSS_WRAPPER_AVAILABLE=0
+if [[ -f "$SCENARIO_PGSS_WRAPPER" ]]; then
+  # shellcheck source=/dev/null
+  if source "$SCENARIO_PGSS_WRAPPER" 2>/dev/null; then
+    PGSS_WRAPPER_AVAILABLE=1
+  fi
+fi
 
 run_post_measurement_diagnostics() {
   if [[ "$MEASUREMENT_STAGE_STARTED" != "1" ]]; then
@@ -2813,6 +2836,81 @@ fi
 
 AB_BA_ORDERS_COMPLETED_JSON="$(printf '%s' "$AB_BA_ORDERS_COMPLETED_RAW" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | awk 'NF>0' | jq -Rsc 'split("\n") | map(select(length > 0) | ascii_downcase) | unique')"
 
+# --- DB measurement-window diagnostics (BUG 1 pg_stat delta + BUG 3 DB-CPU sampler) --------
+# The Postgres cpuset is discoverable via BENCH_DB_CPUSET, else docker-inspect of the
+# benchmark-db container, else empty (mpstat then falls back to -P ALL). Echoes the core list.
+resolve_db_cpuset() {
+  if [[ -n "${BENCH_DB_CPUSET:-}" ]]; then
+    printf '%s' "$BENCH_DB_CPUSET"
+    return 0
+  fi
+  local inspected=""
+  if command -v docker >/dev/null 2>&1; then
+    inspected="$(docker inspect -f '{{.HostConfig.CpusetCpus}}' "${DB_CONTAINER_NAME:-exeris-benchmark-db}" 2>/dev/null || true)"
+  fi
+  printf '%s' "$inspected"
+}
+
+# Records how the cpuset was resolved (for reproducibility of the DB-CPU attribution).
+db_cpuset_source_label() {
+  local resolved="$1"
+  if [[ -n "${BENCH_DB_CPUSET:-}" ]]; then
+    printf 'env:BENCH_DB_CPUSET'
+  elif [[ -n "$resolved" ]]; then
+    printf 'docker-inspect'
+  else
+    printf 'all-cores-fallback'
+  fi
+}
+
+# Best-effort pg_stat_statements snapshot (no reset). No-op unless the scenario wrapper loaded.
+pgss_snapshot_best_effort() {
+  local out_file="$1" phase="$2"
+  [[ "${PGSS_WRAPPER_AVAILABLE:-0}" == "1" ]] || return 0
+  pg_stat_statements_snapshot "$out_file" "$phase" >/dev/null 2>&1 || true
+  return 0
+}
+
+# Emit a per-target measurement-window delta (final minus baseline), keyed by queryid, with
+# diagnostic meta-queries filtered out. mean_time_ms is derived over the window; the pg_stat
+# running max is carried as max_time_ms_cumulative (not window-scoped). Best-effort.
+pgss_compute_delta_best_effort() {
+  local baseline_file="$1" final_file="$2" out_file="$3"
+  [[ -f "$baseline_file" && -f "$final_file" ]] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  jq -n --slurpfile b "$baseline_file" --slurpfile f "$final_file" '
+    ($b[0].queries // []) as $bq
+    | ($f[0].queries // []) as $fq
+    | ($bq | map({ (.queryid): {calls: (.calls // 0), total_time_ms: (.total_time_ms // 0)} }) | add // {}) as $bmap
+    | {
+        timestamp: ($f[0].timestamp // null),
+        phase: "measurement-delta",
+        server_version_num: ($f[0].server_version_num // null),
+        column_profile: ($f[0].column_profile // null),
+        baseline_timestamp: ($b[0].timestamp // null),
+        final_timestamp: ($f[0].timestamp // null),
+        note: "Per-target delta over this target'"'"'s measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
+        queries: [
+          $fq[]
+          | . as $q
+          | ($bmap[$q.queryid] // {calls: 0, total_time_ms: 0}) as $base
+          | (($q.calls // 0) - ($base.calls // 0)) as $dcalls
+          | (($q.total_time_ms // 0) - ($base.total_time_ms // 0)) as $dtotal
+          | select($dcalls > 0)
+          | select((($q.query // "") | test("pg_stat_statements|pg_extension|pg_settings|shared_preload_libraries|server_version_num"; "i")) | not)
+          | {
+              queryid: $q.queryid,
+              query: $q.query,
+              calls: $dcalls,
+              total_time_ms: $dtotal,
+              mean_time_ms: (if $dcalls > 0 then ($dtotal / $dcalls) else 0 end),
+              max_time_ms_cumulative: ($q.max_time_ms // null)
+            }
+        ]
+      }' > "$out_file" 2>/dev/null || true
+  return 0
+}
+
 run_wrk_target() {
   local target_id="$1"
   local port="$2"
@@ -2832,6 +2930,13 @@ run_wrk_target() {
   local perf_stat_enabled=0
   local perf_no_scale="${BENCHMARK_PERF_NO_SCALE:-1}"
   local perf_stat_file="${outdir}/perf-stat.csv"
+  # BUG 3: fine-grained DB-CPU sampler (Postgres cpuset) bracketed to the measurement window.
+  local db_cpu_mpstat_pid="" db_cpu_mpstat_csv="${outdir}/db-cpuset-mpstat.csv"
+  local db_cpuset_resolved=""
+  # BUG 1: per-target pg_stat_statements measurement-window delta artifacts.
+  local pgss_baseline="${outdir}/pg_stat_statements-measurement-baseline.json"
+  local pgss_final="${outdir}/pg_stat_statements-measurement-final.json"
+  local pgss_delta="${outdir}/pg_stat_statements-measurement-delta.json"
 
   if [[ -n "$LOADGEN_CPU_AFFINITY" ]]; then
     if ! command -v taskset >/dev/null 2>&1; then
@@ -2873,6 +2978,28 @@ run_wrk_target() {
     start_resource_sampler "$detected_pid" "${outdir}/resource-samples.csv" 1 &
     sampler_pid=$!
   fi
+
+  # BUG 3: start a fine-grained (1s) DB-CPU sampler over the Postgres cpuset, bracketed to
+  # THIS target's measurement window (after warmup, stopped right after measurement). This
+  # replaces reliance on the system sar cron (10-min cadence, uselessly coarse for a
+  # 120/300/900s window). Falls back to all cores when the cpuset is not discoverable.
+  db_cpuset_resolved="$(resolve_db_cpuset)"
+  if command -v bench_start_mpstat_sampler_for_cpus >/dev/null 2>&1; then
+    db_cpu_mpstat_pid="$(bench_start_mpstat_sampler_for_cpus "$db_cpu_mpstat_csv" "$db_cpuset_resolved" 1 2>/dev/null || true)"
+  fi
+  jq -n \
+    --arg cpuset "$db_cpuset_resolved" \
+    --arg source "$(db_cpuset_source_label "$db_cpuset_resolved")" \
+    --arg target_id "$target_id" \
+    --arg started "$([[ -n "$db_cpu_mpstat_pid" ]] && echo true || echo false)" \
+    '{resolved_cpuset: $cpuset, source: $source, interval_seconds: 1, window: "measurement", target_id: $target_id, sampler_started: ($started == "true")}' \
+    > "${outdir}/db-cpuset-mpstat.meta.json" 2>/dev/null || true
+
+  # BUG 1: pg_stat_statements baseline at measurement-start (after warmup). The matching
+  # final+delta are taken at measurement-end below, both strictly inside this run-comparative
+  # invocation — so the delta reflects only THIS target's measurement window and cannot be
+  # clobbered by the next leaf's reset (robust for both ab and ba order).
+  pgss_snapshot_best_effort "$pgss_baseline" "measurement-baseline"
 
   if [[ "$PERF_STAT_REQUIRED" == "1" || "$PERF_STAT_CAPTURE_REQUESTED" == "1" ]]; then
     perf_stat_enabled=1
@@ -2939,7 +3066,16 @@ run_wrk_target() {
     kill "$sampler_pid" 2>/dev/null || true
     wait "$sampler_pid" 2>/dev/null || true
   fi
-  
+
+  # BUG 3: stop the DB-CPU sampler at measurement-end (converts its raw capture to CSV).
+  if [[ -n "$db_cpu_mpstat_pid" ]] && command -v bench_stop_mpstat_sampler >/dev/null 2>&1; then
+    bench_stop_mpstat_sampler "$db_cpu_mpstat_pid" "$db_cpu_mpstat_csv" || true
+  fi
+
+  # BUG 1: pg_stat_statements final at measurement-end, then emit the per-target window delta.
+  pgss_snapshot_best_effort "$pgss_final" "measurement-final"
+  pgss_compute_delta_best_effort "$pgss_baseline" "$pgss_final" "$pgss_delta"
+
   if [[ -f "${outdir}/resource-samples.csv" ]]; then
     summarize_resource_samples "${outdir}/resource-samples.csv" "${outdir}/resource-metrics.json" "$MEASUREMENT_SECONDS"
   fi

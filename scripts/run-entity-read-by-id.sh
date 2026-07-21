@@ -146,10 +146,21 @@ DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
 # comparison (exeris vs spring vs quarkus against the same Postgres), so bridge/NAT
 # taxes chattier runtimes asymmetrically. DB_HOST_NETWORK=1 (or BENCH_BACKEND_NETWORK=host)
 # layers the host-net override so the DB shares the host network. Recorded in result.json.
-DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.host-net.yml"
-if [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
+# DB network override selection (both host modes share the host network; only cpuset differs):
+#   BENCH_DB_TUNED=1  -> tuned override = host-net + PG cpuset isolation (the tuned-PG baseline).
+#   DB_HOST_NETWORK=1 -> plain host-net override = host-net, NO cpuset.
+# BENCH_DB_TUNED takes precedence: without this, a constrained/tuned run that also sets
+# DB_HOST_NETWORK=1 would recreate the DB via the plain host-net override and SILENTLY DROP the
+# cpuset isolation, reintroducing PG<->app core contention. `compose_db up -d` is idempotent, so
+# once the tuned override is applied the per-run re-invocations are no-ops (no DB churn).
+if [[ "${BENCH_DB_TUNED:-0}" == "1" ]]; then
+  DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.tuned.yml"
+  BACKEND_NETWORK_MODE="host"
+elif [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
+  DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.host-net.yml"
   BACKEND_NETWORK_MODE="host"
 else
+  DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.host-net.yml"
   BACKEND_NETWORK_MODE="bridge"
 fi
 DB_INIT_SQL_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql"

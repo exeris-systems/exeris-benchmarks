@@ -2699,9 +2699,14 @@ elif [[ -f "$LAUNCH_VERIFIER" ]]; then
     _tv_id="${_tv_pair%%|*}"
     _tv_url="${_tv_pair#*|}"
     _tv_port="$(printf '%s' "$_tv_url" | sed -E 's#.*:([0-9]+).*#\1#')"
-    # Log path conventions differ per env file; match on the port, which every arm-specific log
-    # carries. Absent log => the verifier reports the breadcrumb as NOT asserted rather than passing.
-    _tv_log="$(ls -1t /tmp/exeris-*"${_tv_port}"*.log 2>/dev/null | head -1)"
+    # Log path conventions differ per env file; match on the port when the log carries it.
+    # Absent log => the verifier reports the breadcrumb as NOT asserted rather than passing.
+    # `|| true` is REQUIRED under `set -euo pipefail`: portless logs (exeris-community writes
+    # /tmp/exeris-community.log, no port) make the glob match nothing, `ls` exit non-zero, and
+    # pipefail+errexit would then silently abort the whole run BEFORE the verifier — which is
+    # exactly what turning this assertion on by default (f0e82ec) did to every exeris-community
+    # pair. An absent log must yield an empty _tv_log, per the line above, not kill the leaf.
+    _tv_log="$(ls -1t /tmp/exeris-*"${_tv_port}"*.log 2>/dev/null | head -1 || true)"
     if ! bash "$LAUNCH_VERIFIER" "$_tv_id" "$_tv_port" "$_tv_log"; then
       echo "ERROR: launch verification failed for ${_tv_id} — refusing to measure an unidentified artifact." >&2
       exit 1

@@ -568,6 +568,14 @@ summarize_resource_samples() {
   fi
   
   local first_utime first_stime last_utime last_stime
+# Best-effort stat pipelines below use `... | head -1` / `sort -n | head -1`. head closes the
+# pipe after the first line, so the upstream tail/sort can take SIGPIPE (exit 141). Under
+# `set -o pipefail` + errexit that RACILY aborts the whole run once the CSV is large enough that
+# sort's output does not finish in one atomic pipe write — a real 900s measurement (~840 rows)
+# loses the race and silently kills every leaf at post-measurement, while a 15s debug run (~15
+# rows, one atomic write) never does. The captured min/first value is already correct (head read
+# it); only the benign SIGPIPE exit code must not abort. Re-armed right after the block.
+  set +o pipefail
   first_utime="$(tail -n +2 "$csv_file" | head -1 | cut -d, -f2)"
   first_stime="$(tail -n +2 "$csv_file" | head -1 | cut -d, -f3)"
   last_utime="$(tail -n +2 "$csv_file" | tail -1 | cut -d, -f2)"
@@ -615,7 +623,8 @@ summarize_resource_samples() {
   rss_pref_min="$(tail -n +2 "$csv_file" | LC_ALL=C awk -F, '{rss=(($8+0)>0?$8:$4); print rss}' | sort -n | head -1)"
   rss_pref_max="$(tail -n +2 "$csv_file" | LC_ALL=C awk -F, '{rss=(($8+0)>0?$8:$4); print rss}' | sort -n | tail -1)"
   rss_pref_avg="$(tail -n +2 "$csv_file" | LC_ALL=C awk -F, '{rss=(($8+0)>0?$8:$4); sum+=rss} END {if (NR>0) printf "%.0f", sum/NR; else print 0}')"
-  
+  set -o pipefail  # re-arm errexit-on-pipe-failure after the best-effort stat pipelines above
+
   jq -n \
     --argjson sample_count "$sample_count" \
     --arg cpu_time_seconds "$cpu_time_seconds" \

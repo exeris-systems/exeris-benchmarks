@@ -304,11 +304,17 @@ ensure_constrained_scope() {
   #    revert to the http,persistence,crypto default after relaunch.
   #  - EXERIS_ENABLE_TELEMETRY_SUBSYSTEM / EXERIS_TELEMETRY_JFR_ENABLED: Exeris-only
   #    overhead toggles; an explicit =false must not be inherited-on.
+  #  - BENCHMARK_ALLOW_EXTERNAL_DB: when a pre-launched tuned Postgres (host-net +
+  #    fixed cpuset) is already bound to :5432, this tells the base runner to REUSE it
+  #    (DB_LAUNCH_MODE=external) instead of insisting on a managed DB. Without it the
+  #    base runner sees the occupied port, refuses reuse, and drops to the docker-run
+  #    fallback which recreates the container host-net but WITHOUT the cpuset — silently
+  #    unpinning the DB mid-sweep. Must survive the relaunch or every point re-clobbers it.
   # Forwarded only-if-set, so runtimes/arms that don't set them are unaffected.
   local v
   for v in BENCHMARK_TLS_ENABLED EXERIS_SSL_ENABLED EXERIS_TRANSPORT_CERT_PATH \
            EXERIS_TRANSPORT_KEY_PATH BENCH_PROTOCOL_MODE_OVERRIDE \
-           DB_HOST_NETWORK BENCH_BACKEND_NETWORK BENCH_DB_TUNED \
+           DB_HOST_NETWORK BENCH_BACKEND_NETWORK BENCH_DB_TUNED BENCHMARK_ALLOW_EXTERNAL_DB \
            EXERIS_SUBSYSTEMS EXERIS_ENABLE_TELEMETRY_SUBSYSTEM EXERIS_TELEMETRY_JFR_ENABLED; do
     [[ -n "${!v:-}" ]] && env_passthrough+=("${v}=${!v}")
   done

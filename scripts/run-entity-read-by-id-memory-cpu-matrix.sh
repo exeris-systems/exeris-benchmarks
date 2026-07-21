@@ -89,6 +89,13 @@ HARDWARE_PROFILE="${BENCHMARK_HARDWARE_PROFILE:-perf-box-amd64}"
 DB_POOL_SIZE="${MATRIX_DB_POOL_SIZE:-16}"
 SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
 CAPTURE_PG_RSS="${MATRIX_CAPTURE_PG_RSS:-1}"
+# The matrix REQUIRES a pre-launched tuned Postgres (host-net + fixed cpuset 4-7,12-15)
+# bound to :5432 — a wiring the base runner's managed-DB path cannot reproduce (its
+# docker-run fallback is host-net but cpuset-less). So reuse-external is the matrix
+# default: the base runner must adopt the running tuned DB, never recreate it (which
+# would silently drop the cpuset mid-sweep). Set MATRIX_ALLOW_EXTERNAL_DB=0 only if you
+# deliberately want the base runner to manage its own (untuned) DB.
+ALLOW_EXTERNAL_DB="${MATRIX_ALLOW_EXTERNAL_DB:-1}"
 # Per-arm heap fraction of memory.max (user decision; see HEAP POLICY header).
 # community 0.25: with crypto off + exeris's off-heap design its heap need is tiny
 # (empirically ~16MB fits a 128MB budget), so 0.25 (32MB @128MB) is a safe default
@@ -551,6 +558,7 @@ for r in $(seq 1 "$REPEATS"); do
         "BENCHMARK_SKIP_TARGET_BUILD=${SKIP_TARGET_BUILD}"
         "BENCHMARK_CONSTRAINED_DB_POOL_MIN_SIZE=${DB_POOL_SIZE}"
         "BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE=${DB_POOL_SIZE}"
+        "BENCHMARK_ALLOW_EXTERNAL_DB=${ALLOW_EXTERNAL_DB}"
       )
       telemetry_subsystem="n/a"; telemetry_jfr="n/a"; exeris_subsystems="n/a"
       if [[ "$arm_id" == "exeris-community" ]]; then

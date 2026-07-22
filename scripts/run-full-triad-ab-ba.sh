@@ -30,7 +30,10 @@ TARGET_START_SCRIPT="./runtime/drivers/start-target.sh"
 TARGET_STOP_SCRIPT="./runtime/drivers/stop-target.sh"
 
 CAMPAIGN_TS=$(date -u +%Y%m%d-%H%M%S)
-CAMPAIGN_OUTPUT_DIR="results/raw/entity-read-by-id/${CAMPAIGN_TS}-full-triad-ab-ba"
+# BENCH_CAMPAIGN_OUTPUT_DIR_OVERRIDE lets a caller (e.g. the latency-curve wrapper, which
+# invokes this harness once per (endpoint,rung)) pin each invocation's output under its own
+# organized path instead of a fresh ${TS}-full-triad-ab-ba dir. Default is unchanged.
+CAMPAIGN_OUTPUT_DIR="${BENCH_CAMPAIGN_OUTPUT_DIR_OVERRIDE:-results/raw/entity-read-by-id/${CAMPAIGN_TS}-full-triad-ab-ba}"
 
 BENCH_DB_POOL_MIN_SIZE=${BENCH_DB_POOL_MIN_SIZE:-16}
 BENCH_DB_POOL_MAX_SIZE=${BENCH_DB_POOL_MAX_SIZE:-256}

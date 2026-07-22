@@ -13,8 +13,11 @@
     "fixed_contract_cross_runtime_v2",
     "fixed_contract_cross_runtime_h1_debug",
     "fixed_contract_cross_runtime_h1_single_read_v1",
-    "fixed_contract_cross_runtime_h1_single_read_debug"
+    "fixed_contract_cross_runtime_h1_single_read_debug",
+    "fixed_contract_p99_stable_h1_wrk2_v1",
+    "fixed_contract_p99_stable_h1_wrk2_single_read_v1"
   ],
+  "required_contracts_note": "The two fixed_contract_p99_stable_h1_wrk2_* contracts are the wrk2 CO-free latency (p99_stable) family (heavy aggregate + light single-read). Matched conditions to the wrk throughput contracts (128 conns, 4 threads, 60s/120s window, h1, loopback) so they are comparative-eligible on the same allowed_pairs. Isolation is by contract_id (as with v1/v2/single_read), reinforced by a -runtime-wrk2 workload_profile_key suffix that run-comparative.sh derives for runtime-wrk2 contracts: wrk2 latency data never aggregates with the wrk throughput family.",
   "comparison_axis": {
     "type": "runtime_pairwise",
     "scope": "within-tier-within-protocol",

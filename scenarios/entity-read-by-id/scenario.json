@@ -331,6 +331,30 @@
         "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
       }
     },
+    "fixed_contract_p99_stable_h1_wrk2_single_read_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk2",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "driver": "wrk2",
+      "endpoint": "GET /api/v1/user?id=1",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "rate_rps": "calibrated",
+      "rate_rps_note": "Must be set to 60-80% of saturated throughput observed via wrk fixed_contract_cross_runtime_h1_single_read_v1 on the same hardware before first valid p99_stable run. For a latency-load CURVE, the offered rate is swept across sub-saturation rungs via BENCH_OFFERED_RPS.",
+      "claim_scope": "p99_stable",
+      "payload_profile": "single-user-by-id-v1",
+      "required_profile": "perf-box-amd64",
+      "note": "LIGHT single-read (GET /api/v1/user?id=1 -> {id, username}) counterpart of fixed_contract_p99_stable_h1_wrk2_v1 (heavy 3-query aggregate). wrk2 rate-controlled p99_stable; wrk is ineligible for this scope. Runtime-bound (DB is a hot single PK row, cache-resident) so latency reflects the runtime + pool + JSON path, not Postgres. NOT comparable across endpoints or windows -- contract_id is the isolation key. Intended for the tuned-PG baseline (BENCH_DB_TUNED=1).",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
     "fixed_contract_h2c_h2load_exploratory_v1": {
       "tier": "community",
       "protocol_mode": "h2c",

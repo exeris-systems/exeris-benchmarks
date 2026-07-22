@@ -2041,6 +2041,18 @@ if [[ -z "$WORKLOAD_PROFILE_KEY" ]]; then
   exit 64
 fi
 
+# Align the workload_profile_key's driver-family suffix with the CONTRACT's benchmark_family.
+# The manifest's allowed_pairs carry a '-runtime-wrk' key (the wrk throughput family). A wrk2
+# (CO-free latency, p99_stable) contract registered on those same pairs must NOT inherit that
+# key: its p99 latency data must never aggregate with wrk throughput. Suffix '-runtime-wrk' ->
+# '-runtime-wrk2' so the key self-identifies and stays isolated (belt-and-suspenders on top of
+# contract_id isolation). wrk (throughput) contracts are unchanged.
+CONTRACT_BENCHMARK_FAMILY="$(jq -r --arg c "$CONTRACT_ID" '.fixed_contracts[$c].benchmark_family // empty' "$SCENARIO_JSON" 2>/dev/null)"
+if [[ "$CONTRACT_BENCHMARK_FAMILY" == "runtime-wrk2" && "$WORKLOAD_PROFILE_KEY" == *-runtime-wrk ]]; then
+  WORKLOAD_PROFILE_KEY="${WORKLOAD_PROFILE_KEY}2"
+  echo "  workload_profile_key: suffixed to '${WORKLOAD_PROFILE_KEY}' for runtime-wrk2 contract (isolated from the wrk throughput family)"
+fi
+
 FORBIDDEN_PAIR_PASS=true
 FORBIDDEN_PAIR_REASON="pair is not forbidden"
 if jq -e \

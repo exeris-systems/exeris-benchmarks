@@ -663,7 +663,13 @@ for r in $(seq 1 "$REPEATS"); do
 
       mkdir -p "$run_dir"
       set +e
-      "${cmd[@]}"
+      # </dev/null is LOAD-BEARING: the constrained runner spawns children (docker,
+      # systemd-run, psql, wrk) that read stdin. Without this redirect they drain the
+      # `done < <(arms_for_point ...)` process substitution feeding THIS while-loop, so
+      # the loop hits EOF after the first arm (exeris) and the quarkus arm(s) never run
+      # -- silently producing an exeris-only campaign with no comparison. (Dry-run masks
+      # this because the cmd is never executed.)
+      "${cmd[@]}" </dev/null
       rc=$?
       set -e
 

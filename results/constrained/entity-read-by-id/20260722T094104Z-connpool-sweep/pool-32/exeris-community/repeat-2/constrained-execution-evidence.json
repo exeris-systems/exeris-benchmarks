@@ -1,0 +1,82 @@
+{
+  "execution_profile_id": "runtime-constrained-1024m-4vcpu-v1",
+  "jit_representativeness": "representative",
+  "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1",
+  "target_runtime": "community",
+  "target_build": "jvm",
+  "benchmark_skip_target_build": 1,
+  "required_track_id": "track-c",
+  "track_id": "track-c",
+  "result_namespace": "results/constrained/entity-read-by-id/20260722T094104Z-connpool-sweep/pool-32/exeris-community/repeat-2",
+  "cgroup_effective": {
+    "memory_max_bytes": 1073741824,
+    "cpu_quota_us": 400000,
+    "cpu_period_us": 100000,
+    "memory_peak_bytes": 230293504,
+    "cpu_stat": {
+      "nr_periods": 4269,
+      "nr_throttled": 4200,
+      "throttled_usec": 383718054
+    },
+    "memory_events": {
+      "oom_kill": 0,
+      "oom": 0,
+      "oom_group_kill": 0,
+      "max": 0
+    }
+  },
+  "phase_reached": "measure_complete",
+  "failed_phase": null,
+  "oom_after_measurement": false,
+  "target_alive_at_teardown": 1,
+  "memory_failure_kind": "none",
+  "crash_artifacts": {
+    "hs_err_present": false,
+    "hs_err_paths": [],
+    "hs_err_cause": null,
+    "replay_present": false,
+    "core_present": false
+  },
+  "dmesg_oom": {
+    "available": false,
+    "oom_killer_invoked": null,
+    "matched_line_count": 0,
+    "sample_lines": [],
+    "note": "best-effort kernel ring-buffer scan; commonly empty/unavailable under a --user systemd scope (no CAP_SYSLOG). memory.events.oom_kill is the authoritative cgroup signal."
+  },
+  "jvm_overlay_flags": [
+    "-XX:+UseParallelGC",
+    "-XX:ActiveProcessorCount=4",
+    "-XX:MaxRAM=1024m",
+    "-Xms256m",
+    "-Xmx256m"
+  ],
+  "launch_command": [
+    "./scripts/run-entity-read-by-id.sh",
+    "--claim-scope",
+    "exploratory",
+    "--profile",
+    "dev-laptop",
+    "--output-dir",
+    "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T094104Z-connpool-sweep/pool-32/exeris-community/repeat-2",
+    "--target-runtime",
+    "community",
+    "--target-build",
+    "jvm",
+    "--threads",
+    "4",
+    "--connections",
+    "128",
+    "--warmup",
+    "120s",
+    "--duration",
+    "300s",
+    "--cpu-affinity",
+    "0-1,8-9",
+    "--client-cpu-affinity",
+    "2-3,10-11"
+  ],
+  "benchmark_exit_code": 0,
+  "outcome": "ok",
+  "generated_at_utc": "2026-07-22T11:28:40Z"
+}

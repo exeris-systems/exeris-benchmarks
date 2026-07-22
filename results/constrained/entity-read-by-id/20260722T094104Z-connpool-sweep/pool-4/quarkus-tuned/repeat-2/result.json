@@ -1,0 +1,67 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260722-125247-unknown",
+  "timestamp": "2026-07-22T10:52:47Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T094104Z-connpool-sweep/pool-4/quarkus-tuned/repeat-2/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h1",
+  "tls": {
+    "enabled": false
+  },
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "quarkus-benchmark-app-tuned",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "commit_sha": "unknown"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+    "duration_seconds": 300,
+    "warmup_seconds": 120,
+    "threads": 4,
+    "connections": 128,
+    "backend_network_mode": "host",
+    "endpoint_path": "/api/v1/user?id=1",
+    "execution_profile_id": "runtime-constrained-1024m-4vcpu-v1",
+    "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1",
+    "track_id": "track-c",
+    "result_namespace": "results/constrained/entity-read-by-id/20260722T094104Z-connpool-sweep/pool-4/quarkus-tuned/repeat-2",
+    "jit_representativeness": "representative"
+  },
+  "metrics": {
+    "throughput_rps": 33488.13,
+    "latency_mean_us": 3820.000000,
+    "latency_stdev_us": 474.820000,
+    "latency_max_us": 23060.000000,
+    "latency_p50_us": 3770.000000,
+    "latency_p75_us": 3850.000000,
+    "latency_p90_us": 3930.000000,
+    "latency_p99_us": 6510.000000,
+    "total_requests": 10047733,
+    "total_errors": 0,
+    "error_rate_pct": 0.000000
+  },
+  "notes": "backendMode=default-vt targetRuntimeEffective=quarkus-tuned targetBuild=jvm cpuAffinity=0-1,8-9 clientCpuAffinity=2-3,10-11",
+  "tags": [
+    "backend-mode:default-vt",
+    "target-runtime-effective:quarkus-tuned",
+    "target-build:jvm"
+  ],
+  "raw_output": "Running 5m test @ http://localhost:8080/api/v1/user?id=1\n  4 threads and 128 connections\n  Thread Stats   Avg      Stdev     Max   +/- Stdev\n    Latency     3.82ms  474.82us  23.06ms   97.65%\n    Req/Sec     8.41k   293.86     9.57k    89.47%\n  Latency Distribution\n     50%    3.77ms\n     75%    3.85ms\n     90%    3.93ms\n     99%    6.51ms\n  10047733 requests in 5.00m, 1.08GB read\nRequests/sec:  33488.13\nTransfer/sec:      3.67MB\n",
+  "run_track": "constrained"
+}

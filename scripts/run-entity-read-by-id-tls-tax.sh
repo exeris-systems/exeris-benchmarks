@@ -43,6 +43,12 @@ REPEATS="${TLSTAX_REPEATS:-3}"
 HARDWARE_PROFILE="${BENCHMARK_HARDWARE_PROFILE:-perf-box-amd64}"
 SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
 ALLOW_EXTERNAL_DB="${TLSTAX_ALLOW_EXTERNAL_DB:-1}"
+# ADR-035 persistence admission: at 128 conns / pool 16 the default ratio=8 gives a
+# queue depth of exactly 128 (16*8), leaving only ~16 slots of margin over the ~112
+# steady pendingAcquires — a GC-bunched acquire spike could shed and dirty exeris's
+# error rate. Pin ratio=32 for the exeris arm (matches the connpool sweep + floor:
+# same post-fence exeris config across the batch). No-op when not shedding.
+ADMISSION_RATIO="${TLSTAX_ADMISSION_RATIO:-32}"
 CAPTURE_PG_RSS="${TLSTAX_CAPTURE_PG_RSS:-1}"
 DB_CONTAINER="${BENCHMARK_DB_CONTAINER:-exeris-benchmark-db}"
 CERT_DIR="${TLSTAX_CERT_DIR:-/tmp/exeris-bench-certs}"
@@ -146,6 +152,7 @@ for r in $(seq 1 "$REPEATS"); do
           "EXERIS_SUBSYSTEMS=${mode_subsystems}"
           "EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false"
           "EXERIS_TELEMETRY_JFR_ENABLED=false"
+          "JDK_JAVA_OPTIONS=-Dexeris.persistence.admission.queueDepthAllowanceRatio=${ADMISSION_RATIO}"
         )
         exeris_subsystems="$mode_subsystems"
       fi
@@ -182,11 +189,13 @@ for r in $(seq 1 "$REPEATS"); do
         --arg arm "$arm_id" --arg target_runtime "$target_runtime" --argjson repeat "$r" \
         --arg run_dir "$run_dir" --argjson rc "$rc" --argjson xmx "$xmx_mb" --arg exeris_subsystems "$exeris_subsystems" \
         --arg pg_rss_kb "$pg_rss_kb" --arg pg_rss_source "$pg_rss_source" \
+        --argjson admission_ratio "$ADMISSION_RATIO" \
         '{mode: $mode, tls_enabled: ($tls==1), db_pool_size: $pool, vcpu: $vcpu, memory_max_mb: $mem,
           arm: $arm, target_runtime: $target_runtime, repeat: $repeat, run_dir: $run_dir,
           constrained_runner_exit_code: $rc, jvm: {xmx_mb: $xmx},
           fairness_controls: {exeris_subsystems: (if $exeris_subsystems=="n/a" then null else $exeris_subsystems end),
-                              crypto_subsystem_enabled: (if $exeris_subsystems=="n/a" then null else ($exeris_subsystems|test("(^|,)crypto(,|$)")) end)},
+                              crypto_subsystem_enabled: (if $exeris_subsystems=="n/a" then null else ($exeris_subsystems|test("(^|,)crypto(,|$)")) end),
+                              exeris_admission_queue_depth_ratio: (if $arm=="exeris-community" then $admission_ratio else null end)},
           tls: ($result.tls // null),
           rps: ($result.metrics.throughput_rps // null),
           total_requests: ($result.metrics.total_requests // null),

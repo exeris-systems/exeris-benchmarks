@@ -1,0 +1,65 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260722-185311-unknown",
+  "timestamp": "2026-07-22T16:53:11Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk2",
+  "env_ref": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T154115Z-memory-floor/tls/exeris-community/mem-160m/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h1",
+  "tls": {
+    "enabled": true
+  },
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "exeris-community-app",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "commit_sha": "unknown"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+    "duration_seconds": 300,
+    "warmup_seconds": 60,
+    "threads": 4,
+    "connections": 32,
+    "backend_network_mode": "bridge",
+    "endpoint_path": "/api/v1/user?id=1",
+    "execution_profile_id": "runtime-constrained-floor-160m-4vcpu-v1",
+    "contract_id": "fixed_contract_runtime_h1_constrained_floor_160m_4vcpu_v1",
+    "track_id": "track-c",
+    "result_namespace": "results/constrained/entity-read-by-id/20260722T154115Z-memory-floor/tls/exeris-community/mem-160m",
+    "jit_representativeness": "representative"
+  },
+  "metrics": {
+    "throughput_rps": 999.99,
+    "latency_p50_us": 834,
+    "latency_p75_us": 1090,
+    "latency_p90_us": 1320,
+    "latency_p99_us": 1630,
+    "latency_p999_us": 1880,
+    "total_requests": 299999,
+    "total_errors": 0,
+    "error_rate_pct": 0.000000
+  },
+  "notes": "backendMode=default-vt targetRuntimeEffective=community targetBuild=jvm cpuAffinity=0-1,8-9 clientCpuAffinity=2-3,10-11",
+  "tags": [
+    "backend-mode:default-vt",
+    "target-runtime-effective:community",
+    "target-build:jvm"
+  ],
+  "raw_output": "  Client pin : taskset -c 2-3,10-11\n  Loadgen escape: systemd-run --user --scope --slice=benchloadgen.slice (driver RSS off the target's memory budget)\n=== wrk2 benchmark (CO-mitigated) ===\n  URL        : https://localhost:8080/api/v1/user?id=1\n  Threads    : 4\n  Connections: 32\n  Duration   : 300s\n  Lua script : scenarios/entity-read-by-id/wrk.lua\n\n--- Saturation discovery SKIPPED (fixed-rate mode; WRK2_TARGET_RPS=1000) ---\nWARN: WRK2_TARGET_RPS=1000 exceeds 95% of observed saturation (1000).\n\n--- Warmup (60s, rate-limited wrk2 -R 1000) ---\n--- Measurement (wrk2, fixed rate) ---\nRunning 5m test @ https://localhost:8080/api/v1/user?id=1\n  4 threads and 32 connections\n  Thread calibration: mean lat.: 0.804ms, rate sampling interval: 10ms\n  Thread calibration: mean lat.: 0.796ms, rate sampling interval: 10ms\n  Thread calibration: mean lat.: 0.866ms, rate sampling interval: 10ms\n  Thread calibration: mean lat.: 0.807ms, rate sampling interval: 10ms\n  Thread Stats   Avg      Stdev     Max   +/- Stdev\n    Latency   835.16us  367.76us  12.64ms   67.08%\n    Req/Sec   263.94     82.16   666.00     84.73%\n  Latency Distribution (HdrHistogram - Recorded Latency)\n 50.000%  834.00us\n 75.000%    1.09ms\n 90.000%    1.32ms\n 99.000%    1.63ms\n 99.900%    1.88ms\n 99.990%    2.14ms\n 99.999%   11.51ms\n100.000%   12.65ms\n\n  Detailed Percentile spectrum:\n       Value   Percentile   TotalCount 1/(1-Percentile)\n\n       0.081     0.000000            1         1.00\n       0.344     0.100000        29035         1.11\n       0.506     0.200000        58117         1.25\n       0.623     0.300000        87022         1.43\n       0.729     0.400000       116195         1.67\n       0.834     0.500000       145121         2.00\n       0.889     0.550000       159573         2.22\n       0.941     0.600000       174202         2.50\n       0.993     0.650000       188715         2.86\n       1.042     0.700000       203216         3.33\n       1.091     0.750000       217611         4.00\n       1.116     0.775000       224851         4.44\n       1.142     0.800000       232078         5.00\n       1.174     0.825000       239306         5.71\n       1.218     0.850000       246582         6.67\n       1.266     0.875000       253819         8.00\n       1.291     0.887500       257431         8.89\n       1.317     0.900000       261016        10.00\n       1.345     0.912500       264628        11.43\n       1.375     0.925000       268319        13.33\n       1.407     0.937500       271860        16.00\n       1.425     0.943750       273694        17.78\n       1.444     0.950000       275528        20.00\n       1.464     0.956250       277350        22.86\n       1.486     0.962500       279127        26.67\n       1.510     0.968750       280901        32.00\n       1.524     0.971875       281869        35.56\n       1.538     0.975000       282773        40.00\n       1.552     0.978125       283632        45.71\n       1.569     0.981250       284537        53.33\n       1.589     0.984375       285457        64.00\n       1.600     0.985938       285895        71.11\n       1.612     0.987500       286363        80.00\n       1.625     0.989062       286792        91.43\n       1.642     0.990625       287249       106.67\n       1.661     0.992188       287695       128.00\n       1.672     0.992969       287925       142.22\n       1.686     0.993750       288162       160.00\n       1.700     0.994531       288374       182.86\n       1.717     0.995313       288606       213.33\n       1.738     0.996094       288834       256.00\n       1.748     0.996484       288940       284.44\n       1.762     0.996875       289055       320.00\n       1.780     0.997266       289171       365.71\n       1.798     0.997656       289284       426.67\n       1.818     0.998047       289396       512.00\n       1.826     0.998242       289454       568.89\n       1.834     0.998437       289507       640.00\n       1.851     0.998633       289564       731.43\n       1.866     0.998828       289620       853.33\n       1.883     0.999023       289676      1024.00\n       1.894     0.999121       289707      1137.78\n       1.907     0.999219       289733      1280.00\n       1.919     0.999316       289762      1462.86\n       1.933     0.999414       289792      1706.67\n       1.949     0.999512       289818      2048.00\n       1.965     0.999561       289834      2275.56\n       1.977     0.999609       289846      2560.00\n       1.988     0.999658       289861      2925.71\n       1.999     0.999707       289876      3413.33\n       2.014     0.999756       289889      4096.00\n       2.027     0.999780       289896      4551.11\n       2.038     0.999805       289905      5120.00\n       2.061     0.999829       289910      5851.43\n       2.077     0.999854       289917      6826.67\n       2.101     0.999878       289924      8192.00\n       2.131     0.999890       289928      9102.22\n       2.167     0.999902       289931     10240.00\n       2.685     0.999915       289935     11702.86\n       4.819     0.999927       289938     13653.33\n       5.167     0.999939       289942     16384.00\n       5.919     0.999945       289944     18204.44\n       6.319     0.999951       289945     20480.00\n       7.223     0.999957       289947     23405.71\n       7.395     0.999963       289949     27306.67\n       7.651     0.999969       289951     32768.00\n       8.775     0.999973       289952     36408.89\n       8.775     0.999976       289952     40960.00\n       9.631     0.999979       289953     46811.43\n       9.663     0.999982       289954     54613.33\n       9.879     0.999985       289955     65536.00\n      11.511     0.999986       289956     72817.78\n      11.511     0.999988       289956     81920.00\n      11.511     0.999989       289956     93622.86\n      12.359     0.999991       289957    109226.67\n      12.359     0.999992       289957    131072.00\n      12.415     0.999993       289958    145635.56\n      12.415     0.999994       289958    163840.00\n      12.415     0.999995       289958    187245.71\n      12.415     0.999995       289958    218453.33\n      12.415     0.999996       289958    262144.00\n      12.647     0.999997       289959    291271.11\n      12.647     1.000000       289959          inf\n#[Mean    =        0.835, StdDeviation   =        0.368]\n#[Max     =       12.640, Total count    =       289959]\n#[Buckets =           27, SubBuckets     =         2048]\n----------------------------------------------------------\n  299999 requests in 5.00m, 35.76MB read\nRequests/sec:    999.99\nTransfer/sec:    122.07KB\n\nResult written to: /home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T154115Z-memory-floor/tls/exeris-community/mem-160m/wrk2-latency.json\nRaw driver output : /home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T154115Z-memory-floor/tls/exeris-community/mem-160m/wrk2-latency.raw.txt\n/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T154115Z-memory-floor/tls/exeris-community/mem-160m/wrk2-latency.json\n",
+  "run_track": "constrained"
+}

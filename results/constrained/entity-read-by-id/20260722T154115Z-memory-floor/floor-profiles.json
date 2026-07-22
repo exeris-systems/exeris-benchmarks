@@ -1,0 +1,606 @@
+{
+  "schema_version": "1",
+  "note": "generated memory-floor grid profiles",
+  "profiles": [
+    {
+      "execution_profile_id": "runtime-constrained-floor-32m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 32,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 32
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 32MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-48m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 48,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 48
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 48MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-64m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 64,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 64
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 64MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-80m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 80,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 80
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 80MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-96m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 96,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 96
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 96MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-112m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 112,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 112
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 112MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-128m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 128,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 128
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 128MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-160m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 160,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 160
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 160MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-192m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 192,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 192
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 192MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-224m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 224,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 224
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 224MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-256m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 256,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 256
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 256MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-320m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 320,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 320
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 320MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-384m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 384,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 384
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 384MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-448m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 448,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 448
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 448MB / 4vCPU, fixed-rate wrk2"
+    },
+    {
+      "execution_profile_id": "runtime-constrained-floor-512m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk2",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 512,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 512
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "memory-floor grid point 512MB / 4vCPU, fixed-rate wrk2"
+    }
+  ]
+}

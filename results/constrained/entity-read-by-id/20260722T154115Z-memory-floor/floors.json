@@ -1,0 +1,26 @@
+[
+  {
+    "mode": "plaintext",
+    "arm": "exeris-community",
+    "tls_enabled": false,
+    "floor_memory_max_mb": 128
+  },
+  {
+    "mode": "plaintext",
+    "arm": "quarkus-tuned",
+    "tls_enabled": false,
+    "floor_memory_max_mb": 192
+  },
+  {
+    "mode": "tls",
+    "arm": "exeris-community",
+    "tls_enabled": true,
+    "floor_memory_max_mb": 128
+  },
+  {
+    "mode": "tls",
+    "arm": "quarkus-tuned",
+    "tls_enabled": true,
+    "floor_memory_max_mb": 192
+  }
+]

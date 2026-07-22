@@ -1,0 +1,188 @@
+{
+  "schema_version": "1",
+  "matrix": "entity-read-by-id-memory-cpu",
+  "generated_at": "2026-07-22T01:57:08Z",
+  "campaign_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix",
+  "separation_axes": {
+    "tier": "community",
+    "protocol_mode": "h1",
+    "transport_mode": "loopback-h1",
+    "benchmark_family": "runtime-wrk",
+    "mode": "baseline-db",
+    "purity": "pure",
+    "execution_class": "exploratory-constrained",
+    "track_id": "track-c",
+    "claim_scope": "descriptive_only",
+    "comparison_policy": "forbidden",
+    "comparison_axis": "within-tier"
+  },
+  "reproducibility": {
+    "benchmark_commit_sha": "unknown",
+    "hardware_profile": "perf-box-amd64",
+    "jvm_gc": "parallel",
+    "db_pool_min_size": 16,
+    "db_pool_max_size": 16,
+    "warmup_seconds": 120,
+    "duration_seconds": 300,
+    "threads": 4,
+    "connections": 128,
+    "endpoint": "GET /api/v1/user?id=1",
+    "repeats": 3,
+    "repeat_ordering": "interleaved (repeat is the outer loop)",
+    "cpu_partition_policy": {
+      "model": "per-point disjoint tuned-PG partition derived from each point vCPU (matrix_affinity_for_vcpu)",
+      "db_cpuset": "4-7,12-15 (externally pinned, reused across all points)",
+      "vcpu_le_4": "target 0-1,8-9 / loadgen 2-3,10-11 (fully disjoint; = 2026-07 tuned-PG triad partition)",
+      "vcpu_eq_8": "target 0-3,8-11 / loadgen 4-7,12-15 (loadgen co-located with DB; target isolated, throughput DB-bound at this point only)",
+      "target_override": null,
+      "client_override": null
+    },
+    "skip_target_build": 1,
+    "profiles_json": "/home/bench/exeris-benchmarks/runtime/profiles/entity-read-by-id-memory-cpu-sweep-profiles.json",
+    "scenario_json": "/home/bench/exeris-benchmarks/scenarios/entity-read-by-id/memory-cpu-sweep-scenario.json"
+  },
+  "heap_policy": {
+    "model": "per-arm architecture-appropriate heap fraction of memory.max, applied per point, passed via --jvm-xmx-mb (user decision; replaces the identical ~3/4*MaxRAM auto-derivation)",
+    "community_fraction_of_budget": 0.25,
+    "quarkus_fraction_of_budget": 0.75,
+    "rationale": "exeris-community 0.25 (crypto off + off-heap design => tiny heap need, ~16MB fits a 128MB budget; 0.25 gives 32MB @128MB with floor headroom); quarkus-tuned + quarkus-hibernate 0.75 (JVM-heap-standard, ~ container ergonomic).",
+    "absolute_overrides_mb": {
+      "exeris-community": null,
+      "quarkus-tuned": null,
+      "quarkus-hibernate": null
+    },
+    "precedence": "absolute MATRIX_XMX_MB_<arm> overrides the fraction when set",
+    "floor_policy": "no upward clamp; a tiny computed Xmx is passed as-is so a JVM OOM / fail-to-start at a low budget is a recorded RESULT (the floor), not a harness error",
+    "xms_policy": "Xms == Xmx per arm (fixed heap, both arms): -Xms and -Xmx are both set to the per-arm resolved value, so neither arm resizes its heap during measurement. Eliminates growth dynamics so steady-state RSS is well-defined and sampling-independent (same rationale as the min=max DB pool). Community fixed at 0.25*mem, quarkus fixed at 0.75*mem.",
+    "resolved": [
+      {
+        "arm": "exeris-community",
+        "memory_max_mb": 128,
+        "xmx_mb": 32,
+        "heap_fraction_of_budget": 0.2500,
+        "xmx_source": "fraction:0.25"
+      },
+      {
+        "arm": "exeris-community",
+        "memory_max_mb": 256,
+        "xmx_mb": 64,
+        "heap_fraction_of_budget": 0.2500,
+        "xmx_source": "fraction:0.25"
+      },
+      {
+        "arm": "exeris-community",
+        "memory_max_mb": 512,
+        "xmx_mb": 128,
+        "heap_fraction_of_budget": 0.2500,
+        "xmx_source": "fraction:0.25"
+      },
+      {
+        "arm": "exeris-community",
+        "memory_max_mb": 1024,
+        "xmx_mb": 256,
+        "heap_fraction_of_budget": 0.2500,
+        "xmx_source": "fraction:0.25"
+      },
+      {
+        "arm": "exeris-community",
+        "memory_max_mb": 2048,
+        "xmx_mb": 512,
+        "heap_fraction_of_budget": 0.2500,
+        "xmx_source": "fraction:0.25"
+      },
+      {
+        "arm": "quarkus-tuned",
+        "memory_max_mb": 128,
+        "xmx_mb": 96,
+        "heap_fraction_of_budget": 0.7500,
+        "xmx_source": "fraction:0.75"
+      },
+      {
+        "arm": "quarkus-tuned",
+        "memory_max_mb": 256,
+        "xmx_mb": 192,
+        "heap_fraction_of_budget": 0.7500,
+        "xmx_source": "fraction:0.75"
+      },
+      {
+        "arm": "quarkus-tuned",
+        "memory_max_mb": 512,
+        "xmx_mb": 384,
+        "heap_fraction_of_budget": 0.7500,
+        "xmx_source": "fraction:0.75"
+      },
+      {
+        "arm": "quarkus-tuned",
+        "memory_max_mb": 1024,
+        "xmx_mb": 768,
+        "heap_fraction_of_budget": 0.7500,
+        "xmx_source": "fraction:0.75"
+      },
+      {
+        "arm": "quarkus-tuned",
+        "memory_max_mb": 2048,
+        "xmx_mb": 1536,
+        "heap_fraction_of_budget": 0.7500,
+        "xmx_source": "fraction:0.75"
+      },
+      {
+        "arm": "quarkus-hibernate",
+        "memory_max_mb": 1024,
+        "xmx_mb": 768,
+        "heap_fraction_of_budget": 0.7500,
+        "xmx_source": "fraction:0.75",
+        "reference_point_only": true
+      }
+    ]
+  },
+  "fairness_controls": {
+    "applies_to": [
+      "exeris-community"
+    ],
+    "exeris_subsystems_community": "http,persistence",
+    "crypto_subsystem_disabled_for_community": true,
+    "exeris_telemetry_disabled_for_community": true,
+    "flags": [
+      "EXERIS_SUBSYSTEMS=http,persistence",
+      "EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false",
+      "EXERIS_TELEMETRY_JFR_ENABLED=false"
+    ],
+    "rationale": "Plaintext H1 sweep: the crypto subsystem is unused native memory Quarkus never allocates (ExerisCommunityApplication default is http,persistence,crypto) and is what blocks exeris from the 128MB floor, so EXERIS_SUBSYSTEMS drops it (default http,persistence). Exeris telemetry is disabled belt-and-suspenders (not in the default subsystem set; harmless). Applied ONLY to the exeris-community arm (Quarkus ignores these vars) and forwarded explicitly through the systemd-run relaunch so they cannot be inherited-on. Benchmark JFR is already off on the constrained path."
+  },
+  "target_provenance": [
+    {
+      "arm": "exeris-community",
+      "target_runtime": "community",
+      "jar_glob": "targets/exeris-community-app/target/exeris-community-app-*.jar",
+      "jar_path": "/home/bench/exeris-benchmarks/targets/exeris-community-app/target/exeris-community-app-1.0.0-SNAPSHOT.jar",
+      "jar_sha256": "ae822c31e7837dada7fb714e6c89f04cfe63cd7e81e5c1ecc18899cdc35958ad",
+      "jar_size_bytes": 20569065,
+      "jar_mtime_epoch": 1784676323
+    },
+    {
+      "arm": "quarkus-tuned",
+      "target_runtime": "quarkus-tuned",
+      "jar_glob": "targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-*-runner.jar",
+      "jar_path": "/home/bench/exeris-benchmarks/targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-1.0.0-SNAPSHOT-runner.jar",
+      "jar_sha256": "7b2c0a6ed78fb33835897ef1e12b3160a12d1defd14f1bc71ad0cdca87a19314",
+      "jar_size_bytes": 55463153,
+      "jar_mtime_epoch": 1784676328
+    },
+    {
+      "arm": "quarkus-hibernate",
+      "target_runtime": "quarkus",
+      "jar_glob": "targets/quarkus-benchmark-app/target/quarkus-benchmark-app-*-runner.jar",
+      "jar_path": "/home/bench/exeris-benchmarks/targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar",
+      "jar_sha256": "30c6e9f5999582ceb48a7c23a603a8bc4ccaf6516ffeae83ab71cdbc59fc6c94",
+      "jar_size_bytes": 75907312,
+      "jar_mtime_epoch": 1784676334
+    }
+  ],
+  "caveats": {
+    "latency": "wrk is closed-loop: recorded p99/p50 are COORDINATED-OMISSION figures (queueing ~= concurrency/throughput), for rank-ordering only, NOT a service-time tail. CO-free p99 needs wrk2 on a perf-box.",
+    "heap": "per-arm architecture-appropriate heaps (community 0.25, quarkus 0.75 of memory.max), declared per row (jvm.xmx_mb / jvm.heap_fraction_of_budget) - user decision. This is NOT an identical-knob configuration across arms; it is intentional and must be stated when reading the curve.",
+    "pg_rss": "postgres runs OUTSIDE the app cgroup budget; pg_rss_kb is a best-effort post-run docker-stats snapshot and is NEVER counted in the app memory budget.",
+    "comparison": "constrained/descriptive_only/track-c: cross-arm throughput comparison is NOT eligible here. Route comparative claims to a perf-box comparison-eligible run.",
+    "oom_is_a_result": "a point where an arm OOMs / will-not-start is recorded (outcome from constrained-execution-evidence.json), not a harness error."
+  }
+}

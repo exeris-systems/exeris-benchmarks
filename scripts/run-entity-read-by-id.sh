@@ -1233,15 +1233,27 @@ if ! target_reachable; then
   fi
 
   echo "[step 6/9] Starting benchmark target app..."
+  # Cross-arm pgjdbc fairness (equalize adaptive-fetch/portals + protocol): exeris (via
+  # its QueryResult persistence layer) and quarkus (via Agroal) both drive the bundled
+  # pgjdbc driver, but through different layers whose fetch / portal / adaptive / prepare
+  # DEFAULTS can diverge. Pin the query-protocol params IDENTICALLY on both arms' URLs so
+  # the comparison measures the runtime, not JDBC driver-config drift. exeris honors
+  # pgjdbc URL params on exeris.persistence.jdbcUrl, quarkus/Agroal on the datasource URL,
+  # so a single shared param string covers both. Choice: extended protocol + server-side
+  # prepared statements (prepareThreshold=1) + fetch-all (defaultRowFetchSize=0 -> unnamed
+  # portal, no cursor) + adaptiveFetch OFF -> deterministic, identical query wire for both.
+  # Overridable via BENCH_PGJDBC_FAIR_PARAMS.
+  _pgjdbc_fair="${BENCH_PGJDBC_FAIR_PARAMS:-preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false}"
+  echo "[step 6/9] pgjdbc fairness params (identical on both arms): ${_pgjdbc_fair}"
   TARGET_CMD=(env \
     EXERIS_PORT="$TARGET_PORT" \
     EXERIS_HTTP_PORT="$TARGET_PORT" \
-    EXERIS_DB_JDBC_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db" \
+    EXERIS_DB_JDBC_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db?${_pgjdbc_fair}" \
     EXERIS_DB_USERNAME=benchmark \
     EXERIS_DB_PASSWORD=benchmark \
     EXERIS_DB_POOL_MIN_SIZE="$EXERIS_DB_POOL_MIN_SIZE" \
     EXERIS_DB_POOL_MAX_SIZE="$EXERIS_DB_POOL_MAX_SIZE" \
-    SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db" \
+    SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db?${_pgjdbc_fair}" \
     SPRING_DATASOURCE_USERNAME=benchmark \
     SPRING_DATASOURCE_PASSWORD=benchmark \
     SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE="$EXERIS_DB_POOL_MIN_SIZE" \

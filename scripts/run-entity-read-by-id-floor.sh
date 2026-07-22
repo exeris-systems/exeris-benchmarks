@@ -137,6 +137,7 @@ trial() {
     "BENCHMARK_CONSTRAINED_DB_POOL_MIN_SIZE=${POOL}"
     "BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE=${POOL}"
     "WRK2_TARGET_RPS=${TARGET_RPS}" "WRK2_SKIP_DISCOVERY=1"
+    "BENCHMARK_LOADGEN_CGROUP_ESCAPE=1"
   )
   [[ "$tls" == "1" ]] && env_prefix+=("BENCHMARK_TLS_ENABLED=1" "EXERIS_SSL_ENABLED=true" "EXERIS_TRANSPORT_CERT_PATH=${CERT_PATH}" "EXERIS_TRANSPORT_KEY_PATH=${KEY_PATH}")
   if [[ "$arm" == "exeris-community" ]]; then
@@ -187,6 +188,20 @@ gen_grid
 echo "[floor] campaign : $CAMPAIGN_DIR"
 echo "[floor] grid(MB) : ${MEM_GRID[*]}"
 echo "[floor] rate=${TARGET_RPS}rps conns=${CONNECTIONS} pool=${POOL} dur=${DURATION_S}s p99_gate=${P99_GATE_MS}ms partition: target ${TARGET_CPUS}/loadgen ${LOADGEN_CPUS}/DB 4-7,12-15"
+
+# TLS combos need a smoke cert/key; provision once up-front (idempotent — reuses an
+# existing pair). The TLS arms point EXERIS_TRANSPORT_CERT/KEY_PATH at these files.
+if printf '%s\n' "${CONFIGS[@]}" | grep -q '|1|'; then
+  if [[ ! -f "$CERTS_LIB" ]]; then echo "ERROR: missing certs lib $CERTS_LIB" >&2; exit 2; fi
+  # shellcheck source=/dev/null
+  source "$CERTS_LIB"
+  if ! ensure_smoke_cert_key "$CERT_PATH" "$KEY_PATH"; then
+    echo "ERROR: failed to provision smoke TLS cert/key ($CERT_PATH / $KEY_PATH)" >&2
+    exit 1
+  fi
+  write_cert_metadata "$CERT_PATH" "$KEY_PATH" "$CAMPAIGN_DIR/tls-cert-metadata.json" 2>/dev/null || true
+  echo "[floor] TLS cert : $CERT_PATH ($(cert_key_type_and_size "$KEY_PATH"))"
+fi
 
 : > "$FLOORS_JSON.tmp"
 for cfg in "${CONFIGS[@]}"; do

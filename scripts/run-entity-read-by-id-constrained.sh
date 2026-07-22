@@ -330,11 +330,15 @@ ensure_constrained_scope() {
   #    e.g. -Dexeris.persistence.admission.queueDepthAllowanceRatio=N (ADR-035 admission
   #    control) so the connection-pool sweep can raise exeris's acquire-queue depth to
   #    cover the offered connections instead of shedding at small pools.
+  #  - BENCHMARK_LOADGEN_CGROUP_ESCAPE: memory-floor only. Tells run-wrk2.sh to re-exec
+  #    the load driver in its OWN transient scope under a sibling slice so the driver's
+  #    RSS is NOT charged to the target's constrained scope. Without forwarding it past
+  #    the relaunch the driver stays in-cgroup and the measured floor is target+loadgen.
   for v in BENCHMARK_TLS_ENABLED EXERIS_SSL_ENABLED EXERIS_TRANSPORT_CERT_PATH \
            EXERIS_TRANSPORT_KEY_PATH BENCH_PROTOCOL_MODE_OVERRIDE \
            DB_HOST_NETWORK BENCH_BACKEND_NETWORK BENCH_DB_TUNED BENCHMARK_ALLOW_EXTERNAL_DB \
            EXERIS_SUBSYSTEMS EXERIS_ENABLE_TELEMETRY_SUBSYSTEM EXERIS_TELEMETRY_JFR_ENABLED \
-           WRK2_TARGET_RPS WRK2_SKIP_DISCOVERY JDK_JAVA_OPTIONS; do
+           WRK2_TARGET_RPS WRK2_SKIP_DISCOVERY JDK_JAVA_OPTIONS BENCHMARK_LOADGEN_CGROUP_ESCAPE; do
     [[ -n "${!v:-}" ]] && env_passthrough+=("${v}=${!v}")
   done
 

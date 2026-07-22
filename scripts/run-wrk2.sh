@@ -101,6 +101,25 @@ if [[ -n "${WRK2_CLIENT_CPU_AFFINITY:-}" ]]; then
   fi
 fi
 
+# Optional cgroup ESCAPE for the load driver (memory-floor experiment). When the
+# target runs under a constrained systemd scope (MemoryMax), the load driver is a
+# CHILD of that same scope and its RSS — wrk2's per-thread HdrHistogram is tens of
+# MB — is charged to the target's memory cgroup, inflating the measured floor. Re-
+# exec each driver pass in its OWN transient scope under a SIBLING slice
+# (benchloadgen.slice; the target scope lives in app.slice) so the driver's memory
+# is billed elsewhere and the floor reflects the target alone. taskset still pins
+# the driver to the disjoint loadgen cpuset (CPU partition is independent of the
+# memory cgroup). No-op unless BENCHMARK_LOADGEN_CGROUP_ESCAPE=1.
+if [[ "${BENCHMARK_LOADGEN_CGROUP_ESCAPE:-0}" == "1" ]]; then
+  if command -v systemd-run >/dev/null 2>&1; then
+    WRK2_TASKSET_PREFIX=(systemd-run --user --scope --quiet --collect \
+      --slice=benchloadgen.slice "${WRK2_TASKSET_PREFIX[@]}")
+    echo "  Loadgen escape: systemd-run --user --scope --slice=benchloadgen.slice (driver RSS off the target's memory budget)"
+  else
+    echo "WARN: BENCHMARK_LOADGEN_CGROUP_ESCAPE=1 but systemd-run unavailable; driver stays in the target cgroup." >&2
+  fi
+fi
+
 WRK_BASE_CMD=("${WRK2_TASKSET_PREFIX[@]}" wrk -t "$THREADS" -c "$CONNECTIONS")
 if [[ -n "$LUA_SCRIPT" ]]; then
   WRK_BASE_CMD+=(--script "$LUA_SCRIPT")

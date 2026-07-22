@@ -320,10 +320,16 @@ ensure_constrained_scope() {
   #    unpinning the DB mid-sweep. Must survive the relaunch or every point re-clobbers it.
   # Forwarded only-if-set, so runtimes/arms that don't set them are unaffected.
   local v
+  #  - WRK2_TARGET_RPS / WRK2_SKIP_DISCOVERY: fixed-rate wrk2 knobs for the memory-floor
+  #    experiment. The base runner delegates --driver wrk2 to run-wrk2.sh, which reads
+  #    these from the environment; without forwarding them past the scope relaunch the
+  #    floor run would fall back to closed-loop saturation discovery (a MAX-load pass that
+  #    OOMs a floor-sized cgroup and inflates the measured floor).
   for v in BENCHMARK_TLS_ENABLED EXERIS_SSL_ENABLED EXERIS_TRANSPORT_CERT_PATH \
            EXERIS_TRANSPORT_KEY_PATH BENCH_PROTOCOL_MODE_OVERRIDE \
            DB_HOST_NETWORK BENCH_BACKEND_NETWORK BENCH_DB_TUNED BENCHMARK_ALLOW_EXTERNAL_DB \
-           EXERIS_SUBSYSTEMS EXERIS_ENABLE_TELEMETRY_SUBSYSTEM EXERIS_TELEMETRY_JFR_ENABLED; do
+           EXERIS_SUBSYSTEMS EXERIS_ENABLE_TELEMETRY_SUBSYSTEM EXERIS_TELEMETRY_JFR_ENABLED \
+           WRK2_TARGET_RPS WRK2_SKIP_DISCOVERY; do
     [[ -n "${!v:-}" ]] && env_passthrough+=("${v}=${!v}")
   done
 

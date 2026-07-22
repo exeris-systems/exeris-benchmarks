@@ -114,13 +114,26 @@ echo "  Duration   : $DURATION"
 [[ -n "$LUA_SCRIPT" ]] && echo "  Lua script : $LUA_SCRIPT"
 echo ""
 
-echo "--- Saturation discovery (wrk, 30s) ---"
-SATURATION_OUTPUT="$("${WRK_BASE_CMD[@]}" -d 30s "$URL" 2>&1)"
-printf '%s\n' "$SATURATION_OUTPUT"
-SATURATION_RPS="$(printf '%s\n' "$SATURATION_OUTPUT" | awk '/Requests\/sec:/ {print $2; exit}')"
-if [[ -z "$SATURATION_RPS" ]]; then
-  echo "ERROR: Failed to parse Requests/sec from saturation output." >&2
-  exit 1
+# WRK2_SKIP_DISCOVERY=1 (fixed-rate mode): skip the closed-loop saturation pass. It is a
+# MAX-load probe; under a tight memory cgroup (the memory-floor experiment) it can OOM the
+# target even when the intended fixed rate fits comfortably, inflating the measured floor.
+# Requires an explicit WRK2_TARGET_RPS (there is no saturation figure to derive a rate from).
+if [[ "${WRK2_SKIP_DISCOVERY:-0}" == "1" ]]; then
+  if [[ -z "${WRK2_TARGET_RPS:-}" ]]; then
+    echo "ERROR: WRK2_SKIP_DISCOVERY=1 requires WRK2_TARGET_RPS (no saturation pass to derive a rate)." >&2
+    exit 1
+  fi
+  echo "--- Saturation discovery SKIPPED (fixed-rate mode; WRK2_TARGET_RPS=${WRK2_TARGET_RPS}) ---"
+  SATURATION_RPS="$WRK2_TARGET_RPS"   # sentinel; no closed-loop max-load pass under a floor cgroup
+else
+  echo "--- Saturation discovery (wrk, 30s) ---"
+  SATURATION_OUTPUT="$("${WRK_BASE_CMD[@]}" -d 30s "$URL" 2>&1)"
+  printf '%s\n' "$SATURATION_OUTPUT"
+  SATURATION_RPS="$(printf '%s\n' "$SATURATION_OUTPUT" | awk '/Requests\/sec:/ {print $2; exit}')"
+  if [[ -z "$SATURATION_RPS" ]]; then
+    echo "ERROR: Failed to parse Requests/sec from saturation output." >&2
+    exit 1
+  fi
 fi
 
 MEASUREMENT_RPS="$(awk -v sat="$SATURATION_RPS" 'BEGIN { v = int(sat * 0.75); if (v < 1) v = 1; print v }')"
@@ -135,8 +148,17 @@ LOAD_FRACTION="$(awk -v target="$MEASUREMENT_RPS" -v sat="$SATURATION_RPS" 'BEGI
 AT_SATURATION="$(awk -v fraction="$LOAD_FRACTION" 'BEGIN { if (fraction >= 0.95) print "true"; else print "false" }')"
 
 echo ""
-echo "--- Warmup (60s) ---"
-"${WRK_BASE_CMD[@]}" -d 60s "$URL" > /dev/null
+if [[ "${WRK2_SKIP_DISCOVERY:-0}" == "1" ]]; then
+  # Fixed-rate mode: warm up AT the target rate (open-loop wrk2 -R), not with a closed-loop
+  # max-load pass, so warmup itself cannot OOM a floor-sized cgroup.
+  echo "--- Warmup (60s, rate-limited wrk2 -R ${MEASUREMENT_RPS}) ---"
+  WRK2_WARMUP_CMD=("${WRK2_TASKSET_PREFIX[@]}" wrk2 -t "$THREADS" -c "$CONNECTIONS" -d 60s -R "$MEASUREMENT_RPS")
+  [[ -n "$LUA_SCRIPT" ]] && WRK2_WARMUP_CMD+=(--script "$LUA_SCRIPT")
+  "${WRK2_WARMUP_CMD[@]}" "$URL" > /dev/null 2>&1 || true
+else
+  echo "--- Warmup (60s) ---"
+  "${WRK_BASE_CMD[@]}" -d 60s "$URL" > /dev/null
+fi
 
 echo "--- Measurement (wrk2, fixed rate) ---"
 WRK2_CMD=("${WRK2_TASKSET_PREFIX[@]}" wrk2 -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" -R "$MEASUREMENT_RPS" --latency)

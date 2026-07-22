@@ -325,11 +325,16 @@ ensure_constrained_scope() {
   #    these from the environment; without forwarding them past the scope relaunch the
   #    floor run would fall back to closed-loop saturation discovery (a MAX-load pass that
   #    OOMs a floor-sized cgroup and inflates the measured floor).
+  #  - JDK_JAVA_OPTIONS: extra JVM -D system properties for the target (the JVM reads it
+  #    automatically). Used to set exeris kernel config that has no dedicated env var,
+  #    e.g. -Dexeris.persistence.admission.queueDepthAllowanceRatio=N (ADR-035 admission
+  #    control) so the connection-pool sweep can raise exeris's acquire-queue depth to
+  #    cover the offered connections instead of shedding at small pools.
   for v in BENCHMARK_TLS_ENABLED EXERIS_SSL_ENABLED EXERIS_TRANSPORT_CERT_PATH \
            EXERIS_TRANSPORT_KEY_PATH BENCH_PROTOCOL_MODE_OVERRIDE \
            DB_HOST_NETWORK BENCH_BACKEND_NETWORK BENCH_DB_TUNED BENCHMARK_ALLOW_EXTERNAL_DB \
            EXERIS_SUBSYSTEMS EXERIS_ENABLE_TELEMETRY_SUBSYSTEM EXERIS_TELEMETRY_JFR_ENABLED \
-           WRK2_TARGET_RPS WRK2_SKIP_DISCOVERY; do
+           WRK2_TARGET_RPS WRK2_SKIP_DISCOVERY JDK_JAVA_OPTIONS; do
     [[ -n "${!v:-}" ]] && env_passthrough+=("${v}=${!v}")
   done
 

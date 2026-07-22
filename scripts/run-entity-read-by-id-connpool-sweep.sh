@@ -47,6 +47,15 @@ HARDWARE_PROFILE="${BENCHMARK_HARDWARE_PROFILE:-perf-box-amd64}"
 SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
 ALLOW_EXTERNAL_DB="${CONNPOOL_ALLOW_EXTERNAL_DB:-1}"
 EXERIS_SUBSYSTEMS_COMMUNITY="${CONNPOOL_EXERIS_SUBSYSTEMS:-http,persistence}"
+# ADR-035 persistence admission control: exeris admits + queues acquires while
+# pendingAcquires <= ceil(poolMax * queueDepthAllowanceRatio); above that (and at
+# saturation) it sheds. The DEFAULT ratio 8 gives a queue depth of only 8*pool, so at
+# pool=4 (depth 32) it sheds most of a 128-connection load. To compare pool SIZE fairly
+# (both runtimes must queue the offered load, as HikariCP does), set the ratio so the
+# queue depth covers connections at the SMALLEST pool: ratio >= connections/minPool =
+# 128/4 = 32. Injected as a -D system property on the exeris arm only (quarkus/HikariCP
+# blocks by default). Validated: pool=4 goes 84% err -> 0% err, 39.2k successful rps.
+ADMISSION_QUEUE_DEPTH_RATIO="${CONNPOOL_ADMISSION_RATIO:-32}"
 CAPTURE_PG_RSS="${CONNPOOL_CAPTURE_PG_RSS:-1}"
 DB_CONTAINER="${BENCHMARK_DB_CONTAINER:-exeris-benchmark-db}"
 DRY_RUN=0
@@ -115,14 +124,16 @@ for r in $(seq 1 "$REPEATS"); do
         "BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE=${pool}"
         "BENCHMARK_ALLOW_EXTERNAL_DB=${ALLOW_EXTERNAL_DB}"
       )
-      exeris_subsystems="n/a"
+      exeris_subsystems="n/a"; admission_ratio="n/a"
       if [[ "$arm_id" == "exeris-community" ]]; then
         env_prefix+=(
           "EXERIS_SUBSYSTEMS=${EXERIS_SUBSYSTEMS_COMMUNITY}"
           "EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false"
           "EXERIS_TELEMETRY_JFR_ENABLED=false"
+          "JDK_JAVA_OPTIONS=-Dexeris.persistence.admission.queueDepthAllowanceRatio=${ADMISSION_QUEUE_DEPTH_RATIO}"
         )
         exeris_subsystems="$EXERIS_SUBSYSTEMS_COMMUNITY"
+        admission_ratio="$ADMISSION_QUEUE_DEPTH_RATIO"
       fi
 
       cmd=(
@@ -144,7 +155,7 @@ for r in $(seq 1 "$REPEATS"); do
 
       run_count=$((run_count + 1))
       echo
-      echo "[connpool] === run ${run_count}: pool=${pool} arm=${arm_id} repeat=${r}/${REPEATS} xmx=${xmx_mb}m subsystems=${exeris_subsystems} target=${TARGET_CPUS} loadgen=${LOADGEN_CPUS} ==="
+      echo "[connpool] === run ${run_count}: pool=${pool} arm=${arm_id} repeat=${r}/${REPEATS} xmx=${xmx_mb}m subsystems=${exeris_subsystems} admission_ratio=${admission_ratio} target=${TARGET_CPUS} loadgen=${LOADGEN_CPUS} ==="
       if [[ "$DRY_RUN" == "1" ]]; then
         printf '[connpool][dry-run] %q ' "${cmd[@]}"; echo
         continue
@@ -171,14 +182,16 @@ for r in $(seq 1 "$REPEATS"); do
         --argjson pool "$pool" --argjson vcpu "$VCPU" --argjson mem "$MEM_MB" \
         --arg arm "$arm_id" --arg target_runtime "$target_runtime" --argjson repeat "$r" \
         --arg run_dir "$run_dir" --argjson rc "$rc" \
-        --argjson xmx "$xmx_mb" --arg exeris_subsystems "$exeris_subsystems" \
+        --argjson xmx "$xmx_mb" --arg exeris_subsystems "$exeris_subsystems" --arg admission_ratio "$admission_ratio" \
         --arg pg_rss_kb "$pg_rss_kb" --arg pg_rss_source "$pg_rss_source" \
         '{db_pool_size: $pool, pool_min_equals_max: true, vcpu: $vcpu, memory_max_mb: $mem,
           arm: $arm, target_runtime: $target_runtime, repeat: $repeat, run_dir: $run_dir,
           constrained_runner_exit_code: $rc,
           jvm: {xmx_mb: $xmx, xms_equals_xmx: true},
           fairness_controls: {exeris_subsystems: (if $exeris_subsystems=="n/a" then null else $exeris_subsystems end),
-                              crypto_subsystem_enabled: (if $exeris_subsystems=="n/a" then null else ($exeris_subsystems|test("(^|,)crypto(,|$)")) end)},
+                              crypto_subsystem_enabled: (if $exeris_subsystems=="n/a" then null else ($exeris_subsystems|test("(^|,)crypto(,|$)")) end),
+                              exeris_admission_queue_depth_ratio: (if $admission_ratio=="n/a" then null else ($admission_ratio|tonumber) end),
+                              admission_note: "ADR-035: exeris queueDepthAllowanceRatio raised so acquire-queue depth (ratio*poolMax) covers the 128 offered connections at every pool (default 8 sheds at small pools); quarkus HikariCP blocks by default"},
           cpu_partition: {target_cpuset:"0-1,8-9", loadgen_cpuset:"2-3,10-11", db_cpuset:"4-7,12-15"},
           rps: ($result.metrics.throughput_rps // null),
           total_requests: ($result.metrics.total_requests // null),

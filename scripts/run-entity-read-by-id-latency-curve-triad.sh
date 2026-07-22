@@ -47,6 +47,14 @@ read -r -a LIGHT_RUNGS <<< "${LATENCY_LIGHT_RUNGS:-5000 10000 15000 20000 25000}
 export BENCH_DB_TUNED="${BENCH_DB_TUNED:-1}"
 export BENCHMARK_ALLOW_EXTERNAL_DB="${BENCHMARK_ALLOW_EXTERNAL_DB:-1}"
 
+# Skip run-comparative.sh's Stage-2 endpoint-contract test gate (a `mvn -Dtest=...ContractTest
+# test` compile+test cycle it runs for the heavy /api/v1/users endpoint). It is redundant here
+# (the target jars are contract-verified at build time and the first leaf passed the gate) and
+# its maven CPU burst risks contaminating a wrk2 LATENCY measurement (p99 is spike-sensitive; no
+# CPU pinning on this box). Skipping does NOT affect comparison-eligibility (the stage7 gates
+# G1-G10 don't include it) — the endpoint is still HTTP-200 preflighted at Stage 4.
+export BENCHMARK_SKIP_ENDPOINT_CONTRACT_GATE="${BENCHMARK_SKIP_ENDPOINT_CONTRACT_GATE:-1}"
+
 # The reused tuned-PG (host-net + cpuset, created by the constrained runs) uses db/role
 # 'benchmark_db'/'benchmark'; the runtime/drivers/env/*.env target files default DB creds to
 # 'postgres' -> HikariPool 'FATAL: role "postgres" does not exist' and the target never passes

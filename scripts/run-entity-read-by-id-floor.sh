@@ -37,8 +37,13 @@ THREADS="${FLOOR_THREADS:-4}"
 DURATION_S="${FLOOR_DURATION_S:-300}"
 POOL="${FLOOR_POOL:-16}"
 P99_GATE_MS="${FLOOR_P99_GATE_MS:-50}"
-HEAP_FRAC_COMMUNITY="${FLOOR_HEAP_FRAC_COMMUNITY:-0.25}"
-HEAP_FRAC_QUARKUS="${FLOOR_HEAP_FRAC_QUARKUS:-0.75}"
+# Floor heap policy: TUNED MINIMAL FIXED heaps (user choice 2026-07-22), NOT a fraction of
+# the budget. The floor is the edge baseline, so each arm's heap is pinned to its minimal
+# viable value and the search finds the smallest memory.max that fits heap + non-heap +
+# the 1000 rps working set. exeris 16m (off-heap design, crypto off); quarkus 64m (its
+# runtime needs more base heap). A budget where an arm's fixed heap won't fit is a RESULT.
+XMX_COMMUNITY="${FLOOR_XMX_COMMUNITY:-16}"
+XMX_QUARKUS="${FLOOR_XMX_QUARKUS:-64}"
 SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
 ALLOW_EXTERNAL_DB="${FLOOR_ALLOW_EXTERNAL_DB:-1}"
 EXERIS_SUBSYSTEMS_PLAINTEXT="${FLOOR_EXERIS_SUBSYSTEMS_PLAINTEXT:-http,persistence}"
@@ -54,9 +59,9 @@ DRY_RUN=0
 UTC_STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 CAMPAIGN_DIR="${REPO_ROOT}/results/constrained/entity-read-by-id/${UTC_STAMP}-memory-floor"
 
-# CONFIGS: mode|tls|exeris_subsystems  ; ARMS: arm|runtime|heap_frac
+# CONFIGS: mode|tls|exeris_subsystems  ; ARMS: arm|runtime|xmx_mb (fixed, tuned-minimal)
 CONFIGS=("plaintext|0|${EXERIS_SUBSYSTEMS_PLAINTEXT}" "tls|1|${EXERIS_SUBSYSTEMS_TLS}")
-ARMS=("exeris-community|community|${HEAP_FRAC_COMMUNITY}" "quarkus-tuned|quarkus-tuned|${HEAP_FRAC_QUARKUS}")
+ARMS=("exeris-community|community|${XMX_COMMUNITY}" "quarkus-tuned|quarkus-tuned|${XMX_QUARKUS}")
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -113,9 +118,17 @@ gen_grid() {
 
 # --- one trial at grid[idx] for (arm,mode); prints "ok" or "fail" + records --
 trial() {
-  local mem="$1" arm="$2" runtime="$3" heap_frac="$4" mode="$5" tls="$6" subs="$7"
-  local xmx; xmx="$(awk -v m="$mem" -v f="$heap_frac" 'BEGIN{v=int(m*f); if(v<8)v=8; print v}')"
+  local mem="$1" arm="$2" runtime="$3" xmx="$4" mode="$5" tls="$6" subs="$7"
   local run_dir="$CAMPAIGN_DIR/${mode}/${arm}/mem-${mem}m"
+  # Fixed tuned heap needs non-heap headroom; a budget at/below heap+16m cannot fit ->
+  # auto-fail (no point burning a 6-min run on a guaranteed startup OOM).
+  if (( mem <= xmx + 16 )); then
+    mkdir -p "$run_dir"
+    jq -cn --argjson mem "$mem" --arg arm "$arm" --arg mode "$mode" --argjson tls "$tls" --argjson xmx "$xmx" \
+      '{memory_max_mb:$mem,arm:$arm,mode:$mode,tls_enabled:($tls==1),xmx_mb:$xmx,rc:-1,rps:0,error_rate_pct:100,p99_ms:0,verdict:"fail",note:"budget<=heap+16m headroom (auto-fail)",run_dir:"(skipped)"}' >> "$RESULTS_JSONL"
+    echo "  [trial] ${mode}/${arm} mem=${mem}m xmx=${xmx}m -> auto-fail (no non-heap room)" >&2
+    echo "fail"; return
+  fi
   local pid="runtime-constrained-floor-${mem}m-${VCPU}vcpu-v1"
   local cid="fixed_contract_runtime_h1_constrained_floor_${mem}m_${VCPU}vcpu_v1"
   local env_prefix=(
@@ -156,15 +169,15 @@ trial() {
 
 # --- binary search over grid indices for the minimal successful memory -------
 floor_search() {
-  local arm="$1" runtime="$2" heap_frac="$3" mode="$4" tls="$5" subs="$6"
+  local arm="$1" runtime="$2" xmx_fixed="$3" mode="$4" tls="$5" subs="$6"
   local lo=0 hi=$((${#MEM_GRID[@]}-1)) best=-1
   # quick reject: if the largest grid point fails, there is no floor in range
-  local top; top="$(trial "${MEM_GRID[$hi]}" "$arm" "$runtime" "$heap_frac" "$mode" "$tls" "$subs")"
+  local top; top="$(trial "${MEM_GRID[$hi]}" "$arm" "$runtime" "$xmx_fixed" "$mode" "$tls" "$subs")"
   if [[ "$top" != "ok" ]]; then echo "-1"; return; fi
   best=$hi
   while (( lo <= hi )); do
     local mid=$(( (lo+hi)/2 ))
-    local v; v="$(trial "${MEM_GRID[$mid]}" "$arm" "$runtime" "$heap_frac" "$mode" "$tls" "$subs")"
+    local v; v="$(trial "${MEM_GRID[$mid]}" "$arm" "$runtime" "$xmx_fixed" "$mode" "$tls" "$subs")"
     if [[ "$v" == "ok" ]]; then best=$mid; hi=$((mid-1)); else lo=$((mid+1)); fi
   done
   echo "${MEM_GRID[$best]}"
@@ -179,9 +192,9 @@ echo "[floor] rate=${TARGET_RPS}rps conns=${CONNECTIONS} pool=${POOL} dur=${DURA
 for cfg in "${CONFIGS[@]}"; do
   IFS='|' read -r mode tls subs <<< "$cfg"
   for arm_spec in "${ARMS[@]}"; do
-    IFS='|' read -r arm runtime heap_frac <<< "$arm_spec"
+    IFS='|' read -r arm runtime xmx_fixed <<< "$arm_spec"
     echo "[floor] === searching ${mode} / ${arm} ==="
-    floor="$(floor_search "$arm" "$runtime" "$heap_frac" "$mode" "$tls" "$subs")"
+    floor="$(floor_search "$arm" "$runtime" "$xmx_fixed" "$mode" "$tls" "$subs")"
     echo "[floor] FLOOR ${mode}/${arm} = ${floor} MB"
     jq -cn --arg mode "$mode" --arg arm "$arm" --argjson tls "$tls" --argjson floor "${floor}" \
       '{mode:$mode, arm:$arm, tls_enabled:($tls==1), floor_memory_max_mb:(if $floor<0 then null else $floor end)}' >> "$FLOORS_JSON.tmp"

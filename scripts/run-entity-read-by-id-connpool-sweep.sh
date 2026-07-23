@@ -33,8 +33,13 @@ PROFILES_JSON="${REPO_ROOT}/runtime/profiles/entity-read-by-id-memory-cpu-sweep-
 SCENARIO_JSON="${REPO_ROOT}/scenarios/entity-read-by-id/memory-cpu-sweep-scenario.json"
 
 # Fixed point: 1024 MB / 4 vCPU (reuse the sweep's 1024/4 profile+contract for every pool).
-PROFILE_ID="runtime-constrained-1024m-4vcpu-v1"
-CONTRACT_ID="fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1"
+# CONTRACT_ID is workload-selectable: default single-read; set CONNPOOL_CONTRACT_ID to the
+# aggregate contract (fixed_contract_runtime_h1_constrained_aggregate_1024m_4vcpu_v1) to run
+# the heavy GET /api/v1/users pool sweep. The profile is workload-agnostic (both contracts
+# share runtime-constrained-1024m-4vcpu-v1); the endpoint/payload/connections come from the
+# contract, so no other change is needed.
+PROFILE_ID="${CONNPOOL_PROFILE_ID:-runtime-constrained-1024m-4vcpu-v1}"
+CONTRACT_ID="${CONNPOOL_CONTRACT_ID:-fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1}"
 MEM_MB=1024
 VCPU=4
 # 4-vCPU disjoint tuned-PG partition (identical to the matrix vCPU<=4 partition):

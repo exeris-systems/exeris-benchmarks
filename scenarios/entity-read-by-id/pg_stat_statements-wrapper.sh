@@ -135,14 +135,30 @@ EOF
       ;;
   esac
 
-  local raw_output
-  raw_output=$(_run_psql -t -A -F $'\t' -c \
-    "SELECT queryid::TEXT, query, calls::TEXT, ${total_time_col}::TEXT, ${mean_time_col}::TEXT, ${max_time_col}::TEXT 
-     FROM pg_stat_statements 
-     ORDER BY ${total_time_col} DESC 
-     LIMIT 20" 2>/dev/null || echo "")
+  # Emit query rows as server-side JSON. The GET /api/v1/users aggregate query text is
+  # multi-line; a line-based capture (-F $'\t' piped through a per-line awk) splits a single
+  # pg_stat_statements row across physical lines, corrupting the output (empty
+  # calls/total_time_ms on the head line, a bogus "queryid":"FROM (" from continuation lines).
+  # json_agg(row_to_json(...)) makes PostgreSQL escape embedded newlines as \n, so the value
+  # is valid single-line JSON regardless of query text. queryid stays ::text (preserves int64
+  # precision and is used as a jq object key by the comparative delta); calls and the *_time_ms
+  # columns stay numeric so downstream delta arithmetic works.
+  local queries_json
+  queries_json=$(_run_psql -t -A -c \
+    "SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.total_time_ms DESC), '[]'::json)::text
+     FROM (
+       SELECT queryid::text    AS queryid,
+              query             AS query,
+              calls             AS calls,
+              ${total_time_col} AS total_time_ms,
+              ${mean_time_col}  AS mean_time_ms,
+              ${max_time_col}   AS max_time_ms
+       FROM pg_stat_statements
+       ORDER BY ${total_time_col} DESC
+       LIMIT 20
+     ) t;" 2>/dev/null | tr -d '\r\n')
 
-  if [[ -z "$raw_output" ]]; then
+  if [[ -z "$queries_json" ]]; then
     cat > "$output_file" <<EOF
 {
   "error": "failed to query pg_stat_statements",
@@ -156,11 +172,8 @@ EOF
     return 0
   fi
 
-  {
-    printf '{"timestamp": "%s", "phase": "%s", "server_version_num": "%s", "column_profile": "%s", "queries": [' "$timestamp" "$phase" "$server_version_num" "$column_profile"
-    printf '%s\n' "$raw_output" | awk -v FS=$'\t' 'NR>1{printf ","} {q=$2; gsub(/\\/,"\\\\",q); gsub(/"/,"\\\"",q); gsub(/\r/,"\\r",q); gsub(/\n/,"\\n",q); gsub(/\t/,"\\t",q); printf "{\"queryid\":\"%s\",\"query\":\"%s\",\"calls\":%s,\"total_time_ms\":%s,\"mean_time_ms\":%s,\"max_time_ms\":%s}", $1, q, $3, $4, $5, $6}'
-    printf ']}\n'
-  } > "$output_file"
+  printf '{"timestamp": "%s", "phase": "%s", "server_version_num": "%s", "column_profile": "%s", "queries": %s}\n' \
+    "$timestamp" "$phase" "$server_version_num" "$column_profile" "$queries_json" > "$output_file"
 
   return 0
 }

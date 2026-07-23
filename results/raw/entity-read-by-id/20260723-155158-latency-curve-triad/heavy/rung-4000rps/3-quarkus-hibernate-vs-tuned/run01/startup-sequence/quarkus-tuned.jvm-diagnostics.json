@@ -1,0 +1,20 @@
+{
+  "target_id": "quarkus-tuned",
+  "pid": 416762,
+  "capture_utc": "2026-07-23T16:59:33Z",
+  "jcmd_available": true,
+  "captures": {
+    "vm_flags": {
+      "path": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-4000rps/3-quarkus-hibernate-vs-tuned/run01/startup-sequence/quarkus-tuned.jcmd-vm.flags.txt",
+      "status": "captured"
+    },
+    "vm_command_line": {
+      "path": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-4000rps/3-quarkus-hibernate-vs-tuned/run01/startup-sequence/quarkus-tuned.jcmd-vm.command_line.txt",
+      "status": "captured"
+    },
+    "jfr_check": {
+      "path": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-4000rps/3-quarkus-hibernate-vs-tuned/run01/startup-sequence/quarkus-tuned.jcmd-jfr.check.txt",
+      "status": "captured"
+    }
+  }
+}

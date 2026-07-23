@@ -1,0 +1,14 @@
+{
+  "target_id": "exeris-community",
+  "port": 9000,
+  "scenario_endpoint_path": "/api/v1/users",
+  "startup_init_utc": "2026-07-23T16:05:56Z",
+  "health_ready_utc": "2026-07-23T16:05:57Z",
+  "first_request_utc": "2026-07-23T16:05:57Z",
+  "startup_to_health_ms": 1090,
+  "startup_to_first_request_ms": 1162,
+  "health_to_first_request_ms": 72,
+  "health_attempts": 1,
+  "first_request_attempts": 1,
+  "generated_at_utc": "2026-07-23T16:05:57Z"
+}

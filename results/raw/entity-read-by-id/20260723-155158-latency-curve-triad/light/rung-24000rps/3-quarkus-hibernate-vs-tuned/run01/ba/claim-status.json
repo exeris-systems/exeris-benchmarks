@@ -1,0 +1,22 @@
+{
+  "claim_status": "comparison_eligible",
+  "reason": "all_gates_passed",
+  "track_id": "track-ba-01",
+  "pair_id": "entity-read-by-id-fixed_contract_p99_stable_h1_wrk2_single_read_v1-quarkus-hibernate__quarkus-tuned",
+  "pair_order": "ba",
+  "rejection_codes": [],
+  "failed_request_rate_pct": {
+    "target_a": "0.0000",
+    "target_b": "0.0000",
+    "threshold_pct": "2"
+  },
+  "latency_percentile_eligibility": {
+    "publishable": true,
+    "reason": "open_loop_fixed_rate",
+    "driver_mode": "open",
+    "cores_used_target_a": "1.8864",
+    "cores_used_target_b": "1.7193",
+    "pinned_cpus": "4",
+    "note": "Closed-loop percentiles at saturation are queue-depth/throughput, not service time. Throughput and resource metrics are unaffected."
+  }
+}

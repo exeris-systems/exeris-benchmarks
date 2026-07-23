@@ -1,0 +1,17 @@
+=== ENDPOINT DIAGNOSTIC ===
+Target: quarkus-hibernate
+URL: http://localhost:9002/api/v1/user?id=1
+Timestamp: 2026-07-23T19:26:32.615Z
+
+Attempting curl request...
+
+HTTP Status Code: 200
+Response (first 500 chars):
+---
+HTTP/1.1 200 OK
+Content-Type: application/json;charset=UTF-8
+content-length: 30
+
+{"id":"1","username":"user_1"}
+
+---

@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-07-23T16:52:40Z",
+  "phase": "measurement-delta",
+  "server_version_num": "160002",
+  "column_profile": "exec_time_cols",
+  "baseline_timestamp": "2026-07-23T16:50:38Z",
+  "final_timestamp": "2026-07-23T16:52:40Z",
+  "note": "Per-target delta over this target's measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
+  "queries": [
+    {
+      "queryid": "8085706505270454220",
+      "query": "SELECT ranked.user_id AS user_id,\n    ranked.friend_user_id AS friend_user_id,\n    ranked.friend_username AS friend_username\n     FROM (\n         SELECT f.user_id,\n                f.friend_user_id,\n                u.username AS friend_username,\n                ROW_NUMBER() OVER (PARTITION BY f.user_id ORDER BY f.friend_user_id ASC) AS rn\n         FROM friendships f\n         JOIN users u ON u.id = f.friend_user_id\n         WHERE f.user_id IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)\n     ) ranked\n     WHERE ranked.rn <= $17\n     ORDER BY ranked.user_id ASC, ranked.friend_user_id ASC",
+      "calls": 5521,
+      "total_time_ms": 1126.8928969999988,
+      "mean_time_ms": 0.2041102874479259,
+      "max_time_ms_cumulative": 0.308678
+    },
+    {
+      "queryid": "-4411305900406856244",
+      "query": "SELECT ranked.user_id AS user_id,\n    ranked.interest_id AS interest_id,\n    ranked.interest_name AS interest_name,\n    ranked.interest_category AS interest_category\n     FROM (\n         SELECT ui.user_id,\n                ui.interest_id,\n                i.name AS interest_name,\n                i.category AS interest_category,\n                ROW_NUMBER() OVER (PARTITION BY ui.user_id ORDER BY ui.interest_id ASC) AS rn\n         FROM user_interests ui\n         JOIN interests i ON i.id = ui.interest_id\n         WHERE ui.user_id IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)\n     ) ranked\n     WHERE ranked.rn <= $17\n     ORDER BY ranked.user_id ASC, ranked.interest_id ASC",
+      "calls": 5522,
+      "total_time_ms": 597.7206189999997,
+      "mean_time_ms": 0.10824350217312563,
+      "max_time_ms_cumulative": 0.17415599999999998
+    },
+    {
+      "queryid": "1840689630361923714",
+      "query": "select ue1_0.id,ue1_0.username from users ue1_0 order by ue1_0.id offset $1 rows fetch first $2 rows only",
+      "calls": 5518,
+      "total_time_ms": 43.6455729999999,
+      "mean_time_ms": 0.007909672526277618,
+      "max_time_ms_cumulative": 0.024436000000000003
+    },
+    {
+      "queryid": "6650430479887907887",
+      "query": "BEGIN",
+      "calls": 5517,
+      "total_time_ms": 1.0097710000000062,
+      "mean_time_ms": 0.00018302900126880665,
+      "max_time_ms_cumulative": 0.005541
+    }
+  ]
+}

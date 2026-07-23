@@ -197,14 +197,23 @@ done
 # -----------------------------------------------------------------------------
 # Point + arm model. POINTS: mem_mb|vcpu|axis|profile_id|contract_id
 # -----------------------------------------------------------------------------
+# MATRIX_WORKLOAD selects the sweep endpoint family via the contract-id template. The endpoint
+# itself is CONTRACT-driven (each contract carries its own endpoint+payload), so switching the
+# workload only re-points --contract-id:
+#   single_read (default) -> GET /api/v1/user?id=1        (runtime-bound single hot PK row)
+#   aggregate             -> GET /api/v1/users            (3-query 10x10x10 heavy aggregate;
+#                            where pgjdbc fetch-size/portal behavior actually bites, multi-row)
+MATRIX_WORKLOAD="${MATRIX_WORKLOAD:-single_read}"
+case "$MATRIX_WORKLOAD" in single_read|aggregate) ;; *) echo "ERROR: MATRIX_WORKLOAD must be single_read|aggregate (got '$MATRIX_WORKLOAD')" >&2; exit 2 ;; esac
+if [[ "$MATRIX_WORKLOAD" == aggregate ]]; then MATRIX_ENDPOINT_LABEL="GET /api/v1/users"; else MATRIX_ENDPOINT_LABEL="GET /api/v1/user?id=1"; fi
 POINTS=(
-  "128|4|memory|runtime-constrained-128m-4vcpu-v1|fixed_contract_runtime_h1_constrained_single_read_128m_4vcpu_v1"
-  "256|4|memory|runtime-constrained-256m-4vcpu-v1|fixed_contract_runtime_h1_constrained_single_read_256m_4vcpu_v1"
-  "512|4|memory|runtime-constrained-512m-4vcpu-v1|fixed_contract_runtime_h1_constrained_single_read_512m_4vcpu_v1"
-  "1024|4|shared|runtime-constrained-1024m-4vcpu-v1|fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1"
-  "2048|4|memory|runtime-constrained-2048m-4vcpu-v1|fixed_contract_runtime_h1_constrained_single_read_2048m_4vcpu_v1"
-  "1024|2|cpu|runtime-constrained-1024m-2vcpu-v1|fixed_contract_runtime_h1_constrained_single_read_1024m_2vcpu_v1"
-  "1024|8|cpu|runtime-constrained-1024m-8vcpu-v1|fixed_contract_runtime_h1_constrained_single_read_1024m_8vcpu_v1"
+  "128|4|memory|runtime-constrained-128m-4vcpu-v1|fixed_contract_runtime_h1_constrained_${MATRIX_WORKLOAD}_128m_4vcpu_v1"
+  "256|4|memory|runtime-constrained-256m-4vcpu-v1|fixed_contract_runtime_h1_constrained_${MATRIX_WORKLOAD}_256m_4vcpu_v1"
+  "512|4|memory|runtime-constrained-512m-4vcpu-v1|fixed_contract_runtime_h1_constrained_${MATRIX_WORKLOAD}_512m_4vcpu_v1"
+  "1024|4|shared|runtime-constrained-1024m-4vcpu-v1|fixed_contract_runtime_h1_constrained_${MATRIX_WORKLOAD}_1024m_4vcpu_v1"
+  "2048|4|memory|runtime-constrained-2048m-4vcpu-v1|fixed_contract_runtime_h1_constrained_${MATRIX_WORKLOAD}_2048m_4vcpu_v1"
+  "1024|2|cpu|runtime-constrained-1024m-2vcpu-v1|fixed_contract_runtime_h1_constrained_${MATRIX_WORKLOAD}_1024m_2vcpu_v1"
+  "1024|8|cpu|runtime-constrained-1024m-8vcpu-v1|fixed_contract_runtime_h1_constrained_${MATRIX_WORKLOAD}_1024m_8vcpu_v1"
 )
 
 # ARMS: arm_id|target_runtime|xmx_env_key|frac_key|jar_glob
@@ -486,6 +495,7 @@ jq -n \
   --arg campaign_dir "$CAMPAIGN_DIR" \
   --arg commit_sha "$COMMIT_SHA" \
   --arg hardware_profile "$HARDWARE_PROFILE" \
+  --arg endpoint_label "$MATRIX_ENDPOINT_LABEL" \
   --arg profiles_json "$PROFILES_JSON" \
   --arg scenario_json "$SCENARIO_JSON" \
   --arg cpu_affinity_target_override "${CPU_AFFINITY:-none}" \
@@ -529,7 +539,7 @@ jq -n \
       duration_seconds: 300,
       threads: 4,
       connections: 128,
-      endpoint: "GET /api/v1/user?id=1",
+      endpoint: $endpoint_label,
       repeats: $repeats,
       repeat_ordering: "interleaved (repeat is the outer loop)",
       cpu_partition_policy: {
@@ -584,7 +594,7 @@ jq -n \
 echo "[matrix] campaign_dir : $CAMPAIGN_DIR"
 echo "[matrix] manifest     : $MANIFEST_FILE"
 echo "[matrix] points=7 arms=exeris-community,quarkus-tuned (+quarkus-hibernate @1024/4) repeats=$REPEATS interleaved dry_run=$DRY_RUN"
-echo "[matrix] gc=parallel db_pool=${DB_POOL_SIZE} (min==max) warmup=120s duration=300s 128c/4t endpoint=GET /api/v1/user?id=1"
+echo "[matrix] gc=parallel db_pool=${DB_POOL_SIZE} (min==max) warmup=120s duration=300s 128c/4t workload=${MATRIX_WORKLOAD} endpoint=${MATRIX_ENDPOINT_LABEL}"
 echo "[matrix] heap: community=${HEAP_FRAC_COMMUNITY} quarkus=${HEAP_FRAC_QUARKUS} of memory.max (per-arm --jvm-xmx-mb); exeris telemetry OFF for community"
 echo "[matrix] cpu partition (per-point, tuned-PG): DB=4-7,12-15 (external, reused); vCPU<=4 -> target 0-1,8-9 / loadgen 2-3,10-11 (disjoint); vCPU=8 -> target 0-3,8-11 / loadgen 4-7,12-15 (loadgen co-located w/ DB, target isolated)"
 if [[ -n "$CPU_AFFINITY" ]]; then

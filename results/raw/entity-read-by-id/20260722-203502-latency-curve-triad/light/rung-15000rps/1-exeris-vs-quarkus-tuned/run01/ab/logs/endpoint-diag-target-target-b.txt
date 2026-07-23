@@ -1,0 +1,17 @@
+=== ENDPOINT DIAGNOSTIC ===
+Target: quarkus-tuned
+URL: http://localhost:9003/api/v1/user?id=1
+Timestamp: 2026-07-23T01:17:25.842Z
+
+Attempting curl request...
+
+HTTP Status Code: 200
+Response (first 500 chars):
+---
+HTTP/1.1 200 OK
+Content-Type: application/json;charset=UTF-8
+content-length: 30
+
+{"id":"1","username":"user_1"}
+
+---

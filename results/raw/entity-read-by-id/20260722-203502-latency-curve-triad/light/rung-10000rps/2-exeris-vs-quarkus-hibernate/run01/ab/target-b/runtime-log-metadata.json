@@ -1,0 +1,14 @@
+{
+  "launcher_mode": "external",
+  "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/quarkus-runtime.env",
+  "log_path": "/tmp/exeris-quarkus-9002.log",
+  "external_jar_path": "targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar",
+  "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar",
+  "jar_exists": true,
+  "jar_sha256": "cb6bafa53868dee5a74111d72d454b78a3ebb782a84212a2736e8316e043178b",
+  "jar_size_bytes": 75907314,
+  "jar_mtime_utc": "2026-07-23T00:37:13Z",
+  "copied": true,
+  "output_file": "results/raw/entity-read-by-id/20260722-203502-latency-curve-triad/light/rung-10000rps/2-exeris-vs-quarkus-hibernate/run01/ab/target-b/target-runtime.log",
+  "note": "runtime log copied"
+}

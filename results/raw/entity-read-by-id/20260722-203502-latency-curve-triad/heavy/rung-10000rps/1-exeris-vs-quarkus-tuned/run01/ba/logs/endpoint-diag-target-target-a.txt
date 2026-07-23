@@ -1,0 +1,18 @@
+=== ENDPOINT DIAGNOSTIC ===
+Target: exeris-community
+URL: http://localhost:9000/api/v1/users
+Timestamp: 2026-07-22T23:22:52.153Z
+
+Attempting curl request...
+
+HTTP Status Code: 200
+Response (first 500 chars):
+---
+HTTP/1.1 200 OK
+content-type: application/json
+Content-Length: 9105
+Connection: keep-alive
+
+[{"id":"1","username":"user_1","friends":[{"id":"2","username":"user_2"},{"id":"3","username":"user_3"},{"id":"4","username":"user_4"},{"id":"5","username":"user_5"},{"id":"6","username":"user_6"},{"id":"7","username":"user_7"},{"id":"8","username":"user_8"},{"id":"9","username":"user_9"},{"id":"10","username":"user_10"},{"id":"11","username":"user_11"}],"interests":[{"id":"14","name":"interest-14","...<truncated>
+
+---

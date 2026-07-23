@@ -1,0 +1,14 @@
+{
+  "target_id": "quarkus-hibernate",
+  "port": 9002,
+  "scenario_endpoint_path": "/api/v1/users",
+  "startup_init_utc": "2026-07-22T20:48:48Z",
+  "health_ready_utc": "2026-07-22T20:48:50Z",
+  "first_request_utc": "2026-07-22T20:48:50Z",
+  "startup_to_health_ms": 2130,
+  "startup_to_first_request_ms": 2381,
+  "health_to_first_request_ms": 251,
+  "health_attempts": 1,
+  "first_request_attempts": 1,
+  "generated_at_utc": "2026-07-22T20:48:50Z"
+}

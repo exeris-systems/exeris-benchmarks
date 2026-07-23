@@ -1,0 +1,6 @@
+3316644:
+VM Arguments:
+jvm_args: --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Xms256m -Xmx256m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Xlog:safepoint=debug:file=results/raw/entity-read-by-id/20260722-203502-latency-curve-triad/heavy/rung-10000rps/diagnostics/exeris-community.safepoint.log:time,level,tags -XX:StartFlightRecording=filename=results/raw/entity-read-by-id/20260722-203502-latency-curve-triad/heavy/rung-10000rps/diagnostics/exeris-community.jfr,settings=profile,maxsize=6144m,dumponexit=true --add-opens=java.base/jdk.internal.module=ALL-UNNAMED --enable-preview 
+java_command: targets/exeris-community-app/target/exeris-community-app-1.0.0-SNAPSHOT.jar
+java_class_path (initial): targets/exeris-community-app/target/exeris-community-app-1.0.0-SNAPSHOT.jar
+Launcher Type: SUN_STANDARD

@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-07-22T22:15:48Z",
+  "phase": "measurement-delta",
+  "server_version_num": "unknown",
+  "column_profile": "unavailable",
+  "baseline_timestamp": "2026-07-22T22:13:47Z",
+  "final_timestamp": "2026-07-22T22:15:48Z",
+  "note": "Per-target delta over this target's measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
+  "queries": []
+}

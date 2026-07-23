@@ -1,0 +1,37 @@
+{
+  "campaign": "20260722-203502-latency-curve-triad",
+  "type": "comparison-eligible wrk2 CO-free latency-load curve",
+  "triad": ["exeris-community", "quarkus-tuned", "quarkus-hibernate"],
+  "shape": "3 pairs x ab/ba x 5 rungs x {light,heavy} = 60 leaves, all 60 comparison_eligible",
+  "window": "120s (60s warmup + 120s measure), fixed_contract_p99_stable_h1_wrk2_v1 (heavy) / _single_read_v1 (light)",
+  "driver": "wrk2 open-loop at a fixed offered rate (percentiles = true service time)",
+  "config": {
+    "memory_mb": 2048, "db_pool": "16-256",
+    "db": "tuned-PG host-net cpuset 4-7,12-15 (role/db benchmark/benchmark_db, prepareThreshold=1)",
+    "cpu_pinning": "NONE (matches 60707c4): 2 resident pair-targets + wrk2 loadgen share cores 0-3,8-11; DB holds 4-7,12-15",
+    "heap_mb": {"exeris": 256, "quarkus": 1280}
+  },
+  "n_per_point": 4,
+  "heavy_endpoint": "GET /api/v1/users (3-query 10x10x10 aggregate, DB-CPU-bound ~11k closed-loop ceiling)",
+  "light_endpoint": "GET /api/v1/user?id=1 (single-row hot PK, runtime-bound, cache-resident)",
+  "heavy_p99_ms_by_rung": {
+    "exeris":            {"2000": 3.63, "4000": 2.63, "6000": 4.61, "8000": 3.49, "10000": 16.51},
+    "quarkus-hibernate": {"2000": 2.53, "4000": 2.69, "6000": 4.27, "8000": 3.37, "10000": 9.86},
+    "quarkus-tuned":     {"2000": 3.27, "4000": 3.38, "6000": 2.56, "8000": 4.25, "10000": 5.13}
+  },
+  "heavy_finding": "Below saturation (2-8k) all three overlap ~2.5-4.6ms within n=4 noise. At the 10k knee (~91% of the DB ceiling) tails diverge: exeris p99 degrades MOST (16.5ms), quarkus-tuned holds best (5.1ms), quarkus-hibernate mid (9.9ms). Descriptive; absolute p99 inflated for all three by the unpinned loadgen contention, but the relative ordering is a same-conditions fair comparison.",
+  "light_p99_ms_by_rung": {
+    "exeris":            {"5000": 1.86, "10000": 1.89, "15000": 1.60, "20000": 1.58, "25000": 1.85},
+    "quarkus-hibernate": {"5000": 1.94, "10000": 1.92, "15000": 2.04, "20000": 2.19, "25000": 2.60},
+    "quarkus-tuned":     {"5000": 1.88, "10000": 1.89, "15000": 8776.01, "20000": 16221.08, "25000": 2.61}
+  },
+  "light_achieved_shortfall": "quarkus-tuned achieved<<offered at 15k(13736)/20k(17024)/25k(20808); exeris + quarkus-hibernate achieved=offered through 25k.",
+  "light_finding": "exeris + quarkus-hibernate scale cleanly to 25k (~2ms flat, achieved=offered). quarkus-tuned COLLAPSES above ~14k (p99 in seconds, cannot sustain the rate). CONFOUND: quarkus-tuned did ~47k light ISOLATED (2026-07-22 memory-cpu matrix). This is a CPU-SCHEDULING-CONTENTION sensitivity of quarkus-tuned's native-epoll under the unpinned shared-core triad, NOT an isolated-latency result. The light single-read is too CPU-cheap to isolate cleanly with 2 resident targets + loadgen unpinned. A clean light saturation curve needs CPU pinning (loadgen/target isolation) the 2-resident-target triad cannot provide on 16 cores with the DB on 8.",
+  "caveats": [
+    "NO CPU pinning (matches 60707c4): absolute p99 inflated by loadgen + resident-target contention; relative comparisons at a given rung are same-conditions.",
+    "n=4 per point (2 pairs x ab/ba); p99 at the knee is noisy - directions are solid, magnitudes indicative.",
+    "Raw JFR (75GB, 140 files) retained on the perf-box only; excluded from the committed artifacts (public-track confidentiality default-deny + size).",
+    "Endpoint-contract-test gate skipped (BENCHMARK_SKIP_ENDPOINT_CONTRACT_GATE=1) so its maven compile+test never ran during a measure window (it was observed contaminating p99).",
+    "Descriptive_only within the comparative gate: all 60 leaves passed the stage7 gates (comparison_eligible, latency publishable / open_loop_fixed_rate)."
+  ]
+}

@@ -47,6 +47,20 @@ read -r -a LIGHT_RUNGS <<< "${LATENCY_LIGHT_RUNGS:-5000 10000 15000 20000 25000}
 export BENCH_DB_TUNED="${BENCH_DB_TUNED:-1}"
 export BENCHMARK_ALLOW_EXTERNAL_DB="${BENCHMARK_ALLOW_EXTERNAL_DB:-1}"
 
+# CPU PINNING — THE fix vs the superseded 20260722-203502 run, which OMITTED these and ran
+# unpinned on the shared cpuset 0-15 (the sole real flaw of that curve; see its curve-notes.json).
+# The comparative harness drives the two pair-targets SEQUENTIALLY (run_wrk_target FIRST then
+# SECOND, co-locator idle), so pinning the driven target to a clean 2-physical-core slice and the
+# loadgen to a disjoint slice gives each target an ISOLATED measurement — no restructure needed.
+# DB (tuned-PG) is already pinned to 4-7,12-15. Partition matches 60707c4.
+export BENCH_SERVER_CPU_AFFINITY="${LATENCY_SERVER_CPU_AFFINITY:-0-1,8-9}"
+export BENCH_LOADGEN_CPU_AFFINITY="${LATENCY_LOADGEN_CPU_AFFINITY:-2-3,10-11}"
+
+# Stricter open-loop CO-free validity: require >=99% rate attainment (harness default gate is 95%).
+# Any rung a pinned target cannot sustain is auto-flagged .latency_percentile_eligibility.publishable=
+# false / open_loop_rate_not_sustained — but the ladder is capped below saturation so this should not fire.
+export BENCH_MIN_RATE_ATTAINMENT_PCT="${BENCH_MIN_RATE_ATTAINMENT_PCT:-99}"
+
 # Skip run-comparative.sh's Stage-2 endpoint-contract test gate (a `mvn -Dtest=...ContractTest
 # test` compile+test cycle it runs for the heavy /api/v1/users endpoint). It is redundant here
 # (the target jars are contract-verified at build time and the first leaf passed the gate) and

@@ -30,7 +30,11 @@ PAIR="${PROMOTION_PAIR:-1-exeris-vs-quarkus-tuned:exeris-community:quarkus-tuned
 # tuned-PG creds (reused host-net PG uses benchmark/benchmark_db; target env defaults to
 # 'postgres' -> HikariPool FATAL role does not exist). All arms read EXERIS_DB_* (quarkus maps
 # quarkus.datasource.* from them). Matches the proven latency-curve wrapper.
-export EXERIS_DB_JDBC_URL="${EXERIS_DB_JDBC_URL:-jdbc:postgresql://localhost:5432/benchmark_db?prepareThreshold=1}"
+# FAIR pgjdbc params on the SHARED url (both arms map quarkus.datasource.* from EXERIS_DB_*), so
+# exeris and quarkus run byte-identical query-protocol config. Without the full set, the arms fall
+# back to DIFFERENT defaults and exeris is handicapped on the multi-row aggregate (the same
+# non-equalization that caused the +15% sweep-vs-triad gap). Mirrors 9f2b182 / the constrained sweep.
+export EXERIS_DB_JDBC_URL="${EXERIS_DB_JDBC_URL:-jdbc:postgresql://localhost:5432/benchmark_db?prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false&preferQueryMode=extended}"
 export EXERIS_DB_USERNAME="${EXERIS_DB_USERNAME:-benchmark}"
 export EXERIS_DB_PASSWORD="${EXERIS_DB_PASSWORD:-benchmark}"
 export BENCH_DB_TUNED="${BENCH_DB_TUNED:-1}"

@@ -49,14 +49,39 @@ per-PID `CPU/req·kernel%` = 37.1 / 41.2 / 42.3 µs — **agree**: exeris lowest
    the same for every stack. Unlike heavy (37 / 36 / 26), syscall *count* is not a differentiator at light;
    the per-request kernel-CPU difference comes from per-syscall cost, not count.
 
-## Honesty flag on the headline +39 %
+## Headline +39 % — reconciled on clean (profiler-free) numbers
 
-At this operating point I measure a **kernel-CPU/req** gap of ~7–14 % (exeris lowest) and a **total CPU/req**
-gap of ~21–35 % vs quarkus. The report's headline **+39 %** is **not reproduced here** — it is closest to
-the total-CPU/req gap vs hibernate (+35 %), not the pure kernel gap. Likely a different operating point
-(the promotion light ran ~79 k rps vs 54 k here). **Recommend restating §2 as an absolute per-request figure
-with its exact config**, since (a) the %sys+%soft fraction alone favours quarkus, and (b) the kernel-only gap
-is ~10 %, not 39 %.
+The profiled CPU/req above is inflated by async-profiler overhead. A **clean re-run** (no agent, `mpstat -P
+ALL`; see `bottleneck-diagnostic/`) gives total CPU/req **52.8 / 66.9 / 74.6 µs** (exeris / qtuned / qhib):
+
+- **Clean total-CPU/req gap exeris → hibernate = +41 %** — this *reproduces* §2's **+39 %**. The headline is a
+  **total-CPU/req** advantage over hibernate, **not** a kernel-time figure.
+- **Clean kernel-CPU/req gap is only ~15–16 %** (mpstat: 35.3 / 40.7 / 41.0 µs). The %sys+%soft *fraction* is
+  highest for exeris (51 %). §2 should therefore read "exeris uses ~41 % less **total** CPU/req than hibernate",
+  not "less kernel time".
+- **Profiler overhead:** +4.2 µs on exeris (~8 %), +2.3 µs on quarkus (~3 %) — it slightly *under*-stated
+  exeris's lead, so the clean gap is larger than the profiled one. The profiled table is directionally correct;
+  the clean numbers are the honest absolutes.
+
+## Bottleneck: target-CPU-bound (load-gen and DB have headroom)
+
+Clean `mpstat -P ALL` during measurement (`bottleneck-diagnostic/`), busy per cpuset:
+
+| cpuset (phys cores) | exeris | quarkus-tuned | quarkus-hibernate |
+|---|---|---|---|
+| **target** (0,1 = 4 SMT thr) | 76.7 % / 3.07c | 81.6 % / 3.26c | 83.1 % / 3.32c |
+| **load-gen** (2,3) | 21.1 % / 0.84c | 16.3 % / 0.65c | 14.6 % / 0.58c |
+| **DB** (postgres, 4-7,12-15) | 29.6 % / 2.37c | 31.6 % / 2.53c | 28.1 % / 2.25c |
+
+- **Target** = 2 physical cores (topology: cpu 0&8→core0, 1&9→core1), SMT-saturated at 77–83 % logical — the limiter.
+- **Load-gen** 15–21 % (0.6–0.8 c): wrk is *not* the cap (if it were, all three would share one rps ceiling).
+- **DB** 28–32 % (2.2–2.5 c of 4 physical): headroom; not the cap.
+- **Clean identity holds:** `rps × CPU/req` = 3.05 / 3.24 / 3.31 cores ≈ target busy ⇒ **rps = target_cores /
+  CPU_per_req**. The rps ranking is pure target-CPU efficiency, not a load-gen/DB artefact.
+- **"Slower but not heavier" resolved:** quarkus's lower rps is its higher CPU/req on the fixed 2 cores; the rps
+  *level* (vs the ~79 k promotion light) is the 4-vCPU pin, not extra per-request work. wrk latency corroborates
+  (closed-loop, 128 conns): exeris mean 5.59 ms with a fat tail (max 163 ms) vs qhib 3.62 ms (max 32 ms) — exeris's
+  bulk is faster (higher throughput) with an occasional tail, not a uniformly slower pipeline.
 
 ## Loopback (one sentence, as required)
 

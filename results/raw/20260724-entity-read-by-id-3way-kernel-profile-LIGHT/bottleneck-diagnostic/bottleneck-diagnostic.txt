@@ -1,0 +1,20 @@
+############ community (communityD) 18:07:25UTC ############
+[communityD] mpstat -P ALL 30s (steady state)...
+[communityD] CLEAN rps=57830  cpu_time_s=915.7  CPU/req=52.8us
+    target    cpus=4  busy=76.7%  cores=3.07  (%usr=25.7 %sys=37.3 %soft=13.7)
+    loadgen   cpus=4  busy=21.1%  cores=0.84  (%usr=4.9 %sys=10.1 %soft=6.0)
+    db_free   cpus=8  busy=29.6%  cores=2.37  (%usr=14.3 %sys=11.6 %soft=3.7)
+############ quarkus-tuned (qtunedD) 18:14:35UTC ############
+[qtunedD] mpstat -P ALL 30s (steady state)...
+[qtunedD] CLEAN rps=48492  cpu_time_s=973.8  CPU/req=66.9us
+    target    cpus=4  busy=81.6%  cores=3.26  (%usr=32.3 %sys=32.1 %soft=17.2)
+    loadgen   cpus=4  busy=16.3%  cores=0.65  (%usr=3.9 %sys=9.1 %soft=3.2)
+    db_free   cpus=8  busy=31.6%  cores=2.53  (%usr=14.2 %sys=12.7 %soft=4.7)
+############ quarkus (qhibD) 18:21:44UTC ############
+[qhibD] mpstat -P ALL 30s (steady state)...
+[qhibD] CLEAN rps=44334  cpu_time_s=991.8  CPU/req=74.6us
+    target    cpus=4  busy=83.1%  cores=3.32  (%usr=37.7 %sys=29.9 %soft=15.5)
+    loadgen   cpus=4  busy=14.6%  cores=0.58  (%usr=3.4 %sys=8.2 %soft=2.9)
+    db_free   cpus=8  busy=28.1%  cores=2.25  (%usr=12.5 %sys=11.3 %soft=4.3)
+===== BOTTLENECK DIAG DONE 18:28:55UTC =====
+(compare CLEAN CPU/req here vs profiled 57/69/77us -> async-profiler overhead; compare busy per cpuset -> limiter)

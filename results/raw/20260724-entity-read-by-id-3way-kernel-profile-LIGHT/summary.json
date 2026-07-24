@@ -23,10 +23,30 @@
     "Serialization negligible at light (0.8%); the Jackson question is heavy-only."
   ],
   "headline_39pct_reconciliation": {
-    "measured_kernel_cpu_per_req_gap_pct": "7-14 (exeris lowest)",
-    "measured_total_cpu_per_req_gap_pct": "21-35 (exeris lowest)",
-    "plus_39_reproduced": false,
-    "note": "At 1024m/4vcpu/256m/54k-rps the +39% kernel figure is not reproduced; closest match is total-CPU/req vs hibernate (+35%). Likely a different operating point (promotion light ~79k rps). Recommend restating §2 as absolute per-request with exact config."
+    "basis": "CLEAN (profiler-free) numbers from bottleneck-diagnostic/",
+    "clean_total_cpu_per_req_us": {"exeris": 52.8, "quarkus_tuned": 66.9, "quarkus_hibernate": 74.6},
+    "clean_total_cpu_per_req_gap_exeris_to_hibernate_pct": 41,
+    "clean_kernel_cpu_per_req_us_mpstat": {"exeris": 35.3, "quarkus_tuned": 40.7, "quarkus_hibernate": 41.0},
+    "clean_kernel_cpu_per_req_gap_pct": "15-16",
+    "plus_39_reproduced": true,
+    "verdict": "The +39% headline reproduces as CLEAN TOTAL-CPU/req exeris-vs-hibernate (+41%), NOT as kernel time (kernel gap only ~15-16%). Restate §2 as 'exeris ~41% less total CPU/req than hibernate', not 'less kernel time'."
+  },
+  "profiler_overhead": {
+    "note": "async-profiler event=cpu agent inflates the profiled CPU/req; clean re-run quantifies it.",
+    "profiled_cpu_per_req_us": {"exeris": 57.0, "quarkus_tuned": 69.2, "quarkus_hibernate": 76.9},
+    "clean_cpu_per_req_us": {"exeris": 52.8, "quarkus_tuned": 66.9, "quarkus_hibernate": 74.6},
+    "overhead_us": {"exeris": 4.2, "quarkus_tuned": 2.3, "quarkus_hibernate": 2.3},
+    "overhead_pct": {"exeris": 8.0, "quarkus_tuned": 3.4, "quarkus_hibernate": 3.1},
+    "effect": "overhead is exeris-heavier, so profiled numbers slightly UNDER-state exeris's lead; clean gap is larger."
+  },
+  "bottleneck": {
+    "verdict": "TARGET-CPU-bound; load-gen and DB have headroom. rps = target_cores / CPU_per_req.",
+    "topology": "cpu 0&8->phys core0, 1&9->core1 (target=2 phys cores/4 SMT); loadgen 2,3; postgres floats 4-7,12-15",
+    "clean_rps": {"exeris": 57830, "quarkus_tuned": 48492, "quarkus_hibernate": 44334},
+    "busy_pct": {"target": {"exeris": 76.7, "quarkus_tuned": 81.6, "quarkus_hibernate": 83.1}, "loadgen": {"exeris": 21.1, "quarkus_tuned": 16.3, "quarkus_hibernate": 14.6}, "db_free": {"exeris": 29.6, "quarkus_tuned": 31.6, "quarkus_hibernate": 28.1}},
+    "cores_busy": {"target": {"exeris": 3.07, "quarkus_tuned": 3.26, "quarkus_hibernate": 3.32}, "loadgen": {"exeris": 0.84, "quarkus_tuned": 0.65, "quarkus_hibernate": 0.58}, "db_free": {"exeris": 2.37, "quarkus_tuned": 2.53, "quarkus_hibernate": 2.25}},
+    "rps_times_cpu_per_req_cores": {"exeris": 3.05, "quarkus_tuned": 3.24, "quarkus_hibernate": 3.31},
+    "slower_not_heavier": "quarkus lower rps = higher CPU/req on the fixed 2 cores; rps level (vs ~79k promotion light) is the 4-vCPU pin, not extra work. Load-gen 15-21% + DB 28-32% => not the cap."
   },
   "loopback_caveat": "Inline softirq attribution (worker/vert.x syscall context, no ksoftirqd) is a LOOPBACK property; on a real NIC RX softirq moves to ksoftirqd and per-PID misses it.",
   "heavy_vs_light_exeris": {"kernel_pct": "38 -> 65", "syscalls_per_req": "37.4 -> 12.4", "serializer_pct": "9.1 -> 0.8"}

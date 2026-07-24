@@ -88,6 +88,11 @@ Derived (CPU/req × fraction — approximate, since fractions are warmup-inclusi
   Derived kernel-/user-CPU/req multiply the two and are therefore approximate.
 - **Per-stack DB drivers differ** (exeris pgjdbc / qtuned vertx-pg reactive / qhib Hibernate+pgjdbc). The
   syscalls/req and db-client% therefore reflect transport *and* query-plan strategy, not transport alone.
+- **Durable CPU/req is measured under the profiler** (async-profiler agent attached). The light companion's
+  `bottleneck-diagnostic/` quantifies the overhead as ~+3–8 µs/req (exeris-heavier), so these absolutes are
+  slightly inflated and *under*-state exeris's lead; the clean gap is larger. The comparison is unaffected.
+- **Throughput is target-CPU-bound** (2 physical cores, SMT-saturated; load-gen ~15–21 %, DB ~28–32 % — both
+  have headroom). Confirmed in the light `bottleneck-diagnostic/`: `rps × CPU/req ≈ target cores`.
 
 ## Files
 - `three-way-analysis.txt` — raw analyzer output (kernel%, syscalls/req, top kernel+user frames, system-wide).

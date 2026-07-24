@@ -117,6 +117,21 @@
       <artifactId>exeris-kernel-core</artifactId>
       <version>${exeris.kernel.version}</version>
     </dependency>
+
+    <!-- Jackson version-comparison micro (JacksonVersionSerializationBenchmark): isolate the
+         serializer-library cost the runtime report attributes to "Jackson-3 dispatch". Both on the
+         classpath at once (distinct packages tools.jackson vs com.fasterxml.jackson).
+         Jackson 3 pinned to the kernel BOM (3.1.1); Jackson 2 to Quarkus 3.34's line (2.18.x). -->
+    <dependency>
+      <groupId>tools.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>3.1.1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.18.2</version>
+    </dependency>
   </dependencies>
 
   <build>

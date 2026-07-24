@@ -1,0 +1,56 @@
+############ exeris LIGHT closed-loop heap=256m (h256) 18:52:17UTC ############
+[h256] rps=56929.19  (OOM check: 2)
+[h256] wrk closed-loop latency (--latency, CO-inflated):
+    # command: taskset -c 2-3,10-11 wrk -t 4 -c 128 -d 300s --script scenarios/entity-read-by-id/wrk.lua --latency http://localhost:8080/api/v1/user?id=1
+      Thread Stats   Avg      Stdev     Max   +/- Stdev
+        Latency     5.61ms    8.78ms 147.71ms   87.49%
+        Req/Sec    14.30k     1.17k   25.85k    76.93%
+      Latency Distribution
+         50%    1.14ms
+         75%    7.26ms
+         90%   17.13ms
+         99%   37.19ms
+      17080205 requests in 5.00m, 1.99GB read
+[h256] GC pause classification (parallel GC):
+awk: cmd. line:1: {a[NR]=$1; s+=$1} END{n=NR; if(n>0){printf "    pauses=%d  total_gc=%.0fms  mean=%.3fms  p99=%.2fms  MAX=%.2fms\n", n,s,s/n,a[int(n*0.99)>0?int(n*0.99):1],a[n]} else print "    (no pause lines)"}
+awk: cmd. line:1:                                                                                                                                          ^ syntax error
+    pause histogram (ms buckets):
+      <1      1466
+      1-5     5
+      5-10    4
+      20-50   1
+    5 longest pauses (ms): 5.647 7.352 7.374 7.442 23.086 
+    Full GCs: 0
+    safepoint stalls (catches NON-GC stops): 2 sample lines + max total-stop:
+      [2026-07-24T20:59:25.333+0200][420980ms][info][safepoint] Safepoint "ParallelCollectForAllocation", Time since last: 281602343 ns, Reaching safepoint: 70753 ns, At safepoint: 605393 ns, Leaving safepoint: 7685 ns, Total: 683831 ns, Threads: 2 runnable, 26 total
+      [2026-07-24T20:59:25.631+0200][421277ms][info][safepoint] Safepoint "ParallelCollectForAllocation", Time since last: 296966038 ns, Reaching safepoint: 72285 ns, At safepoint: 607788 ns, Leaving safepoint: 10640 ns, Total: 690713 ns, Threads: 1 runnable, 26 total
+      max safepoint stop ~= 23.27 ms
+############ exeris LIGHT closed-loop heap=768m (h768) 18:59:27UTC ############
+[h768] rps=57453.88  (OOM check: 2)
+[h768] wrk closed-loop latency (--latency, CO-inflated):
+    # command: taskset -c 2-3,10-11 wrk -t 4 -c 128 -d 300s --script scenarios/entity-read-by-id/wrk.lua --latency http://localhost:8080/api/v1/user?id=1
+      Thread Stats   Avg      Stdev     Max   +/- Stdev
+        Latency     5.63ms    9.00ms 127.38ms   87.74%
+        Req/Sec    14.44k     1.45k   28.95k    77.38%
+      Latency Distribution
+         50%    1.12ms
+         75%    7.16ms
+         90%   17.20ms
+         99%   38.52ms
+      17237886 requests in 5.00m, 2.01GB read
+[h768] GC pause classification (parallel GC):
+awk: cmd. line:1: {a[NR]=$1; s+=$1} END{n=NR; if(n>0){printf "    pauses=%d  total_gc=%.0fms  mean=%.3fms  p99=%.2fms  MAX=%.2fms\n", n,s,s/n,a[int(n*0.99)>0?int(n*0.99):1],a[n]} else print "    (no pause lines)"}
+awk: cmd. line:1:                                                                                                                                          ^ syntax error
+    pause histogram (ms buckets):
+      <1      448
+      1-5     3
+      5-10    5
+      20-50   1
+    5 longest pauses (ms): 6.078 6.205 7.362 9.371 27.917 
+    Full GCs: 0
+    safepoint stalls (catches NON-GC stops): 2 sample lines + max total-stop:
+      [2026-07-24T21:06:33.799+0200][420049ms][info][safepoint] Safepoint "ParallelCollectForAllocation", Time since last: 953164457 ns, Reaching safepoint: 70662 ns, At safepoint: 473146 ns, Leaving safepoint: 13084 ns, Total: 556892 ns, Threads: 3 runnable, 26 total
+      [2026-07-24T21:06:34.721+0200][420971ms][info][safepoint] Safepoint "ParallelCollectForAllocation", Time since last: 921650874 ns, Reaching safepoint: 19887 ns, At safepoint: 475651 ns, Leaving safepoint: 10530 ns, Total: 506068 ns, Threads: 1 runnable, 26 total
+      max safepoint stop ~= 28.37 ms
+===== TAIL CLASSIFIER DONE 19:06:36UTC =====
+VERDICT RULE: max GC pause ~= wrk Max -> GC-driven. max pause << wrk Max -> non-GC stall (CO pileup).

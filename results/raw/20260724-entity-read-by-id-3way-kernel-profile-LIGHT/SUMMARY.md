@@ -82,6 +82,10 @@ Clean `mpstat -P ALL` during measurement (`bottleneck-diagnostic/`), busy per cp
   *level* (vs the ~79 k promotion light) is the 4-vCPU pin, not extra per-request work. wrk latency corroborates
   (closed-loop, 128 conns): exeris mean 5.59 ms with a fat tail (max 163 ms) vs qhib 3.62 ms (max 32 ms) — exeris's
   bulk is faster (higher throughput) with an occasional tail, not a uniformly slower pipeline.
+  **That closed-loop tail is resolved in `../20260724-entity-read-light-tail-diagnostic/`:** it is coordinated-omission
+  amplification, not a real stall — CO-free (open-loop) exeris has the *tightest* tail of the three (p99.9 2.36 ms,
+  max 25.6 ms), its ~22 ms extreme is just the occasional young-GC pause (heap-independent), and the genuine tail
+  problem is instead **quarkus-tuned** (p99.9 913 ms, max ~1.02 s at sustained 30k).
 
 ## Loopback (one sentence, as required)
 

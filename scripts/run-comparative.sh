@@ -3781,6 +3781,13 @@ if [[ -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" && -x "$GATE_SCRIPT" ]]; then
           note: "Closed-loop percentiles at saturation are queue-depth/throughput, not service time. Throughput and resource metrics are unaffected."
         }
       }' > "$CLAIM_STATUS_JSON"
+
+    # Strict-gate completeness (CLAUDE.md requires all 4 artifacts in a comparative output dir):
+    # the comparison_eligible SUCCESS path must ALSO emit rejection-codes.json. Previously only the
+    # failure branches wrote it (FAILED_REQUEST_RATE_EXCEEDED / GATE_VALIDATOR_MISSING), so every
+    # PASSING comparative leaf was missing this required file. Mirror the gate summary's
+    # rejection_codes (empty [] on the passing path).
+    jq -c '.rejection_codes // []' "$GATE_SUMMARY_JSON" > "$REJECTION_CODES_JSON" 2>/dev/null || echo '[]' > "$REJECTION_CODES_JSON"
   fi
 else
   echo -e "${RED}ERROR${NC}: Skipping post-flight gate validation is not allowed in fail-closed mode." >&2

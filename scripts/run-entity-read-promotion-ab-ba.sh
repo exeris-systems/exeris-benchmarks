@@ -46,23 +46,30 @@ ROOT="${PROMOTION_ROOT:-results/raw/entity-read-by-id/${UTC}-promotion-ab-ba}"
 mkdir -p "$ROOT"
 STATUS="$ROOT/promotion-status.jsonl"; : > "$STATUS"
 
-# budget | exeris_heap | quarkus_heap | endpoint_label | contract   (HEAVY first for fast validation)
+# budget | exeris_heap | quarkus_heap | endpoint_label | contract | warmup_s | measurement_s
+# (HEAVY first for fast validation. The window MUST match each contract's IMMUTABLE knobs, or the
+# fail-closed contract check aborts: heavy h1_v1 = 60/120, light single_read_v1 = 300/900. The
+# triad harness defaults WARMUP_SECONDS=60/MEASUREMENT_SECONDS=120 — fine for heavy, wrong for light.)
 COMBOS=(
-  "1024|256|768|heavy|fixed_contract_cross_runtime_h1_v1"
-  "256|64|192|heavy|fixed_contract_cross_runtime_h1_v1"
-  "1024|256|768|light|fixed_contract_cross_runtime_h1_single_read_v1"
-  "256|64|192|light|fixed_contract_cross_runtime_h1_single_read_v1"
+  "1024|256|768|heavy|fixed_contract_cross_runtime_h1_v1|60|120"
+  "256|64|192|heavy|fixed_contract_cross_runtime_h1_v1|60|120"
+  "1024|256|768|light|fixed_contract_cross_runtime_h1_single_read_v1|300|900"
+  "256|64|192|light|fixed_contract_cross_runtime_h1_single_read_v1|300|900"
 )
+# PROMOTION_ONLY: empty = all combos; "light" / "heavy" runs just that subset (for re-running a leg).
+PROMOTION_ONLY="${PROMOTION_ONLY:-}"
 
 echo "[promotion] root: $ROOT"
 echo "[promotion] pair: $PAIR"
 echo "[promotion] partition: target 0-1,8-9 / loadgen 2-3,10-11 / DB 4-7,12-15 (tuned-PG, MaxRAM budgets)"
 
 for combo in "${COMBOS[@]}"; do
-  IFS='|' read -r budget eheap qheap eplabel contract <<< "$combo"
+  IFS='|' read -r budget eheap qheap eplabel contract warmup measure <<< "$combo"
+  [[ -n "$PROMOTION_ONLY" && "$eplabel" != "$PROMOTION_ONLY" ]] && continue
   out="$ROOT/${eplabel}/budget-${budget}m"
   echo ""
-  echo "############ ${eplabel} budget=${budget}m (exeris ${eheap}m / quarkus ${qheap}m heap) contract=${contract} ############"
+  echo "############ ${eplabel} budget=${budget}m (exeris ${eheap}m / quarkus ${qheap}m heap) contract=${contract} window=${warmup}+${measure}s ############"
+  WARMUP_SECONDS="$warmup" MEASUREMENT_SECONDS="$measure" \
   BENCH_TRIAD_PAIRS="$PAIR" \
   BENCH_CONTRACT_ID="$contract" \
   BENCH_TOTAL_MEMORY_MB="$budget" \

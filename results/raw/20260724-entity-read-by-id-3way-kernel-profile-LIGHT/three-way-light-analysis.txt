@@ -1,0 +1,78 @@
+================= LIGHT STACK: communityL =================
+  samples=122861  kernel(leaf,per-PID)=80041 (65.1%)  user=34.9%
+  serializer(jackson,incl)=0.8%   db-client(incl)=48.5%
+  syscalls_30s=20244130  rps=54234  => syscalls/req = 12.44
+  mpstat cpuset(4cpu avg): %usr=24.2 %sys=41.7 %soft=12.5  =>  %sys+%soft=54.1  (%busy=78.3)
+  -- top KERNEL leaf frames --
+     12044 _raw_spin_unlock_irqrestore_[k]
+     3084 do_syscall_64_[k]
+     1610 srso_alias_safe_ret_[k]
+     1220 __tcp_transmit_skb_[k]
+     1145 tcp_recvmsg_locked_[k]
+     1039 tcp_clean_rtx_queue.constprop.0_[k]
+     1036 tcp_sendmsg_locked_[k]
+     931 mod_memcg_state_[k]
+  -- softirq/net_rx inline? (system-wide, by command) --
+         16.37%    16.37%  ForkJoi..rker-4
+         16.05%    16.05%  ForkJoi..rker-3
+         16.03%    16.03%  ForkJoi..rker-2
+         15.90%    15.90%  ForkJoi..rker-1
+          3.05%     3.05%  exeris-..-adder
+          2.84%     2.84%  ForkJoi..eduler
+          3.13%     0.00%  ForkJoi..rker-4  [kernel.kallsyms]     [k] __do_softirq
+          3.09%     0.09%  ForkJoi..rker-4  [kernel.kallsyms]     [k] net_rx_action
+          3.05%     0.00%  ForkJoi..rker-1  [kernel.kallsyms]     [k] __do_softirq
+          3.05%     0.00%  ForkJoi..rker-2  [kernel.kallsyms]     [k] __do_softirq
+
+================= LIGHT STACK: qtunedL =================
+  samples=135854  kernel(leaf,per-PID)=80924 (59.6%)  user=40.4%
+  serializer(jackson,incl)=1.9%   db-client(incl)=58.3%
+  syscalls_30s=17607831  rps=47220  => syscalls/req = 12.43
+  mpstat cpuset(4cpu avg): %usr=32.0 %sys=34.1 %soft=16.5  =>  %sys+%soft=50.6  (%busy=82.6)
+  -- top KERNEL leaf frames --
+     8460 _raw_spin_unlock_irqrestore_[k]
+     2160 do_syscall_64_[k]
+     1781 refill_stock_[k]
+     1663 srso_alias_safe_ret_[k]
+     1443 __tcp_transmit_skb_[k]
+     1189 nf_hook_slow_[k]
+     1095 tcp_v4_rcv_[k]
+     1086 tcp_recvmsg_locked_[k]
+  -- softirq/net_rx inline? (system-wide, by command) --
+         16.32%    16.32%  vert.x-..read-0
+         15.73%    15.73%  ForkJoi..rker-3
+         15.67%    15.67%  ForkJoi..rker-4
+         15.59%    15.59%  ForkJoi..rker-1
+         15.52%    15.52%  ForkJoi..rker-2
+          1.27%     1.27%  ForkJoi..eduler
+          3.70%     0.00%  vert.x-..read-0  [kernel.kallsyms]                                                       [k] __do_softirq
+          3.65%     0.11%  vert.x-..read-0  [kernel.kallsyms]                                                       [k] net_rx_action
+          3.45%     0.02%  vert.x-..read-0  [kernel.kallsyms]                                                       [k] __napi_poll
+          3.24%     0.00%  ForkJoi..rker-1  [kernel.kallsyms]                                                       [k] __do_softirq
+
+================= LIGHT STACK: qhibL =================
+  samples=138389  kernel(leaf,per-PID)=76045 (55.0%)  user=45.0%
+  serializer(jackson,incl)=1.7%   db-client(incl)=58.9%
+  syscalls_30s=16150495  rps=43206  => syscalls/req = 12.46
+  mpstat cpuset(4cpu avg): %usr=36.0 %sys=32.7 %soft=15.2  =>  %sys+%soft=47.9  (%busy=83.9)
+  -- top KERNEL leaf frames --
+     7720 _raw_spin_unlock_irqrestore_[k]
+     2036 do_syscall_64_[k]
+     1652 refill_stock_[k]
+     1629 srso_alias_safe_ret_[k]
+     1483 __tcp_transmit_skb_[k]
+     1086 nf_hook_slow_[k]
+     1013 tcp_recvmsg_locked_[k]
+     1007 tcp_v4_rcv_[k]
+  -- softirq/net_rx inline? (system-wide, by command) --
+         16.18%    16.18%  ForkJoi..rker-3
+         16.10%    16.10%  ForkJoi..rker-4
+         15.99%    15.99%  ForkJoi..rker-1
+         15.93%    15.93%  ForkJoi..rker-2
+         15.92%    15.92%  vert.x-..read-0
+          1.24%     1.24%  ForkJoi..eduler
+          3.37%     0.00%  vert.x-..read-0  [kernel.kallsyms]       [k] __do_softirq
+          3.34%     0.10%  vert.x-..read-0  [kernel.kallsyms]       [k] net_rx_action
+          3.16%     0.01%  vert.x-..read-0  [kernel.kallsyms]       [k] __napi_poll
+          2.95%     0.00%  ForkJoi..rker-3  [kernel.kallsyms]       [k] __do_softirq
+

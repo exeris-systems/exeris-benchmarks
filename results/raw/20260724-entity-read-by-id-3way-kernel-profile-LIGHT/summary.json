@@ -1,0 +1,33 @@
+{
+  "run_id": "20260724-entity-read-by-id-3way-kernel-profile-LIGHT",
+  "contract": "fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1",
+  "endpoint": "GET /api/v1/user?id=1 (single-read, ~125 B)",
+  "track": "community-cross-runtime",
+  "protocol_mode": "H1",
+  "claim_scope": "exploratory",
+  "gated": false,
+  "purpose": "Close report §2 kernel-time blind spot on the LIGHT contract (§2 is a light claim); reconcile the two denominators (per-PID process kernel% vs mpstat cpuset %sys+%soft).",
+  "host": "hetzner-perfbox-amd-16lcpu-8pcpu",
+  "matched_config": {"heap": "-Xms256m -Xmx256m", "db_pool": "32/32", "target_cpuset": "0-1,8-9", "load_cpuset": "2-3,10-11", "warmup_s": 120, "measurement_s": 300, "wrk_conns": 128, "gc": "parallel", "maxram_mb": 1024},
+  "probes": {"probe1_syscalls": "root perf stat raw_syscalls:sys_enter -p PID 30s", "probe2_per_pid": "async-profiler event=cpu collapsed", "probe3_system_wide": "perf record -a -C 0-1,8-9 cpu-clock 30s", "probe4_mpstat": "mpstat -P 0,1,8,9 30 1 (sar denominator)"},
+  "stacks": {
+    "exeris":            {"target_runtime": "community",     "rps": 54233.96, "cpu_time_s": 928.16, "avg_cores": 3.1022, "cpu_per_req_us": 57.0, "rss_avg_mib": 283.7, "rss_peak_mib": 285.5, "kernel_pct_per_pid": 65.1, "user_pct_per_pid": 34.9, "serializer_jackson_incl_pct": 0.8, "db_client_incl_pct": 48.5, "syscalls_30s": 20244130, "syscalls_per_req": 12.44, "mpstat_usr": 24.2, "mpstat_sys": 41.7, "mpstat_soft": 12.5, "mpstat_sys_plus_soft": 54.1, "mpstat_busy": 78.3, "kernel_cpu_per_req_us_mpstat": 39.9, "kernel_cpu_per_req_us_perpid": 37.1},
+    "quarkus_tuned":     {"target_runtime": "quarkus-tuned", "rps": 47219.81, "cpu_time_s": 979.69, "avg_cores": 3.2668, "cpu_per_req_us": 69.2, "rss_avg_mib": 345.7, "rss_peak_mib": 352.3, "kernel_pct_per_pid": 59.6, "user_pct_per_pid": 40.4, "serializer_jackson_incl_pct": 1.9, "db_client_incl_pct": 58.3, "syscalls_30s": 17607831, "syscalls_per_req": 12.43, "mpstat_usr": 32.0, "mpstat_sys": 34.1, "mpstat_soft": 16.5, "mpstat_sys_plus_soft": 50.6, "mpstat_busy": 82.6, "kernel_cpu_per_req_us_mpstat": 42.9, "kernel_cpu_per_req_us_perpid": 41.2},
+    "quarkus_hibernate": {"target_runtime": "quarkus",       "rps": 43205.64, "cpu_time_s": 996.19, "avg_cores": 3.3201, "cpu_per_req_us": 76.9, "rss_avg_mib": 429.8, "rss_peak_mib": 436.3, "kernel_pct_per_pid": 55.0, "user_pct_per_pid": 45.0, "serializer_jackson_incl_pct": 1.7, "db_client_incl_pct": 58.9, "syscalls_30s": 16150495, "syscalls_per_req": 12.46, "mpstat_usr": 36.0, "mpstat_sys": 32.7, "mpstat_soft": 15.2, "mpstat_sys_plus_soft": 47.9, "mpstat_busy": 83.9, "kernel_cpu_per_req_us_mpstat": 44.3, "kernel_cpu_per_req_us_perpid": 42.3}
+  },
+  "findings": [
+    "mpstat %sys+%soft (54.1/50.6/47.9%) reproduces report §2's 49-60% band (same cpuset wall-clock denominator as sar).",
+    "DENOMINATOR TRAP: exeris has the HIGHEST kernel fraction (54.1% mpstat) but the LOWEST absolute kernel-CPU/req (~38-40us) and lowest total CPU/req (57us). Lean user-space -> kernel is a bigger slice of a smaller pie. §2 must be stated per-request/absolute, not as a fraction.",
+    "Blind spot closed for light: per-PID kernel% + mpstat %sys+%soft + inline softirq all measured; no hidden ksoftirqd.",
+    "syscalls/req identical (~12.4) across all three at single-read; per-request kernel gap is per-syscall cost, not count.",
+    "Serialization negligible at light (0.8%); the Jackson question is heavy-only."
+  ],
+  "headline_39pct_reconciliation": {
+    "measured_kernel_cpu_per_req_gap_pct": "7-14 (exeris lowest)",
+    "measured_total_cpu_per_req_gap_pct": "21-35 (exeris lowest)",
+    "plus_39_reproduced": false,
+    "note": "At 1024m/4vcpu/256m/54k-rps the +39% kernel figure is not reproduced; closest match is total-CPU/req vs hibernate (+35%). Likely a different operating point (promotion light ~79k rps). Recommend restating §2 as absolute per-request with exact config."
+  },
+  "loopback_caveat": "Inline softirq attribution (worker/vert.x syscall context, no ksoftirqd) is a LOOPBACK property; on a real NIC RX softirq moves to ksoftirqd and per-PID misses it.",
+  "heavy_vs_light_exeris": {"kernel_pct": "38 -> 65", "syscalls_per_req": "37.4 -> 12.4", "serializer_pct": "9.1 -> 0.8"}
+}

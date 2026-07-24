@@ -14,6 +14,12 @@ Closes two review findings on the entity-read heavy report:
 - **§4 kernel blind spot** — the user-space method sampler saw "no frame > 7%" and missed the ~half of CPU
   that is `%sys`+`%soft`.
 
+> **Scope note:** this profile closes **§4 for the HEAVY contract only**. §2's kernel-time claim is a **LIGHT**
+> (single-read, 125 B, high-rps) claim with a different denominator (sar %sys+%soft of the cpuset, not per-PID
+> process kernel%) and a ~5.4× higher packet rate. It is closed separately in the companion run
+> `../20260724-entity-read-by-id-3way-kernel-profile-LIGHT/`, which reproduces §2's 49–60 % band and reconciles
+> both denominators. Do not read this heavy 38.4 % as evidence for the light §2 claim.
+
 ## Matched configuration (fairness)
 
 All three stacks, identical: heap `-Xms256m -Xmx256m` (verified in each `constrained-launch-overlay`),

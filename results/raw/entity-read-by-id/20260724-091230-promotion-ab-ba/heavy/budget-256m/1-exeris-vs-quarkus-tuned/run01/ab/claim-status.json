@@ -1,0 +1,22 @@
+{
+  "claim_status": "comparison_eligible",
+  "reason": "all_gates_passed",
+  "track_id": "track-ab-01",
+  "pair_id": "entity-read-by-id-fixed_contract_cross_runtime_h1_v1-exeris-community__quarkus-tuned",
+  "pair_order": "ab",
+  "rejection_codes": [],
+  "failed_request_rate_pct": {
+    "target_a": "0.0000",
+    "target_b": "0.0000",
+    "threshold_pct": "2"
+  },
+  "latency_percentile_eligibility": {
+    "publishable": true,
+    "reason": "below_saturation",
+    "driver_mode": "closed",
+    "cores_used_target_a": "3.0142",
+    "cores_used_target_b": "3.0801",
+    "pinned_cpus": "4",
+    "note": "Closed-loop percentiles at saturation are queue-depth/throughput, not service time. Throughput and resource metrics are unaffected."
+  }
+}

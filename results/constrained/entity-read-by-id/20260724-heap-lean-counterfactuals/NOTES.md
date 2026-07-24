@@ -20,3 +20,11 @@ Three constrained single-target runs (exeris-community, pinned target 0-1,8-9 / 
 - rps **53,883**, err **0%**, cgroup **117 MiB** (< 128 budget, < matrix ~124), **rc=0, no post-measurement SIGTERM, no OOM**.
 - Confirms the leanest sensible config holds ~full speed cleanly. Upgrades the 128m headline from "works, on the edge (one SIGTERM)" to "full speed, clean." Caveat: n=1; cgroup headroom modest (~7 MiB vs matrix, not the predicted 16).
 - NOTE: an earlier run WITHOUT the admission ratio hit 88% error (ADR-035 shedding at pool 8 / 128 conns) — that was a harness-config miss, not a config failure; `ratio=32` fixes it (matches the connpool sweep).
+
+## n=3 confirmation (subdir `n3/`)
+
+Interleaved n=3 of both; **all 9 runs `rc=0 / oom_kill=0 / memory_failure_kind=none / measure_complete`, 0% err — zero real SIGTERM/OOM** (the earlier "18 mentions" were benign `oom_kill_delta=0`/`oom_after_measurement=false` outcome-line fields, 2×9).
+
+**Heavy heap counterfactual (open-loop @10k p99, ms):** 256m = 2.97 / 2.91 / **4.43** (mean 3.44); 768m = 2.91 / 2.92 / 3.05 (mean 2.96). The typical tail is ~2.9 ms at **both** heaps (median heap-independent — the "16 ms GC-tail" stays retracted), but the 0.25× heap adds mild tail **jitter** (one rep 4.43 vs 768m's tight 2.91–3.05) — a real, small heap effect on tail *stability* (~1–1.5 ms occasional spike), NOT a systematic GC-tail. Confirms "exeris jitters ±1 ms" is real and heap-driven, but small.
+
+**Lean-optimum (128m / 16m-heap / pool-8 / ratio-32):** rps 53,901 / 53,773 / 47,897 (mean ~51.9k; r3 dipped ~11%); cgroup 113 / 121 / 115 MiB (all < 128); 3/3 rc=0, no OOM, **no SIGTERM**. "Full speed, clean, with headroom" holds across n=3 — the intermittent matrix SIGTERM never returned. Modest rps variance (48–54k) is the one caveat.

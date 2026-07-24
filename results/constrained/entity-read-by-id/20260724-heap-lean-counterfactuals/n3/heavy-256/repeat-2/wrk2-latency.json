@@ -1,0 +1,45 @@
+{
+  "tool": "wrk2",
+  "co_corrected": true,
+  "r_value": 10000,
+  "observed_saturation_rps": 10000,
+  "load_fraction": 1.000000,
+  "at_saturation": true,
+  "url": "http://localhost:8080/api/v1/users",
+  "threads": 4,
+  "connections": 128,
+  "duration": "300s",
+  "requests_per_sec": 9997.56,
+  "timestamp": "20260724-055949",
+  "hardware_profile": "dev-laptop",
+  "latency_percentiles": [
+    {
+      "percentile": "p50",
+      "latency_us": 1470
+    },
+    {
+      "percentile": "p75",
+      "latency_us": 1910
+    },
+    {
+      "percentile": "p90",
+      "latency_us": 2320
+    },
+    {
+      "percentile": "p99",
+      "latency_us": 2910
+    },
+    {
+      "percentile": "p99.9",
+      "latency_us": 4030
+    },
+    {
+      "percentile": "p99.99",
+      "latency_us": 18940
+    },
+    {
+      "percentile": "p99.999",
+      "latency_us": 33950
+    }
+  ]
+}

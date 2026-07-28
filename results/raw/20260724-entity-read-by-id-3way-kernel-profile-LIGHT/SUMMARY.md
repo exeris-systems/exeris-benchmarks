@@ -84,8 +84,10 @@ Clean `mpstat -P ALL` during measurement (`bottleneck-diagnostic/`), busy per cp
   bulk is faster (higher throughput) with an occasional tail, not a uniformly slower pipeline.
   **That closed-loop tail is resolved in `../20260724-entity-read-light-tail-diagnostic/`:** it is coordinated-omission
   amplification, not a real stall — CO-free (open-loop) exeris has the *tightest* tail of the three (p99.9 2.36 ms,
-  max 25.6 ms), its ~22 ms extreme is just the occasional young-GC pause (heap-independent), and the genuine tail
-  problem is instead **quarkus-tuned** (p99.9 913 ms, max ~1.02 s at sustained 30k).
+  max 25.6 ms) and its ~22 ms extreme is just the occasional young-GC pause (heap-independent). Cross-validated
+  against §7 (`20260723-155158-latency-curve-triad`), whose unpublished p99.9 axis shows exeris flat 1.94–2.60 ms
+  vs both quarkus arms 3–8× higher across the whole ladder. (A one-off ~1 s quarkus-tuned stall in that run is a
+  single-event outlier — §7 measures 12.22 ms at the same rung — not a quarkus tail claim.)
 
 ## Loopback (one sentence, as required)
 

@@ -42,25 +42,67 @@ All rungs valid (attained ≈ offered: 29969 / 29992 / 29969 / 47987 rps).
   ~57k ceiling) it stays tight (p99.9 4.12 ms, max 45 ms) — graceful degradation toward saturation. The closed-loop
   148 ms was pure coordinated-omission amplification of exeris's ~22 ms real extreme, which is itself just the
   occasional ~23 ms young-GC pause (matches Step 1) — benign and heap-independent. **No 3am problem in exeris.**
-- **quarkus-tuned has the real tail problem:** p99.9 = **913 ms**, p99.99–max ≈ **1.0 s**, at the *same* sustained
-  30k. ~390× exeris's p99.9. A ~1-second stall hitting ~0.1 % of requests — invisible to closed-loop wrk (CO
-  scrambles it) and to the CPU/throughput metrics. The ~1 s roundness hints at a timeout (pool/retry/event-loop
-  block in the reactive stack), but the **cause is a hypothesis** — n=1, warrants a repeat + its own probe.
-- **quarkus-hibernate** is comparable to exeris (p99.9 4.38 ms, max 35.7 ms), slightly worse at the extreme.
+- **quarkus-tuned showed a single ~1 s stall — RARE, not systematic (see §7 cross-check below).** This run
+  measured p99.9 = 913 ms, p99.99–max ≈ 1.0 s. §7's independent campaign at the *same* 30k rung (lean-co-resident
+  pair-1, n=2) measured **p99.9 = 12.22 ms**, so this is **not** a reproducible per-run property. Arithmetic
+  explains the shape: at 30k × 300 s = 9 M requests, one ~1 s stall delays every request scheduled during it
+  (~30 k = 0.33 % > 0.1 %), which alone drives p99.9 → ~913 ms and p99.99/max → ~1.0 s. **One event in one
+  window.** §7's 120 s windows are less likely to catch it. Frequency is unestablished (n=1); needs repeats.
+- **quarkus-hibernate** here is comparable to exeris (p99.9 4.38 ms, max 35.7 ms) — notably better than §7's
+  co-resident 19.91 ms at the same rung, consistent with §7's own co-residence thesis.
+
+## Cross-validation against §7 (`20260723-155158-latency-curve-triad`)
+
+§7's campaign **recorded `latency_p999_us` in every leaf but published p99 only**. Mining it gives an independent
+check of this run — and an unpublished axis that strengthens §7's own light conclusion.
+
+**§7 light p99.9 (ms), clean pairs (exeris & quarkus-tuned pair-1, hibernate pair-2; n=2 each):**
+
+| offered rps | exeris | quarkus-tuned | quarkus-hibernate |
+|---|---:|---:|---:|
+| 6 k | 1.96 | 6.38 | 5.81 |
+| 12 k | 1.98 | 8.34 | 9.86 |
+| 18 k | 1.94 | 10.96 | 9.93 |
+| 24 k | 2.52 | 10.61 | 11.05 |
+| 30 k | 2.60 | 12.22 | 19.91 |
+
+1. **Exeris: fully consistent.** §7 @30k p99 2.16 / p99.9 2.60 vs this run's p99 2.03 / p99.9 2.36 — agreement
+   across different campaigns, windows (120 s vs 300 s) and heap configs, with this single-target run marginally
+   tighter (no co-resident neighbor), exactly as §7's co-residence thesis predicts. This run also **extends the
+   ladder past §7's 30 k top**: at 48 k (84 % of exeris's ceiling) p99.9 is still 4.12 ms — the flatness holds.
+2. **Saturation reproduced near-exactly.** §7 probed Hibernate 44.3 k / Quarkus-tuned ~48 k / Exeris ~57 k; the
+   clean diagnostic in the sibling bundle measured 44 334 / 48 492 / 57 830. Independent campaigns, ~1 % apart.
+3. **p99.9 strengthens §7's headline.** §7's published p99 shows separation only emerging at 24–30 k
+   (2.16 vs 5.21 vs 7.31). At p99.9 exeris is **flat 1.94–2.60 ms while both quarkus arms run 3–8× higher across
+   the entire ladder, from 6 k up**. §7 under-states its own result by publishing p99 alone.
+4. **This run's quarkus-tuned 913 ms is NOT corroborated** — §7 measures 12.22 ms at the same rung (see above).
+   Treated as a rare single-event outlier, not a property.
+5. **Heavy (context):** §7's heavy p99.9 at 10 k is exeris 37.3 (pair-1) / 40.4 (pair-2) vs quarkus-tuned 13.8 —
+   exeris's near-ceiling heavy tail is worse at p99.9 in *both* pairs, and hibernate's pair-3 99.7 ms vs pair-2
+   31.3 ms reproduces §7's "heavier neighbor → fatter tail" signature. Nothing here contradicts §7's reading that
+   the 10 k column is co-residence-contaminated (its isolated counterfactual, p99 ~2.9 ms, remains the clean ref).
 
 ## Bottom line
 
-The tail investigation *removes* an exeris concern and *surfaces* a quarkus-tuned one. Exeris's light tail is the
-tightest measured, driven only by benign young-GC pauses that a larger heap doesn't improve. The genuine
-"engine does something bad under load" case is quarkus-tuned's ~1 s p99.9 — the one item in this series that
-would cost at 3am — and it only shows up under CO-free open-loop measurement.
+The tail investigation **removes an exeris concern** and does **not** establish a quarkus one. Exeris's light tail
+is the tightest measured — flat p99.9 ≈ 2–4 ms from 6 k to 48 k — driven only by benign young-GC pauses that a
+larger heap does not improve; the alarming 148 ms closed-loop max was pure coordinated-omission amplification.
+The quarkus-tuned ~1 s event seen here is a **single unreproduced outlier** that §7's independent data contradicts
+at the same rung; it is logged as an open question, not a finding. The durable, cross-validated result is that
+**exeris owns the light service-time tail at p99.9 by 3–8× across the whole ladder** — a stronger statement than
+§7 published, and it comes from §7's own gated data.
 
 ## Caveats
 - **Loopback** (no NIC/GSO/TSO/IRQ-coalescing); fair across stacks, doesn't transfer to real network.
 - **Exploratory**, not gated. Open-loop rungs are sub-saturation (attained ≈ offered) so percentiles are true
   service time. Closed-loop maxes are CO-inflated and used only as the smoke alarm that started this.
-- **quarkus-tuned 1.02 s is n=1** — the measurement is valid (rate sustained) but the *cause* is unproven; needs a
-  repeat + targeted probe (GC log / pool-timeout log / event-loop stall) before it's a claim.
+- **quarkus-tuned 1.02 s is n=1 and contradicted by §7** (12.22 ms at the same rung, n=2). The measurement is
+  valid (rate sustained, CO-free) but is a **single-event outlier, not a property** — one ~1 s stall in a 300 s
+  window fully explains the percentile shape. Do not publish it as a quarkus tail claim. To settle frequency:
+  repeat quarkus-tuned @30 k ×3 with longer windows + `-Xlog:gc,safepoint` and pool/timeout logging.
+- **This run is truly single-target** (verified: one target-app per run, no co-locator) — the isolated reference
+  §7 noted its pairwise harness could not provide. Levels are therefore not directly comparable to §7's
+  co-resident leaves; the *ordering* and exeris's absolute values agree.
 
 ## Files
 `STEP1-gc-classifier.txt`, `STEP2-openloop.txt`, `openloop-percentiles.txt`; per-rung `wrk2.log` + `result.json`

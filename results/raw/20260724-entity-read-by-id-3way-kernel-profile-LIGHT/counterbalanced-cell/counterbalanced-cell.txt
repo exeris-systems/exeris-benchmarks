@@ -1,0 +1,18 @@
+############ SLOT 1: quarkus (qhibCB) 08:05:14UTC ############
+[qhibCB] rps=43547  cpu_time_s=995.8  CPU/req=76.2us  RSS_avg=372654
+    target    cpus=4  busy=83.5%  cores=3.34  (%usr=39.0 %sys=29.1 %soft=15.4)
+    loadgen   cpus=4  busy=14.6%  cores=0.58  (%usr=3.5 %sys=8.1 %soft=2.9)
+    db_free   cpus=8  busy=27.0%  cores=2.16  (%usr=11.8 %sys=10.9 %soft=4.2)
+############ SLOT 2: quarkus-tuned (qtunedCB) 08:12:25UTC ############
+[qtunedCB] rps=48425  cpu_time_s=975.3  CPU/req=67.1us  RSS_avg=277676
+    target    cpus=4  busy=81.6%  cores=3.27  (%usr=33.0 %sys=31.6 %soft=17.1)
+    loadgen   cpus=4  busy=16.0%  cores=0.64  (%usr=3.8 %sys=8.8 %soft=3.2)
+    db_free   cpus=8  busy=31.3%  cores=2.51  (%usr=13.9 %sys=12.6 %soft=4.8)
+############ SLOT 3: community (commCB) 08:19:34UTC ############
+[commCB] rps=57058  cpu_time_s=918.8  CPU/req=53.7us  RSS_avg=229288
+    target    cpus=4  busy=77.4%  cores=3.09  (%usr=27.9 %sys=35.9 %soft=13.6)
+    loadgen   cpus=4  busy=20.5%  cores=0.82  (%usr=4.7 %sys=9.7 %soft=6.0)
+    db_free   cpus=8  busy=28.6%  cores=2.29  (%usr=13.9 %sys=11.1 %soft=3.5)
+===== COUNTERBALANCED CELL DONE 08:26:44UTC =====
+FORWARD (community,qtuned,qhib): rps 57830/48492/44334  CPU/req 52.8/66.9/74.6us
+Compare per-stack: if the forward-vs-reverse delta is within run-to-run noise, order is not a confound.

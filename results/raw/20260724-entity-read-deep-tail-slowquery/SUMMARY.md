@@ -32,8 +32,16 @@ and the PG slow-statement census come from the same window, so they can be compa
    Meanwhile the app saw tail events of 26 ms (exeris) and 1.01 s (quarkus-tuned). Both tails are entirely
    runtime/app-side. This is the discriminator firing cleanly in the negative direction.
 
-2. **The quarkus-tuned ~1 s stall REPRODUCED — the earlier "single-event outlier" retraction was wrong.**
-   Two independent runs at this configuration now agree to within ~1 %:
+2. **The quarkus-tuned ~1 s stall appeared a second time.**
+   > **SUPERSEDED — see `../20260724-qtuned-stall-probe/`.** Two further runs at this configuration
+   > (256 m and 768 m, JFR-instrumented) came back **clean** (p99.9 4.69 ms / 5.51 ms). The tally is now
+   > **2 of 3 stalled at 256 m**, so the event is **intermittent, not reproducible-on-demand**, and the
+   > "reproduced" framing below over-reads n=2. That probe also **excludes** GC (max pause 16.9–19.4 ms),
+   > safepoints (max stop 18.6–27.2 ms) and socket waits (max ~30 ms) as the mechanism, and shows the only
+   > ~1 s `ThreadPark` events are Agroal *housekeeping* threads idling on a 2-minute-timeout condition.
+   > Combined with this bundle's DB exclusion and the zero-error timeout exclusion, the trigger is
+   > unidentified and the frequency unestablished.
+   Two independent runs at this configuration agree to within ~1 %:
 
    | run | p99.9 | p99.99 | max |
    |---|---:|---:|---:|

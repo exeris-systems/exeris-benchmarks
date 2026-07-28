@@ -1,0 +1,93 @@
+############ quarkus-tuned heap=256m open-loop -R 30000 (h256) 09:52:00UTC ############
+[h256] attained_rps=29992.23  errors=0
+[h256] app-side CO-free percentiles (does the ~1s stall reproduce at this heap?):
+       50.000%    1.33ms
+       99.000%    2.99ms
+       99.900%    4.69ms
+       99.990%   17.71ms
+       99.999%   23.22ms
+      100.000%   29.42ms
+[h256] VARIANT 1 - GC pauses:
+      count=3652  MAX=16.86 ms
+      5 longest: 15.570 15.731 16.679 16.811 16.864 
+      Full GCs: 2
+[h256] VARIANT 2 - safepoint stalls (max total stop):
+      18.58 ms
+      17.65 ms
+      17.63 ms
+[h256] VARIANT 3 - blocking waits (JFR, threshold ~20ms):
+       jdk.SocketRead                          33553       1505996
+       jdk.GCPhasePauseLevel1                  10966        331237
+       jdk.GCPhasePauseLevel2                  10966        467076
+       jdk.SocketWrite                          5641        241822
+       jdk.GCPhasePause                         3652         87214
+       jdk.ThreadPark                            672         23610
+       jdk.JavaMonitorWait                       266          7736
+       jdk.GCPhasePauseLevel3                      0             0
+       jdk.GCPhasePauseLevel4                      0             0
+       jdk.JavaMonitorEnter                        0             0
+       jdk.ThreadSleep                             0             0
+      jdk.ThreadPark:        30000.0 ms
+                             1190.0 ms
+                             488.0 ms
+                             355.0 ms
+      jdk.JavaMonitorWait:   2000.0 ms
+                             2000.0 ms
+                             2000.0 ms
+                             2000.0 ms
+      jdk.SocketRead:        20.0 ms
+                             20.0 ms
+                             20.0 ms
+                             19.8 ms
+      jdk.SocketWrite:       20.8 ms
+                             20.0 ms
+                             20.0 ms
+                             20.0 ms
+############ quarkus-tuned heap=768m open-loop -R 30000 (h768) 10:00:15UTC ############
+[h768] attained_rps=29969.17  errors=0
+[h768] app-side CO-free percentiles (does the ~1s stall reproduce at this heap?):
+       50.000%    1.26ms
+       99.000%    3.02ms
+       99.900%    5.51ms
+       99.990%    8.64ms
+       99.999%   15.77ms
+      100.000%   19.50ms
+[h768] VARIANT 1 - GC pauses:
+      count=1159  MAX=19.37 ms
+      5 longest: 17.311 17.446 17.554 19.236 19.374 
+      Full GCs: 2
+[h768] VARIANT 2 - safepoint stalls (max total stop):
+      27.24 ms
+      19.52 ms
+      19.38 ms
+[h768] VARIANT 3 - blocking waits (JFR, threshold ~20ms):
+       jdk.SocketRead                          29484       1328413
+       jdk.SocketWrite                          4077        174956
+       jdk.GCPhasePauseLevel1                   3487        105075
+       jdk.GCPhasePauseLevel2                   3487        147978
+       jdk.ThreadPark                           1729         60684
+       jdk.GCPhasePause                         1159         27953
+       jdk.JavaMonitorWait                       266          7736
+       jdk.GCPhasePauseLevel3                      0             0
+       jdk.GCPhasePauseLevel4                      0             0
+       jdk.JavaMonitorEnter                        0             0
+       jdk.ThreadSleep                             0             0
+      jdk.ThreadPark:        30000.0 ms
+                             1200.0 ms
+                             464.0 ms
+                             339.0 ms
+      jdk.JavaMonitorWait:   2020.0 ms
+                             2000.0 ms
+                             2000.0 ms
+                             2000.0 ms
+      jdk.SocketRead:        29.5 ms
+                             29.5 ms
+                             29.5 ms
+                             28.9 ms
+      jdk.SocketWrite:       20.8 ms
+                             20.6 ms
+                             20.2 ms
+                             19.7 ms
+===== QTUNED STALL PROBE DONE 10:08:29UTC =====
+READ: ~1s in GC pauses -> heap-driven. ~1s only in ThreadPark/MonitorWait -> pool/lock wait.
+      ~1s in SocketRead -> downstream/network wait. Nothing ~1s anywhere -> not a single stall event.

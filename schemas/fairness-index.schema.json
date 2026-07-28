@@ -8,6 +8,8 @@
     "error_symmetry",
     "latency_symmetry",
     "throughput_confidence",
+    "db_config_symmetry",
+    "db_config",
     "composite_score",
     "interpretation",
     "computed_at",
@@ -33,11 +35,32 @@
       "maximum": 1.0,
       "description": "Confidence score derived from the throughput ratio (min/max). 1.0 = ratio > 0.9; 0.5 = ratio < 0.7. Weight: 0.2."
     },
+    "db_config_symmetry": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Fairness score for the DATABASE CONFIGURATION axis — a run INPUT, unlike the three outcome-derived scores above. 1.0 only when both arms saw an identical DB environment AND the fairness-relevant pgjdbc parameters (preferQueryMode, prepareThreshold, defaultRowFetchSize, adaptiveFetch) are all present. NOT a weighted component: it is a hard precondition, because input fairness cannot be traded against good outcome symmetry."
+    },
+    "db_config": {
+      "type": "object",
+      "description": "Evidence for the db_config_symmetry score: the per-arm DB-config fingerprint the harness passed down, and the resulting status.",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "asymmetric", "incomplete_normalization", "unverified"],
+          "description": "ok = symmetric and fully normalized. asymmetric = the arms saw different DB config. incomplete_normalization = the arms agreed but the fairness-relevant pgjdbc params are absent (both arms equal, equally wrong — the mode that a naive A==B equality check silently passes). unverified = no fingerprint supplied. Any value other than 'ok' forces composite_score to 0.0 and interpretation to 'unsuitable'."
+        },
+        "a": { "$ref": "#/$defs/dbConfigFingerprint" },
+        "b": { "$ref": "#/$defs/dbConfigFingerprint" }
+      }
+    },
     "composite_score": {
       "type": "number",
       "minimum": 0.0,
       "maximum": 1.0,
-      "description": "Weighted composite fairness score, normalized to the 0.0-1.0 range: (0.3*error_symmetry + 0.4*latency_symmetry + 0.2*throughput_confidence) / 0.9. The current component weights sum to 0.9; 0.1 remains reserved for a future metadata_symmetry metric."
+      "description": "Weighted composite fairness score: 0.3*error_symmetry + 0.4*latency_symmetry + 0.2*throughput_confidence, whose weights sum to 0.9 (0.1 remains reserved for a future metadata_symmetry metric). Forced to 0.0 when db_config.status is not 'ok'. NOTE: the emitted value is the raw weighted sum on the 0.0-0.9 scale and is NOT divided by 0.9; the interpretation thresholds are applied to that raw value. The scale is left unchanged so previously published indices stay directly comparable."
     },
     "interpretation": {
       "type": "string",
@@ -63,6 +86,40 @@
       "description": "Optional human-readable notes about detected or declared asymmetries.",
       "items": {
         "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "dbConfigFingerprint": {
+      "type": ["object", "null"],
+      "description": "Fingerprint of the EXERIS_DB_* environment the harness passed down to an arm. Secrets are excluded from both the document and the digest.",
+      "required": ["env_digest", "fairness_params_complete"],
+      "additionalProperties": true,
+      "properties": {
+        "jdbc_base_url": {
+          "type": "string",
+          "description": "JDBC URL with the query string stripped (parameters are reported separately)."
+        },
+        "fairness_params": {
+          "type": "object",
+          "description": "The fairness-relevant pgjdbc parameters actually present on the JDBC URL.",
+          "additionalProperties": { "type": "string" }
+        },
+        "fairness_params_missing": {
+          "type": "array",
+          "description": "Fairness-relevant pgjdbc parameters that were ABSENT. Non-empty means the URL was not normalized.",
+          "items": { "type": "string" }
+        },
+        "fairness_params_complete": {
+          "type": "boolean",
+          "description": "True only when every fairness-relevant pgjdbc parameter is present."
+        },
+        "env_digest": {
+          "type": "string",
+          "description": "sha256 digest of the sorted, secret-stripped EXERIS_DB_* environment slice."
+        },
+        "captured_at": { "type": "string", "format": "date-time" },
+        "note": { "type": "string" }
       }
     }
   }

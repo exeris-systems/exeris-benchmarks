@@ -3820,11 +3820,74 @@ FAIRNESS_OUT="${OUTPUT_DIR}/fairness-index.json"
 COMPARATIVE_OUT="${OUTPUT_DIR}/comparative-result.json"
 REPORT_MD="${OUTPUT_DIR}/comparative-report.md"
 
+# ---------------------------------------------------------------------------
+# DB-config fingerprint (fairness axis on run INPUTS).
+#
+# Targets read their datasource from EXERIS_DB_* in the environment, and this script
+# passes that environment down by inheritance — it never recorded it, so the strict
+# gate was structurally blind to the DB-config axis. Every caller therefore had to
+# remember to normalize the JDBC URL itself, and three separate incidents (9f2b182,
+# d1032c8, and the promotion re-run) were each fixed by patching one more caller.
+# Fingerprinting the inherited environment here moves the check off the callers.
+#
+# Password-bearing variables are excluded from both the emitted document and the
+# digest: the secret is not a fairness axis.
+DB_CONFIG_JSON="${OUTPUT_DIR}/db-config.json"
+capture_db_config() {
+  local jdbc_url query base
+  jdbc_url="${EXERIS_DB_JDBC_URL:-}"
+  base="${jdbc_url%%\?*}"
+  query=""
+  [[ "$jdbc_url" == *\?* ]] && query="${jdbc_url#*\?}"
+
+  # Canonical env slice: every EXERIS_DB_* except secrets, sorted for a stable digest.
+  local env_slice
+  env_slice="$(env | grep -E '^EXERIS_DB_' | grep -viE 'password|passwd|secret' | LC_ALL=C sort || true)"
+  local digest
+  digest="sha256:$(printf '%s' "$env_slice" | sha256sum | cut -d' ' -f1)"
+
+  # The pgjdbc parameters that decide fetch/prepare behaviour. Absent params are the
+  # real-world failure mode, so they are reported explicitly rather than defaulted.
+  local -a fairness_keys=(preferQueryMode prepareThreshold defaultRowFetchSize adaptiveFetch)
+  local params_json='{}' missing_json='[]' k v
+  for k in "${fairness_keys[@]}"; do
+    v="$(printf '%s' "$query" | tr '&' '\n' | awk -F= -v key="$k" '$1==key {print $2; exit}')"
+    if [[ -n "$v" ]]; then
+      params_json="$(jq -c --arg k "$k" --arg v "$v" '. + {($k): $v}' <<<"$params_json")"
+    else
+      missing_json="$(jq -c --arg k "$k" '. + [$k]' <<<"$missing_json")"
+    fi
+  done
+
+  local complete=true
+  [[ "$(jq -r 'length' <<<"$missing_json")" != "0" ]] && complete=false
+
+  jq -n \
+    --arg     jdbc_base   "$base" \
+    --arg     env_digest  "$digest" \
+    --argjson params      "$params_json" \
+    --argjson missing     "$missing_json" \
+    --argjson complete    "$complete" \
+    --arg     captured_at "$(ts_now_utc)" \
+  '{
+     jdbc_base_url:             $jdbc_base,
+     fairness_params:           $params,
+     fairness_params_missing:   $missing,
+     fairness_params_complete:  $complete,
+     env_digest:                $env_digest,
+     captured_at:               $captured_at,
+     note: "Fingerprint of the EXERIS_DB_* environment this harness passes down to both arms (secrets excluded). Both arms inherit one environment, so equality alone proves nothing — fairness_params_complete is the check that catches an un-normalized URL."
+   }' > "$DB_CONFIG_JSON"
+}
+capture_db_config || echo -e "${YELLOW}WARN${NC}: DB-config capture failed." >&2
+
 # Compute fairness index
 if [[ -x "$FAIRNESS_TOOL" && -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" ]]; then
   "$FAIRNESS_TOOL" \
     --result-a "$RESULT_A_PATH" \
     --result-b "$RESULT_B_PATH" \
+    --db-config-a "$DB_CONFIG_JSON" \
+    --db-config-b "$DB_CONFIG_JSON" \
     --output   "$FAIRNESS_OUT"
   echo -e "  ${GREEN}✓${NC} Fairness index computed."
 else
@@ -3836,11 +3899,46 @@ else
   '{
     error_symmetry: 0, latency_symmetry: 0,
     throughput_confidence: 0, composite_score: 0,
+    db_config_symmetry: 0,
+    db_config: { status: "unverified", a: null, b: null },
     interpretation: "unsuitable",
     computed_at: $ts,
     targets: [$ta, $tb],
     asymmetry_notes: ["fairness tool unavailable"]
   }' > "$FAIRNESS_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# Fail-closed enforcement of the DB-config axis.
+#
+# The fairness index is computed in Stage 8, i.e. AFTER Stage 7 has already written
+# claim-status.json. Recording the axis without enforcing it would reproduce the very
+# failure being fixed — visible, and ignored — so a non-ok status demotes the claim
+# here rather than merely annotating it.
+DB_CONFIG_STATUS_EFFECTIVE="$(jq -r '.db_config.status // "unverified"' "$FAIRNESS_OUT" 2>/dev/null || echo unverified)"
+if [[ "$DB_CONFIG_STATUS_EFFECTIVE" != "ok" ]]; then
+  case "$DB_CONFIG_STATUS_EFFECTIVE" in
+    asymmetric)               DB_REJECTION_CODE="DB_CONFIG_ASYMMETRIC" ;;
+    incomplete_normalization) DB_REJECTION_CODE="DB_CONFIG_NOT_NORMALIZED" ;;
+    *)                        DB_REJECTION_CODE="DB_CONFIG_UNVERIFIED" ;;
+  esac
+  echo -e "${RED}ERROR${NC}: DB-config fairness gate failed (status=${DB_CONFIG_STATUS_EFFECTIVE}) [rejection_code=${DB_REJECTION_CODE}]" >&2
+  jq -r '.asymmetry_notes[]? | "  - " + .' "$FAIRNESS_OUT" >&2 2>/dev/null || true
+
+  jq -c --arg c "$DB_REJECTION_CODE" '(. // []) + [$c] | unique' "$REJECTION_CODES_JSON" \
+    > "${REJECTION_CODES_JSON}.tmp" 2>/dev/null \
+    && mv "${REJECTION_CODES_JSON}.tmp" "$REJECTION_CODES_JSON" \
+    || jq -nc --arg c "$DB_REJECTION_CODE" '[$c]' > "$REJECTION_CODES_JSON"
+
+  if [[ -f "$CLAIM_STATUS_JSON" ]]; then
+    jq --arg c "$DB_REJECTION_CODE" --arg s "$DB_CONFIG_STATUS_EFFECTIVE" \
+      '.claim_status = "non_eligible"
+       | .final_reason = ("db_config_" + $s)
+       | .rejection_codes = (((.rejection_codes // []) + [$c]) | unique)' \
+      "$CLAIM_STATUS_JSON" > "${CLAIM_STATUS_JSON}.tmp" \
+      && mv "${CLAIM_STATUS_JSON}.tmp" "$CLAIM_STATUS_JSON"
+  fi
+  POSTFLIGHT_OK=0
 fi
 
 # Build gate_status from CSV if available

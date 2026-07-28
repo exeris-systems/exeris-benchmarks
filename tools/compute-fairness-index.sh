@@ -27,15 +27,19 @@ NC='\033[0m'
 RESULT_A=""
 RESULT_B=""
 OUTPUT=""
+DB_CONFIG_A=""
+DB_CONFIG_B=""
 
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --result-a) RESULT_A="$2"; shift 2 ;;
-    --result-b) RESULT_B="$2"; shift 2 ;;
-    --output)   OUTPUT="$2";   shift 2 ;;
+    --result-a)    RESULT_A="$2";    shift 2 ;;
+    --result-b)    RESULT_B="$2";    shift 2 ;;
+    --output)      OUTPUT="$2";      shift 2 ;;
+    --db-config-a) DB_CONFIG_A="$2"; shift 2 ;;
+    --db-config-b) DB_CONFIG_B="$2"; shift 2 ;;
     *) echo -e "${RED}ERROR${NC}: Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -188,6 +192,54 @@ THROUGHPUT_CONFIDENCE="$(awk -v a="$RPS_A" -v b="$RPS_B" 'BEGIN {
   printf "%.4f", val
 }')"
 
+# ---- Gate 4: db_config_symmetry (HARD PRECONDITION, not a weighted term) ---
+# The three gates above score run OUTCOMES. This one scores a run INPUT, which is
+# the axis the index was structurally blind to: a DB-config defect changes the
+# measured numbers, so an outcome-only index can never detect it.
+#
+# TWO independent failure modes, and only checking the first is a trap:
+#   (a) asymmetry             — the arms saw different DB config;
+#   (b) incomplete normalization — the fairness-relevant pgjdbc params are absent.
+# Mode (b) produced the real incidents (9f2b182, d1032c8): BOTH arms inherited the
+# SAME un-normalized JDBC URL, so they were equal — equally wrong. An A==B equality
+# check passes cleanly on exactly the bug it is supposed to catch. Hence completeness
+# is asserted independently of symmetry.
+#
+# It is a precondition rather than a weighted component because input fairness is not
+# tradeable against good outcome symmetry: you cannot average away a wrong fetch-size.
+DB_CONFIG_STATUS="unverified"
+DB_CONFIG_SYMMETRY="0.0000"
+DB_CONFIG_NOTE=""
+
+if [[ -z "$DB_CONFIG_A" || -z "$DB_CONFIG_B" ]]; then
+  DB_CONFIG_STATUS="unverified"
+  DB_CONFIG_NOTE="db config not supplied (--db-config-a/--db-config-b): DB-config axis unverified"
+elif [[ ! -f "$DB_CONFIG_A" || ! -f "$DB_CONFIG_B" ]]; then
+  DB_CONFIG_STATUS="unverified"
+  DB_CONFIG_NOTE="db config file missing: DB-config axis unverified"
+else
+  DIGEST_A="$(jq -r '.env_digest // empty' "$DB_CONFIG_A" 2>/dev/null || true)"
+  DIGEST_B="$(jq -r '.env_digest // empty' "$DB_CONFIG_B" 2>/dev/null || true)"
+  COMPLETE_A="$(jq -r '.fairness_params_complete // false' "$DB_CONFIG_A" 2>/dev/null || echo false)"
+  COMPLETE_B="$(jq -r '.fairness_params_complete // false' "$DB_CONFIG_B" 2>/dev/null || echo false)"
+  MISSING_A="$(jq -r '(.fairness_params_missing // []) | join(",")' "$DB_CONFIG_A" 2>/dev/null || true)"
+  MISSING_B="$(jq -r '(.fairness_params_missing // []) | join(",")' "$DB_CONFIG_B" 2>/dev/null || true)"
+
+  if [[ -z "$DIGEST_A" || -z "$DIGEST_B" ]]; then
+    DB_CONFIG_STATUS="unverified"
+    DB_CONFIG_NOTE="db config present but env_digest absent: DB-config axis unverified"
+  elif [[ "$DIGEST_A" != "$DIGEST_B" ]]; then
+    DB_CONFIG_STATUS="asymmetric"
+    DB_CONFIG_NOTE="DB config differs between arms (env_digest ${DIGEST_A:0:12} vs ${DIGEST_B:0:12})"
+  elif [[ "$COMPLETE_A" != "true" || "$COMPLETE_B" != "true" ]]; then
+    DB_CONFIG_STATUS="incomplete_normalization"
+    DB_CONFIG_NOTE="DB config symmetric but NOT normalized; missing fairness params: a=[${MISSING_A}] b=[${MISSING_B}]"
+  else
+    DB_CONFIG_STATUS="ok"
+    DB_CONFIG_SYMMETRY="1.0000"
+  fi
+fi
+
 # ---- Composite score -------------------------------------------------------
 # 0.3 * error + 0.4 * latency + 0.2 * throughput  (weights sum to 0.9 by design)
 COMPOSITE="$(awk \
@@ -199,13 +251,24 @@ COMPOSITE="$(awk \
   printf "%.4f", val
 }')"
 
+# The composite scale is deliberately left at its historical 0.9 maximum so previously
+# published indices remain directly comparable; a DB-config failure collapses it instead
+# of shifting every compliant run upward.
+if [[ "$DB_CONFIG_STATUS" != "ok" ]]; then
+  COMPOSITE="0.0000"
+fi
+
 # ---- Interpretation --------------------------------------------------------
-INTERPRETATION="$(awk -v c="$COMPOSITE" 'BEGIN {
-  if (c >= 0.85) { print "highly_fair";        exit }
-  if (c >= 0.70) { print "fairly_comparable";  exit }
-  if (c >= 0.50) { print "moderate_asymmetry"; exit }
-  print "unsuitable"
-}')"
+if [[ "$DB_CONFIG_STATUS" != "ok" ]]; then
+  INTERPRETATION="unsuitable"
+else
+  INTERPRETATION="$(awk -v c="$COMPOSITE" 'BEGIN {
+    if (c >= 0.85) { print "highly_fair";        exit }
+    if (c >= 0.70) { print "fairly_comparable";  exit }
+    if (c >= 0.50) { print "moderate_asymmetry"; exit }
+    print "unsuitable"
+  }')"
+fi
 
 # ---------------------------------------------------------------------------
 # Build output JSON via jq (never string-concatenate JSON)
@@ -214,24 +277,45 @@ COMPUTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 mkdir -p "$(dirname "$OUTPUT")"
 
+DB_CONFIG_A_JSON='null'
+DB_CONFIG_B_JSON='null'
+[[ -n "$DB_CONFIG_A" && -f "$DB_CONFIG_A" ]] && DB_CONFIG_A_JSON="$(jq -c '.' "$DB_CONFIG_A" 2>/dev/null || echo null)"
+[[ -n "$DB_CONFIG_B" && -f "$DB_CONFIG_B" ]] && DB_CONFIG_B_JSON="$(jq -c '.' "$DB_CONFIG_B" 2>/dev/null || echo null)"
+
+NOTES_JSON='[]'
+if [[ -n "$DB_CONFIG_NOTE" ]]; then
+  NOTES_JSON="$(jq -nc --arg n "$DB_CONFIG_NOTE" '[$n]')"
+fi
+
 jq -n \
   --argjson error_symmetry       "$ERROR_SYMMETRY" \
   --argjson latency_symmetry     "$LATENCY_SYMMETRY" \
   --argjson throughput_confidence "$THROUGHPUT_CONFIDENCE" \
+  --argjson db_config_symmetry   "$DB_CONFIG_SYMMETRY" \
+  --arg     db_config_status     "$DB_CONFIG_STATUS" \
+  --argjson db_config_a          "$DB_CONFIG_A_JSON" \
+  --argjson db_config_b          "$DB_CONFIG_B_JSON" \
   --argjson composite_score      "$COMPOSITE" \
   --arg     interpretation       "$INTERPRETATION" \
   --arg     computed_at          "$COMPUTED_AT" \
   --arg     target_a             "$TARGET_A_ID" \
   --arg     target_b             "$TARGET_B_ID" \
+  --argjson asymmetry_notes      "$NOTES_JSON" \
 '{
   error_symmetry:        $error_symmetry,
   latency_symmetry:      $latency_symmetry,
   throughput_confidence: $throughput_confidence,
+  db_config_symmetry:    $db_config_symmetry,
+  db_config: {
+    status: $db_config_status,
+    a:      $db_config_a,
+    b:      $db_config_b
+  },
   composite_score:       $composite_score,
   interpretation:        $interpretation,
   computed_at:           $computed_at,
   targets:               [$target_a, $target_b],
-  asymmetry_notes:       []
+  asymmetry_notes:       $asymmetry_notes
 }' > "$OUTPUT"
 
 echo -e "${GREEN}✓${NC} Fairness index written to: $OUTPUT"
@@ -239,3 +323,9 @@ echo -e "  composite_score:  ${COMPOSITE}  (${INTERPRETATION})"
 echo -e "  error_symmetry:   ${ERROR_SYMMETRY}"
 echo -e "  latency_symmetry: ${LATENCY_SYMMETRY}"
 echo -e "  throughput_conf:  ${THROUGHPUT_CONFIDENCE}"
+if [[ "$DB_CONFIG_STATUS" == "ok" ]]; then
+  echo -e "  db_config:        ${GREEN}ok${NC} (symmetric + normalized)"
+else
+  echo -e "  db_config:        ${RED}${DB_CONFIG_STATUS}${NC} — ${DB_CONFIG_NOTE}"
+  echo -e "  ${YELLOW}composite forced to 0.0 / unsuitable: DB-config fairness is a precondition.${NC}"
+fi

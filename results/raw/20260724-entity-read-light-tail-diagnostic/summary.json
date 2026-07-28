@@ -1,0 +1,137 @@
+{
+  "run_id": "20260724-entity-read-light-tail-diagnostic",
+  "endpoint": "GET /api/v1/user?id=1 (single-read, ~125 B)",
+  "track": "community-cross-runtime",
+  "claim_scope": "exploratory",
+  "host": "hetzner-perfbox (target = 2 physical cores 0,1 SMT)",
+  "method": "classify (Xlog gc,safepoint closed-loop) then measure CO-free (open-loop wrk2 fixed -R)",
+  "step1_classifier": {
+    "verdict": "NOT GC, NOT heap",
+    "heaps": {
+      "256m": {
+        "rps": 56929,
+        "closed_loop_max_ms": 147.7,
+        "closed_p99_ms": 37.2,
+        "max_gc_pause_ms": 23.1,
+        "full_gcs": 0,
+        "minor_gc_count": 1466
+      },
+      "768m": {
+        "rps": 57454,
+        "closed_loop_max_ms": 127.4,
+        "closed_p99_ms": 38.5,
+        "max_gc_pause_ms": 27.9,
+        "full_gcs": 0,
+        "minor_gc_count": 448
+      }
+    },
+    "conclusion": "max GC pause (23-28ms) << closed-loop max (128-148ms); 0 full GCs; heap 256->768 leaves tail+p99 unchanged (only minor-GC count drops). 'exeris lean-heap GC-tail' falsified in a 2nd regime (light/closed-loop/SMT-sat) alongside \u00c2\u00a77 heavy/open-loop."
+  },
+  "step2_openloop_cofree": {
+    "note": "open-loop wrk2, attained ~= offered (CO-free true service time). Closed-loop max was CO-inflated AND backwards.",
+    "percentiles_ms": {
+      "exeris_30k": {
+        "attained_rps": 29969,
+        "p50": 0.95,
+        "p99": 2.03,
+        "p99_9": 2.36,
+        "p99_99": 5.03,
+        "p99_999": 22.43,
+        "max": 25.61
+      },
+      "quarkus_tuned_30k": {
+        "attained_rps": 29992,
+        "p50": 1.32,
+        "p99": 4.36,
+        "p99_9": 913.41,
+        "p99_99": 1000,
+        "p99_999": 1010,
+        "max": 1020
+      },
+      "quarkus_hibernate_30k": {
+        "attained_rps": 29969,
+        "p50": 1.32,
+        "p99": 2.99,
+        "p99_9": 4.38,
+        "p99_99": 21.47,
+        "p99_999": 33.22,
+        "max": 35.68
+      },
+      "exeris_48k_near_saturation": {
+        "attained_rps": 47987,
+        "p50": 1.24,
+        "p99": 2.9,
+        "p99_9": 4.12,
+        "p99_99": 22.69,
+        "p99_999": 35.23,
+        "max": 45.38
+      }
+    }
+  },
+  "findings": [
+    "Closed-loop reading was BACKWARDS: CO-free, exeris has the TIGHTEST tail (p99.9 2.36ms, max 25.6ms @30k; still tight at 48k near saturation).",
+    "Exeris extreme tail (~22ms p99.999) = the occasional young-GC pause (matches Step 1); benign, heap-independent. No 3am problem in exeris; closed-loop 148ms was CO amplification.",
+    "quarkus-tuned 913ms p99.9 REPRODUCED (n=2: 913 -> 903ms) in ../20260724-entity-read-deep-tail-slowquery/ and is NOT database-side. Earlier 'single-event outlier' reading RETRACTED. Real at matched 256m heap; cause unproven, heap match is the leading suspect.",
+    "quarkus-hibernate comparable to exeris here (p99.9 4.38ms, max 35.7ms); better than \u00c2\u00a77's co-resident 19.91ms, consistent with \u00c2\u00a77's co-residence thesis."
+  ],
+  "section7_cross_validation": {
+    "campaign": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad",
+    "key_discovery": "\u00c2\u00a77 recorded latency_p999_us in every leaf but published p99 only; mining p99.9 strengthens \u00c2\u00a77's own light conclusion.",
+    "s7_light_p999_ms_clean_pairs": {
+      "exeris": {
+        "6k": 1.96,
+        "12k": 1.98,
+        "18k": 1.94,
+        "24k": 2.52,
+        "30k": 2.6
+      },
+      "quarkus_tuned": {
+        "6k": 6.38,
+        "12k": 8.34,
+        "18k": 10.96,
+        "24k": 10.61,
+        "30k": 12.22
+      },
+      "quarkus_hibernate": {
+        "6k": 5.81,
+        "12k": 9.86,
+        "18k": 9.93,
+        "24k": 11.05,
+        "30k": 19.91
+      }
+    },
+    "agreement": {
+      "exeris_30k_p99": {
+        "s7": 2.16,
+        "this_run": 2.03
+      },
+      "exeris_30k_p99_9": {
+        "s7": 2.6,
+        "this_run": 2.36
+      },
+      "saturation_rps": {
+        "s7_probe": {
+          "hibernate": 44300,
+          "quarkus_tuned": 48000,
+          "exeris": 57000
+        },
+        "clean_diagnostic": {
+          "hibernate": 44334,
+          "quarkus_tuned": 48492,
+          "exeris": 57830
+        }
+      }
+    },
+    "new_result": "At p99.9 exeris is FLAT 1.94-2.60ms while both quarkus arms run 3-8x higher across the ENTIRE ladder (from 6k), whereas \u00c2\u00a77's published p99 shows separation only at 24-30k. \u00c2\u00a77 under-states its own light result.",
+    "extends_s7": "This run adds a 48k rung (past \u00c2\u00a77's 30k top): exeris p99.9 4.12ms - flatness holds to 84% of its ceiling.",
+    "contradicts_this_run": "SUPERSEDED: \u00a77 p99.9=12.22ms vs 913/903ms here is a CONFIGURATION difference (\u00a77 quarkus at 0.75x budget heap + 120s window; here matched 256m + 300s), not an outlier in this run.",
+    "heavy_context": "\u00c2\u00a77 heavy p99.9 @10k: exeris 37.3 (pair-1) / 40.4 (pair-2) vs quarkus-tuned 13.8; hibernate pair-3 99.7 vs pair-2 31.3 reproduces the 'heavier neighbor -> fatter tail' signature. Consistent with \u00c2\u00a77's co-residence reading."
+  },
+  "outlier_arithmetic": "At 30k rps x 300s = 9M requests, ONE ~1s stall delays every request scheduled during it (~30k = 0.33% > 0.1%), alone driving p99.9 -> ~913ms and p99.99/max -> ~1.0s. Signature of one event in one window; \u00c2\u00a77's 120s windows are less likely to catch it.",
+  "caveats": [
+    "Loopback; fair across stacks, not transferable to real network.",
+    "Open-loop rungs sub-saturation (attained ~= offered) => percentiles are true service time; closed-loop max used only as the initiating smoke alarm.",
+    "quarkus-tuned ~1s stall is REPRODUCED (n=2) and not database-side, but its CAUSE is unproven and the matched-256m-heap choice is the leading suspect. Do NOT publish as an unqualified 'quarkus has a 1s tail'. Decisive test: quarkus-tuned @30k open-loop with -Xlog:gc,safepoint at 256m vs 768m.",
+    "This run is truly single-target (verified: one target-app per run, no co-locator) - the isolated reference \u00c2\u00a77's pairwise harness could not provide. Levels not directly comparable to \u00c2\u00a77's co-resident leaves; ordering and exeris absolutes agree."
+  ]
+}

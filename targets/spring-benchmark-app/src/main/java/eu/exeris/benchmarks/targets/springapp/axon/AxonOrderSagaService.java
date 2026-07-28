@@ -34,13 +34,19 @@ public class AxonOrderSagaService {
             String userId,
             String cartId,
             String paymentMethod,
+            String requestedOrderId,
             ShopSagaStateService cartState
     ) {
         if (!cartState.hasCartForUser(userId, cartId)) {
             return Optional.empty();
         }
 
-        String orderId = UUID.randomUUID().toString();
+        // CONTRACT-v2 §3: prefer the client-generated orderId (deterministic seeded
+        // population, prerequisite for the §4.1 exact decline oracle); fall back to a
+        // server-generated UUID when the harness does not supply one.
+        String orderId = (requestedOrderId == null || requestedOrderId.isBlank())
+                ? UUID.randomUUID().toString()
+                : requestedOrderId.trim();
         String sagaId = "saga-" + UUID.randomUUID();
 
         commandGateway.sendAndWait(

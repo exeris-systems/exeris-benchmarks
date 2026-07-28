@@ -115,6 +115,7 @@ public class ShopSagaResource {
         }
         Optional<OrderAcceptedView> accepted = axonOrderSagaService.createOrder(
                 userId.get(),
+                request.orderId(),
                 request.cartId(),
                 request.paymentMethod()
         );

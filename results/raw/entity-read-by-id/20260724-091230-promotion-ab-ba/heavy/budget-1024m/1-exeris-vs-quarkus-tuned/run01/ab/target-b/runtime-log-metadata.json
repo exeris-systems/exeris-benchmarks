@@ -1,0 +1,14 @@
+{
+  "launcher_mode": "external",
+  "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/quarkus-tuned.env",
+  "log_path": "/tmp/exeris-quarkus-tuned-9003.log",
+  "external_jar_path": "targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-1.0.0-SNAPSHOT-runner.jar",
+  "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-1.0.0-SNAPSHOT-runner.jar",
+  "jar_exists": true,
+  "jar_sha256": "bf2e0d1b7acba71a3feca9ec78eb125c311e48786295c8039bc9f183f36bf53b",
+  "jar_size_bytes": 55463160,
+  "jar_mtime_utc": "2026-07-24T09:12:39Z",
+  "copied": true,
+  "output_file": "results/raw/entity-read-by-id/20260724-091230-promotion-ab-ba/heavy/budget-1024m/1-exeris-vs-quarkus-tuned/run01/ab/target-b/target-runtime.log",
+  "note": "runtime log copied"
+}

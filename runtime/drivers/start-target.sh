@@ -161,6 +161,37 @@ case "${START_MODE}" in
       bash -lc "cd '$ROOT' && $EXTERNAL_STOP_CMD" || true
     fi
     echo "  External runner command: $EXTERNAL_START_CMD"
+    # ------------------------------------------------------------------------------------
+    # Per-target memory cap (BENCH_TARGET_MEMORY_MAX_MB), for the memory-budget sweep and the
+    # memory-floor search.
+    #
+    # Scope is the TARGET'S JVM ONLY — never the harness, the load generator or PostgreSQL.
+    # The swept budget is defined as application-only (a managed database is not part of what
+    # a buyer rents), so capping the whole campaign would measure the wrong thing entirely.
+    # That is why the cap is applied here, at target launch, rather than by wrapping a run.
+    #
+    # MemorySwapMax=0 is mandatory, not decoration. Without it the cgroup swaps instead of
+    # OOM-ing, so a floor search would measure swap tolerance rather than memory need and
+    # report a floor far below the truth — while looking perfectly healthy.
+    #
+    # Safe for measurement attribution: the harness locates the target by LISTENING PORT
+    # (detect_pid_for_port -> lsof -ti), not via the pid file, so the JVM inside the scope is
+    # still the process sampled for CPU/RSS and attached for JFR.
+    #
+    # Env files opt in by placing ${TARGET_MEM_SCOPE_PREFIX:-} immediately before `java`,
+    # outside the existing taskset prefix, so the scope contains taskset and the JVM.
+    # ------------------------------------------------------------------------------------
+    if [[ -n "${BENCH_TARGET_MEMORY_MAX_MB:-}" ]]; then
+      if ! command -v systemd-run >/dev/null 2>&1; then
+        echo "ERROR: BENCH_TARGET_MEMORY_MAX_MB=${BENCH_TARGET_MEMORY_MAX_MB} set but systemd-run is unavailable;" >&2
+        echo "       refusing to run uncapped, which would silently produce an unconstrained result." >&2
+        exit 1
+      fi
+      export TARGET_MEM_SCOPE_PREFIX="systemd-run --user --scope -q -p MemoryMax=${BENCH_TARGET_MEMORY_MAX_MB}M -p MemorySwapMax=0 "
+      echo "  Target memory cap: MemoryMax=${BENCH_TARGET_MEMORY_MAX_MB}M MemorySwapMax=0 (application only)"
+    else
+      export TARGET_MEM_SCOPE_PREFIX=""
+    fi
     # Java 26 module system compatibility for Neo4j driver + Eclipse Collections
     # Add --add-opens flag to EXERIS_JAVA_OPTS so it's used by EXTERNAL_START_CMD
     export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} --add-opens java.base/jdk.internal.module=ALL-UNNAMED"

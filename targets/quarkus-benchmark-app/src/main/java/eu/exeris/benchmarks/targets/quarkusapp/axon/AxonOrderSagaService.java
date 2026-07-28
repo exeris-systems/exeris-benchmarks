@@ -5,6 +5,8 @@ import eu.exeris.benchmarks.targets.quarkusapp.dto.OrderAcceptedView;
 import eu.exeris.benchmarks.targets.quarkusapp.dto.OrderStatusView;
 import eu.exeris.benchmarks.targets.quarkusapp.service.ShopSagaStateService;
 
+import io.quarkus.runtime.Startup;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -18,6 +20,7 @@ import org.axonframework.common.Registration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
+@Startup
 @ApplicationScoped
 public class AxonOrderSagaService {
 
@@ -37,10 +40,16 @@ public class AxonOrderSagaService {
     AxonOrderSagaProjection projection;
 
     private final AtomicLong orderSequence = new AtomicLong(1);
-    private final AtomicLong sagaSequence = new AtomicLong(1);
 
     private Registration commandSubscription;
 
+    /**
+     * The bean is {@code @Startup}-eager so the CreateOrderCommand registration with
+     * Axon Server is initiated during boot, not on the first POST /orders: a lazy bean
+     * combined with the non-awaited {@code AxonServerCommandBus.subscribe(..)} ack meant
+     * the first harness requests could race the server-side registration and fail with
+     * NoHandlerForCommandException.
+     */
     @PostConstruct
     @SuppressWarnings("unused")
     void subscribe() {
@@ -58,13 +67,25 @@ public class AxonOrderSagaService {
         }
     }
 
-    public Optional<OrderAcceptedView> createOrder(String userId, String cartId, String paymentMethod) {
+    /**
+     * {@code clientOrderId} is the CONTRACT-v2 §3 client-generated deterministic orderId.
+     * When present it is adopted verbatim — it is the input to the §4.1 deterministic
+     * payment-decline rule, so minting a server-side id here would break the "identical
+     * declined subset in every stack and every run" invariant. Blank/absent (pre-v2
+     * clients) falls back to the server-generated sequence. {@code sagaId} is derived as
+     * {@code "saga-" + orderId} so the projection's {@code saga_id} lookup stays coherent
+     * for both populations (the previous lockstep order/saga sequences produced the same
+     * derivation for sequence-based ids).
+     */
+    public Optional<OrderAcceptedView> createOrder(String userId, String clientOrderId, String cartId, String paymentMethod) {
         if (!shopSagaStateService.cartBelongsToUser(userId, cartId)) {
             return Optional.empty();
         }
 
-        String orderId = Long.toString(orderSequence.getAndIncrement());
-        String sagaId = "saga-" + sagaSequence.getAndIncrement();
+        String orderId = (clientOrderId == null || clientOrderId.isBlank())
+                ? Long.toString(orderSequence.getAndIncrement())
+                : clientOrderId.trim();
+        String sagaId = "saga-" + orderId;
         CreateOrderCommand command = new CreateOrderCommand(orderId, sagaId, userId, cartId, paymentMethod);
         OrderAcceptedView accepted = (OrderAcceptedView) commandGateway.sendAndWait(command);
         return Optional.ofNullable(accepted);

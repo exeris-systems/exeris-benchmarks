@@ -1,0 +1,55 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260722-040417-unknown",
+  "timestamp": "2026-07-22T02:04:17Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-128m-4vcpu/exeris-community/repeat-1/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h1",
+  "tls": {"enabled":false},
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "exeris-community-app",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "commit_sha": "unknown"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+  "duration_seconds": 300,
+  "warmup_seconds": 120,
+  "threads": 4,
+  "connections": 128,
+  "backend_network_mode": "host",
+  "endpoint_path": "/api/v1/user?id=1"
+},
+  "metrics": {
+  "throughput_rps": 56301.75,
+  "latency_mean_us": 6830.000000,
+  "latency_stdev_us": 10750.000000,
+  "latency_max_us": 189450.000000,
+  "latency_p50_us": 2070.000000,
+  "latency_p75_us": 9500.000000,
+  "latency_p90_us": 20490.000000,
+  "latency_p99_us": 48700.000000,
+  "total_requests": 16892611,
+  "total_errors": 0,
+  "error_rate_pct": 0.000000
+},
+  "notes": "backendMode=default-vt targetRuntimeEffective=community targetBuild=jvm cpuAffinity=0-1,8-9 clientCpuAffinity=2-3,10-11",
+  "tags": ["backend-mode:default-vt", "target-runtime-effective:community", "target-build:jvm"],
+  "raw_output": "Running 5m test @ http://localhost:8080/api/v1/user?id=1\n  4 threads and 128 connections\n  Thread Stats   Avg      Stdev     Max   +/- Stdev\n    Latency     6.83ms   10.75ms 189.45ms   87.30%\n    Req/Sec    14.15k     1.75k   28.23k    74.12%\n  Latency Distribution\n     50%    2.07ms\n     75%    9.50ms\n     90%   20.49ms\n     99%   48.70ms\n  16892611 requests in 5.00m, 1.97GB read\nRequests/sec:  56301.75\nTransfer/sec:      6.71MB\n"
+}

@@ -33,6 +33,10 @@ public class UserRepository {
         return userPanacheRepository.findTopUsers(limit);
     }
 
+    public UserSummary findUserById(long id) {
+        return userPanacheRepository.findUserById(id);
+    }
+
     public List<FriendSummary> findFriendsForUser(String userId, int limit) {
         return friendshipPanacheRepository.findFriendsForUser(userId, limit);
     }

@@ -1,0 +1,67 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260728-110424-unknown",
+  "timestamp": "2026-07-28T09:04:24Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/tmp/pw-qtuned-p64-run/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h1",
+  "tls": {
+    "enabled": false
+  },
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "quarkus-benchmark-app-tuned",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "commit_sha": "unknown"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+    "duration_seconds": 300,
+    "warmup_seconds": 120,
+    "threads": 4,
+    "connections": 128,
+    "backend_network_mode": "bridge",
+    "endpoint_path": "/api/v1/users",
+    "execution_profile_id": "runtime-constrained-1024m-4vcpu-v1",
+    "contract_id": "fixed_contract_runtime_h1_constrained_aggregate_1024m_4vcpu_v1",
+    "track_id": "track-c",
+    "result_namespace": "/tmp/pw-qtuned-p64-run",
+    "jit_representativeness": "representative"
+  },
+  "metrics": {
+    "throughput_rps": 13640.20,
+    "latency_mean_us": 9380.000000,
+    "latency_stdev_us": 1360.000000,
+    "latency_max_us": 36010.000000,
+    "latency_p50_us": 9280.000000,
+    "latency_p75_us": 10190.000000,
+    "latency_p90_us": 11110.000000,
+    "latency_p99_us": 12970.000000,
+    "total_requests": 4093083,
+    "total_errors": 0,
+    "error_rate_pct": 0.000000
+  },
+  "notes": "backendMode=default-vt targetRuntimeEffective=quarkus-tuned targetBuild=jvm cpuAffinity=0-1,8-9 clientCpuAffinity=2-3,10-11",
+  "tags": [
+    "backend-mode:default-vt",
+    "target-runtime-effective:quarkus-tuned",
+    "target-build:jvm"
+  ],
+  "raw_output": "Running 5m test @ http://localhost:8080/api/v1/users\n  4 threads and 128 connections\n  Thread Stats   Avg      Stdev     Max   +/- Stdev\n    Latency     9.38ms    1.36ms  36.01ms   71.17%\n    Req/Sec     3.43k    69.82     5.23k    84.81%\n  Latency Distribution\n     50%    9.28ms\n     75%   10.19ms\n     90%   11.11ms\n     99%   12.97ms\n  4093083 requests in 5.00m, 35.14GB read\nRequests/sec:  13640.20\nTransfer/sec:    119.91MB\n",
+  "run_track": "constrained"
+}

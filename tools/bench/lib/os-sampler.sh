@@ -134,6 +134,51 @@ bench_stop_mpstat_sampler() {
   rm -f "$raw" 2>/dev/null || true
 }
 
+# _os_sampler_expand_cpu_list "4-7,12-15" -> "4,5,6,7,12,13,14,15"
+# Expands a cpuset spec (comma list with optional a-b ranges) to an explicit comma list, so
+# it is portable to older sysstat/mpstat builds that do not accept ranges after -P. Empty
+# input, or any non-numeric token, yields an empty string (caller then falls back to ALL).
+_os_sampler_expand_cpu_list() {
+  local spec="$1" out="" part a b i
+  [[ -z "$spec" ]] && { printf ''; return 0; }
+  local IFS=','
+  for part in $spec; do
+    part="${part//[[:space:]]/}"
+    [[ -z "$part" ]] && continue
+    if [[ "$part" == *-* ]]; then
+      a="${part%%-*}"; b="${part##*-}"
+      if [[ "$a" =~ ^[0-9]+$ && "$b" =~ ^[0-9]+$ ]] && (( a <= b )); then
+        for (( i = a; i <= b; i++ )); do out="${out:+$out,}$i"; done
+      fi
+    elif [[ "$part" =~ ^[0-9]+$ ]]; then
+      out="${out:+$out,}$part"
+    fi
+  done
+  printf '%s' "$out"
+}
+
+# bench_start_mpstat_sampler_for_cpus <out_csv> <cpu_list_or_empty> [interval_s]
+# Like bench_start_mpstat_sampler, but restricts sampling to a specific CPU list (e.g. a
+# Postgres cpuset "4-7,12-15"); ranges are expanded for portability. An empty/invalid cpu
+# list falls back to -P ALL. Echoes the background sampler PID (empty string if not started).
+# Stop with bench_stop_mpstat_sampler (identical raw->CSV parsing).
+bench_start_mpstat_sampler_for_cpus() {
+  local out_csv="$1" cpu_spec="${2:-}" interval="${3:-1}"
+  if ! command -v mpstat >/dev/null 2>&1; then
+    echo ""; return 0
+  fi
+  local pflag="ALL" expanded=""
+  if [[ -n "$cpu_spec" ]]; then
+    expanded="$(_os_sampler_expand_cpu_list "$cpu_spec")"
+    [[ -n "$expanded" ]] && pflag="$expanded"
+  fi
+  local raw="${out_csv}.raw"
+  # LC_ALL=C: same decimal-comma hazard as bench_start_mpstat_sampler. S_TIME_FORMAT=ISO for a
+  # stable leading timestamp column.
+  LC_ALL=C S_TIME_FORMAT=ISO mpstat -P "$pflag" "$interval" > "$raw" 2>/dev/null &
+  echo "$!"
+}
+
 # bench_resolve_container_host_pid <container_name_or_id>
 # Echoes the host-side PID of a (bridged) container's main process, or "" if
 # docker is unavailable / the container is not running. See namespace note above.

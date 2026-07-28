@@ -1,0 +1,20 @@
+{
+  "target_id": "quarkus-hibernate",
+  "pid": 1088902,
+  "capture_utc": "2026-07-21T10:57:00Z",
+  "jcmd_available": true,
+  "captures": {
+    "vm_flags": {
+      "path": "results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/3-quarkus-hibernate-vs-tuned/run01/startup-sequence/quarkus-hibernate.jcmd-vm.flags.txt",
+      "status": "captured"
+    },
+    "vm_command_line": {
+      "path": "results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/3-quarkus-hibernate-vs-tuned/run01/startup-sequence/quarkus-hibernate.jcmd-vm.command_line.txt",
+      "status": "captured"
+    },
+    "jfr_check": {
+      "path": "results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/3-quarkus-hibernate-vs-tuned/run01/startup-sequence/quarkus-hibernate.jcmd-jfr.check.txt",
+      "status": "captured"
+    }
+  }
+}

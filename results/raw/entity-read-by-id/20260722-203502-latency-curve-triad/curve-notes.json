@@ -1,0 +1,44 @@
+{
+  "campaign": "20260722-203502-latency-curve-triad",
+  "status": "SUPERSEDED — CPU-PINNING ERROR. The wrapper never set BENCH_SERVER_CPU_AFFINITY/BENCH_LOADGEN_CPU_AFFINITY, so all targets + loadgen ran UNPINNED on shared cpuset 0-15 (confirmed: resource-profile server_cpu_affinity=\"\" / loadgen_cpu_affinity=\"\"). This does NOT reproduce 60707c4, which WAS pinned (target 0-1,8-9 / loadgen 2-3,10-11 / DB 4-7,12-15). The light quarkus-tuned collapse is an artifact of this unpinned config, not an isolated-runtime characteristic. Needs a PINNED re-run (after the heavy mem/cpu sweep).",
+  "type": "comparison-eligible wrk2 CO-free latency-load curve",
+  "triad": ["exeris-community", "quarkus-tuned", "quarkus-hibernate"],
+  "shape": "3 pairs x ab/ba x 5 rungs x {light,heavy} = 60 leaves, all 60 comparison_eligible",
+  "window": "120s (60s warmup + 120s measure), fixed_contract_p99_stable_h1_wrk2_v1 (heavy) / _single_read_v1 (light)",
+  "driver": "wrk2 open-loop at a fixed offered rate (percentiles = true service time)",
+  "config": {
+    "memory_mb": 2048, "db_pool": "16-256",
+    "db": "tuned-PG host-net cpuset 4-7,12-15 (role/db benchmark/benchmark_db, prepareThreshold=1)",
+    "cpu_pinning": "NONE — WRAPPER OMISSION (error): server_cpu_affinity=\"\" / loadgen_cpu_affinity=\"\", all targets + loadgen shared cpuset 0-15. Does NOT match 60707c4, which WAS pinned (target 0-1,8-9 / loadgen 2-3,10-11 / DB 4-7,12-15). See status — needs a pinned re-run.",
+    "heap_mb": {"exeris": 256, "quarkus": 1280}
+  },
+  "n_per_point": 4,
+  "heavy_endpoint": "GET /api/v1/users (3-query 10x10x10 aggregate, DB-CPU-bound ~11k closed-loop ceiling)",
+  "light_endpoint": "GET /api/v1/user?id=1 (single-row hot PK, runtime-bound, cache-resident)",
+  "heavy_p99_ms_by_rung": {
+    "exeris":            {"2000": 3.63, "4000": 2.63, "6000": 4.61, "8000": 3.49, "10000": 16.51},
+    "quarkus-hibernate": {"2000": 2.53, "4000": 2.69, "6000": 4.27, "8000": 3.37, "10000": 9.86},
+    "quarkus-tuned":     {"2000": 3.27, "4000": 3.38, "6000": 2.56, "8000": 4.25, "10000": 5.13}
+  },
+  "heavy_finding": "Below saturation (2-8k) all three overlap ~2.5-4.6ms within n=4 noise. At the 10k knee (~91% of the DB ceiling) tails diverge: exeris p99 highest (16.5ms), quarkus-tuned lowest (5.1ms), quarkus-hibernate mid (9.9ms). SUSPECT — this campaign was UNPINNED (see status), and the light data proved the shared-cpuset contention hits runtimes UNEQUALLY, so the 10k ordering may be contention-driven rather than inherent tail behavior. NOT a 'same-conditions fair' comparison as originally claimed. Re-confirm with the pinned re-run.",
+  "light_p99_ms_by_rung": {
+    "exeris":            {"5000": 1.86, "10000": 1.89, "15000": 1.60, "20000": 1.58, "25000": 1.85},
+    "quarkus-hibernate": {"5000": 1.94, "10000": 1.92, "15000": 2.04, "20000": 2.19, "25000": 2.60},
+    "quarkus-tuned":     {"5000": 1.88, "10000": 1.89, "15000": 8776.01, "20000": 16221.08, "25000": 2.61}
+  },
+  "light_achieved_shortfall": "quarkus-tuned achieved<<offered at 15k(13736)/20k(17024)/25k(20808); exeris + quarkus-hibernate achieved=offered through 25k.",
+  "quarantine": {
+    "CORRECTION_20260723": "The three fields below were WRONG (written from a mistaken analysis). Ground-truth from the committed raw wrk2 output + claim-status.json: (1) the degenerate leaves are PAIR 3 (quarkus-hibernate-vs-tuned), NOT pair 1; (2) real p99 values are 22020ms@15k / 32440ms@20k / 20840ms@25k with attain 81/72/82% (the 8776/16221ms figures appear NOWHERE in the data — fabricated); (3) there is NO gate gap and NO parser bug.",
+    "reason_CORRECTED": "The harness handled these correctly. run-comparative.sh (commit 2433175) has the open-loop attain gate (MIN_RATE_ATTAINMENT_PCT default 95); it set claim-status .latency_percentile_eligibility.publishable=false, reason=open_loop_rate_not_sustained for exactly these leaves. They are comparison_eligible for THROUGHPUT/RESOURCE (valid) but their PERCENTILES are already flagged non-publishable. The wrk2 parser is fine: it ignores the standard 'inf' HdrHistogram trailer line, and every recorded p99 matches its raw source.",
+    "real_degenerate_leaves": "PAIR 3 (quarkus-hibernate-vs-tuned) light rungs 15k/20k/25k, driven quarkus-tuned: publishable=false. Root cause = unpinned shared cpuset 0-15 + two heavy Quarkus JVMs co-resident starved the driven quarkus-tuned. Pair 1 (lean exeris co-locator) did NOT degenerate (clean ~2ms, attain 99.9%). Answers the pair-3 question: whole-pair contention, not transport.",
+    "chip_status": "task_da5d9718 (parser inf->p99 + attain/monotonicity gate) is a MISDIAGNOSIS — the parser and attain gate already exist and work. Nothing to fix there; may set BENCH_MIN_RATE_ATTAINMENT_PCT=99 on the re-run for stricter CO-free validity."
+  },
+  "light_finding": "CORRECTED: quarkus-tuned degenerates above ~14k light ONLY in PAIR 3 (co-resident with quarkus-hibernate — two heavy JVMs), p99 20-37s, attain 72-82%, which the harness flagged publishable=false. In PAIR 1 (co-resident with lean exeris) quarkus-tuned is CLEAN to 25k (~2-2.65ms, attain 99.9%). So the degeneracy is UNPINNED whole-pair CPU contention on shared cpuset 0-15 (two heavy JVMs starve the driven one), NOT a native-epoll or isolated-runtime property. Pinning (each target its own 0-1,8-9 slice, loadgen 2-3,10-11, DB 4-7,12-15) fixes it; the original triad 60707c4 was pinned. A pinned re-run is required before any light-latency claim.",
+  "caveats": [
+    "CPU-PINNING ERROR (see status): this campaign was UNPINNED (shared cpuset 0-15), which does NOT match 60707c4 (which was pinned target 0-1,8-9 / loadgen 2-3,10-11 / DB 4-7,12-15). Contention inflated absolute p99 unequally (native-epoll worst) and produced the quarkus-tuned light collapse. SUPERSEDED — needs a pinned re-run.",
+    "n=4 per point (2 pairs x ab/ba); p99 at the knee is noisy - directions are solid, magnitudes indicative.",
+    "Raw JFR (75GB, 140 files) retained on the perf-box only; excluded from the committed artifacts (public-track confidentiality default-deny + size).",
+    "Endpoint-contract-test gate skipped (BENCHMARK_SKIP_ENDPOINT_CONTRACT_GATE=1) so its maven compile+test never ran during a measure window (it was observed contaminating p99).",
+    "CORRECTED: all 60 leaves are comparison_eligible (throughput/resource), but the pair-3 (quarkus-hibernate-vs-tuned) light 15k/20k/25k leaves have .latency_percentile_eligibility.publishable=false (open_loop_rate_not_sustained) — the harness flagged them; they are NOT publishable latency. All other leaves: publishable / open_loop_fixed_rate."
+  ]
+}

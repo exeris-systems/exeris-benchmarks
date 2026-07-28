@@ -45,6 +45,15 @@ K6_CONSOLE_LOG="$RESULTS_DIR/k6-console-${TIMESTAMP}.log"
 K6_TIMESERIES_CSV="$RESULTS_DIR/k6-timeseries-${TIMESTAMP}.csv"
 K6_TIMESERIES_ENABLED="${BENCH_K6_TIMESERIES:-0}"
 
+# Long-run disk guard (BENCH_K6_JSON_GZ=1): k6 gzips the JSON point stream
+# natively when the output filename ends with .gz (~10-15x smaller). At soak
+# rates the raw stream is ~100 MB/min — a 24h run would exhaust a 160 GB disk.
+# Downstream consumers must zcat; the in-script consumers below are gz-aware.
+K6_JSON_GZ_ENABLED="${BENCH_K6_JSON_GZ:-0}"
+if [[ "$K6_JSON_GZ_ENABLED" == "1" ]]; then
+  RESULT_JSON="${RESULT_JSON}.gz"
+fi
+
 echo "=== k6 scenario ==="
 echo "  Script    : $K6_SCRIPT"
 echo "  Output    : $RESULT_JSON"
@@ -68,7 +77,7 @@ k6 run \
   "$@" \
   "$K6_SCRIPT" 2>&1 | tee "$K6_CONSOLE_LOG"
 
-if [[ -f "$RESULT_JSON" ]]; then
+if [[ -f "$RESULT_JSON" && "$K6_JSON_GZ_ENABLED" != "1" ]]; then
   if ! jq -e '.metrics.http_req_duration.values["p(99)"]' "$RESULT_JSON" >/dev/null 2>&1; then
     echo "WARN: p(99) not found in k6 output — check that enough samples were collected." >&2
   fi
@@ -92,7 +101,16 @@ if [[ -n "${BENCH_EXPECTED_PROTOCOL_MODE:-}" ]]; then
   case "$BENCH_EXPECTED_PROTOCOL_MODE" in
     h2|h2c)
       k6_base_url="${K6_BASE_URL:-${BASE_URL:-}}"
-      bench_derive_k6_protocol_mode_from_output "$RESULT_JSON" "$k6_base_url"
+      if [[ "$K6_JSON_GZ_ENABLED" == "1" ]]; then
+        # proto tags appear on every http_req point; a decompressed head sample
+        # is enough for the label check without materializing the full stream.
+        k6_proto_sample="$(mktemp)"
+        zcat "$RESULT_JSON" 2>/dev/null | head -n 500000 > "$k6_proto_sample" || true
+        bench_derive_k6_protocol_mode_from_output "$k6_proto_sample" "$k6_base_url"
+        rm -f "$k6_proto_sample"
+      else
+        bench_derive_k6_protocol_mode_from_output "$RESULT_JSON" "$k6_base_url"
+      fi
       case "$BENCH_K6_OBSERVED_PROTOCOL_MODE" in
         h2|h2c) echo "k6 protocol confirmed: $BENCH_K6_OBSERVED_PROTOCOL_MODE (proto tags: ${BENCH_K6_PROTO_TAGS_CSV})" ;;
         *)

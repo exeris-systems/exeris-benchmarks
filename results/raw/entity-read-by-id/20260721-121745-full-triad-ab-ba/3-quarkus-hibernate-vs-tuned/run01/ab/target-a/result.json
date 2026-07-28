@@ -1,0 +1,199 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260721-150113-000000",
+  "timestamp": "2026-07-21T15:21:26Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/home/bench/exeris-benchmarks/runtime/drivers/env/quarkus-runtime.env",
+  "transport_mode": "loopback-h1",
+  "target": {
+    "tier": "community",
+    "repo": "quarkus-hibernate",
+    "protocol": "h1",
+    "mode": "pure",
+    "commit_sha": "d85c2121608aef92126901345709a36578ea3f3f",
+    "build_provenance": {
+      "artifact_path": "/home/bench/exeris-benchmarks/targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar",
+      "artifact_sha256": "7196acd2d756fd5a0f4d5848198eff5267302e11b7a72560c604178ae6d3ff92"
+    }
+  },
+  "run_config": {
+    "duration_seconds": 900,
+    "warmup_seconds": 300,
+    "threads": 4,
+    "connections": 128,
+    "contract_id": "fixed_contract_cross_runtime_h1_v2",
+    "protocol_mode": "h1",
+    "transport_mode": "loopback-h1",
+    "track_id": "track-ab-01",
+    "pair_id": "entity-read-by-id-fixed_contract_cross_runtime_h1_v2-quarkus-hibernate__quarkus-tuned",
+    "pair_order": "ab",
+    "ab_ba_orders_completed": [
+      "ab",
+      "ba"
+    ],
+    "pair_completion_evidence": {
+      "invocation_order": "ab",
+      "target_slot": "target-a",
+      "completion_marker_utc": "2026-07-21T15:21:26Z",
+      "completed_orders": [
+        "ab",
+        "ba"
+      ]
+    },
+    "jvm_class": "jvm",
+    "mode": "pure",
+    "driver": {
+      "mode": "closed",
+      "offered_rps": 0,
+      "rate_attainment_pct": 0,
+      "note": "closed = wrk at saturation: throughput and resource metrics valid, percentiles are queue-depth/throughput. open = wrk2 at a fixed arrival rate: percentiles are service time."
+    },
+    "payload_size_bytes": 1024,
+    "drift_snapshot": {
+      "required_metadata_present": true,
+      "max_latency_drift_pct": 0,
+      "observed_latency_drift_pct": 0,
+      "max_throughput_drift_pct": 0,
+      "observed_throughput_drift_pct": 0
+    },
+    "metadata": {
+      "jdk_vendor": "Eclipse Adoptium",
+      "jdk_version": "26.0.1",
+      "benchmark_tool_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+      "jvm_flags": [
+        "jvm-defaults-no-explicit-launcher-flags"
+      ],
+      "hardware_profile": "perf-box-amd64",
+      "backend_network_mode": "host",
+      "scenario_id": "entity-read-by-id",
+      "target_classification": "runtime-comparative"
+    },
+    "pinned_versions": {
+      "jdk_version": "26.0.1",
+      "benchmark_tool_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+      "target_commit_sha": "d85c2121608aef92126901345709a36578ea3f3f"
+    },
+    "actual_versions": {
+      "jdk_version": "26.0.1",
+      "benchmark_tool_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+      "target_commit_sha": "d85c2121608aef92126901345709a36578ea3f3f"
+    },
+    "target_contract": {
+      "target_id": "quarkus-hibernate",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/quarkus-runtime.env",
+      "profile_id": "quarkus-hibernate",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9002/health"
+    },
+    "resource_metrics": {
+      "sample_count": 854,
+      "cpu_time_seconds": 3349.12,
+      "cpu_util_percent_of_one_core": 372.12,
+      "avg_cores_used": 3.7212,
+      "host_logical_cpus": 16,
+      "cpu_util_percent_of_host_total": 23.26,
+      "vmrss_kb_min": 1205304,
+      "vmrss_kb_max": 1230300,
+      "vmrss_kb_avg": 1221351,
+      "vmsize_kb_min": 5869780,
+      "vmsize_kb_max": 5869780,
+      "vmsize_kb_avg": 5869780,
+      "vmhwm_kb_max": 1230300,
+      "threads_min": 43,
+      "threads_max": 44,
+      "threads_avg": 43.01,
+      "smaps_rss_kb_min": 1205392,
+      "smaps_rss_kb_max": 1230300,
+      "smaps_rss_kb_avg": 1221352,
+      "cgroup_memory_current_kb_min": 11591076,
+      "cgroup_memory_current_kb_max": 11965840,
+      "cgroup_memory_current_kb_avg": 11781387,
+      "rss_kb_min": 1205392,
+      "rss_kb_max": 1230300,
+      "rss_kb_avg": 1221352,
+      "jvm_memory_breakdown": {
+        "jcmd_available": true,
+        "jcmd_heap_info_succeeded": true,
+        "heap_metrics_present": false,
+        "breakdown_valid": true,
+        "breakdown_note": "NMT breakdown present; heap_committed_kb backfilled from NMT after partial GC.heap_info parse.",
+        "heap_used_kb": 0,
+        "heap_committed_kb": 1310720,
+        "heap_max_kb": 0,
+        "native_total_committed_kb": 1555385,
+        "native_total_reserved_kb": 2871409,
+        "native_java_heap_committed_kb": 1310720,
+        "offheap_kb_estimate": 244665,
+        "heap_plus_offheap_kb_estimate": 244665,
+        "offheap_estimate_source": "nmt_minus_java_heap",
+        "nmt_enabled": true
+      }
+    },
+    "jfr_capture": {
+      "pid": "1430710",
+      "jcmd_available": true,
+      "check_ok": true,
+      "recording_detected": true,
+      "dump_attempted": true,
+      "dump_success": true,
+      "stop_attempted": false,
+      "stop_success": false,
+      "stop_recording_name": "",
+      "jfr_file": "results/raw/entity-read-by-id/20260721-121745-full-triad-ab-ba/3-quarkus-hibernate-vs-tuned/run01/ab/target-a/target-quarkus-hibernate-20260721-150113.jfr",
+      "note": "jfr stop skipped: recording ownership not from this run"
+    },
+    "runtime_log": {
+      "launcher_mode": "external",
+      "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/quarkus-runtime.env",
+      "log_path": "/tmp/exeris-quarkus-9002.log",
+      "external_jar_path": "targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar",
+      "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar",
+      "jar_exists": true,
+      "jar_sha256": "7196acd2d756fd5a0f4d5848198eff5267302e11b7a72560c604178ae6d3ff92",
+      "jar_size_bytes": 75907309,
+      "jar_mtime_utc": "2026-07-21T12:17:59Z",
+      "copied": true,
+      "output_file": "results/raw/entity-read-by-id/20260721-121745-full-triad-ab-ba/3-quarkus-hibernate-vs-tuned/run01/ab/target-a/target-runtime.log",
+      "note": "runtime log copied"
+    },
+    "jfr_start": {
+      "pid": "1430710",
+      "jcmd_available": true,
+      "start_attempted": false,
+      "start_success": true,
+      "recording_already_present": true,
+      "recording_name": "quarkus_hibernate_20260721_150113",
+      "note": "recording already present"
+    }
+  },
+  "metrics": {
+    "throughput_rps": 10951.92,
+    "latency_p50_us": 11470.000000,
+    "latency_p75_us": 14770.000000,
+    "latency_p90_us": 17080.000000,
+    "latency_p95_us": 18450.000000,
+    "latency_p99_us": 21160.000000,
+    "error_rate_pct": 0.0000,
+    "total_requests": 9857815,
+    "total_errors": 0,
+    "socket_errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "timeout": 0,
+      "total": 0
+    },
+    "failed_requests_total": 0,
+    "failed_request_rate_pct": 0.0000,
+    "latency_p999_us": 0
+  },
+  "claim_scope": "comparison_eligible",
+  "runner_status": "success",
+  "final_reason": "ok",
+  "reproducibility_status": "complete"
+}

@@ -1,0 +1,30 @@
+
+                                                                                                    Allocation by Class
+
+Object Type                                                                                                                                                                                             Allocation Pressure
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- -------------------
+jdk.internal.vm.StackChunk                                                                                                                                                                                           15.34%
+byte[]                                                                                                                                                                                                                7.65%
+java.lang.Object[]                                                                                                                                                                                                    7.31%
+java.lang.String                                                                                                                                                                                                      2.73%
+java.util.ArrayList                                                                                                                                                                                                   2.23%
+java.util.HashMap$Node[]                                                                                                                                                                                              2.07%
+com.arjuna.ats.arjuna.common.Uid                                                                                                                                                                                      1.60%
+java.util.TreeMap                                                                                                                                                                                                     1.59%
+io.vertx.core.http.impl.headers.HeadersMultiMap$MapEntry                                                                                                                                                              1.47%
+java.util.HashMap$Node                                                                                                                                                                                                1.40%
+java.util.HashMap                                                                                                                                                                                                     1.36%
+java.util.concurrent.ConcurrentHashMap$Node                                                                                                                                                                           1.34%
+io.quarkus.resteasy.reactive.server.runtime.QuarkusResteasyReactiveRequestContext                                                                                                                                     1.26%
+java.util.concurrent.locks.ReentrantLock$NonfairSync                                                                                                                                                                  1.15%
+io.vertx.core.http.impl.headers.HeadersMultiMap$MapEntry[]                                                                                                                                                            1.12%
+java.util.TreeMap$Entry                                                                                                                                                                                               0.91%
+java.lang.ThreadLocal$ThreadLocalMap$Entry                                                                                                                                                                            0.88%
+java.util.Hashtable$Entry[]                                                                                                                                                                                           0.82%
+java.lang.VirtualThread                                                                                                                                                                                               0.80%
+java.lang.ThreadLocal$ThreadLocalMap$Entry[]                                                                                                                                                                          0.79%
+com.arjuna.ats.internal.jta.transaction.arjunacore.AtomicAction                                                                                                                                                       0.79%
+org.hibernate.internal.SessionImpl                                                                                                                                                                                    0.71%
+io.vertx.ext.web.impl.RoutingContextImpl                                                                                                                                                                              0.71%
+org.postgresql.jdbc.PgResultSet                                                                                                                                                                                       0.70%
+java.util.Hashtable                                                                                                                                                                                                   0.60%

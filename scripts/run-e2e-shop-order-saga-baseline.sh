@@ -24,7 +24,11 @@ Usage: run-e2e-shop-order-saga-baseline.sh [options]
 
 Options:
   --base-url <url>         Base URL for target app (default: https://localhost:8080)
-  --contract-id <id>       Contract id (default: exeris_community_h2c_v1)
+  --contract-id <id>       Contract id (default: exeris_community_h2c_v1).
+                           Restate runs MUST pass this explicitly with a
+                           restate-appropriate id: the h2c default is never
+                           stamped onto a restate (h1 facade) run — the runner
+                           aborts instead of mislabeling the artifacts.
   --target-app <name>      Target app label (default: exeris-community)
   --auto-start-infra       Auto-start benchmark infra (Postgres + Neo4j) via docker compose (default)
   --no-auto-start-infra    Do not auto-start benchmark infra
@@ -34,6 +38,8 @@ Options:
   --no-force-restart-target   Reuse existing target process if already healthy
   --health-timeout-seconds <n>  Seconds to wait for target health (default: 60)
   --graph-track <name>     Graph track label (default: postgres)
+  --fault-mode <mode>      Fault-class label per CONTRACT-v2 s4: terminal|transient (default: terminal).
+                           Never mixed in one run; headline claims come from terminal runs only.
   --profile <name>         Capture profile for env metadata (default: dev-laptop)
   --k6-docker-image <image>  Docker image for fallback k6 run (default: grafana/k6:latest)
   --output-dir <path>      Output directory (default: results/raw/e2e-shop-order-saga/<utc>-baseline)
@@ -46,6 +52,18 @@ Options:
   --cgroup-memory-limit-mb <n>  Enforce OS-level memory limit on target (cgroup v2, MB). Empty = disabled.
   --cgroup-cpu-quota-pct <n>    Enforce OS-level CPU quota on target (cgroup v2, %). Empty = disabled.
   -h, --help               Show this help
+
+Environment (durability-tier declaration, CONTRACT-v2 s8):
+  The durability_tier stamped into run-metadata.json / result.json /
+  correctness-gate.json is a LABEL only — it changes no target behavior.
+  Cross-tier comparisons are forbidden (s8); relabel via these overrides when
+  the actual durability configuration differs (e.g. WAL fsync disabled -> T1):
+  RESTATE_DURABILITY_TIER_LABEL  Label for restate runs (default:
+                                 T2-fsync-node-durable — restate-server 1.7
+                                 default, RocksDB WAL fsync per commit batch).
+  BENCH_DURABILITY_TIER_LABEL    Label for all other targets (default:
+                                 T2-fsync-node-durable-postgres — Postgres-backed
+                                 saga state at synchronous_commit=on).
 EOF
 }
 
@@ -308,6 +326,17 @@ configure_target_runtime_overrides() {
   # Spring/Quarkus targets, which read this env var not at all.)
   export EXERIS_SUBSYSTEMS="http,persistence,graph,flow,events,crypto"
 
+  # CONTRACT-v2 fault-injection knobs, exported BEFORE target start so every stack
+  # sees the same declared configuration (s4 fault-class label + s5 pinned retry
+  # policy; defaults are not trusted). Targets that have not yet implemented the
+  # v2 deterministic decline ignore these; the s4.1 correctness gate then fails
+  # the run instead of letting a probabilistic population pass as deterministic.
+  export EXERIS_SAGA_FAULT_MODE="$FAULT_MODE"
+  export EXERIS_SAGA_RETRY_MAX_ATTEMPTS="3"
+  export EXERIS_SAGA_RETRY_INITIAL_BACKOFF_MS="50"
+  export EXERIS_SAGA_RETRY_BACKOFF_FACTOR="2"
+  export EXERIS_SAGA_RETRY_JITTER="false"
+
   if [[ "$GRAPH_TRACK" == "neo4j" ]]; then
     export EXERIS_GRAPH_BACKEND_TYPE="neo4j"
     : "${EXERIS_GRAPH_NEO4J_URI:=bolt://localhost:7687}"
@@ -324,6 +353,20 @@ configure_target_runtime_overrides() {
     unset EXERIS_GRAPH_NEO4J_USER
     unset EXERIS_GRAPH_NEO4J_PASSWORD
     unset EXERIS_GRAPH_NEO4J_DATABASE
+  fi
+
+  # Restate deployment-unit env (CONTRACT-v2 s1: target JVM + external
+  # restate-server). Exported BEFORE target start so the app's startup
+  # self-registration and the baseline's post-readiness force-registration
+  # agree on the same endpoints. restate-server runs in Docker
+  # (benchmark-restate-server), so it calls back into the host-side SDK
+  # endpoint via host.docker.internal.
+  if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+    export RESTATE_SDK_PORT="${RESTATE_SDK_PORT:-9084}"
+    export RESTATE_INGRESS_URL="${RESTATE_INGRESS_URL:-http://localhost:8080}"
+    export RESTATE_ADMIN_URL="${RESTATE_ADMIN_URL:-http://localhost:9070}"
+    export RESTATE_SDK_ADVERTISED_URL="${RESTATE_SDK_ADVERTISED_URL:-http://host.docker.internal:${RESTATE_SDK_PORT}}"
+    export RESTATE_AUTO_REGISTER="${RESTATE_AUTO_REGISTER:-true}"
   fi
 
   declared_protocol_mode="$(bench_derive_declared_protocol_mode "$TARGET_APP")"
@@ -364,6 +407,7 @@ configure_target_runtime_overrides() {
   export SPRING_JAVA_OPTS="${SPRING_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
   export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
   export QUARKUS_JAVA_OPTS="${QUARKUS_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
+  export RESTATE_JAVA_OPTS="${RESTATE_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
 
   # Intentionally no -XX:MaxRAM / -XX:MaxRAMPercentage flags here.
   #
@@ -392,7 +436,7 @@ configure_target_runtime_overrides() {
       export EXERIS_HTTP_PORT="$_base_port"
     fi
   fi
-  echo "Runtime overrides: graph_backend=${EXERIS_GRAPH_BACKEND_TYPE} protocol=${declared_protocol_mode} http_max=${EXERIS_HTTP_MAX_VERSION} h2c_upgrade=${EXERIS_HTTP_H2C_UPGRADE_ENABLED} http2=${EXERIS_HTTP2_ENABLED} ssl=${EXERIS_SSL_ENABLED}"
+  echo "Runtime overrides: graph_backend=${EXERIS_GRAPH_BACKEND_TYPE} protocol=${declared_protocol_mode} http_max=${EXERIS_HTTP_MAX_VERSION} h2c_upgrade=${EXERIS_HTTP_H2C_UPGRADE_ENABLED} http2=${EXERIS_HTTP2_ENABLED} ssl=${EXERIS_SSL_ENABLED} fault_mode=${FAULT_MODE}"
 }
 
 wait_for_compose_service_health() {
@@ -509,9 +553,38 @@ ensure_benchmark_infra() {
     done
     sleep 1
   fi
+
+  if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+    echo "Restate target detected (contract=${CONTRACT_ID}); starting benchmark-restate-server."
+    # Fresh journal per run (same policy as the axonserver force-recreate above):
+    # stale invocation journals from a previous run must not replay into this one.
+    docker compose -f "$BENCHMARK_COMPOSE_FILE" rm -sf --volumes benchmark-restate-server 2>/dev/null || true
+    if ! docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up -d --force-recreate benchmark-restate-server; then
+      echo "Warning: docker compose failed to start benchmark-restate-server; checking health anyway." >&2
+    fi
+    # The restate image has no shell/wget for a container healthcheck; poll the
+    # admin API from the host instead (readiness gate for the ingress as well).
+    local _restate_admin_url="${RESTATE_ADMIN_URL:-http://localhost:9070}"
+    local _restate_health_http="000"
+    echo "Waiting for restate-server admin API at ${_restate_admin_url}/health..."
+    for _restate_health_attempt in $(seq 1 30); do
+      _restate_health_http="$(curl -s -o /dev/null -w "%{http_code}" \
+        "${_restate_admin_url}/health" 2>/dev/null || echo "000")"
+      if [[ "$_restate_health_http" == "200" ]]; then
+        echo "  restate-server admin API healthy (HTTP ${_restate_health_http})."
+        break
+      fi
+      echo "  Attempt ${_restate_health_attempt}: admin health returned ${_restate_health_http}, retrying in 2s..."
+      sleep 2
+    done
+    if [[ "$_restate_health_http" != "200" ]]; then
+      echo "Warning: restate-server admin API did not become healthy; target self-registration and ingress calls may fail." >&2
+    fi
+  fi
 }
 
 _BASE_URL_EXPLICIT="false"
+_CONTRACT_ID_EXPLICIT="false"
 BASE_URL="http://localhost:9000"
 CURL_INSECURE_OPT=""
 CONTRACT_ID="exeris_community_h2c_v1"
@@ -526,6 +599,10 @@ STOP_TARGET_SCRIPT="$REPO_ROOT/runtime/drivers/stop-target.sh"
 BENCHMARK_COMPOSE_REF="runtime/compose/e2e-shop-order-saga.yml"
 BENCHMARK_COMPOSE_FILE="$REPO_ROOT/$BENCHMARK_COMPOSE_REF"
 GRAPH_TRACK="postgres"
+# CONTRACT-v2 s4 fault-class label: 'terminal' (deterministic per-orderId business
+# decline, s4.1) or 'transient' (retryable infra fault, s4.2). MUST NOT be mixed
+# within a run; headline latency/throughput claims come from terminal runs only.
+FAULT_MODE="terminal"
 PROFILE="dev-laptop"
 K6_DOCKER_IMAGE="grafana/k6:latest"
 OUTPUT_DIR=""
@@ -549,6 +626,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --contract-id)
       CONTRACT_ID="$2"
+      _CONTRACT_ID_EXPLICIT="true"
       shift 2
       ;;
     --target-app)
@@ -585,6 +663,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --graph-track)
       GRAPH_TRACK="$2"
+      shift 2
+      ;;
+    --fault-mode)
+      FAULT_MODE="$2"
       shift 2
       ;;
     --profile)
@@ -643,12 +725,66 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "$FAULT_MODE" in
+  terminal|transient) ;;
+  *)
+    echo "ERROR: --fault-mode must be 'terminal' or 'transient' (got: $FAULT_MODE)" >&2
+    exit 1
+    ;;
+esac
+
+# Restate contract-id fail-closed check: restate is not a scenario.json fixed
+# contract, so the runner cannot derive a restate contract id — and the default
+# (exeris_community_h2c_v1) is an h2c contract while the restate facade is
+# HTTP/1.1. Stamping the h2c default onto a restate run would mislabel every
+# artifact (protocol axis + contract id), so abort instead of defaulting.
+if [[ "$TARGET_APP" == *restate* || "$CONTRACT_ID" == *restate* ]]; then
+  if [[ "$_CONTRACT_ID_EXPLICIT" != "true" ]]; then
+    echo "ERROR: restate run detected (target_app=${TARGET_APP}) but --contract-id was not passed; refusing to stamp the defaulted h2c contract id '${CONTRACT_ID}' onto a restate (h1 facade) run." >&2
+    echo "ERROR: pass --contract-id <restate-appropriate id> explicitly (see targets/restate-benchmark-app/README.md and CONTRACT-v2-IMPLEMENTATION.md, restate row)." >&2
+    exit 1
+  fi
+  if [[ "$CONTRACT_ID" != *restate* ]]; then
+    echo "ERROR: restate run detected (target_app=${TARGET_APP}) but --contract-id '${CONTRACT_ID}' is not a restate-appropriate id (must contain 'restate'); refusing to mislabel the run." >&2
+    echo "ERROR: pass --contract-id <restate-appropriate id> explicitly (see targets/restate-benchmark-app/README.md and CONTRACT-v2-IMPLEMENTATION.md, restate row)." >&2
+    exit 1
+  fi
+fi
+
+# CONTRACT-v2 s8 durability-tier declaration. The value is a LABEL stamped into
+# run-metadata.json / result.json / correctness-gate.json — it changes no target
+# behavior. restate-server 1.7 default = replicated loglet + RocksDB WAL fsync
+# per commit batch (T2 fsync node-durable); the Postgres-backed stacks persist
+# saga-relevant state through Postgres at synchronous_commit=on (same T2 tier,
+# Postgres-backed). Override the label (RESTATE_DURABILITY_TIER_LABEL /
+# BENCH_DURABILITY_TIER_LABEL) when the actual durability configuration differs;
+# cross-tier comparisons are forbidden (s8).
+if [[ "$TARGET_APP" == *restate* || "$CONTRACT_ID" == *restate* ]]; then
+  if [[ -n "${RESTATE_DURABILITY_TIER_LABEL:-}" ]]; then
+    DURABILITY_TIER="$RESTATE_DURABILITY_TIER_LABEL"
+    DURABILITY_TIER_SOURCE="env:RESTATE_DURABILITY_TIER_LABEL"
+  else
+    DURABILITY_TIER="T2-fsync-node-durable"
+    DURABILITY_TIER_SOURCE="default:restate-server-1.7-wal-fsync"
+  fi
+else
+  if [[ -n "${BENCH_DURABILITY_TIER_LABEL:-}" ]]; then
+    DURABILITY_TIER="$BENCH_DURABILITY_TIER_LABEL"
+    DURABILITY_TIER_SOURCE="env:BENCH_DURABILITY_TIER_LABEL"
+  else
+    DURABILITY_TIER="T2-fsync-node-durable-postgres"
+    DURABILITY_TIER_SOURCE="default:postgres-synchronous-commit-on"
+  fi
+fi
+echo "Durability tier label: ${DURABILITY_TIER} (source: ${DURABILITY_TIER_SOURCE}; label only, no behavior change)"
+
 # Derive the path of the target process log file (fixed name from EXTERNAL_START_CMD) for failure capture.
 case "${TARGET_APP:-}" in
   exeris-community|exeris-community-app|exeris-e2e-community-h2*)  TARGET_APP_LOG_FILE="/tmp/exeris-community.log"  ;;
   exeris-community-app-locality)                  TARGET_APP_LOG_FILE="/tmp/exeris-locality-8080.log"  ;;
   spring-on-exeris|spring-hibernate|spring-app-axon|spring-*)      TARGET_APP_LOG_FILE="/tmp/exeris-spring-9001.log"    ;;
   quarkus-hibernate|quarkus-app-axon|quarkus-*)   TARGET_APP_LOG_FILE="/tmp/exeris-quarkus-9002.log"   ;;
+  restate|restate-benchmark-app|restate-*)        TARGET_APP_LOG_FILE="/tmp/exeris-restate-9004.log"   ;;
   *)                                               TARGET_APP_LOG_FILE=""                               ;;
 esac
 
@@ -823,10 +959,13 @@ RECOMMEND_PREFLIGHT_BODY_JSON="$LOGS_DIR/recommend-preflight-body.json"
 RECOMMEND_PREFLIGHT_STATUS_TXT="$LOGS_DIR/recommend-preflight-status.txt"
 TARGET_RUNTIME_LOG="$LOGS_DIR/target-runtime.log"
 CLAIM_STATUS_JSON="$OUTPUT_DIR/claim-status.json"
+CORRECTNESS_GATE_JSON="$OUTPUT_DIR/correctness-gate.json"
 RESULT_JSON="$OUTPUT_DIR/result.json"
 RUNTIME_LOG_METADATA_JSON="$LOGS_DIR/runtime-log-metadata.json"
 AXON_STATS_CSV="$LOGS_DIR/axonserver-docker-stats.csv"
 AXON_STATS_PID=""
+RESTATE_STATS_CSV="$LOGS_DIR/restate-server-docker-stats.csv"
+RESTATE_STATS_PID=""
 # OS-level sidecars (opt-in via BENCH_OS_SIDECARS=1, default OFF). pidstat gives
 # per-thread %wait (C2 starvation) + context switches; mpstat gives per-CPU
 # %usr/%sys/%soft/%idle (network/softirq burn). See tools/bench/lib/os-sampler.sh.
@@ -850,6 +989,37 @@ if [[ "$FORCE_RESTART_TARGET" == "true" && -n "$START_TARGET_SCRIPT" ]]; then
   "$START_TARGET_SCRIPT" "$TARGET_APP" || echo "Warning: start-target.sh exited non-zero; bench_ensure_target_ready will perform authoritative health wait." >&2
 fi
 bench_ensure_target_ready "$BASE_URL" "$CURL_INSECURE_OPT" "$HEALTH_TIMEOUT_SECONDS" "$START_TARGET_ON_DEMAND" "$START_TARGET_SCRIPT" "$TARGET_APP"
+
+# Restate: ensure the SDK deployment is registered against the restate-server
+# admin API before k6 traffic. The target self-registers at startup
+# (RESTATE_AUTO_REGISTER), but that races the (force-recreated) server coming
+# up — a force=true POST here is idempotent and makes registration
+# deterministic post-readiness. The SDK endpoint (:9084) is already listening
+# once /health answers: it binds before the facade in the target's main().
+if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+  _restate_admin_url="${RESTATE_ADMIN_URL:-http://localhost:9070}"
+  _restate_sdk_url="${RESTATE_SDK_ADVERTISED_URL:-http://host.docker.internal:${RESTATE_SDK_PORT:-9084}}"
+  RESTATE_REGISTRATION_TXT="$LOGS_DIR/restate-registration.txt"
+  _restate_reg_http="000"
+  echo "Registering Restate deployment ${_restate_sdk_url} at ${_restate_admin_url}/deployments..."
+  for _restate_reg_attempt in $(seq 1 15); do
+    _restate_reg_http="$(curl -s -o "$RESTATE_REGISTRATION_TXT" -w "%{http_code}" \
+      -X POST "${_restate_admin_url}/deployments" \
+      -H 'content-type: application/json' \
+      --data "{\"uri\":\"${_restate_sdk_url}\",\"force\":true}" \
+      2>/dev/null || echo "000")"
+    if [[ "$_restate_reg_http" == "200" || "$_restate_reg_http" == "201" ]]; then
+      echo "  Restate deployment registered (HTTP ${_restate_reg_http})."
+      break
+    fi
+    echo "  Attempt ${_restate_reg_attempt}: deployment registration returned ${_restate_reg_http}, retrying in 2s..."
+    sleep 2
+  done
+  if [[ "$_restate_reg_http" != "200" && "$_restate_reg_http" != "201" ]]; then
+    echo "ERROR: Restate deployment registration failed (last HTTP ${_restate_reg_http}); OrderSaga would be uninvokable. See $RESTATE_REGISTRATION_TXT" >&2
+    exit 1
+  fi
+fi
 
 DECLARED_PROTOCOL_MODE="$(bench_derive_declared_protocol_mode "$TARGET_APP")"
 DECLARED_TRANSPORT_MODE="$(bench_derive_transport_mode "$DECLARED_PROTOCOL_MODE")"
@@ -950,74 +1120,101 @@ elif [[ "$ENABLE_JFR" == "true" ]]; then
   bench_start_jfr_recording "" "$LOGS_DIR" "$JFR_RECORDING_NAME" "$JFR_SETTINGS" || true
 fi
 
+# Sidecar docker-stats sampler (1 Hz). Used for deployment-unit sidecars
+# (Axon Server, restate-server) whose CPU/RSS is a separate container and
+# therefore NOT captured by the per-process resource sampler. Sets
+# _CONTAINER_STATS_SAMPLER_PID (the sampler runs as a direct child of this
+# shell so the post-run kill/wait semantics are unchanged).
+_CONTAINER_STATS_SAMPLER_PID=""
+_start_container_stats_sampler() {
+  local _stats_container="$1"
+  local _stats_csv="$2"
+  printf 'epoch_ms,cpu_pct,mem_usage_mb,mem_limit_mb,net_in_mb,net_out_mb,block_in_mb,block_out_mb,pids\n' > "$_stats_csv"
+  (
+    _mem_to_mb() {
+      local v="$1"
+      if [[ "$v" == *GiB ]]; then
+        awk -v n="${v%GiB}" 'BEGIN{printf "%.1f\n", n*1024}'
+      elif [[ "$v" == *MiB ]]; then
+        echo "${v%MiB}"
+      elif [[ "$v" == *kB ]]; then
+        awk -v n="${v%kB}" 'BEGIN{printf "%.3f\n", n/1024}'
+      else
+        echo "0"
+      fi
+    }
+    _io_to_mb() {
+      local v="$1"
+      if [[ "$v" == *GB ]]; then
+        awk -v n="${v%GB}" 'BEGIN{printf "%.1f\n", n*1024}'
+      elif [[ "$v" == *MB ]]; then
+        echo "${v%MB}"
+      elif [[ "$v" == *kB ]]; then
+        awk -v n="${v%kB}" 'BEGIN{printf "%.3f\n", n/1024}'
+      else
+        echo "0"
+      fi
+    }
+    while true; do
+      _line="$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}},{{.NetIO}},{{.BlockIO}},{{.PIDs}}' "$_stats_container" 2>/dev/null || true)"
+      [[ -z "$_line" ]] && { sleep 1; continue; }
+      # date +%s%3N is unreliable (ignores %3N width and drops leading zeros in
+      # the sub-second field, corrupting the timestamp) — read s and ns in one
+      # atomic call and combine arithmetically. See resource-sampler.sh.
+      _epoch_s=""; _epoch_ns=""
+      read -r _epoch_s _epoch_ns < <(date +'%s %N')
+      [[ "$_epoch_ns" =~ ^[0-9]+$ ]] || _epoch_ns=0
+      _epoch_ms=$(( _epoch_s * 1000 + 10#$_epoch_ns / 1000000 ))
+      # Parse CPUPerc (strip %)
+      _cpu="${_line%%,*}"; _cpu="${_cpu//%/}"
+      _rest="${_line#*,}"
+      # Parse MemUsage: "123MiB / 456GiB" → usage and limit in MB
+      _mem_field="${_rest%%,*}"; _rest="${_rest#*,}"
+      _mem_usage_raw="${_mem_field%% /*}"; _mem_limit_raw="${_mem_field##* / }"
+      _mem_u="$(_mem_to_mb "$_mem_usage_raw")"
+      _mem_l="$(_mem_to_mb "$_mem_limit_raw")"
+      # Parse NetIO: "1.2MB / 3.4MB"
+      _net_field="${_rest%%,*}"; _rest="${_rest#*,}"
+      _net_in_raw="${_net_field%% /*}"; _net_out_raw="${_net_field##* / }"
+      _net_in="$(_io_to_mb "$_net_in_raw")"
+      _net_out="$(_io_to_mb "$_net_out_raw")"
+      # Parse BlockIO: "1.2MB / 3.4MB"
+      _blk_field="${_rest%%,*}"; _pids="${_rest##*,}"
+      _blk_in_raw="${_blk_field%% /*}"; _blk_out_raw="${_blk_field##* / }"
+      _blk_in="$(_io_to_mb "$_blk_in_raw")"
+      _blk_out="$(_io_to_mb "$_blk_out_raw")"
+      printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+        "$_epoch_ms" "$_cpu" "$_mem_u" "$_mem_l" "$_net_in" "$_net_out" "$_blk_in" "$_blk_out" "$_pids" >> "$_stats_csv"
+      sleep 1
+    done
+  ) &
+  _CONTAINER_STATS_SAMPLER_PID="$!"
+}
+
 # Start Axon Server docker stats sampler (if axon contract detected)
 AXON_STATS_PID=""
 if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
   _axon_cid="$(docker inspect --format '{{.Id}}' exeris-e2e-saga-axonserver 2>/dev/null || true)"
   if [[ -n "$_axon_cid" ]]; then
-    printf 'epoch_ms,cpu_pct,mem_usage_mb,mem_limit_mb,net_in_mb,net_out_mb,block_in_mb,block_out_mb,pids\n' > "$AXON_STATS_CSV"
-    (
-      _mem_to_mb() {
-        local v="$1"
-        if [[ "$v" == *GiB ]]; then
-          awk -v n="${v%GiB}" 'BEGIN{printf "%.1f\n", n*1024}'
-        elif [[ "$v" == *MiB ]]; then
-          echo "${v%MiB}"
-        elif [[ "$v" == *kB ]]; then
-          awk -v n="${v%kB}" 'BEGIN{printf "%.3f\n", n/1024}'
-        else
-          echo "0"
-        fi
-      }
-      _io_to_mb() {
-        local v="$1"
-        if [[ "$v" == *GB ]]; then
-          awk -v n="${v%GB}" 'BEGIN{printf "%.1f\n", n*1024}'
-        elif [[ "$v" == *MB ]]; then
-          echo "${v%MB}"
-        elif [[ "$v" == *kB ]]; then
-          awk -v n="${v%kB}" 'BEGIN{printf "%.3f\n", n/1024}'
-        else
-          echo "0"
-        fi
-      }
-      while true; do
-        _line="$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}},{{.NetIO}},{{.BlockIO}},{{.PIDs}}' exeris-e2e-saga-axonserver 2>/dev/null || true)"
-        [[ -z "$_line" ]] && { sleep 1; continue; }
-        # date +%s%3N is unreliable (ignores %3N width and drops leading zeros in
-        # the sub-second field, corrupting the timestamp) — read s and ns in one
-        # atomic call and combine arithmetically. See resource-sampler.sh.
-        _epoch_s=""; _epoch_ns=""
-        read -r _epoch_s _epoch_ns < <(date +'%s %N')
-        [[ "$_epoch_ns" =~ ^[0-9]+$ ]] || _epoch_ns=0
-        _epoch_ms=$(( _epoch_s * 1000 + 10#$_epoch_ns / 1000000 ))
-        # Parse CPUPerc (strip %)
-        _cpu="${_line%%,*}"; _cpu="${_cpu//%/}"
-        _rest="${_line#*,}"
-        # Parse MemUsage: "123MiB / 456GiB" → usage and limit in MB
-        _mem_field="${_rest%%,*}"; _rest="${_rest#*,}"
-        _mem_usage_raw="${_mem_field%% /*}"; _mem_limit_raw="${_mem_field##* / }"
-        _mem_u="$(_mem_to_mb "$_mem_usage_raw")"
-        _mem_l="$(_mem_to_mb "$_mem_limit_raw")"
-        # Parse NetIO: "1.2MB / 3.4MB"
-        _net_field="${_rest%%,*}"; _rest="${_rest#*,}"
-        _net_in_raw="${_net_field%% /*}"; _net_out_raw="${_net_field##* / }"
-        _net_in="$(_io_to_mb "$_net_in_raw")"
-        _net_out="$(_io_to_mb "$_net_out_raw")"
-        # Parse BlockIO: "1.2MB / 3.4MB"
-        _blk_field="${_rest%%,*}"; _pids="${_rest##*,}"
-        _blk_in_raw="${_blk_field%% /*}"; _blk_out_raw="${_blk_field##* / }"
-        _blk_in="$(_io_to_mb "$_blk_in_raw")"
-        _blk_out="$(_io_to_mb "$_blk_out_raw")"
-        printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
-          "$_epoch_ms" "$_cpu" "$_mem_u" "$_mem_l" "$_net_in" "$_net_out" "$_blk_in" "$_blk_out" "$_pids" >> "$AXON_STATS_CSV"
-        sleep 1
-      done
-    ) &
-    AXON_STATS_PID="$!"
+    _start_container_stats_sampler exeris-e2e-saga-axonserver "$AXON_STATS_CSV"
+    AXON_STATS_PID="$_CONTAINER_STATS_SAMPLER_PID"
     echo "Axon Server docker stats sampler started (container: exeris-e2e-saga-axonserver, pid: ${AXON_STATS_PID})."
   else
     echo "Warning: exeris-e2e-saga-axonserver container not found; Axon Server stats will not be captured." >&2
+  fi
+fi
+
+# Start restate-server docker stats sampler (if restate target detected) —
+# same deployment-unit attribution policy as Axon Server above.
+RESTATE_STATS_PID=""
+if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+  _restate_cid="$(docker inspect --format '{{.Id}}' exeris-e2e-saga-restate-server 2>/dev/null || true)"
+  if [[ -n "$_restate_cid" ]]; then
+    _start_container_stats_sampler exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV"
+    RESTATE_STATS_PID="$_CONTAINER_STATS_SAMPLER_PID"
+    echo "restate-server docker stats sampler started (container: exeris-e2e-saga-restate-server, pid: ${RESTATE_STATS_PID})."
+  else
+    echo "Warning: exeris-e2e-saga-restate-server container not found; restate-server stats will not be captured." >&2
   fi
 fi
 
@@ -1031,6 +1228,12 @@ fi
 if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
   export K6_MAX_POLL_ATTEMPTS="${K6_MAX_POLL_ATTEMPTS:-40}"
 fi
+# CONTRACT-v2 s8 outcome-split reporting needs p99 for saga_completed_duration /
+# saga_compensated_duration (med == p50 is already in k6's default set, p(99) is
+# not, and k6 only adds extra stats implicitly when a threshold references them).
+# K6_* OS env reaches both the local k6 binary and the docker fallback (-e
+# forwarding in tools/bench/lib/k6.sh). Caller override wins.
+export K6_SUMMARY_TREND_STATS="${K6_SUMMARY_TREND_STATS:-avg,min,med,max,p(90),p(95),p(99)}"
 K6_EXIT_CODE=0
 set +e
 bench_run_k6 "$K6_SCRIPT" "$K6_OUTPUT_JSON" "$K6_SUMMARY_JSON" "" "$K6_DOCKER_IMAGE" "$K6_TIMESERIES_CSV" \
@@ -1064,6 +1267,13 @@ if [[ -n "$AXON_STATS_PID" ]]; then
   kill "$AXON_STATS_PID" >/dev/null 2>&1 || true
   wait "$AXON_STATS_PID" 2>/dev/null || true
   AXON_STATS_PID=""
+fi
+
+# Stop restate-server docker stats sampler
+if [[ -n "$RESTATE_STATS_PID" ]]; then
+  kill "$RESTATE_STATS_PID" >/dev/null 2>&1 || true
+  wait "$RESTATE_STATS_PID" 2>/dev/null || true
+  RESTATE_STATS_PID=""
 fi
 
 # Capture JFR dump and metadata after the run
@@ -1102,7 +1312,206 @@ SEED_MANIFEST_SHA256="$(file_sha256_or_unknown "$SEED_MANIFEST_PATH")"
 SEED_VERIFY_SCRIPT_SHA256="$(file_sha256_or_unknown "$SEED_VERIFY_SCRIPT")"
 SEED_APPLY_SCRIPT_SHA256="$(file_sha256_or_unknown "$SEED_APPLY_SCRIPT")"
 
-if [[ "$K6_EXIT_CODE" -eq 0 ]]; then
+# --- CONTRACT-v2 s4.1 exact compensation oracle (s7 O2-style hard assert) ---
+# decline(orderId) := fnv1a64(orderId) mod 1000 < 30 over the seeded,
+# deterministic orderId population, so the expected compensation count per run
+# is an exact integer, not a statistical estimate. observed == expected is a
+# hard pass/fail gate; a declined payment is business-terminal (compensated,
+# never retried). Expected values come from tools/bench/lib/fnv1a64.py — the
+# single source of truth kept in lockstep with generateOrderId() in k6.js:
+#   orderId = `${K6_ORDER_SEED}-${exec.scenario.name}-i${iterationInTest}`
+# iterationInTest is a dense zero-based PER-SCENARIO index, so the issued
+# population is one dense 0..N-1 sequence per k6 scenario (warmup/measurement/
+# cooldown); per-scenario counts are derived from the k6 NDJSON stream and the
+# density assumption is checked against per-scenario completed iterations.
+# Backward compat: summaries from the pre-v2 k6 script (no saga_issued_total
+# counter) skip the gate with an explicit WARN instead of failing.
+FNV1A64_HELPER="$REPO_ROOT/tools/bench/lib/fnv1a64.py"
+GATE_STATUS="skipped"
+GATE_REASON=""
+GATE_EXPECTED=""
+GATE_OBSERVED=""
+GATE_ISSUED=""
+GATE_POP_COUNTS=""
+GATE_DENSITY_NOTE=""
+# Defaults MUST match ORDER_SEED / generateOrderId() in scenarios/e2e-shop-order-saga/k6.js.
+GATE_ORDER_SEED="${K6_ORDER_SEED:-exeris-saga-v2}"
+GATE_ORDER_ID_FORMAT="{seed}-{scenario}-i{index}"
+
+GATE_ISSUED="$(jq -r '.metrics.saga_issued_total.count // empty' "$K6_SUMMARY_JSON" 2>/dev/null || true)"
+GATE_OBSERVED="$(jq -r '.metrics.saga_compensated_total.count // empty' "$K6_SUMMARY_JSON" 2>/dev/null || true)"
+
+# v2 capability marker: the driving k6 script declaring saga_issued_total is the
+# only derivable distinction between a legacy pre-v2 summary (documented
+# skip-with-WARN) and a v2-capable run whose gate inputs are broken (fails
+# closed, status=error). Target-build v2-ness is not independently derivable
+# here; the k6 script is the authority.
+GATE_V2_CAPABLE="false"
+if grep -q 'saga_issued_total' "$K6_SCRIPT" 2>/dev/null; then
+  GATE_V2_CAPABLE="true"
+fi
+
+# k6 omits zero-sample metrics from the summary export: a missing counter under
+# a v2 script (which declares saga_issued_total) means 0 issued, not "old script".
+if [[ -z "$GATE_ISSUED" && -f "$K6_SUMMARY_JSON" && "$GATE_V2_CAPABLE" == "true" ]]; then
+  GATE_ISSUED="0"
+fi
+
+if [[ ! -f "$K6_SUMMARY_JSON" ]]; then
+  if [[ "$GATE_V2_CAPABLE" == "true" ]]; then
+    GATE_STATUS="error"
+    GATE_REASON="k6 summary not found for a v2-capable k6 script; gate inputs missing — failing closed (this is not the documented pre-v2 legacy-summary skip)"
+  else
+    GATE_REASON="k6 summary not found; correctness gate not evaluable (pre-v2 k6 script)"
+  fi
+elif [[ -z "$GATE_ISSUED" ]]; then
+  if [[ "$GATE_V2_CAPABLE" == "true" ]]; then
+    GATE_STATUS="error"
+    GATE_REASON="saga_issued_total unreadable from k6 summary despite a v2-capable k6 script; failing closed"
+  else
+    GATE_REASON="k6 summary lacks the saga_issued_total counter (pre-CONTRACT-v2 k6 script); gate skipped"
+  fi
+else
+  # With the v2 script present, an absent saga_compensated_total means zero
+  # compensations were observed — exactly the v1 Axon defect class the gate
+  # must catch — so it counts as 0, never as "skip".
+  [[ -z "$GATE_OBSERVED" ]] && GATE_OBSERVED="0"
+  if [[ "$FAULT_MODE" == "transient" ]]; then
+    # s4.2 inverse assertion: transient faults must NOT produce compensations.
+    GATE_EXPECTED="0"
+  elif [[ "$GATE_ISSUED" == "0" ]]; then
+    # No orders issued → no declined subset → zero compensations expected.
+    GATE_EXPECTED="0"
+  elif ! command -v python3 >/dev/null 2>&1; then
+    GATE_STATUS="error"
+    GATE_REASON="python3 unavailable; expected declines not computable — failing closed on a v2-capable run"
+  else
+    # Per-scenario issued counts and completed-iteration counts from the k6
+    # NDJSON stream (--out json=). iterations > issued in any scenario means an
+    # iteration aborted BEFORE order creation → the issued index set is no
+    # longer dense and count-based regeneration would run the oracle over the
+    # wrong id set; the exact oracle is then not computable from counts alone.
+    declare -A _gate_issued_by=() _gate_iters_by=()
+    if [[ -s "$K6_OUTPUT_JSON" ]]; then
+      while read -r _g_cnt _g_metric _g_scen; do
+        # Strip a trailing CR (CRLF-emitting jq builds / CRLF-contaminated
+        # streams) — a CR inside the scenario name would silently change the
+        # hashed orderIds and corrupt the exact oracle.
+        _g_scen="${_g_scen%$'\r'}"
+        [[ -z "${_g_cnt:-}" || -z "${_g_scen:-}" ]] && continue
+        case "$_g_metric" in
+          saga_issued_total) _gate_issued_by["$_g_scen"]="$_g_cnt" ;;
+          iterations)        _gate_iters_by["$_g_scen"]="$_g_cnt" ;;
+        esac
+      done < <(jq -r 'select(.type=="Point" and (.metric=="saga_issued_total" or .metric=="iterations"))
+                        | .metric + " " + (.data.tags.scenario // "unknown")' \
+                 "$K6_OUTPUT_JSON" 2>/dev/null | sort | uniq -c || true)
+    fi
+
+    if [[ "${#_gate_issued_by[@]}" -eq 0 ]]; then
+      GATE_STATUS="error"
+      GATE_REASON="no per-scenario saga_issued_total samples in $(basename "$K6_OUTPUT_JSON"); the '${GATE_ORDER_ID_FORMAT}' population needs the scenario split; exact oracle not computable"
+    else
+      _gate_total_issued=0
+      _gate_density_violations=""
+      while IFS= read -r _g_scen; do
+        [[ -z "$_g_scen" ]] && continue
+        _g_issued="${_gate_issued_by[$_g_scen]:-0}"
+        _g_iters="${_gate_iters_by[$_g_scen]:-0}"
+        if [[ "$_g_issued" -gt 0 ]]; then
+          GATE_POP_COUNTS+="${GATE_POP_COUNTS:+,}${_g_scen}=${_g_issued}"
+        fi
+        _gate_total_issued=$(( _gate_total_issued + _g_issued ))
+        if (( _g_iters > _g_issued )); then
+          _gate_density_violations+="${_gate_density_violations:+, }${_g_scen}: iterations=${_g_iters} > issued=${_g_issued}"
+        elif (( _g_issued > _g_iters )); then
+          GATE_DENSITY_NOTE+="${GATE_DENSITY_NOTE:+; }${_g_scen}: issued=${_g_issued} > completed iterations=${_g_iters} (post-issue interruption; index set assumed still dense)"
+        fi
+      done < <(printf '%s\n' "${!_gate_issued_by[@]}" "${!_gate_iters_by[@]}" | sort -u)
+
+      if [[ -n "$_gate_density_violations" ]]; then
+        GATE_STATUS="error"
+        GATE_REASON="issued orderId population not regenerable: iterations aborted before order creation (${_gate_density_violations}); exact oracle needs the actual issued id list (fnv1a64.py --ids-file)"
+      elif [[ "$_gate_total_issued" -ne "$GATE_ISSUED" ]]; then
+        GATE_STATUS="error"
+        GATE_REASON="per-scenario issued sum (${_gate_total_issued}) != summary saga_issued_total (${GATE_ISSUED}); inconsistent k6 artifacts"
+      else
+        GATE_EXPECTED="$(python3 "$FNV1A64_HELPER" --seed "$GATE_ORDER_SEED" --counts "$GATE_POP_COUNTS" 2>&1)" || true
+        if [[ ! "$GATE_EXPECTED" =~ ^[0-9]+$ ]]; then
+          GATE_STATUS="error"
+          GATE_REASON="fnv1a64.py did not produce an integer (output: ${GATE_EXPECTED:-empty})"
+          GATE_EXPECTED=""
+        fi
+      fi
+    fi
+  fi
+fi
+
+if [[ -n "$GATE_EXPECTED" ]]; then
+  if [[ "$GATE_OBSERVED" == "$GATE_EXPECTED" ]]; then
+    GATE_STATUS="pass"
+    GATE_REASON="observed_compensations == expected_declines (${GATE_OBSERVED}); issued=${GATE_ISSUED}${GATE_POP_COUNTS:+ (${GATE_POP_COUNTS})} seed=${GATE_ORDER_SEED} fault=${FAULT_MODE}"
+  else
+    GATE_STATUS="fail"
+    GATE_REASON="observed_compensations=${GATE_OBSERVED} != expected_declines=${GATE_EXPECTED} (issued=${GATE_ISSUED}${GATE_POP_COUNTS:+ (${GATE_POP_COUNTS})} seed=${GATE_ORDER_SEED} fault=${FAULT_MODE}); CONTRACT-v2 s4.1 requires exact equality"
+  fi
+fi
+
+case "$GATE_STATUS" in
+  pass)    echo "Correctness gate PASS: ${GATE_REASON}" ;;
+  fail)    echo "ERROR: correctness gate FAIL: ${GATE_REASON}" >&2 ;;
+  error)   echo "ERROR: correctness gate ERROR (fails closed): ${GATE_REASON}" >&2 ;;
+  skipped) echo "WARN: correctness gate SKIPPED: ${GATE_REASON}" >&2 ;;
+esac
+
+jq -n \
+  --arg status           "$GATE_STATUS" \
+  --arg reason           "$GATE_REASON" \
+  --arg expected         "$GATE_EXPECTED" \
+  --arg observed         "$GATE_OBSERVED" \
+  --arg issued           "$GATE_ISSUED" \
+  --arg order_seed       "$GATE_ORDER_SEED" \
+  --arg order_id_format  "$GATE_ORDER_ID_FORMAT" \
+  --arg pop_counts       "$GATE_POP_COUNTS" \
+  --arg density_note     "$GATE_DENSITY_NOTE" \
+  --arg fault_mode       "$FAULT_MODE" \
+  --arg durability_tier  "$DURABILITY_TIER" \
+  --arg durability_tier_source "$DURABILITY_TIER_SOURCE" \
+  --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{
+    schema_version:   "1",
+    gate_id:          "contract_v2_s4_1_exact_compensation",
+    gate_name:        "observed_compensations == expected_declines",
+    contract_ref:     "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
+    decline_rule:     "fnv1a64(orderId) mod 1000 < 30 (unsigned, FNV-1a 64 over UTF-8 bytes)",
+    fault_mode:       $fault_mode,
+    durability_tier:  $durability_tier,
+    durability_tier_source: $durability_tier_source,
+    status:           $status,
+    pass_fail:        (if $status == "pass" then "pass" elif $status == "fail" then "fail" else "not_evaluated" end),
+    expected:         (if $expected == "" then null else ($expected | tonumber) end),
+    observed:         (if $observed == "" then null else ($observed | tonumber) end),
+    issued_orders:    (if $issued   == "" then null else ($issued   | tonumber) end),
+    order_seed:       $order_seed,
+    order_id_format:  $order_id_format,
+    issued_by_scenario: (if $pop_counts == ""
+                         then null
+                         else ($pop_counts | split(",") | map(split("=") | {(.[0]): (.[1] | tonumber)}) | add)
+                         end),
+    density_note:     (if $density_note == "" then null else $density_note end),
+    population_assumption: "one dense iteration-index sequence 0..N-1 per k6 scenario (exec.scenario.iterationInTest); density checked via per-scenario completed iterations vs saga_issued_total from the k6 NDJSON stream (see fnv1a64.py)",
+    helper_ref:       "tools/bench/lib/fnv1a64.py",
+    reason:           $reason,
+    generated_at_utc: $generated_at_utc
+  }' > "$CORRECTNESS_GATE_JSON"
+
+if [[ "$GATE_STATUS" == "fail" ]]; then
+  RUNNER_STATUS="compensation_mismatch"
+elif [[ "$GATE_STATUS" == "error" ]]; then
+  # Gate not evaluable on a v2-capable run (missing k6 metrics, helper crash,
+  # python3 unavailable, inconsistent artifacts) — fails closed, never silent.
+  RUNNER_STATUS="compensation_gate_error"
+elif [[ "$K6_EXIT_CODE" -eq 0 ]]; then
   RUNNER_STATUS="clean"
 else
   RUNNER_STATUS="threshold_failure"
@@ -1113,6 +1522,10 @@ jq -n \
   --arg contract_id "$CONTRACT_ID" \
   --arg target_app "$TARGET_APP" \
   --arg graph_track "$GRAPH_TRACK" \
+  --arg fault_mode "$FAULT_MODE" \
+  --arg durability_tier "$DURABILITY_TIER" \
+  --arg durability_tier_source "$DURABILITY_TIER_SOURCE" \
+  --arg correctness_gate_status "$GATE_STATUS" \
   --arg hardware_profile "$PROFILE" \
   --arg tier "community" \
   --arg benchmark_family "runtime" \
@@ -1158,6 +1571,9 @@ jq -n \
     contract_id: $contract_id,
     target_app: $target_app,
     graph_track: $graph_track,
+    fault_mode: $fault_mode,
+    durability_tier: $durability_tier,
+    durability_tier_source: $durability_tier_source,
     hardware_profile: $hardware_profile,
     tier: $tier,
     benchmark_family: $benchmark_family,
@@ -1185,8 +1601,21 @@ jq -n \
     perf_stat_enabled: ($perf_stat_enabled == "true"),
     k6_exit_code: $k6_exit_code,
     runner_status: $runner_status,
+    correctness_gate_status: $correctness_gate_status,
     logs_dir: $logs_dir,
     backend_network_mode: $backend_network_mode,
+    fault_injection: {
+      fault_mode: $fault_mode,
+      selection: "per-orderId, deterministic, business-terminal (CONTRACT-v2 s4.1)",
+      decline_rule: "fnv1a64(orderId) mod 1000 < 30 (unsigned)",
+      nominal_decline_fraction: 0.03,
+      transient_retry_policy: {
+        max_attempts: 3,
+        initial_backoff_ms: 50,
+        backoff_factor: 2,
+        jitter: false
+      }
+    },
     infra_contract: {
       compose_ref: $compose_ref,
       compose_sha256: $compose_sha256,
@@ -1213,8 +1642,10 @@ jq -n \
   --arg contract_id      "$CONTRACT_ID" \
   --arg target_app       "$TARGET_APP" \
   --arg graph_track      "$GRAPH_TRACK" \
+  --arg fault_mode       "$FAULT_MODE" \
   --arg hardware_profile "$PROFILE" \
   --arg claim_scope      "exploratory" \
+  --arg correctness_gate_status "$GATE_STATUS" \
   --argjson k6_exit_code "$K6_EXIT_CODE" \
   '{
     schema_version:   "1",
@@ -1222,18 +1653,22 @@ jq -n \
     contract_id:      $contract_id,
     target_app:       $target_app,
     graph_track:      $graph_track,
+    fault_mode:       $fault_mode,
     hardware_profile: $hardware_profile,
     claim_scope:      $claim_scope,
+    correctness_gate_status: $correctness_gate_status,
     rejection_codes:  (
-      if $hardware_profile != "perf-box-amd64"
-      then ["non_canonical_hardware_profile"]
-      elif $k6_exit_code != 0
-      then ["threshold_failure"]
-      else []
-      end
+      (if $correctness_gate_status == "fail" then ["compensation_mismatch"] else [] end)
+      + (if $correctness_gate_status == "error" then ["compensation_gate_error"] else [] end)
+      + (if $hardware_profile != "perf-box-amd64" then ["non_canonical_hardware_profile"] else [] end)
+      + (if $k6_exit_code != 0 then ["threshold_failure"] else [] end)
     ),
     reason: (
-      if $hardware_profile != "perf-box-amd64"
+      if $correctness_gate_status == "fail"
+      then "correctness gate failed: observed compensations != expected declines (CONTRACT-v2 s4.1); performance numbers excluded from headline tables"
+      elif $correctness_gate_status == "error"
+      then "correctness gate errored: CONTRACT-v2 s4.1 not evaluable on a v2-capable run (fails closed); performance numbers excluded from headline tables"
+      elif $hardware_profile != "perf-box-amd64"
       then "not perf-box-amd64 hardware profile"
       elif $k6_exit_code != 0
       then ("k6 exited with code " + ($k6_exit_code | tostring))
@@ -1299,10 +1734,37 @@ jq -n \
     detection_method: $detection_method
   }' > "$RUNTIME_LOG_METADATA_JSON"
 
+# Effective core count for ops/s/core (CONTRACT-v2 s8: throughput as ops/s AND
+# ops/s/core). Precedence: explicit cgroup CPU quota (effective cores) >
+# resource-sampler host_logical_cpus (nproc at sample time) > env.json
+# cpu.logical_threads > nproc fallback.
+CORES_EFFECTIVE=""
+CORES_SOURCE="unknown"
+if [[ -n "$BENCH_CGROUP_CPU_QUOTA_PCT" ]]; then
+  CORES_EFFECTIVE="$(awk -v p="$BENCH_CGROUP_CPU_QUOTA_PCT" 'BEGIN { printf "%.2f", p / 100 }')"
+  CORES_SOURCE="cgroup_cpu_quota_pct"
+fi
+if [[ -z "$CORES_EFFECTIVE" ]]; then
+  CORES_EFFECTIVE="$(jq -r '.host_logical_cpus // empty' "$RESOURCE_METRICS_JSON" 2>/dev/null || true)"
+  [[ -n "$CORES_EFFECTIVE" ]] && CORES_SOURCE="resource_metrics_host_logical_cpus"
+fi
+if [[ -z "$CORES_EFFECTIVE" ]]; then
+  CORES_EFFECTIVE="$(jq -r '.cpu.logical_threads // empty' "$ENV_JSON" 2>/dev/null || true)"
+  [[ -n "$CORES_EFFECTIVE" ]] && CORES_SOURCE="env_cpu_logical_threads"
+fi
+if [[ -z "$CORES_EFFECTIVE" ]]; then
+  CORES_EFFECTIVE="$(nproc 2>/dev/null || true)"
+  [[ -n "$CORES_EFFECTIVE" ]] && CORES_SOURCE="nproc"
+fi
+if [[ ! "$CORES_EFFECTIVE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+  CORES_EFFECTIVE=""
+  CORES_SOURCE="unknown"
+fi
+
 # Generate result.json (canonical merged artifact)
 # Create null stubs for optional JSON files that may not exist (JFR disabled, or the
 # throughput aggregator skipped when no CSV/python3).
-for _optional_json in "$JFR_METADATA_JSON" "$JFR_START_JSON" "$K6_THROUGHPUT_SERIES_JSON"; do
+for _optional_json in "$JFR_METADATA_JSON" "$JFR_START_JSON" "$K6_THROUGHPUT_SERIES_JSON" "$CORRECTNESS_GATE_JSON"; do
   [[ -f "$_optional_json" ]] || printf 'null\n' > "$_optional_json"
 done
 
@@ -1351,6 +1813,9 @@ if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_
     --slurpfile jfr_capture        "$JFR_METADATA_JSON" \
     --slurpfile jfr_start          "$JFR_START_JSON" \
     --slurpfile throughput_series  "$K6_THROUGHPUT_SERIES_JSON" \
+    --slurpfile correctness_gate   "$CORRECTNESS_GATE_JSON" \
+    --arg      cores_effective     "$CORES_EFFECTIVE" \
+    --arg      cores_source        "$CORES_SOURCE" \
     --argjson  warmup_window_s     "$_warmup_window_s" \
     --argjson  measurement_window_s "$_measurement_window_s" \
     --argjson  cooldown_window_s   "$_cooldown_window_s" \
@@ -1367,6 +1832,9 @@ if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_
       contract_id:              $rm.contract_id,
       target_app:               $rm.target_app,
       graph_track:              $rm.graph_track,
+      fault_mode:               $rm.fault_mode,
+      durability_tier:          $rm.durability_tier,
+      durability_tier_source:   $rm.durability_tier_source,
       tier:                     $rm.tier,
       benchmark_family:         $rm.benchmark_family,
       run_timestamp_utc:        $rm.run_timestamp_utc,
@@ -1379,12 +1847,17 @@ if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_
       runner_status:            $rm.runner_status,
       final_reason:             $final_reason,
       reproducibility_status:   $reproducibility_status,
+      correctness_gate:         ($correctness_gate[0]),
       output_dir:               $rm.output_dir,
       metrics: {
         tool:                        "k6",
         orders_initiated:            ($km.orders_initiated.count // 0),
         saga_success_rate:           ($km.saga_success.value // 0),
         saga_compensated_rate:       ($km.saga_compensated.value // 0),
+        saga_issued_total:             ($km.saga_issued_total.count // null),
+        saga_completed_total:          ($km.saga_completed_total.count // null),
+        saga_compensated_total:        ($km.saga_compensated_total.count // null),
+        saga_failed_unrecovered_total: ($km.saga_failed_unrecovered_total.count // null),
         http_reqs_total:             ($km.http_reqs.count // 0),
         http_reqs_rate:              ($km.http_reqs.rate // 0),
         http_req_duration_avg_ms:    ($km.http_req_duration.avg // null),
@@ -1394,7 +1867,40 @@ if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_
         iteration_duration_p90_ms:   ($km.iteration_duration["p(90)"] // null),
         iteration_duration_p95_ms:   ($km.iteration_duration["p(95)"] // null),
         error_rate_pct:              (($km.http_req_failed.value // 0) * 100),
+        latency_by_outcome: {
+          note: "CONTRACT-v2 s8: COMPLETED and COMPENSATED are separate populations (structurally different code paths); never mix or average across them",
+          completed: {
+            count:  ($km.saga_completed_total.count // null),
+            p50_ms: ($km.saga_completed_duration["p(50)"] // $km.saga_completed_duration.med // null),
+            p99_ms: ($km.saga_completed_duration["p(99)"] // null)
+          },
+          compensated: {
+            count:  ($km.saga_compensated_total.count // null),
+            p50_ms: ($km.saga_compensated_duration["p(50)"] // $km.saga_compensated_duration.med // null),
+            p99_ms: ($km.saga_compensated_duration["p(99)"] // null)
+          }
+        },
+        cores_effective:             (if $cores_effective == "" then null else ($cores_effective | tonumber) end),
+        cores_source:                $cores_source,
         steady_state_throughput_rps: ($ts.steady_state_throughput_rps // null),
+        steady_state_throughput_rps_per_core: (
+          if $cores_effective != "" and (($cores_effective | tonumber) > 0)
+             and (($ts.steady_state_throughput_rps // null) != null)
+          then ($ts.steady_state_throughput_rps / ($cores_effective | tonumber))
+          else null
+          end),
+        http_reqs_rate_per_core: (
+          if $cores_effective != "" and (($cores_effective | tonumber) > 0)
+          then (($km.http_reqs.rate // 0) / ($cores_effective | tonumber))
+          else null
+          end),
+        orders_initiated_rate:       ($km.orders_initiated.rate // null),
+        orders_initiated_rate_per_core: (
+          if $cores_effective != "" and (($cores_effective | tonumber) > 0)
+             and (($km.orders_initiated.rate // null) != null)
+          then ($km.orders_initiated.rate / ($cores_effective | tonumber))
+          else null
+          end),
         time_to_peak_s:              ($ts.time_to_peak_s // null),
         throughput_series:           ($ts.throughput_series // [])
       },
@@ -1445,10 +1951,15 @@ if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]; then
   echo "axon server stats: $AXON_STATS_CSV"
   echo "Note: Axon Server CPU/RSS is in $AXON_STATS_CSV (separate process). Not included in resource-metrics.json."
 fi
+if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
+  echo "restate server stats: $RESTATE_STATS_CSV"
+  echo "Note: restate-server CPU/RSS is in $RESTATE_STATS_CSV (separate container). Not included in resource-metrics.json."
+fi
 echo "logs dir: $LOGS_DIR"
 echo "jcmd diagnostics: $JCMD_DIAGNOSTICS_JSON"
 echo "endpoint preflight: $ENDPOINT_PREFLIGHT_TXT"
 echo "claim status: $CLAIM_STATUS_JSON"
+echo "correctness gate: $CORRECTNESS_GATE_JSON (status: ${GATE_STATUS})"
 echo "result: $RESULT_JSON"
 echo "runtime log metadata: $RUNTIME_LOG_METADATA_JSON"
 echo "target runtime log: $TARGET_RUNTIME_LOG"
@@ -1460,3 +1971,20 @@ if [[ "$ENABLE_PERF_STAT" == "true" ]]; then
   echo "perf stat: $PERF_STAT_CSV"
 fi
 echo "Note: results are exploratory unless profile is perf-box-amd64."
+
+# Fail closed on the CONTRACT-v2 s4.1 correctness gate: a compensation-count
+# mismatch is a correctness bug (v1 "zero compensations" class), not a
+# statistical anomaly. gate status=error (gate not evaluable on a v2-capable
+# run: missing k6 metrics, helper crash, python3 unavailable, inconsistent
+# artifacts) also fails closed — an unevaluated gate must never pass silently.
+# Only the documented pre-v2 legacy-summary skip remains a WARN. Artifacts
+# above are still written for post-mortem.
+if [[ "$GATE_STATUS" == "fail" ]]; then
+  echo "ERROR: CONTRACT-v2 s4.1 correctness gate FAILED: observed_compensations=${GATE_OBSERVED} expected_declines=${GATE_EXPECTED} (issued=${GATE_ISSUED}, seed=${GATE_ORDER_SEED})." >&2
+  echo "ERROR: run marked runner_status=compensation_mismatch; performance numbers from this run are excluded from headline tables. Details: $CORRECTNESS_GATE_JSON" >&2
+  exit 3
+elif [[ "$GATE_STATUS" == "error" ]]; then
+  echo "ERROR: CONTRACT-v2 s4.1 correctness gate ERROR (fails closed): ${GATE_REASON}" >&2
+  echo "ERROR: run marked runner_status=compensation_gate_error; performance numbers from this run are excluded from headline tables. Details: $CORRECTNESS_GATE_JSON" >&2
+  exit 4
+fi

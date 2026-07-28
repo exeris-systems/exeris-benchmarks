@@ -1,0 +1,30 @@
+
+                                                                                                    Allocation by Class
+
+Object Type                                                                                                                                                                                             Allocation Pressure
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- -------------------
+byte[]                                                                                                                                                                                                               20.98%
+java.util.LinkedHashMap$Entry                                                                                                                                                                                        20.70%
+java.util.HashMap$Node[]                                                                                                                                                                                             12.26%
+java.util.LinkedHashMap                                                                                                                                                                                               9.78%
+java.lang.String                                                                                                                                                                                                      6.75%
+java.lang.Object[]                                                                                                                                                                                                    6.49%
+jdk.internal.vm.StackChunk                                                                                                                                                                                            2.54%
+byte[][]                                                                                                                                                                                                              2.51%
+org.hibernate.jpa.spi.NativeQueryTupleTransformer$NativeTupleImpl                                                                                                                                                     2.27%
+org.postgresql.core.Tuple                                                                                                                                                                                             1.82%
+eu.exeris.benchmarks.targets.quarkusapp.dto.InterestView                                                                                                                                                              0.93%
+eu.exeris.benchmarks.targets.quarkusapp.dto.FriendSummary                                                                                                                                                             0.88%
+java.util.HashMap                                                                                                                                                                                                     0.65%
+java.util.HashMap$Node                                                                                                                                                                                                0.58%
+java.util.ArrayList                                                                                                                                                                                                   0.43%
+org.hibernate.sql.exec.internal.JdbcParameterImpl                                                                                                                                                                     0.32%
+org.hibernate.sql.exec.internal.JdbcParameterBindingImpl                                                                                                                                                              0.29%
+org.hibernate.engine.internal.EntityEntryImpl                                                                                                                                                                         0.25%
+eu.exeris.benchmarks.targets.quarkusapp.entity.UserEntity                                                                                                                                                             0.20%
+io.netty.channel.DefaultChannelPromise                                                                                                                                                                                0.19%
+org.hibernate.engine.internal.StatefulPersistenceContext$EntityHolderImpl                                                                                                                                             0.18%
+java.lang.Integer                                                                                                                                                                                                     0.18%
+org.hibernate.query.internal.QueryParameterBindingImpl                                                                                                                                                                0.17%
+org.postgresql.jdbc.PgResultSet                                                                                                                                                                                       0.16%
+org.hibernate.query.internal.QueryOptionsImpl                                                                                                                                                                         0.15%

@@ -10,9 +10,10 @@ import eu.exeris.benchmarks.targets.springapp.application.axon.event.InventoryRe
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.OrderConfirmedEvent;
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.OrderSagaCompensatedEvent;
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.OrderSagaCompletedEvent;
+import eu.exeris.benchmarks.targets.springapp.application.axon.event.OrderSagaFailedUnrecoveredEvent;
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.OrderSagaInitiatedEvent;
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentCompensatedEvent;
-import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentFailedEvent;
+import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentDeclinedEvent;
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentProcessedEvent;
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.ReservationCompensatedEvent;
 
@@ -69,16 +70,31 @@ public class OrderFulfillmentSaga {
                 new ConfirmOrderCommand(sagaId, orderId, userId, dbOrderId));
     }
 
+    /**
+     * CONTRACT-v2 §4.1: payment declined — a BUSINESS-TERMINAL outcome. Routed to
+     * backward recovery (LIFO compensation: payment refund, then reservation
+     * restore), never retried. §5: if a compensation step exhausts the command
+     * gateway's transient retry budget, the saga terminates FAILED_UNRECOVERED
+     * instead of being silently swallowed by the saga error handler.
+     */
     @SagaEventHandler(associationProperty = "sagaId")
-    public void on(PaymentFailedEvent event) {
-        commandGateway.sendAndWait(
-                new CompensatePaymentCommand(sagaId, orderId, userId, dbOrderId));
+    public void on(PaymentDeclinedEvent event) {
+        try {
+            commandGateway.sendAndWait(
+                    new CompensatePaymentCommand(sagaId, orderId, userId, dbOrderId));
+        } catch (Exception e) {
+            failUnrecovered();
+        }
     }
 
     @SagaEventHandler(associationProperty = "sagaId")
     public void on(PaymentCompensatedEvent event) {
-        commandGateway.sendAndWait(
-                new CompensateReservationCommand(sagaId, orderId, userId, dbOrderId));
+        try {
+            commandGateway.sendAndWait(
+                    new CompensateReservationCommand(sagaId, orderId, userId, dbOrderId));
+        } catch (Exception e) {
+            failUnrecovered();
+        }
     }
 
     @SagaEventHandler(associationProperty = "sagaId")
@@ -103,5 +119,16 @@ public class OrderFulfillmentSaga {
     @SagaEventHandler(associationProperty = "sagaId")
     public void on(OrderSagaCompensatedEvent event) {
         // saga lifecycle ends
+    }
+
+    @EndSaga
+    @SagaEventHandler(associationProperty = "sagaId")
+    public void on(OrderSagaFailedUnrecoveredEvent event) {
+        // saga lifecycle ends — compensation retry budget exhausted (CONTRACT-v2 §5)
+    }
+
+    private void failUnrecovered() {
+        eventBus.publish(GenericEventMessage.asEventMessage(
+                new OrderSagaFailedUnrecoveredEvent(orderId, userId, cartId, sagaId)));
     }
 }

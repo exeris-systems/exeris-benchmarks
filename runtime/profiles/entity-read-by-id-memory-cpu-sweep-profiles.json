@@ -1,0 +1,291 @@
+{
+  "schema_version": "1",
+  "note": "Sweep-specific execution profiles for the entity-read-by-id memory x CPU constrained single-read matrix (scripts/run-entity-read-by-id-memory-cpu-matrix.sh). This is deliberately NOT runtime/profiles/runtime-execution-profiles.json, which schemas/runtime-execution-profile-matrix.schema.json const-pins to exactly the two smoke profiles (128m-0p5vcpu + 256m-1vcpu); adding points there would break that schema. Passed to run-entity-read-by-id-constrained.sh via --profiles-json. All profiles are exploratory / descriptive_only / track-c / comparison-forbidden. GC is ParallelGC (the 2026-06-23 constrained-axes dossier survivor: Serial -> SIGSEGV and ZGC -> OOM under cap; Parallel is the only GC that stayed up), and the orchestrator also passes --jvm-gc parallel so the declared and effective GC agree with no override. Heap is auto-derived from max_ram_mb by the constrained runner (roughly Xms=MaxRAM/4, Xmx=3*MaxRAM/4) identically across arms; see the orchestrator's per-arm MATRIX_XMX_MB_* escape hatch and its heap-fairness caveat. active_processor_count == vcpu at every point (all integer vCPU). A budget where an arm OOMs / will-not-start is a RESULT, not a harness failure.",
+  "axes": {
+    "memory_mb_at_4vcpu": [128, 256, 512, 1024, 2048],
+    "vcpu_at_1024mb": [2, 4, 8],
+    "shared_point": "1024m / 4vcpu is on both axes (7 unique points, not a full grid)"
+  },
+  "profiles": [
+    {
+      "execution_profile_id": "runtime-constrained-128m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 128,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 128
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "Memory-axis floor point (128MB / 4vCPU) of the single-read memory-budget curve. Full-tier C2 + ParallelGC in 128MB is expected to OOM/startup-fail for most or all arms; that failure IS the curve's lower bound (recorded, not a harness error). No min-footprint (C1-only) overlay so the point stays JVM-knob-identical to the roomier points."
+    },
+    {
+      "execution_profile_id": "runtime-constrained-256m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 256,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 256
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "Memory-axis point (256MB / 4vCPU). The 2026-06-23 dossier found 256MB below the floor for BOTH stacks under the heavy 10x10x10 aggregate; the single-read workload is far lighter, so whether either arm now fits at 256MB is exactly what this point measures."
+    },
+    {
+      "execution_profile_id": "runtime-constrained-512m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 512,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 512
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "Memory-axis point (512MB / 4vCPU)."
+    },
+    {
+      "execution_profile_id": "runtime-constrained-1024m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 1024,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 1024
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "SHARED anchor point (1024MB / 4vCPU): the intersection of the memory axis and the vCPU cut, and the single reference point for the quarkus-hibernate arm. Counted once (7 unique points)."
+    },
+    {
+      "execution_profile_id": "runtime-constrained-2048m-4vcpu-v1",
+      "benchmark_family": "runtime-wrk",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 4,
+        "quota_us": 400000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 2048,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 4,
+        "max_ram_mb": 2048
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "Memory-axis roomiest point (2048MB / 4vCPU). Expected to be memory-unconstrained for the single-read workload; anchors the high end of the budget curve where RSS, not the cap, bounds the app."
+    },
+    {
+      "execution_profile_id": "runtime-constrained-1024m-2vcpu-v1",
+      "benchmark_family": "runtime-wrk",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 2,
+        "quota_us": 200000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 1024,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 2,
+        "max_ram_mb": 1024
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "vCPU-cut point (1024MB / 2vCPU). Perpendicular to the memory axis at the 1024MB anchor; expect heavy CFS throttling (throttled_periods high) so throughput here is CPU-quota-bound, while CPU/req stays the cleaner signal."
+    },
+    {
+      "execution_profile_id": "runtime-constrained-1024m-8vcpu-v1",
+      "benchmark_family": "runtime-wrk",
+      "profile_class": "constrained-runtime",
+      "status": "exploratory",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "result_namespace": "results/constrained",
+      "required_track_id": "track-c",
+      "cpu_limit": {
+        "vcpu": 8,
+        "quota_us": 800000,
+        "period_us": 100000,
+        "enforcement": "cgroup-required"
+      },
+      "memory_limit": {
+        "limit_mb": 1024,
+        "enforcement": "cgroup-required"
+      },
+      "jvm": {
+        "gc": "parallel",
+        "active_processor_count": 8,
+        "max_ram_mb": 1024
+      },
+      "jit_representativeness": "representative",
+      "required_evidence": [
+        "effective-cgroup-limits",
+        "jvm-flags",
+        "peak-memory",
+        "cpu-throttling"
+      ],
+      "allowed_outcomes": [
+        "ok",
+        "oom_killed",
+        "readiness_timeout",
+        "limit_mismatch",
+        "startup_failed"
+      ],
+      "note": "vCPU-cut point (1024MB / 8vCPU). Requires a cpuset spanning >=8 logical CPUs if --cpu-affinity is used; the systemd-run CPUQuota=800% is the enforced budget regardless."
+    }
+  ]
+}

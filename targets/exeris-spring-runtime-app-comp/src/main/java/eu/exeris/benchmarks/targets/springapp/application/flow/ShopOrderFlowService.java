@@ -30,7 +30,7 @@ import java.util.UUID;
  * <h2>Status lookup</h2>
  * <p>{@link #orderStatus} reads from the
  * {@link ShopOrderFlowInputRegistry} projection (in-process
- * {@code ConcurrentMap} keyed by the API-level UUID {@code orderId}). The
+ * {@code ConcurrentMap} keyed by the API-level {@code orderId} string). The
  * pre-migration Axon target used the same single-JVM projection shape via
  * {@code AxonOrderSagaProjection}; cross-restart status recovery is out of
  * scope for this benchmark and was equally out of scope before the swap.
@@ -58,11 +58,19 @@ public class ShopOrderFlowService {
      * resolves to the prior view from
      * {@link ShopOrderFlowInputRegistry#lookupIdempotencyKey}.
      *
+     * <p>{@code clientOrderId} is the CONTRACT-v2 section 3 client-generated
+     * deterministic orderId. When present it is adopted verbatim as the
+     * API-level orderId — it is the input to the section 4.1 deterministic
+     * payment-decline rule, so minting a server-side id here would break the
+     * "identical declined subset in every stack and every run" invariant.
+     * Blank/absent (pre-v2 clients) falls back to a server-generated UUID.
+     *
      * @return empty if the cart does not exist or is not owned by {@code userId};
      *         a {@link OrderAcceptedView} otherwise
      */
     public Optional<OrderAcceptedView> createOrder(
             String userId,
+            String clientOrderId,
             String cartId,
             String paymentMethod,
             ShopSagaStateService cartState
@@ -77,7 +85,9 @@ public class ShopOrderFlowService {
             return prior;
         }
 
-        String orderId = UUID.randomUUID().toString();
+        String orderId = (clientOrderId == null || clientOrderId.isBlank())
+                ? UUID.randomUUID().toString()
+                : clientOrderId.trim();
         String sagaId = "saga-" + UUID.randomUUID();
 
         // Synchronous insert: orders + order_items rows exist before the 202 returns.
@@ -121,23 +131,26 @@ public class ShopOrderFlowService {
 
     /**
      * Maps the internal step-lambda status vocabulary onto the API-level status the
-     * e2e-shop-order-saga k6 contract polls for. The contract's terminal set is
-     * {@code COMPLETED} / {@code COMPENSATED} / {@code FAILED} (see
-     * {@code scenarios/e2e-shop-order-saga/k6.js} {@code TERMINAL_SAGA_STATUSES});
+     * e2e-shop-order-saga contract polls for. The CONTRACT-v2 terminal set is
+     * {@code COMPLETED} / {@code COMPENSATED} / {@code FAILED_UNRECOVERED} (section
+     * 3; {@code scenarios/e2e-shop-order-saga/k6.js} {@code TERMINAL_SAGA_STATUSES});
      * the saga's compensation chain records {@code PAYMENT_REFUNDED} then the
      * terminal {@code CANCELLED}, neither of which the poller recognizes as
      * terminal — so without this mapping a compensated saga is polled to
      * exhaustion and scored {@code saga_unresolved}. Mirrors
      * {@code exeris-community-app}'s {@code RepositoryBackedBenchmarkUseCaseService.mapFallbackSagaStatus}
-     * so all targets expose an identical status surface. Non-terminal in-progress
-     * statuses ({@code SAGA_INITIATED}, {@code INVENTORY_RESERVED},
-     * {@code PAYMENT_PROCESSING}) pass through unchanged for the poller to keep polling.
+     * so all targets expose an identical status surface. {@code FAILED} (defensive:
+     * no step lambda records it today) maps to the section 5 vocabulary
+     * {@code FAILED_UNRECOVERED} — compensation retry-budget exhaustion.
+     * Non-terminal in-progress statuses ({@code SAGA_INITIATED},
+     * {@code INVENTORY_RESERVED}, {@code PAYMENT_PROCESSING}) pass through
+     * unchanged for the poller to keep polling.
      */
     private static String toContractStatus(String internalStatus) {
         return switch (internalStatus) {
             case "COMPLETED", "CONFIRMED" -> "COMPLETED";
             case "CANCELLED", "PAYMENT_REFUNDED" -> "COMPENSATED";
-            case "FAILED" -> "FAILED";
+            case "FAILED" -> "FAILED_UNRECOVERED";
             default -> internalStatus;
         };
     }

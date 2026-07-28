@@ -1,0 +1,23 @@
+{
+  "sample_count": 296,
+  "cpu_time_seconds": 868.190000,
+  "host_logical_cpus": 16,
+  "cpu_util_percent_of_one_core": 289.3369,
+  "avg_cores_used": 2.8934,
+  "cpu_util_percent_of_host_total": 18.0838,
+  "rss_kb_min": 195936,
+  "rss_kb_avg": 226302,
+  "peak_rss_kb": 235920,
+  "vmsize_kb_min": 3834840,
+  "vmsize_kb_avg": 3834840,
+  "peak_vmsize_kb": 3834840,
+  "threads_min": 33,
+  "threads_avg": 33,
+  "peak_threads": 33,
+  "vmhwm_kb_max": 236248,
+  "smaps_rss_kb_avg": 226643,
+  "smaps_rss_kb_max": 236248,
+  "cgroup_memory_current_kb_avg": 214246,
+  "cgroup_memory_current_kb_max": 225332,
+  "jvm_breakdown_note": "jcmd heap/NMT breakdown skipped under constrained scope: launching a jcmd JVM in the tight cgroup would spike memory past MemoryMax and OOM the run before result.json is written"
+}

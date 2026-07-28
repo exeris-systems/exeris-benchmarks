@@ -37,6 +37,16 @@ source "$READINESS_LIB"
 # shellcheck source=/dev/null
 source "$TARGET_CONTRACT_REGISTRY"
 
+# OS-level sidecar samplers (mpstat/pidstat). Optional: used for the per-target DB-CPU
+# sampler over the Postgres cpuset during the measurement window (fine-grained 1s cadence,
+# independent of any host sar cron). Degrades to a no-op when the library or the sampling
+# tools are absent.
+OS_SAMPLER_LIB="${REPO_ROOT}/tools/bench/lib/os-sampler.sh"
+if [[ -f "$OS_SAMPLER_LIB" ]]; then
+  # shellcheck source=/dev/null
+  source "$OS_SAMPLER_LIB"
+fi
+
 # Color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -69,6 +79,18 @@ LOADGEN_CPU_AFFINITY="${LOADGEN_CPU_AFFINITY:-}"
 PERF_STAT_REQUIRED="${BENCHMARK_REQUIRE_PERF_STAT:-0}"
 PERF_STAT_CAPTURE_REQUESTED="${BENCHMARK_CAPTURE_PERF_STAT:-0}"
 
+# Protocol-as-run-axis (additive). A fixed_contract MAY omit protocol_mode/transport_mode
+# (protocol-agnostic); when omitted, the effective protocol comes from this run axis.
+# When a contract pins protocol_mode (legacy), the pin wins and the axis may not override it.
+# Reuse the existing downstream env name BENCH_PROTOCOL_MODE_OVERRIDE (tools/bench/lib/protocol.sh,
+# run-guided.sh) for continuity, plus a friendly BENCH_PROTOCOL_MODE alias.
+PROTOCOL_MODE_AXIS="${BENCH_PROTOCOL_MODE_OVERRIDE:-${BENCH_PROTOCOL_MODE:-}}"
+TRANSPORT_MODE_AXIS="${BENCH_TRANSPORT_MODE:-}"
+# Driver-capability allowlist: the wrk comparative driver serves cleartext HTTP/1.1 only
+# (honesty guard mirroring run-guided.sh). Effective protocols outside this set fail closed
+# until an h2-capable comparative driver is wired. One-line widening point when that lands.
+COMPARATIVE_DRIVER_PROTOCOL_ALLOWLIST="${BENCH_COMPARATIVE_PROTOCOL_ALLOWLIST:-h1}"
+
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
@@ -83,6 +105,8 @@ while [[ $# -gt 0 ]]; do
     --warmup-seconds)     WARMUP_SECONDS="$2";      shift 2 ;;
     --threads)            THREADS="$2";             shift 2 ;;
     --connections)        CONNECTIONS="$2";         shift 2 ;;
+    --protocol-mode)      PROTOCOL_MODE_AXIS="$2";  shift 2 ;;
+    --transport-mode)     TRANSPORT_MODE_AXIS="$2"; shift 2 ;;
     --dry-run)            DRY_RUN=1;                shift 1 ;;
     *) echo "ERROR: Unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -107,6 +131,19 @@ SCENARIO_DIAGNOSTICS_DIR="${BENCH_SCENARIO_DIAGNOSTICS_DIR:-${OUTPUT_DIR}/logs/s
 SCENARIO_DB_DIAGNOSTICS_HOOK="${REPO_ROOT}/scenarios/${SCENARIO_ID}/capture-db-diagnostics.sh"
 POST_MEASUREMENT_DIAGNOSTICS_ATTEMPTED=0
 MEASUREMENT_STAGE_STARTED=0
+
+# Scenario-specific pg_stat_statements helpers (optional). When present, run_wrk_target
+# brackets each target's measurement window with a per-target baseline/final snapshot and
+# emits a delta — so pg_stat attribution is per leaf/per target and cannot be clobbered by
+# the next leaf's reset (the shared post-measurement snapshot alone could not do this).
+SCENARIO_PGSS_WRAPPER="${REPO_ROOT}/scenarios/${SCENARIO_ID}/pg_stat_statements-wrapper.sh"
+PGSS_WRAPPER_AVAILABLE=0
+if [[ -f "$SCENARIO_PGSS_WRAPPER" ]]; then
+  # shellcheck source=/dev/null
+  if source "$SCENARIO_PGSS_WRAPPER" 2>/dev/null; then
+    PGSS_WRAPPER_AVAILABLE=1
+  fi
+fi
 
 run_post_measurement_diagnostics() {
   if [[ "$MEASUREMENT_STAGE_STARTED" != "1" ]]; then
@@ -554,6 +591,14 @@ summarize_resource_samples() {
   fi
   
   local first_utime first_stime last_utime last_stime
+# Best-effort stat pipelines below use `... | head -1` / `sort -n | head -1`. head closes the
+# pipe after the first line, so the upstream tail/sort can take SIGPIPE (exit 141). Under
+# `set -o pipefail` + errexit that RACILY aborts the whole run once the CSV is large enough that
+# sort's output does not finish in one atomic pipe write — a real 900s measurement (~840 rows)
+# loses the race and silently kills every leaf at post-measurement, while a 15s debug run (~15
+# rows, one atomic write) never does. The captured min/first value is already correct (head read
+# it); only the benign SIGPIPE exit code must not abort. Re-armed right after the block.
+  set +o pipefail
   first_utime="$(tail -n +2 "$csv_file" | head -1 | cut -d, -f2)"
   first_stime="$(tail -n +2 "$csv_file" | head -1 | cut -d, -f3)"
   last_utime="$(tail -n +2 "$csv_file" | tail -1 | cut -d, -f2)"
@@ -601,7 +646,8 @@ summarize_resource_samples() {
   rss_pref_min="$(tail -n +2 "$csv_file" | LC_ALL=C awk -F, '{rss=(($8+0)>0?$8:$4); print rss}' | sort -n | head -1)"
   rss_pref_max="$(tail -n +2 "$csv_file" | LC_ALL=C awk -F, '{rss=(($8+0)>0?$8:$4); print rss}' | sort -n | tail -1)"
   rss_pref_avg="$(tail -n +2 "$csv_file" | LC_ALL=C awk -F, '{rss=(($8+0)>0?$8:$4); sum+=rss} END {if (NR>0) printf "%.0f", sum/NR; else print 0}')"
-  
+  set -o pipefail  # re-arm errexit-on-pipe-failure after the best-effort stat pipelines above
+
   jq -n \
     --argjson sample_count "$sample_count" \
     --arg cpu_time_seconds "$cpu_time_seconds" \
@@ -1908,7 +1954,19 @@ fi
 
 CANONICAL_UNORDERED_TARGETS="$(printf '%s\n%s\n' "$TARGET_A_CANONICAL" "$TARGET_B_CANONICAL" | sort | paste -sd ',' -)"
 CANONICAL_UNORDERED_TARGETS_ID="${CANONICAL_UNORDERED_TARGETS/,/__}"
-PAIR_ID="${BENCHMARK_PAIR_ID:-${SCENARIO_ID}-${CONTRACT_ID}-${CANONICAL_UNORDERED_TARGETS_ID}}"
+# Protocol-as-run-axis PAIR_ID isolation (additive). PAIR_ID is built here, BEFORE the full
+# protocol resolution below. For a PINNED contract the protocol is implied by the contract id
+# (h1_* etc.), so PAIR_ID must stay byte-identical (the live _h1_v2 run). For an AGNOSTIC
+# contract the id carries no protocol, so PAIR_ID gains an effective-protocol segment to keep
+# h1 and h2 of the same agnostic contract in separate AB/BA groups + aggregation buckets. This
+# is a cheap key-construction pre-read only; the fail-closed axis validation happens below.
+_PAIR_CONTRACT_PROTO="$(jq -r --arg c "$CONTRACT_ID" '.fixed_contracts[$c].protocol_mode // empty' "$SCENARIO_JSON")"
+_PAIR_PROTO_SEG=""
+if [[ -z "$_PAIR_CONTRACT_PROTO" ]]; then
+  _PAIR_EFF="${PROTOCOL_MODE_AXIS:-${BENCH_PROTOCOL_MODE_OVERRIDE:-${BENCH_PROTOCOL_MODE:-}}}"
+  [[ -n "$_PAIR_EFF" ]] && _PAIR_PROTO_SEG="-${_PAIR_EFF}"
+fi
+PAIR_ID="${BENCHMARK_PAIR_ID:-${SCENARIO_ID}-${CONTRACT_ID}${_PAIR_PROTO_SEG}-${CANONICAL_UNORDERED_TARGETS_ID}}"
 PAIR_ORDER="${BENCHMARK_PAIR_ORDER:-ab}"
 if [[ "$PAIR_ORDER" != "ab" && "$PAIR_ORDER" != "ba" ]]; then
   echo "CONFIG_ERROR: invalid BENCHMARK_PAIR_ORDER='${PAIR_ORDER}' (expected: ab or ba)" >&2
@@ -1981,6 +2039,18 @@ fi
 if [[ -z "$WORKLOAD_PROFILE_KEY" ]]; then
   echo "CONFIG_ERROR: workload_profile_key is required in comparative pair manifest for scenario '${SCENARIO_ID}'" >&2
   exit 64
+fi
+
+# Align the workload_profile_key's driver-family suffix with the CONTRACT's benchmark_family.
+# The manifest's allowed_pairs carry a '-runtime-wrk' key (the wrk throughput family). A wrk2
+# (CO-free latency, p99_stable) contract registered on those same pairs must NOT inherit that
+# key: its p99 latency data must never aggregate with wrk throughput. Suffix '-runtime-wrk' ->
+# '-runtime-wrk2' so the key self-identifies and stays isolated (belt-and-suspenders on top of
+# contract_id isolation). wrk (throughput) contracts are unchanged.
+CONTRACT_BENCHMARK_FAMILY="$(jq -r --arg c "$CONTRACT_ID" '.fixed_contracts[$c].benchmark_family // empty' "$SCENARIO_JSON" 2>/dev/null)"
+if [[ "$CONTRACT_BENCHMARK_FAMILY" == "runtime-wrk2" && "$WORKLOAD_PROFILE_KEY" == *-runtime-wrk ]]; then
+  WORKLOAD_PROFILE_KEY="${WORKLOAD_PROFILE_KEY}2"
+  echo "  workload_profile_key: suffixed to '${WORKLOAD_PROFILE_KEY}' for runtime-wrk2 contract (isolated from the wrk throughput family)"
 fi
 
 FORBIDDEN_PAIR_PASS=true
@@ -2220,6 +2290,80 @@ if [[ "$TARGET_A_PROTOCOL_MODE" != "$TARGET_B_PROTOCOL_MODE" ]]; then
   exit 64
 fi
 
+# ---------------------------------------------------------------------------
+# Protocol-as-run-axis resolution (additive; runs AFTER the native A==B check
+# above so the overwrite in step (vi) cannot neuter that check — the native
+# values are still authoritative for A==B agreement here).
+#   contract pin wins → else run axis → else FAIL CLOSED.
+# For a legacy pinned h1 contract with no axis: EFFECTIVE=h1, every guard passes,
+# and step (vi) is an h1→h1 no-op — byte-identical to pre-refactor behavior.
+# ---------------------------------------------------------------------------
+CONTRACT_PROTOCOL_MODE="$(jq -r --arg c "$CONTRACT_ID" \
+  '.fixed_contracts[$c].protocol_mode // empty' "$SCENARIO_JSON")"
+CONTRACT_TRANSPORT_MODE="$(jq -r --arg c "$CONTRACT_ID" \
+  '.fixed_contracts[$c].transport_mode // empty' "$SCENARIO_JSON")"
+
+# (i) effective protocol: contract pin wins; else axis; else FAIL CLOSED.
+if [[ -n "$CONTRACT_PROTOCOL_MODE" ]]; then
+  if [[ -n "$PROTOCOL_MODE_AXIS" && "$PROTOCOL_MODE_AXIS" != "$CONTRACT_PROTOCOL_MODE" ]]; then
+    echo "CONFIG_ERROR: protocol axis conflict — contract '${CONTRACT_ID}' pins protocol_mode=${CONTRACT_PROTOCOL_MODE} but run axis supplied ${PROTOCOL_MODE_AXIS}; a pinned contract may not be overridden [rejection_code=PROTOCOL_AXIS_CONFLICT]" >&2
+    exit 64
+  fi
+  EFFECTIVE_PROTOCOL_MODE="$CONTRACT_PROTOCOL_MODE"
+  CONTRACT_PROTOCOL_AGNOSTIC=false
+elif [[ -n "$PROTOCOL_MODE_AXIS" ]]; then
+  EFFECTIVE_PROTOCOL_MODE="$PROTOCOL_MODE_AXIS"
+  CONTRACT_PROTOCOL_AGNOSTIC=true
+else
+  echo "CONFIG_ERROR: contract '${CONTRACT_ID}' is protocol-agnostic and no protocol axis was supplied; pass --protocol-mode <h1|h2|h2c|h3> or set BENCH_PROTOCOL_MODE_OVERRIDE [rejection_code=PROTOCOL_AXIS_MISSING]" >&2
+  exit 64
+fi
+
+# (ii) enum-validate the effective protocol (mirror target-contract-registry.sh enum case).
+case "$EFFECTIVE_PROTOCOL_MODE" in
+  h1|h2|h2c|h3) ;;
+  *) echo "CONFIG_ERROR: invalid effective protocol_mode='${EFFECTIVE_PROTOCOL_MODE}' (expected h1|h2|h2c|h3) [rejection_code=PROTOCOL_ENUM_INVALID]" >&2; exit 64 ;;
+esac
+
+# (iii) effective transport: axis override, else contract pin, else loopback-<p>
+#       (h2c collapses to loopback-h2 per transport enum + run-guided.sh convention).
+if [[ -n "$TRANSPORT_MODE_AXIS" ]]; then
+  EFFECTIVE_TRANSPORT_MODE="$TRANSPORT_MODE_AXIS"
+elif [[ -n "$CONTRACT_TRANSPORT_MODE" ]]; then
+  EFFECTIVE_TRANSPORT_MODE="$CONTRACT_TRANSPORT_MODE"
+elif [[ "$EFFECTIVE_PROTOCOL_MODE" == "h2c" ]]; then
+  EFFECTIVE_TRANSPORT_MODE="loopback-h2"
+else
+  EFFECTIVE_TRANSPORT_MODE="loopback-${EFFECTIVE_PROTOCOL_MODE}"
+fi
+
+# (iv) driver-capability honesty guard — do NOT mint a label-only non-h1 wrk claim.
+#      Scoped to AXIS-derived protocols only. A contract that explicitly PINS its
+#      protocol is the operator's deliberate, pre-existing choice, so a legacy pinned
+#      non-h1 contract keeps working exactly as it did before this refactor. (A pinned
+#      h1 passes anyway — h1 is in the allowlist.) Only an agnostic contract steered by
+#      the run axis into a protocol the wrk driver cannot serve is refused here.
+if [[ "$CONTRACT_PROTOCOL_AGNOSTIC" == true ]]; then
+  case " $COMPARATIVE_DRIVER_PROTOCOL_ALLOWLIST " in
+    *" $EFFECTIVE_PROTOCOL_MODE "*) ;;
+    *) echo "CONFIG_ERROR: effective protocol_mode=${EFFECTIVE_PROTOCOL_MODE} is not served by the wrk comparative driver (allowlist='${COMPARATIVE_DRIVER_PROTOCOL_ALLOWLIST}'); the wrk comparative path drives cleartext HTTP/1.1 only — refusing a label-only claim [rejection_code=PROTOCOL_DRIVER_UNSUPPORTED]" >&2; exit 64 ;;
+  esac
+fi
+
+# (v) tie the effective protocol to the resolved targets' native protocol. The native
+#     A==B check above already guarantees the two targets agree; assert that shared native
+#     protocol equals the effective protocol so an axis value can never silently diverge
+#     from what the targets actually serve.
+if [[ "$TARGET_A_PROTOCOL_MODE" != "$EFFECTIVE_PROTOCOL_MODE" ]]; then
+  echo "CONFIG_ERROR: effective protocol_mode=${EFFECTIVE_PROTOCOL_MODE} does not match resolved target-native protocol=${TARGET_A_PROTOCOL_MODE} for '${TARGET_A}'; the run axis may not relabel a target's native protocol [rejection_code=PROTOCOL_TARGET_MISMATCH]" >&2
+  exit 64
+fi
+
+# (vi) make the effective protocol authoritative for ALL downstream stamps/keys/echoes
+#      (echo, per-target result stamping, pair_fingerprint, axis label all inherit this).
+TARGET_A_PROTOCOL_MODE="$EFFECTIVE_PROTOCOL_MODE"
+TARGET_B_PROTOCOL_MODE="$EFFECTIVE_PROTOCOL_MODE"
+
 TARGET_A_TIER="$(jq -r '.tier' <<<"$TARGET_A_CONTRACT_JSON")"
 TARGET_B_TIER="$(jq -r '.tier' <<<"$TARGET_B_CONTRACT_JSON")"
 if [[ "$TARGET_A_TIER" != "$TARGET_B_TIER" ]]; then
@@ -2355,6 +2499,20 @@ if [[ "$SCENARIO_ID" == "entity-read-by-id" ]]; then
   if [[ -n "$expected_connections" && "$CONNECTIONS" != "$expected_connections" ]]; then
     echo "CONFIG_ERROR: immutable scenario contract knob mismatch scenario_id=${SCENARIO_ID} contract_id=${CONTRACT_ID} knob=connections expected=${expected_connections} actual=${CONNECTIONS}" >&2
     exit 64
+  fi
+  # Protocol-as-run-axis immutable-knob audit line (parity with the knobs above). Uses the
+  # EFFECTIVE protocol resolved earlier: pinned ⇒ effective must equal the pin; agnostic ⇒
+  # the axis must have supplied a non-empty protocol (already fail-closed at resolution).
+  if [[ -n "$CONTRACT_PROTOCOL_MODE" ]]; then
+    if [[ "$EFFECTIVE_PROTOCOL_MODE" != "$CONTRACT_PROTOCOL_MODE" ]]; then
+      echo "CONFIG_ERROR: immutable scenario contract knob mismatch scenario_id=${SCENARIO_ID} contract_id=${CONTRACT_ID} knob=protocol_mode expected=${CONTRACT_PROTOCOL_MODE} actual=${EFFECTIVE_PROTOCOL_MODE}" >&2
+      exit 64
+    fi
+  else
+    if [[ -z "$EFFECTIVE_PROTOCOL_MODE" ]]; then
+      echo "CONFIG_ERROR: immutable scenario contract knob missing scenario_id=${SCENARIO_ID} contract_id=${CONTRACT_ID} knob=protocol_mode (protocol-agnostic contract requires --protocol-mode / BENCH_PROTOCOL_MODE_OVERRIDE)" >&2
+      exit 64
+    fi
   fi
 fi
 
@@ -2540,13 +2698,13 @@ if [[ "$SCENARIO_ID" == "entity-read-by-id" ]]; then
 # ============================================================
 " | tee -a "$sync_log"
   
-  if ! diagnose_endpoint "$FIRST_TARGET_ID" "$FIRST_TARGET_PORT" "$SCENARIO_ENDPOINT_PATH" "$local_diag_log_first"; then
+  if ! diagnose_endpoint "$FIRST_TARGET_ID" "$FIRST_TARGET_HEALTH_URL" "$SCENARIO_ENDPOINT_PATH" "$local_diag_log_first"; then
     echo "CONFIG_ERROR: endpoint preflight failed target_id=${FIRST_TARGET_ID} path=${SCENARIO_ENDPOINT_PATH} diagnostic_log=${local_diag_log_first} likely_cause=wrong external process/version on port ${FIRST_TARGET_PORT}" >&2
     echo "ERROR: refusing to continue Stage 4 after failed endpoint diagnostic for target_id=${FIRST_TARGET_ID}" >&2
     exit 1
   fi
 
-  if ! diagnose_endpoint "$SECOND_TARGET_ID" "$SECOND_TARGET_PORT" "$SCENARIO_ENDPOINT_PATH" "$local_diag_log_second"; then
+  if ! diagnose_endpoint "$SECOND_TARGET_ID" "$SECOND_TARGET_HEALTH_URL" "$SCENARIO_ENDPOINT_PATH" "$local_diag_log_second"; then
     echo "CONFIG_ERROR: endpoint preflight failed target_id=${SECOND_TARGET_ID} path=${SCENARIO_ENDPOINT_PATH} diagnostic_log=${local_diag_log_second} likely_cause=wrong external process/version on port ${SECOND_TARGET_PORT}" >&2
     echo "ERROR: refusing to continue Stage 4 after failed endpoint diagnostic for target_id=${SECOND_TARGET_ID}" >&2
     exit 1
@@ -2554,10 +2712,52 @@ if [[ "$SCENARIO_ID" == "entity-read-by-id" ]]; then
   
   echo "Diagnostic files saved. Now attempting to wait for endpoints..." | tee -a "$sync_log"
   
-  wait_for_target_endpoint_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_PORT" "/db/ping" 60 "stage4-preflight-db-ping-${FIRST_TARGET_SLOT}"
-  wait_for_target_endpoint_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_PORT" "$SCENARIO_ENDPOINT_PATH" 60 "stage4-preflight-entity-read-${FIRST_TARGET_SLOT}"
-  wait_for_target_endpoint_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_PORT" "/db/ping" 60 "stage4-preflight-db-ping-${SECOND_TARGET_SLOT}"
-  wait_for_target_endpoint_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_PORT" "$SCENARIO_ENDPOINT_PATH" 60 "stage4-preflight-entity-read-${SECOND_TARGET_SLOT}"
+  wait_for_target_endpoint_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_HEALTH_URL" "/db/ping" 60 "stage4-preflight-db-ping-${FIRST_TARGET_SLOT}"
+  wait_for_target_endpoint_ready "$FIRST_TARGET_ID" "$FIRST_TARGET_HEALTH_URL" "$SCENARIO_ENDPOINT_PATH" 60 "stage4-preflight-entity-read-${FIRST_TARGET_SLOT}"
+  wait_for_target_endpoint_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_HEALTH_URL" "/db/ping" 60 "stage4-preflight-db-ping-${SECOND_TARGET_SLOT}"
+  wait_for_target_endpoint_ready "$SECOND_TARGET_ID" "$SECOND_TARGET_HEALTH_URL" "$SCENARIO_ENDPOINT_PATH" 60 "stage4-preflight-entity-read-${SECOND_TARGET_SLOT}"
+fi
+
+# ------------------------------------------------------------------------------------------
+# Artifact-identity assertion (fail-closed).
+#
+# Readiness proves SOMETHING is serving the port. It does not prove it is the build we meant.
+# The serialisation-matrix arms are all produced from one Maven module and kept apart only by a
+# version-staged jar plus a customizer on the classpath; if either mechanism regresses, all four
+# arms launch the same runtime, every gate passes, and the campaign reports four different numbers
+# for one binary. Asserting here costs a preflight failure instead of a full campaign of numbers
+# attributed to the wrong build.
+# ------------------------------------------------------------------------------------------
+#
+# ON BY DEFAULT since 2026-07-20, after a debug-contract run exercised it end-to-end on the perf
+# box against targets already known to be correct: both arms of a two-instance exeris pair passed
+# artifact identity, and the customizer arm passed the classpath and bootstrap-breadcrumb checks.
+# It depends on `ss -ltnp` and /proc, so it cannot be tested from the Windows dev environment —
+# that is why it shipped gated. Set BENCH_ASSERT_LAUNCH=0 to disable it for a run that genuinely
+# cannot satisfy it (e.g. a target launched outside the harness).
+LAUNCH_VERIFIER="${REPO_ROOT}/tools/verify-target-launch.sh"
+if [[ "${BENCH_ASSERT_LAUNCH:-1}" != "1" ]]; then
+  echo "NOTE: artifact-identity assertion disabled (BENCH_ASSERT_LAUNCH != 1)."
+elif [[ -f "$LAUNCH_VERIFIER" ]]; then
+  for _tv_pair in "${FIRST_TARGET_ID}|${FIRST_TARGET_HEALTH_URL}" "${SECOND_TARGET_ID}|${SECOND_TARGET_HEALTH_URL}"; do
+    _tv_id="${_tv_pair%%|*}"
+    _tv_url="${_tv_pair#*|}"
+    _tv_port="$(printf '%s' "$_tv_url" | sed -E 's#.*:([0-9]+).*#\1#')"
+    # Log path conventions differ per env file; match on the port when the log carries it.
+    # Absent log => the verifier reports the breadcrumb as NOT asserted rather than passing.
+    # `|| true` is REQUIRED under `set -euo pipefail`: portless logs (exeris-community writes
+    # /tmp/exeris-community.log, no port) make the glob match nothing, `ls` exit non-zero, and
+    # pipefail+errexit would then silently abort the whole run BEFORE the verifier — which is
+    # exactly what turning this assertion on by default (f0e82ec) did to every exeris-community
+    # pair. An absent log must yield an empty _tv_log, per the line above, not kill the leaf.
+    _tv_log="$(ls -1t /tmp/exeris-*"${_tv_port}"*.log 2>/dev/null | head -1 || true)"
+    if ! bash "$LAUNCH_VERIFIER" "$_tv_id" "$_tv_port" "$_tv_log"; then
+      echo "ERROR: launch verification failed for ${_tv_id} — refusing to measure an unidentified artifact." >&2
+      exit 1
+    fi
+  done
+else
+  echo "WARN: ${LAUNCH_VERIFIER} not found; artifact identity NOT asserted for this run." >&2
 fi
 
 echo -e "  ${GREEN}✓${NC} Stage 4 complete."
@@ -2570,7 +2770,10 @@ banner "STAGE 5: Sequential Measurement"
 # NOTE: This stage is intentionally sequential so operators can switch between
 # target-a and target-b processes between measurements when running externally.
 
-BENCH_COMMIT_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+# Prefer a live git rev-parse; fall back to .synced-commit-sha (written by
+# tools/cloud/do/sync-repo.sh, since `git archive` ships no .git to a remote box);
+# finally an explicit BENCH_COMMIT_SHA override.
+BENCH_COMMIT_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || cat "$REPO_ROOT/.synced-commit-sha" 2>/dev/null || echo "${BENCH_COMMIT_SHA:-unknown}")"
 JDK_VERSION_DETECTED="$(java -version 2>&1 | awk -F '"' '/version/ {print $2; exit}' || true)"
 if [[ -z "$JDK_VERSION_DETECTED" ]]; then
   JDK_VERSION_DETECTED="unknown"
@@ -2645,6 +2848,81 @@ fi
 
 AB_BA_ORDERS_COMPLETED_JSON="$(printf '%s' "$AB_BA_ORDERS_COMPLETED_RAW" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | awk 'NF>0' | jq -Rsc 'split("\n") | map(select(length > 0) | ascii_downcase) | unique')"
 
+# --- DB measurement-window diagnostics (BUG 1 pg_stat delta + BUG 3 DB-CPU sampler) --------
+# The Postgres cpuset is discoverable via BENCH_DB_CPUSET, else docker-inspect of the
+# benchmark-db container, else empty (mpstat then falls back to -P ALL). Echoes the core list.
+resolve_db_cpuset() {
+  if [[ -n "${BENCH_DB_CPUSET:-}" ]]; then
+    printf '%s' "$BENCH_DB_CPUSET"
+    return 0
+  fi
+  local inspected=""
+  if command -v docker >/dev/null 2>&1; then
+    inspected="$(docker inspect -f '{{.HostConfig.CpusetCpus}}' "${DB_CONTAINER_NAME:-exeris-benchmark-db}" 2>/dev/null || true)"
+  fi
+  printf '%s' "$inspected"
+}
+
+# Records how the cpuset was resolved (for reproducibility of the DB-CPU attribution).
+db_cpuset_source_label() {
+  local resolved="$1"
+  if [[ -n "${BENCH_DB_CPUSET:-}" ]]; then
+    printf 'env:BENCH_DB_CPUSET'
+  elif [[ -n "$resolved" ]]; then
+    printf 'docker-inspect'
+  else
+    printf 'all-cores-fallback'
+  fi
+}
+
+# Best-effort pg_stat_statements snapshot (no reset). No-op unless the scenario wrapper loaded.
+pgss_snapshot_best_effort() {
+  local out_file="$1" phase="$2"
+  [[ "${PGSS_WRAPPER_AVAILABLE:-0}" == "1" ]] || return 0
+  pg_stat_statements_snapshot "$out_file" "$phase" >/dev/null 2>&1 || true
+  return 0
+}
+
+# Emit a per-target measurement-window delta (final minus baseline), keyed by queryid, with
+# diagnostic meta-queries filtered out. mean_time_ms is derived over the window; the pg_stat
+# running max is carried as max_time_ms_cumulative (not window-scoped). Best-effort.
+pgss_compute_delta_best_effort() {
+  local baseline_file="$1" final_file="$2" out_file="$3"
+  [[ -f "$baseline_file" && -f "$final_file" ]] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  jq -n --slurpfile b "$baseline_file" --slurpfile f "$final_file" '
+    ($b[0].queries // []) as $bq
+    | ($f[0].queries // []) as $fq
+    | ($bq | map({ (.queryid): {calls: (.calls // 0), total_time_ms: (.total_time_ms // 0)} }) | add // {}) as $bmap
+    | {
+        timestamp: ($f[0].timestamp // null),
+        phase: "measurement-delta",
+        server_version_num: ($f[0].server_version_num // null),
+        column_profile: ($f[0].column_profile // null),
+        baseline_timestamp: ($b[0].timestamp // null),
+        final_timestamp: ($f[0].timestamp // null),
+        note: "Per-target delta over this target'"'"'s measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
+        queries: [
+          $fq[]
+          | . as $q
+          | ($bmap[$q.queryid] // {calls: 0, total_time_ms: 0}) as $base
+          | (($q.calls // 0) - ($base.calls // 0)) as $dcalls
+          | (($q.total_time_ms // 0) - ($base.total_time_ms // 0)) as $dtotal
+          | select($dcalls > 0)
+          | select((($q.query // "") | test("pg_stat_statements|pg_extension|pg_settings|shared_preload_libraries|server_version_num"; "i")) | not)
+          | {
+              queryid: $q.queryid,
+              query: $q.query,
+              calls: $dcalls,
+              total_time_ms: $dtotal,
+              mean_time_ms: (if $dcalls > 0 then ($dtotal / $dcalls) else 0 end),
+              max_time_ms_cumulative: ($q.max_time_ms // null)
+            }
+        ]
+      }' > "$out_file" 2>/dev/null || true
+  return 0
+}
+
 run_wrk_target() {
   local target_id="$1"
   local port="$2"
@@ -2664,6 +2942,13 @@ run_wrk_target() {
   local perf_stat_enabled=0
   local perf_no_scale="${BENCHMARK_PERF_NO_SCALE:-1}"
   local perf_stat_file="${outdir}/perf-stat.csv"
+  # BUG 3: fine-grained DB-CPU sampler (Postgres cpuset) bracketed to the measurement window.
+  local db_cpu_mpstat_pid="" db_cpu_mpstat_csv="${outdir}/db-cpuset-mpstat.csv"
+  local db_cpuset_resolved=""
+  # BUG 1: per-target pg_stat_statements measurement-window delta artifacts.
+  local pgss_baseline="${outdir}/pg_stat_statements-measurement-baseline.json"
+  local pgss_final="${outdir}/pg_stat_statements-measurement-final.json"
+  local pgss_delta="${outdir}/pg_stat_statements-measurement-delta.json"
 
   if [[ -n "$LOADGEN_CPU_AFFINITY" ]]; then
     if ! command -v taskset >/dev/null 2>&1; then
@@ -2706,6 +2991,28 @@ run_wrk_target() {
     sampler_pid=$!
   fi
 
+  # BUG 3: start a fine-grained (1s) DB-CPU sampler over the Postgres cpuset, bracketed to
+  # THIS target's measurement window (after warmup, stopped right after measurement). This
+  # replaces reliance on the system sar cron (10-min cadence, uselessly coarse for a
+  # 120/300/900s window). Falls back to all cores when the cpuset is not discoverable.
+  db_cpuset_resolved="$(resolve_db_cpuset)"
+  if command -v bench_start_mpstat_sampler_for_cpus >/dev/null 2>&1; then
+    db_cpu_mpstat_pid="$(bench_start_mpstat_sampler_for_cpus "$db_cpu_mpstat_csv" "$db_cpuset_resolved" 1 2>/dev/null || true)"
+  fi
+  jq -n \
+    --arg cpuset "$db_cpuset_resolved" \
+    --arg source "$(db_cpuset_source_label "$db_cpuset_resolved")" \
+    --arg target_id "$target_id" \
+    --arg started "$([[ -n "$db_cpu_mpstat_pid" ]] && echo true || echo false)" \
+    '{resolved_cpuset: $cpuset, source: $source, interval_seconds: 1, window: "measurement", target_id: $target_id, sampler_started: ($started == "true")}' \
+    > "${outdir}/db-cpuset-mpstat.meta.json" 2>/dev/null || true
+
+  # BUG 1: pg_stat_statements baseline at measurement-start (after warmup). The matching
+  # final+delta are taken at measurement-end below, both strictly inside this run-comparative
+  # invocation — so the delta reflects only THIS target's measurement window and cannot be
+  # clobbered by the next leaf's reset (robust for both ab and ba order).
+  pgss_snapshot_best_effort "$pgss_baseline" "measurement-baseline"
+
   if [[ "$PERF_STAT_REQUIRED" == "1" || "$PERF_STAT_CAPTURE_REQUESTED" == "1" ]]; then
     perf_stat_enabled=1
     perf_stat_args=(-x, -o "$perf_stat_file")
@@ -2720,16 +3027,40 @@ run_wrk_target() {
 
   echo "  Running measurement for ${target_id} (${MEASUREMENT_SECONDS}s)..."
   elapsed=0
+  # ------------------------------------------------------------------------------------------
+  # Driver selection.
+  #
+  # closed (default) — wrk drives the target to saturation. That measures MAX THROUGHPUT and
+  #   resource cost well, and its latency percentiles badly: with no think-time the in-flight
+  #   count equals the connection count, so reported latency is queue-depth / throughput
+  #   (Little's law), a property of the harness rather than the server.
+  # open — wrk2 at a fixed offered rate. The only mode whose percentiles mean service time.
+  #   See results/reports/2026-06-20 and the latency_percentile_eligibility gate in Stage 7.
+  # ------------------------------------------------------------------------------------------
+  local -a driver_cmd
+  if [[ "${BENCH_DRIVER_MODE:-closed}" == "open" ]]; then
+    if [[ -z "${BENCH_OFFERED_RPS:-}" ]]; then
+      echo "ERROR: BENCH_DRIVER_MODE=open requires BENCH_OFFERED_RPS (the fixed arrival rate)." >&2
+      return 1
+    fi
+    if ! command -v wrk2 >/dev/null 2>&1; then
+      echo "ERROR: BENCH_DRIVER_MODE=open requires wrk2 in PATH." >&2
+      return 1
+    fi
+    echo "  Driver: wrk2 OPEN loop, fixed offered rate ${BENCH_OFFERED_RPS} rps"
+    driver_cmd=(wrk2 -t"${THREADS}" -c"${CONNECTIONS}" -d"${MEASUREMENT_SECONDS}s" \
+                -R"${BENCH_OFFERED_RPS}" --latency "$endpoint_url")
+  else
+    driver_cmd=(wrk -t"${THREADS}" -c"${CONNECTIONS}" -d"${MEASUREMENT_SECONDS}s" --latency \
+                --script "${REPO_ROOT}/runtime/drivers/wrk-p95.lua" "$endpoint_url")
+  fi
+
   if [[ "$perf_stat_enabled" == "1" ]]; then
     echo "  Capturing perf stat for ${target_id}: ${perf_stat_file}"
     "${wrk_cmd_prefix[@]}" perf stat "${perf_stat_args[@]}" -- \
-      wrk -t"${THREADS}" -c"${CONNECTIONS}" -d"${MEASUREMENT_SECONDS}s" --latency \
-      --script "${REPO_ROOT}/runtime/drivers/wrk-p95.lua" \
-      "$endpoint_url" > "${outdir}/wrk-raw.txt" 2>&1 &
+      "${driver_cmd[@]}" > "${outdir}/wrk-raw.txt" 2>&1 &
   else
-    "${wrk_cmd_prefix[@]}" wrk -t"${THREADS}" -c"${CONNECTIONS}" -d"${MEASUREMENT_SECONDS}s" --latency \
-      --script "${REPO_ROOT}/runtime/drivers/wrk-p95.lua" \
-      "$endpoint_url" > "${outdir}/wrk-raw.txt" 2>&1 &
+    "${wrk_cmd_prefix[@]}" "${driver_cmd[@]}" > "${outdir}/wrk-raw.txt" 2>&1 &
   fi
   wrk_pid=$!
   while kill -0 "$wrk_pid" 2>/dev/null; do
@@ -2747,7 +3078,16 @@ run_wrk_target() {
     kill "$sampler_pid" 2>/dev/null || true
     wait "$sampler_pid" 2>/dev/null || true
   fi
-  
+
+  # BUG 3: stop the DB-CPU sampler at measurement-end (converts its raw capture to CSV).
+  if [[ -n "$db_cpu_mpstat_pid" ]] && command -v bench_stop_mpstat_sampler >/dev/null 2>&1; then
+    bench_stop_mpstat_sampler "$db_cpu_mpstat_pid" "$db_cpu_mpstat_csv" || true
+  fi
+
+  # BUG 1: pg_stat_statements final at measurement-end, then emit the per-target window delta.
+  pgss_snapshot_best_effort "$pgss_final" "measurement-final"
+  pgss_compute_delta_best_effort "$pgss_baseline" "$pgss_final" "$pgss_delta"
+
   if [[ -f "${outdir}/resource-samples.csv" ]]; then
     summarize_resource_samples "${outdir}/resource-samples.csv" "${outdir}/resource-metrics.json" "$MEASUREMENT_SECONDS"
   fi
@@ -2783,9 +3123,13 @@ parse_wrk_to_result() {
   local outdir resource_json jfr_json runtime_log_json jfr_start_json
   env_ref="$(jq -r '.env_file' <<<"$target_contract_json")"
   tier="$(jq -r '.tier' <<<"$target_contract_json")"
-  protocol_mode="$(jq -r '.protocol_mode' <<<"$target_contract_json")"
-  transport_mode="loopback-${protocol_mode}"
-  
+  # Prefer the EFFECTIVE protocol/transport resolved for this run (protocol-as-run-axis);
+  # fall back to the target-native contract value if ever called before resolution. On the
+  # real path EFFECTIVE_* is always set; for a legacy h1 pin this yields h1/loopback-h1,
+  # byte-identical to the pre-refactor derivation.
+  protocol_mode="${EFFECTIVE_PROTOCOL_MODE:-$(jq -r '.protocol_mode' <<<"$target_contract_json")}"
+  transport_mode="${EFFECTIVE_TRANSPORT_MODE:-loopback-${protocol_mode}}"
+
   # Load resource metrics and JFR metadata from sidecars
   outdir="$(dirname "$outfile")"
   if [[ -f "${outdir}/resource-metrics.json" ]]; then
@@ -2821,6 +3165,21 @@ parse_wrk_to_result() {
   latency_mean_ms="$(grep -oP '^\s+Latency\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
   total_requests="$(grep -oP '(\d+) requests' "$wrk_raw" | head -1 | grep -oP '^\d+' || echo "0")"
   total_errors="$(grep -oP 'Non-2xx or 3xx responses:\s+\K\d+' "$wrk_raw" || echo "0")"
+  # Socket errors are reported by wrk on a SEPARATE line and were previously not parsed at all.
+  # total_errors above counts only non-2xx/3xx RESPONSES; a request that timed out never produced
+  # a response and so was invisible — a run drowning in timeouts reported error_rate_pct 0.0000.
+  # That matters most exactly where the memory sweep is heading: under a tight memory.max, timeouts
+  # and dropped connections are the expected failure mode, not 503s.
+  # wrk line format: "  Socket errors: connect 0, read 0, write 0, timeout 0"
+  socket_err_connect="$(grep -oP 'Socket errors:.*?connect\s+\K\d+' "$wrk_raw" || echo "0")"
+  socket_err_read="$(grep -oP 'Socket errors:.*?read\s+\K\d+' "$wrk_raw" || echo "0")"
+  socket_err_write="$(grep -oP 'Socket errors:.*?write\s+\K\d+' "$wrk_raw" || echo "0")"
+  socket_err_timeout="$(grep -oP 'Socket errors:.*?timeout\s+\K\d+' "$wrk_raw" || echo "0")"
+  for _sv in socket_err_connect socket_err_read socket_err_write socket_err_timeout; do
+    printf -v "$_sv" '%s' "$(printf '%s' "${!_sv}" | tr -cd '0-9')"
+    [[ -n "${!_sv}" ]] || printf -v "$_sv" '%s' "0"
+  done
+  socket_err_total="$(( socket_err_connect + socket_err_read + socket_err_write + socket_err_timeout ))"
   total_requests_sanitized="$(printf '%s' "$total_requests" | tr -cd '0-9')"
   total_errors_sanitized="$(printf '%s' "$total_errors" | tr -cd '0-9')"
   if [[ -z "$total_requests_sanitized" ]]; then
@@ -2832,11 +3191,26 @@ parse_wrk_to_result() {
 
   # Parse latency distribution lines (Thread Stats section may include percentile table)
   # Support both "50.00%" and "50%" formats; wrk2 outputs explicit percentile columns; plain wrk may not — default to 0 for missing
-  p50="$(grep -oP '50(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
-  p75="$(grep -oP '75(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
-  p90="$(grep -oP '90(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
-  p99="$(grep -oP '99(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
-  p95="$(grep -oP '95(?:\.00)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" || echo "0us")"
+  # Percentile patterns accept BOTH driver formats. Closed-loop wrk (plus wrk-p95.lua) prints
+  # "50%" or "50.00%"; wrk2's HdrHistogram block prints "50.000%". Widening the optional-zeros
+  # group to (?:\.0+)? covers both, so no parser branch is needed for these five.
+  # head -1 matters for wrk2, whose block also carries 99.900% / 99.990% / 99.999%.
+  p50="$(grep -oP '50(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  p75="$(grep -oP '75(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  p90="$(grep -oP '90(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  p99="$(grep -oP '99(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  p95="$(grep -oP '95(?:\.0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
+  # wrk2 prints 50/75/90/99/99.9/99.99/99.999/100 in its summary block but NOT 95, so fall back
+  # to the Detailed Percentile spectrum, whose Value column is bare milliseconds:
+  #        6.575     0.950000       700819        20.00
+  if [[ -z "$p95" || "$p95" == "0us" ]]; then
+    local _p95_ms
+    _p95_ms="$(grep -oP '^\s+\K[\d.]+(?=\s+0\.950000\s)' "$wrk_raw" | head -1 || true)"
+    [[ -n "$_p95_ms" ]] && p95="${_p95_ms}ms"
+  fi
+  # p99.9 is only available from wrk2; closed-loop runs leave it at 0 and it is reported as
+  # absent rather than as a measured zero.
+  p999="$(grep -oP '99\.9(?:0+)?%\s+\K[\d.]+(?:us|ms|s)' "$wrk_raw" | head -1 || echo "0us")"
 
   # Use existing repo to_us convention — inline awk conversion
   to_us() {
@@ -2878,7 +3252,31 @@ parse_wrk_to_result() {
     error_rate_pct="$(LC_ALL=C awk -v e="$total_err_final" -v t="$total_req_final" 'BEGIN { if (t > 0) printf "%.4f", (e / t) * 100; else printf "0.0000" }')"
   fi
 
-  local p50_us p75_us p90_us p95_us p99_us
+  # Combined failure view. error_rate_pct counts only non-2xx/3xx RESPONSES; requests that never
+  # completed (timeouts, dropped connections) are absent from BOTH its numerator and wrk's
+  # "N requests" denominator, so a badly failing run can report 0.0000. The denominator below adds
+  # the non-completing requests back, so the rate reflects offered load rather than served load.
+  # This is the figure an eligibility gate should act on.
+  local failed_requests_total=$(( total_err_final + socket_err_total ))
+  local failed_request_denominator=$(( total_req_final + socket_err_total ))
+  local failed_request_rate_pct="0"
+  if [[ "$failed_request_denominator" -gt 0 ]]; then
+    failed_request_rate_pct="$(LC_ALL=C awk -v e="$failed_requests_total" -v t="$failed_request_denominator" 'BEGIN { printf "%.4f", (e / t) * 100 }')"
+  fi
+
+  # Driver provenance. Which loop produced these numbers decides whether the percentiles mean
+  # service time at all, so it belongs in the artefact rather than in the operator's memory.
+  # Rate attainment is the open-loop saturation signal: wrk2 that cannot sustain its offered
+  # rate has hit a wall, and a throughput figure alone hides that.
+  local driver_mode="${BENCH_DRIVER_MODE:-closed}"
+  local offered_rps="${BENCH_OFFERED_RPS:-0}"
+  local rate_attainment_pct="0"
+  if [[ "$driver_mode" == "open" && "$offered_rps" != "0" ]]; then
+    rate_attainment_pct="$(LC_ALL=C awk -v a="$rps_final" -v o="$offered_rps" 'BEGIN { if (o > 0) printf "%.2f", (a / o) * 100; else printf "0" }')"
+  fi
+
+  local p50_us p75_us p90_us p95_us p99_us p999_us
+  p999_us="$(to_us "$p999")"
   p50_us="$(to_us "$p50")"
   p75_us="$(to_us "$p75")"
   p90_us="$(to_us "$p90")"
@@ -2893,9 +3291,19 @@ parse_wrk_to_result() {
   latency_p90_us_json="$(normalize_json_number "$p90_us")"
   latency_p95_us_json="$(normalize_json_number "$p95_us")"
   latency_p99_us_json="$(normalize_json_number "$p99_us")"
+  latency_p999_us_json="$(normalize_json_number "$p999_us")"
+  rate_attainment_pct_json="$(normalize_json_number "$rate_attainment_pct")"
+  offered_rps_json="$(normalize_json_number "$offered_rps")"
   error_rate_pct_json="$(normalize_json_number "$error_rate_pct")"
   total_requests_json="$(normalize_json_number "$total_req_final")"
   total_errors_json="$(normalize_json_number "$total_err_final")"
+  socket_err_connect_json="$(normalize_json_number "$socket_err_connect")"
+  socket_err_read_json="$(normalize_json_number "$socket_err_read")"
+  socket_err_write_json="$(normalize_json_number "$socket_err_write")"
+  socket_err_timeout_json="$(normalize_json_number "$socket_err_timeout")"
+  socket_err_total_json="$(normalize_json_number "$socket_err_total")"
+  failed_requests_total_json="$(normalize_json_number "$failed_requests_total")"
+  failed_request_rate_pct_json="$(normalize_json_number "$failed_request_rate_pct")"
   duration_seconds_json="$(normalize_json_number "$MEASUREMENT_SECONDS")"
   warmup_seconds_json="$(normalize_json_number "$WARMUP_SECONDS")"
   threads_json="$(normalize_json_number "$THREADS")"
@@ -2908,6 +3316,68 @@ parse_wrk_to_result() {
   local drift_obs_latency="${BENCHMARK_DRIFT_OBS_LATENCY_PCT:-0}"
   local drift_max_throughput="${BENCHMARK_DRIFT_MAX_THROUGHPUT_PCT:-0}"
   local drift_obs_throughput="${BENCHMARK_DRIFT_OBS_THROUGHPUT_PCT:-0}"
+
+  # ----------------------------------------------------------------------------------------
+  # Pure-vs-Compat is a mandatory separation axis, so a target's mode must come from the
+  # target's OWN registry entry. The legacy TARGET_MODE is a single variable shared by BOTH
+  # targets of a pair and defaults to "compat", which (a) mislabelled every pure target and
+  # (b) made the spring-hibernate (pure) vs spring-on-exeris (compat) pair — the one pair the
+  # axis exists for — structurally impossible to label correctly. Keep it only as a fallback.
+  # ----------------------------------------------------------------------------------------
+  local resolved_target_mode="$TARGET_MODE"
+  local _mode_matrix="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
+  if [[ -f "$_mode_matrix" ]]; then
+    local _matrix_mode
+    _matrix_mode="$(jq -r --arg id "$target_id" \
+      '.targets[] | select(.target_id == $id) | .mode // empty' "$_mode_matrix" 2>/dev/null)"
+    if [[ -n "$_matrix_mode" ]]; then
+      resolved_target_mode="$_matrix_mode"
+    else
+      echo "WARN: target '${target_id}' declares no mode in target-asset-matrix.json; falling back to '${TARGET_MODE}' — the Pure-vs-Compat label for this result is NOT authoritative." >&2
+    fi
+  fi
+
+  # ----------------------------------------------------------------------------------------
+  # Build provenance. Every target in a campaign records the same commit_sha — the BENCHMARKS
+  # repo SHA — which says nothing about which application build produced the numbers. That is
+  # fatal for the serialisation matrix, whose four arms come from ONE Maven module and differ
+  # only by the pinned kernel version: without per-target artefact identity the four results are
+  # indistinguishable in the artefacts.
+  #
+  # The identity is already computed per target into the sibling runtime-log-metadata.json
+  # (resolved_jar_path, jar_sha256, jar_size_bytes). Lift it into the target block, where reports
+  # and comparisons actually read from. A different kernel version yields a different jar and
+  # therefore a different sha256, so the arms become self-identifying without any new mechanism.
+  # ----------------------------------------------------------------------------------------
+  local _prov_meta="$(dirname "$outfile")/runtime-log-metadata.json"
+  local target_jar_sha256="" target_jar_path=""
+  if [[ -f "$_prov_meta" ]]; then
+    target_jar_sha256="$(jq -r '.jar_sha256 // empty' "$_prov_meta" 2>/dev/null)"
+    target_jar_path="$(jq -r '.resolved_jar_path // empty' "$_prov_meta" 2>/dev/null)"
+  fi
+  # Fallback for targets launched via -cp rather than -jar. The harness derives
+  # runtime-log-metadata.json's jar fields by parsing `-jar <path>` out of EXTERNAL_START_CMD,
+  # so any target using `-cp app.jar:customizer.jar <MainClass>` — every Blackbird arm — records
+  # an empty path and empty sha. That would leave the 0.10.1-bb vs 0.10.2-bb pair with NO
+  # provenance on EITHER side: precisely the contrast where telling the two builds apart in the
+  # artefacts matters most. Fall back to the matrix's jar_path, which is the same authoritative
+  # source the launch assertion checks the live process against.
+  if [[ -z "$target_jar_sha256" ]]; then
+    local _prov_matrix="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
+    local _matrix_jar=""
+    if [[ -f "$_prov_matrix" ]]; then
+      _matrix_jar="$(jq -r --arg id "$target_id" \
+        '.targets[] | select(.target_id == $id) | .jar_path // ""' "$_prov_matrix" 2>/dev/null)"
+    fi
+    if [[ -n "$_matrix_jar" && -f "${REPO_ROOT}/${_matrix_jar}" ]]; then
+      target_jar_path="${REPO_ROOT}/${_matrix_jar}"
+      target_jar_sha256="$(sha256sum "${REPO_ROOT}/${_matrix_jar}" 2>/dev/null | awk '{print $1}')"
+      echo "  Build provenance for '${target_id}' resolved from the matrix jar_path (target launches via -cp, not -jar)."
+    fi
+  fi
+  if [[ -z "$target_jar_sha256" ]]; then
+    echo "WARN: no jar_sha256 for target '${target_id}' (${_prov_meta}); this result carries NO build provenance and cannot be attributed to a specific artefact." >&2
+  fi
 
   jq -n \
     --arg schema_version      "1" \
@@ -2927,9 +3397,11 @@ parse_wrk_to_result() {
     --arg pair_order          "$pair_order" \
     --arg pair_slot           "$pair_slot" \
     --arg jvm_class           "$JVM_CLASS" \
-    --arg target_mode         "$TARGET_MODE" \
+    --arg target_mode         "$resolved_target_mode" \
     --argjson payload_size_bytes "$(normalize_json_number "$PAYLOAD_SIZE_BYTES")" \
     --arg benchmark_commit_sha "$BENCH_COMMIT_SHA" \
+    --arg target_jar_path     "$target_jar_path" \
+    --arg target_jar_sha256   "$target_jar_sha256" \
     --arg jdk_vendor          "$JDK_VENDOR_DETECTED" \
     --arg jdk_version         "$JDK_VERSION_DETECTED" \
     --arg benchmark_tool_version "$WRK_VERSION_DETECTED" \
@@ -2956,6 +3428,17 @@ parse_wrk_to_result() {
     --argjson error_rate_pct  "$error_rate_pct_json" \
     --argjson total_requests  "$total_requests_json" \
     --argjson total_errors    "$total_errors_json" \
+    --argjson socket_err_connect "$socket_err_connect_json" \
+    --argjson socket_err_read "$socket_err_read_json" \
+    --argjson socket_err_write "$socket_err_write_json" \
+    --argjson socket_err_timeout "$socket_err_timeout_json" \
+    --argjson socket_err_total "$socket_err_total_json" \
+    --argjson failed_requests_total "$failed_requests_total_json" \
+    --argjson failed_request_rate_pct "$failed_request_rate_pct_json" \
+    --argjson latency_p999_us "$latency_p999_us_json" \
+    --arg driver_mode         "$driver_mode" \
+    --argjson offered_rps     "$offered_rps_json" \
+    --argjson rate_attainment_pct "$rate_attainment_pct_json" \
     --argjson duration_seconds "$duration_seconds_json" \
     --argjson warmup_seconds  "$warmup_seconds_json" \
     --argjson threads         "$threads_json" \
@@ -2977,7 +3460,11 @@ parse_wrk_to_result() {
       repo:     $target_id,
       protocol: $protocol_mode,
       mode:     $target_mode,
-      commit_sha: $benchmark_commit_sha
+      commit_sha: $benchmark_commit_sha,
+      build_provenance: {
+        artifact_path:   $target_jar_path,
+        artifact_sha256: $target_jar_sha256
+      }
     },
     run_config: {
       duration_seconds: $duration_seconds,
@@ -2985,6 +3472,8 @@ parse_wrk_to_result() {
       threads:          $threads,
       connections:      $connections,
       contract_id:      $contract_id,
+      protocol_mode:    $protocol_mode,
+      transport_mode:   $transport_mode,
       track_id:         $track_id,
       pair_id:          $pair_id,
       pair_order:       $pair_order,
@@ -2997,6 +3486,12 @@ parse_wrk_to_result() {
       },
       jvm_class:        $jvm_class,
       mode:             $target_mode,
+      driver: {
+        mode:                $driver_mode,
+        offered_rps:         $offered_rps,
+        rate_attainment_pct: $rate_attainment_pct,
+        note: "closed = wrk at saturation: throughput and resource metrics valid, percentiles are queue-depth/throughput. open = wrk2 at a fixed arrival rate: percentiles are service time."
+      },
       payload_size_bytes: $payload_size_bytes,
       drift_snapshot: {
         required_metadata_present: $drift_required_metadata_present,
@@ -3040,7 +3535,17 @@ parse_wrk_to_result() {
       latency_p99_us:  $latency_p99_us,
       error_rate_pct:  $error_rate_pct,
       total_requests:  $total_requests,
-      total_errors:    $total_errors
+      total_errors:    $total_errors,
+      socket_errors: {
+        connect: $socket_err_connect,
+        read:    $socket_err_read,
+        write:   $socket_err_write,
+        timeout: $socket_err_timeout,
+        total:   $socket_err_total
+      },
+      failed_requests_total:   $failed_requests_total,
+      failed_request_rate_pct: $failed_request_rate_pct,
+      latency_p999_us:         $latency_p999_us
     },
     claim_scope:             $claim_scope,
     runner_status:           "success",
@@ -3134,6 +3639,110 @@ if [[ -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" && -x "$GATE_SCRIPT" ]]; then
     echo -e "  ${GREEN}✓${NC} Post-flight gate validation passed."
     echo "  Gate report: ${GATE_CSV}"
 
+    # ------------------------------------------------------------------------------------
+    # Failure-rate eligibility gate.
+    #
+    # A run in which a meaningful share of the offered load did not succeed is not a valid
+    # basis for comparison however clean its other gates are — and the bias runs in the
+    # FLATTERING direction: cheap failures (fast admission-control 503s, dropped connections)
+    # cost almost no CPU and complete almost instantly, so they inflate throughput and deflate
+    # latency. A target that fails 10% of requests can look faster than one that serves them.
+    # Fail closed rather than leave this to interpretation.
+    # ------------------------------------------------------------------------------------
+    MAX_FAILED_REQUEST_RATE_PCT="${BENCH_MAX_FAILED_REQUEST_RATE_PCT:-2}"
+    fr_a="$(jq -r '.metrics.failed_request_rate_pct // 0' "$RESULT_A_PATH" 2>/dev/null || echo 0)"
+    fr_b="$(jq -r '.metrics.failed_request_rate_pct // 0' "$RESULT_B_PATH" 2>/dev/null || echo 0)"
+    fr_exceeded="$(LC_ALL=C awk -v a="$fr_a" -v b="$fr_b" -v m="$MAX_FAILED_REQUEST_RATE_PCT" \
+      'BEGIN { print ((a+0 > m+0) || (b+0 > m+0)) ? "1" : "0" }')"
+
+    if [[ "$fr_exceeded" == "1" ]]; then
+      echo -e "${RED}ERROR${NC}: failed-request rate exceeds ${MAX_FAILED_REQUEST_RATE_PCT}% (target-a=${fr_a}%, target-b=${fr_b}%) — run is NOT comparison-eligible." >&2
+      echo '["FAILED_REQUEST_RATE_EXCEEDED"]' > "$REJECTION_CODES_JSON"
+      jq -n \
+        --arg claim_status "non_eligible" \
+        --arg reason "failed_request_rate_exceeded" \
+        --arg track_id "$TRACK_ID" \
+        --arg pair_id "$PAIR_ID" \
+        --arg pair_order "$PAIR_ORDER" \
+        --argjson rejection_codes '["FAILED_REQUEST_RATE_EXCEEDED"]' \
+        --arg fr_a "$fr_a" \
+        --arg fr_b "$fr_b" \
+        --arg threshold "$MAX_FAILED_REQUEST_RATE_PCT" \
+        '{
+          claim_status: $claim_status,
+          reason: $reason,
+          track_id: $track_id,
+          pair_id: $pair_id,
+          pair_order: $pair_order,
+          rejection_codes: $rejection_codes,
+          failed_request_rate_pct: {
+            target_a: $fr_a,
+            target_b: $fr_b,
+            threshold_pct: $threshold
+          }
+        }' > "$CLAIM_STATUS_JSON"
+      exit 64
+    fi
+
+    # ------------------------------------------------------------------------------------
+    # Closed-loop percentile eligibility.
+    #
+    # A closed-loop driver at saturation does not measure latency. With no think-time the
+    # in-flight count EQUALS the connection count, so reported percentiles are queue-depth
+    # divided by throughput (Little's law) — a property of the harness, not the server.
+    # This lab documented exactly that failure mode in results/reports/2026-06-20 (h2load
+    # p50 146 ms against a real ~3 ms service time) and then walked into it anyway with wrk
+    # at saturation: 128 connections / 83691 rps = 1.53 ms mean, which is what the "latency"
+    # column was reporting.
+    #
+    # Scope restriction, NOT a run failure: throughput and resource metrics are unaffected by
+    # queueing and remain valid — saturation is precisely what measures max throughput well.
+    # Only the percentiles become non-publishable.
+    # ------------------------------------------------------------------------------------
+    CLOSED_LOOP_UTIL_LIMIT="${BENCH_CLOSED_LOOP_UTIL_LIMIT:-0.90}"
+    server_cpu_count=0
+    if [[ -n "${SERVER_CPU_AFFINITY:-}" ]]; then
+      server_cpu_count="$(LC_ALL=C awk -v s="$SERVER_CPU_AFFINITY" 'BEGIN{
+        n=0; c=split(s,parts,",");
+        for(i=1;i<=c;i++){ if(parts[i]~/-/){ split(parts[i],r,"-"); n+=r[2]-r[1]+1 } else if(parts[i]!=""){ n++ } }
+        print n }')"
+    fi
+    util_a="$(jq -r '.run_config.resource_metrics.avg_cores_used // 0' "$RESULT_A_PATH" 2>/dev/null || echo 0)"
+    util_b="$(jq -r '.run_config.resource_metrics.avg_cores_used // 0' "$RESULT_B_PATH" 2>/dev/null || echo 0)"
+    percentiles_publishable="true"
+    percentile_reason="below_saturation_or_unknown_affinity"
+    if [[ "${BENCH_DRIVER_MODE:-closed}" == "open" ]]; then
+      # Open-loop percentiles measure service time however loaded the target is — that is the
+      # entire point of a fixed arrival rate, and gating them on utilisation would suppress
+      # exactly the measurements this mode exists to produce. What DOES invalidate them is the
+      # generator failing to sustain the offered rate: the target saturated and the run
+      # degenerated back into a closed loop, so the numbers are queue depth again.
+      MIN_RATE_ATTAINMENT_PCT="${BENCH_MIN_RATE_ATTAINMENT_PCT:-95}"
+      att_a="$(jq -r '.run_config.driver.rate_attainment_pct // 0' "$RESULT_A_PATH" 2>/dev/null || echo 0)"
+      att_b="$(jq -r '.run_config.driver.rate_attainment_pct // 0' "$RESULT_B_PATH" 2>/dev/null || echo 0)"
+      if [[ "$(LC_ALL=C awk -v a="$att_a" -v b="$att_b" -v m="$MIN_RATE_ATTAINMENT_PCT" \
+            'BEGIN { print ((a+0 < m+0) || (b+0 < m+0)) ? "1" : "0" }')" == "1" ]]; then
+        percentiles_publishable="false"
+        percentile_reason="open_loop_rate_not_sustained"
+        echo "  NOTE: the generator did not sustain its offered rate (target-a=${att_a}%, target-b=${att_b}%,"
+        echo "        floor ${MIN_RATE_ATTAINMENT_PCT}%). The run degenerated toward a closed loop, so its"
+        echo "        percentiles are queue depth again and are marked NON-PUBLISHABLE."
+      else
+        percentile_reason="open_loop_fixed_rate"
+      fi
+    elif [[ "${server_cpu_count:-0}" -gt 0 ]]; then
+      if [[ "$(LC_ALL=C awk -v a="$util_a" -v b="$util_b" -v n="$server_cpu_count" -v lim="$CLOSED_LOOP_UTIL_LIMIT" \
+            'BEGIN{ print ((a/n > lim) || (b/n > lim)) ? "1" : "0" }')" == "1" ]]; then
+        percentiles_publishable="false"
+        percentile_reason="closed_loop_driver_at_saturation"
+        echo -e "  ${YELLOW:-}NOTE${NC:-}: pinned-cpuset utilisation exceeds ${CLOSED_LOOP_UTIL_LIMIT} with a closed-loop driver."
+        echo "        Latency percentiles from this run are queue-depth/throughput artefacts and are marked"
+        echo "        NON-PUBLISHABLE. Throughput, CPU-per-request and RSS remain valid."
+      else
+        percentile_reason="below_saturation"
+      fi
+    fi
+
     jq -n \
       --arg claim_status "comparison_eligible" \
       --arg reason "all_gates_passed" \
@@ -3141,14 +3750,44 @@ if [[ -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" && -x "$GATE_SCRIPT" ]]; then
       --arg pair_id "$PAIR_ID" \
       --arg pair_order "$PAIR_ORDER" \
       --argjson rejection_codes '[]' \
+      --arg fr_a "$fr_a" \
+      --arg fr_b "$fr_b" \
+      --arg threshold "$MAX_FAILED_REQUEST_RATE_PCT" \
+      --argjson percentiles_publishable "$percentiles_publishable" \
+      --arg percentile_reason "$percentile_reason" \
+      --arg gate_driver_mode "${BENCH_DRIVER_MODE:-closed}" \
+      --arg util_a "$util_a" \
+      --arg util_b "$util_b" \
+      --arg server_cpus "$server_cpu_count" \
       '{
         claim_status: $claim_status,
         reason: $reason,
         track_id: $track_id,
         pair_id: $pair_id,
         pair_order: $pair_order,
-        rejection_codes: $rejection_codes
+        rejection_codes: $rejection_codes,
+        failed_request_rate_pct: {
+          target_a: $fr_a,
+          target_b: $fr_b,
+          threshold_pct: $threshold
+        },
+        latency_percentile_eligibility: {
+          publishable: $percentiles_publishable,
+          reason: $percentile_reason,
+          driver_mode: $gate_driver_mode,
+          cores_used_target_a: $util_a,
+          cores_used_target_b: $util_b,
+          pinned_cpus: $server_cpus,
+          note: "Closed-loop percentiles at saturation are queue-depth/throughput, not service time. Throughput and resource metrics are unaffected."
+        }
       }' > "$CLAIM_STATUS_JSON"
+
+    # Strict-gate completeness (CLAUDE.md requires all 4 artifacts in a comparative output dir):
+    # the comparison_eligible SUCCESS path must ALSO emit rejection-codes.json. Previously only the
+    # failure branches wrote it (FAILED_REQUEST_RATE_EXCEEDED / GATE_VALIDATOR_MISSING), so every
+    # PASSING comparative leaf was missing this required file. Mirror the gate summary's
+    # rejection_codes (empty [] on the passing path).
+    jq -c '.rejection_codes // []' "$GATE_SUMMARY_JSON" > "$REJECTION_CODES_JSON" 2>/dev/null || echo '[]' > "$REJECTION_CODES_JSON"
   fi
 else
   echo -e "${RED}ERROR${NC}: Skipping post-flight gate validation is not allowed in fail-closed mode." >&2
@@ -3181,11 +3820,74 @@ FAIRNESS_OUT="${OUTPUT_DIR}/fairness-index.json"
 COMPARATIVE_OUT="${OUTPUT_DIR}/comparative-result.json"
 REPORT_MD="${OUTPUT_DIR}/comparative-report.md"
 
+# ---------------------------------------------------------------------------
+# DB-config fingerprint (fairness axis on run INPUTS).
+#
+# Targets read their datasource from EXERIS_DB_* in the environment, and this script
+# passes that environment down by inheritance — it never recorded it, so the strict
+# gate was structurally blind to the DB-config axis. Every caller therefore had to
+# remember to normalize the JDBC URL itself, and three separate incidents (9f2b182,
+# d1032c8, and the promotion re-run) were each fixed by patching one more caller.
+# Fingerprinting the inherited environment here moves the check off the callers.
+#
+# Password-bearing variables are excluded from both the emitted document and the
+# digest: the secret is not a fairness axis.
+DB_CONFIG_JSON="${OUTPUT_DIR}/db-config.json"
+capture_db_config() {
+  local jdbc_url query base
+  jdbc_url="${EXERIS_DB_JDBC_URL:-}"
+  base="${jdbc_url%%\?*}"
+  query=""
+  [[ "$jdbc_url" == *\?* ]] && query="${jdbc_url#*\?}"
+
+  # Canonical env slice: every EXERIS_DB_* except secrets, sorted for a stable digest.
+  local env_slice
+  env_slice="$(env | grep -E '^EXERIS_DB_' | grep -viE 'password|passwd|secret' | LC_ALL=C sort || true)"
+  local digest
+  digest="sha256:$(printf '%s' "$env_slice" | sha256sum | cut -d' ' -f1)"
+
+  # The pgjdbc parameters that decide fetch/prepare behaviour. Absent params are the
+  # real-world failure mode, so they are reported explicitly rather than defaulted.
+  local -a fairness_keys=(preferQueryMode prepareThreshold defaultRowFetchSize adaptiveFetch)
+  local params_json='{}' missing_json='[]' k v
+  for k in "${fairness_keys[@]}"; do
+    v="$(printf '%s' "$query" | tr '&' '\n' | awk -F= -v key="$k" '$1==key {print $2; exit}')"
+    if [[ -n "$v" ]]; then
+      params_json="$(jq -c --arg k "$k" --arg v "$v" '. + {($k): $v}' <<<"$params_json")"
+    else
+      missing_json="$(jq -c --arg k "$k" '. + [$k]' <<<"$missing_json")"
+    fi
+  done
+
+  local complete=true
+  [[ "$(jq -r 'length' <<<"$missing_json")" != "0" ]] && complete=false
+
+  jq -n \
+    --arg     jdbc_base   "$base" \
+    --arg     env_digest  "$digest" \
+    --argjson params      "$params_json" \
+    --argjson missing     "$missing_json" \
+    --argjson complete    "$complete" \
+    --arg     captured_at "$(ts_now_utc)" \
+  '{
+     jdbc_base_url:             $jdbc_base,
+     fairness_params:           $params,
+     fairness_params_missing:   $missing,
+     fairness_params_complete:  $complete,
+     env_digest:                $env_digest,
+     captured_at:               $captured_at,
+     note: "Fingerprint of the EXERIS_DB_* environment this harness passes down to both arms (secrets excluded). Both arms inherit one environment, so equality alone proves nothing — fairness_params_complete is the check that catches an un-normalized URL."
+   }' > "$DB_CONFIG_JSON"
+}
+capture_db_config || echo -e "${YELLOW}WARN${NC}: DB-config capture failed." >&2
+
 # Compute fairness index
 if [[ -x "$FAIRNESS_TOOL" && -f "$RESULT_A_PATH" && -f "$RESULT_B_PATH" ]]; then
   "$FAIRNESS_TOOL" \
     --result-a "$RESULT_A_PATH" \
     --result-b "$RESULT_B_PATH" \
+    --db-config-a "$DB_CONFIG_JSON" \
+    --db-config-b "$DB_CONFIG_JSON" \
     --output   "$FAIRNESS_OUT"
   echo -e "  ${GREEN}✓${NC} Fairness index computed."
 else
@@ -3197,11 +3899,46 @@ else
   '{
     error_symmetry: 0, latency_symmetry: 0,
     throughput_confidence: 0, composite_score: 0,
+    db_config_symmetry: 0,
+    db_config: { status: "unverified", a: null, b: null },
     interpretation: "unsuitable",
     computed_at: $ts,
     targets: [$ta, $tb],
     asymmetry_notes: ["fairness tool unavailable"]
   }' > "$FAIRNESS_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# Fail-closed enforcement of the DB-config axis.
+#
+# The fairness index is computed in Stage 8, i.e. AFTER Stage 7 has already written
+# claim-status.json. Recording the axis without enforcing it would reproduce the very
+# failure being fixed — visible, and ignored — so a non-ok status demotes the claim
+# here rather than merely annotating it.
+DB_CONFIG_STATUS_EFFECTIVE="$(jq -r '.db_config.status // "unverified"' "$FAIRNESS_OUT" 2>/dev/null || echo unverified)"
+if [[ "$DB_CONFIG_STATUS_EFFECTIVE" != "ok" ]]; then
+  case "$DB_CONFIG_STATUS_EFFECTIVE" in
+    asymmetric)               DB_REJECTION_CODE="DB_CONFIG_ASYMMETRIC" ;;
+    incomplete_normalization) DB_REJECTION_CODE="DB_CONFIG_NOT_NORMALIZED" ;;
+    *)                        DB_REJECTION_CODE="DB_CONFIG_UNVERIFIED" ;;
+  esac
+  echo -e "${RED}ERROR${NC}: DB-config fairness gate failed (status=${DB_CONFIG_STATUS_EFFECTIVE}) [rejection_code=${DB_REJECTION_CODE}]" >&2
+  jq -r '.asymmetry_notes[]? | "  - " + .' "$FAIRNESS_OUT" >&2 2>/dev/null || true
+
+  jq -c --arg c "$DB_REJECTION_CODE" '(. // []) + [$c] | unique' "$REJECTION_CODES_JSON" \
+    > "${REJECTION_CODES_JSON}.tmp" 2>/dev/null \
+    && mv "${REJECTION_CODES_JSON}.tmp" "$REJECTION_CODES_JSON" \
+    || jq -nc --arg c "$DB_REJECTION_CODE" '[$c]' > "$REJECTION_CODES_JSON"
+
+  if [[ -f "$CLAIM_STATUS_JSON" ]]; then
+    jq --arg c "$DB_REJECTION_CODE" --arg s "$DB_CONFIG_STATUS_EFFECTIVE" \
+      '.claim_status = "non_eligible"
+       | .final_reason = ("db_config_" + $s)
+       | .rejection_codes = (((.rejection_codes // []) + [$c]) | unique)' \
+      "$CLAIM_STATUS_JSON" > "${CLAIM_STATUS_JSON}.tmp" \
+      && mv "${CLAIM_STATUS_JSON}.tmp" "$CLAIM_STATUS_JSON"
+  fi
+  POSTFLIGHT_OK=0
 fi
 
 # Build gate_status from CSV if available
@@ -3267,19 +4004,26 @@ build_target_entry() {
   local rfile="$1"
   local target_id="$2"
 
-  # Load maturity info from pair manifest
+  # Load maturity/tier from pair manifest; source protocol/transport from the EFFECTIVE value
+  # stamped into the result file (protocol-as-run-axis) rather than the manifest's advisory
+  # h1 default — the aggregation fingerprint keys on this field, so a manifest default of h1
+  # would silently blend an agnostic h2 run into h1. Fail closed rather than defaulting.
   local maturity tier protocol transport
   maturity="$(jq -r --arg t "$target_id" '.compatible_targets[] | select(.target_id==$t) | .maturity_level // "unknown"' "$PAIR_MANIFEST")"
   tier="$(jq -r --arg t "$target_id" '.compatible_targets[] | select(.target_id==$t) | .tier // "community"' "$PAIR_MANIFEST")"
-  protocol="$(jq -r --arg t "$target_id" '.compatible_targets[] | select(.target_id==$t) | .protocol_mode // "h1"' "$PAIR_MANIFEST")"
-  transport="$(jq -r --arg t "$target_id" '.compatible_targets[] | select(.target_id==$t) | .transport_mode // "loopback-h1"' "$PAIR_MANIFEST")"
+  protocol="$(jq -r '.target.protocol // empty' "$rfile")"
+  transport="$(jq -r '.transport_mode // empty' "$rfile")"
+  if [[ -z "$protocol" || -z "$transport" ]]; then
+    echo "CONFIG_ERROR: result '${rfile}' missing effective .target.protocol/.transport_mode for build_target_entry — refusing to default to h1 [rejection_code=RESULT_PROTOCOL_MISSING]" >&2
+    exit 64
+  fi
 
   jq -n \
     --arg target_id     "$target_id" \
     --arg maturity      "${maturity:-unknown}" \
     --arg tier          "${tier:-community}" \
-    --arg protocol_mode "${protocol:-h1}" \
-    --arg transport     "${transport:-loopback-h1}" \
+    --arg protocol_mode "$protocol" \
+    --arg transport     "$transport" \
     --slurpfile result  "$rfile" \
   '{
     target_id:      $target_id,
@@ -3310,7 +4054,7 @@ PAIR_FINGERPRINT_JSON="$(jq -n \
   --arg contract_id "$CONTRACT_ID" \
   --arg tier "$TARGET_A_TIER" \
   --arg protocol_mode "$TARGET_A_PROTOCOL_MODE" \
-  --arg transport_mode "loopback-${TARGET_A_PROTOCOL_MODE}" \
+  --arg transport_mode "$EFFECTIVE_TRANSPORT_MODE" \
   --arg workload_profile_key "$WORKLOAD_PROFILE_KEY" \
   --arg t1 "$TARGET_A" \
   --arg t2 "$TARGET_B" \
@@ -3407,7 +4151,7 @@ echo -e "  ${GREEN}✓${NC} comparative-result.json written: ${COMPARATIVE_OUT}"
   echo "| composite_score | ${COMPOSITE} |"
   echo "| interpretation  | **${INTERP}** |"
   echo ""
-  echo "> Axis labels: tier=${TARGET_A_TIER} | protocol_mode=${TARGET_A_PROTOCOL_MODE} | transport_mode=loopback-${TARGET_A_PROTOCOL_MODE} | benchmark_family=runtime | track_id=${TRACK_ID}"
+  echo "> Axis labels: tier=${TARGET_A_TIER} | protocol_mode=${TARGET_A_PROTOCOL_MODE} | transport_mode=${EFFECTIVE_TRANSPORT_MODE} | benchmark_family=runtime | track_id=${TRACK_ID}"
   echo ""
   echo "_Generated by run-comparative.sh — Phase 6.3_"
 } > "$REPORT_MD"

@@ -12,9 +12,14 @@ MATRIX_PATH="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
 #   quarkus-tuned: pure-JDBC, tuned transport (native epoll + native BoringSSL TLS)
 #     counterpart of default-Quarkus quarkus-hibernate; app in flight, not yet promoted
 #     to a comparative-pair-manifest (quarkus-hibernate__quarkus-tuned) as comparison_eligible.
+#   restate: baseline-only per scenarios/e2e-shop-order-saga/CONTRACT-v2-IMPLEMENTATION.md
+#     (anti-overclaim ledger, "No Restate comparisons"): not comparison-eligible until the
+#     h1-facade-vs-h2c-canonical-contract protocol mismatch is resolved or scoped h1-vs-h1;
+#     descriptive single-stack baseline runs only.
 JUSTIFIED_UNUSED_RUNNABLE_TARGETS=(
   "spring-on-exeris"
   "quarkus-tuned"
+  "restate"
 )
 
 fail_count=0

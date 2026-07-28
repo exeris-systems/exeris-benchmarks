@@ -1,0 +1,1402 @@
+[2026-07-23T02:37:20.488+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:20.488+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:20.488+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:20.488+0200][info ][safepoint] Safepoint "SetNotifyJvmtiEventsMode", Time since last: 55289026 ns, Reaching safepoint: 28824 ns, At safepoint: 6612 ns, Leaving safepoint: 3507 ns, Total: 38943 ns, Threads: 0 runnable, 14 total
+[2026-07-23T02:37:20.488+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:20.617+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:20.617+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:20.617+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:20.617+0200][info ][safepoint] Safepoint "JFRSafepointClear", Time since last: 129756582 ns, Reaching safepoint: 21941 ns, At safepoint: 9267 ns, Leaving safepoint: 5711 ns, Total: 36919 ns, Threads: 1 runnable, 18 total
+[2026-07-23T02:37:20.617+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:20.619+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:20.619+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:20.619+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:20.619+0200][info ][safepoint] Safepoint "JFROldObject", Time since last: 2075947 ns, Reaching safepoint: 10920 ns, At safepoint: 8216 ns, Leaving safepoint: 3867 ns, Total: 23003 ns, Threads: 0 runnable, 18 total
+[2026-07-23T02:37:20.619+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:20.623+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:20.623+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:20.623+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:20.623+0200][info ][safepoint] Safepoint "ClassLoaderStatsOperation", Time since last: 3072713 ns, Reaching safepoint: 77766 ns, At safepoint: 97743 ns, Leaving safepoint: 6172 ns, Total: 181681 ns, Threads: 1 runnable, 18 total
+[2026-07-23T02:37:20.623+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:21.115+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:21.115+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:21.119+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:21.119+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 492667851 ns, Reaching safepoint: 14758 ns, At safepoint: 3328392 ns, Leaving safepoint: 13375 ns, Total: 3356525 ns, Threads: 0 runnable, 23 total
+[2026-07-23T02:37:21.119+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:21.193+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:21.193+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:21.195+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:21.195+0200][info ][safepoint] Safepoint "CollectForMetadataAllocation", Time since last: 73775321 ns, Reaching safepoint: 23233 ns, At safepoint: 2395746 ns, Leaving safepoint: 13074 ns, Total: 2432053 ns, Threads: 0 runnable, 23 total
+[2026-07-23T02:37:21.195+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:21.197+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:21.197+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:21.198+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:21.198+0200][info ][safepoint] Safepoint "G1PauseRemark", Time since last: 2119198 ns, Reaching safepoint: 69971 ns, At safepoint: 1120939 ns, Leaving safepoint: 7945 ns, Total: 1198855 ns, Threads: 1 runnable, 23 total
+[2026-07-23T02:37:21.198+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:21.199+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:21.199+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:21.199+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:21.199+0200][info ][safepoint] Safepoint "G1PauseCleanup", Time since last: 348403 ns, Reaching safepoint: 52137 ns, At safepoint: 38723 ns, Leaving safepoint: 3326 ns, Total: 94186 ns, Threads: 1 runnable, 23 total
+[2026-07-23T02:37:21.199+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:22.792+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:22.792+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:22.795+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:22.795+0200][info ][safepoint] Safepoint "CollectForMetadataAllocation", Time since last: 1593334988 ns, Reaching safepoint: 16370 ns, At safepoint: 3200533 ns, Leaving safepoint: 16040 ns, Total: 3232943 ns, Threads: 0 runnable, 34 total
+[2026-07-23T02:37:22.795+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:22.804+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:22.804+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:22.807+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:22.807+0200][info ][safepoint] Safepoint "CollectForMetadataAllocation", Time since last: 8883895 ns, Reaching safepoint: 9317 ns, At safepoint: 2783302 ns, Leaving safepoint: 14347 ns, Total: 2806966 ns, Threads: 0 runnable, 34 total
+[2026-07-23T02:37:22.807+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:22.882+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:22.882+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:22.885+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:22.885+0200][info ][safepoint] Safepoint "CollectForMetadataAllocation", Time since last: 74853258 ns, Reaching safepoint: 16281 ns, At safepoint: 3021898 ns, Leaving safepoint: 16371 ns, Total: 3054550 ns, Threads: 0 runnable, 34 total
+[2026-07-23T02:37:22.885+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:22.887+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:22.887+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:22.888+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:22.888+0200][info ][safepoint] Safepoint "G1PauseRemark", Time since last: 2522443 ns, Reaching safepoint: 11852 ns, At safepoint: 1061407 ns, Leaving safepoint: 11091 ns, Total: 1084350 ns, Threads: 0 runnable, 34 total
+[2026-07-23T02:37:22.888+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:37:22.889+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:37:22.889+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:37:22.889+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:37:22.889+0200][info ][safepoint] Safepoint "G1PauseCleanup", Time since last: 340237 ns, Reaching safepoint: 10179 ns, At safepoint: 53540 ns, Leaving safepoint: 4769 ns, Total: 68488 ns, Threads: 0 runnable, 34 total
+[2026-07-23T02:37:22.889+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:38:20.816+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:38:20.816+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:38:20.817+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:38:20.817+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 57927295239 ns, Reaching safepoint: 45465 ns, At safepoint: 692948 ns, Leaving safepoint: 26239 ns, Total: 764652 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:38:20.817+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:38:20.817+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:38:20.817+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:38:20.817+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:38:20.817+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 77525 ns, Reaching safepoint: 28193 ns, At safepoint: 13215 ns, Leaving safepoint: 5761 ns, Total: 47169 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:38:20.817+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:39:20.886+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:39:20.886+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:39:20.887+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:39:20.887+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 60069342212 ns, Reaching safepoint: 33242 ns, At safepoint: 350707 ns, Leaving safepoint: 8065 ns, Total: 392014 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:39:20.887+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:39:20.887+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:39:20.887+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:39:20.887+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:39:20.887+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 23123 ns, Reaching safepoint: 4198 ns, At safepoint: 7724 ns, Leaving safepoint: 3737 ns, Total: 15659 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:39:20.887+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:20.952+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:20.952+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:20.953+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:20.953+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 60065300025 ns, Reaching safepoint: 36629 ns, At safepoint: 349524 ns, Leaving safepoint: 6623 ns, Total: 392776 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:40:20.953+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:20.953+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:20.953+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:20.953+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:20.953+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 22562 ns, Reaching safepoint: 4057 ns, At safepoint: 7645 ns, Leaving safepoint: 3897 ns, Total: 15599 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:40:20.953+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:37.942+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:37.942+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:37.946+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:37.946+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 16989350917 ns, Reaching safepoint: 99987 ns, At safepoint: 4350526 ns, Leaving safepoint: 54382 ns, Total: 4504895 ns, Threads: 4 runnable, 46 total
+[2026-07-23T02:40:37.946+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:40.087+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:40.087+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:40.091+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:40.091+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 2140246699 ns, Reaching safepoint: 32221 ns, At safepoint: 4252092 ns, Leaving safepoint: 19897 ns, Total: 4304210 ns, Threads: 0 runnable, 45 total
+[2026-07-23T02:40:40.091+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:40.731+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:40.731+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:40.734+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:40.734+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 639783369 ns, Reaching safepoint: 160972 ns, At safepoint: 3039401 ns, Leaving safepoint: 43411 ns, Total: 3243784 ns, Threads: 2 runnable, 45 total
+[2026-07-23T02:40:40.734+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:41.398+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:41.398+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:41.401+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:41.402+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 663690825 ns, Reaching safepoint: 168185 ns, At safepoint: 3605782 ns, Leaving safepoint: 42038 ns, Total: 3816005 ns, Threads: 3 runnable, 45 total
+[2026-07-23T02:40:41.402+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:42.106+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:42.107+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:42.110+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:42.110+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 704909656 ns, Reaching safepoint: 102392 ns, At safepoint: 3524419 ns, Leaving safepoint: 43041 ns, Total: 3669852 ns, Threads: 7 runnable, 45 total
+[2026-07-23T02:40:42.110+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:42.795+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:42.795+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:42.799+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:42.799+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 684944632 ns, Reaching safepoint: 37059 ns, At safepoint: 3555768 ns, Leaving safepoint: 28975 ns, Total: 3621802 ns, Threads: 1 runnable, 43 total
+[2026-07-23T02:40:42.799+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:43.465+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:43.466+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:43.469+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:43.469+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666808673 ns, Reaching safepoint: 95198 ns, At safepoint: 3613997 ns, Leaving safepoint: 46407 ns, Total: 3755602 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:40:43.469+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:44.136+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:44.136+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:44.140+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:44.140+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 667120217 ns, Reaching safepoint: 27221 ns, At safepoint: 3539878 ns, Leaving safepoint: 21560 ns, Total: 3588659 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:40:44.140+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:44.814+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:44.814+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:44.818+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:44.818+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 674064911 ns, Reaching safepoint: 97743 ns, At safepoint: 3546871 ns, Leaving safepoint: 54863 ns, Total: 3699477 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:40:44.818+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:45.498+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:45.498+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:45.501+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:45.501+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 680049706 ns, Reaching safepoint: 102132 ns, At safepoint: 3599109 ns, Leaving safepoint: 29515 ns, Total: 3730756 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:40:45.501+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:46.183+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:46.183+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:46.187+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:46.187+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 681605470 ns, Reaching safepoint: 97112 ns, At safepoint: 3742978 ns, Leaving safepoint: 29105 ns, Total: 3869195 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:40:46.187+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:46.848+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:46.848+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:46.851+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:46.851+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 660582014 ns, Reaching safepoint: 129022 ns, At safepoint: 3564294 ns, Leaving safepoint: 28162 ns, Total: 3721478 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:40:46.851+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:47.517+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:47.517+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:47.521+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:47.521+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665955025 ns, Reaching safepoint: 91702 ns, At safepoint: 3603558 ns, Leaving safepoint: 38532 ns, Total: 3733792 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:40:47.521+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:48.184+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:48.184+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:48.187+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:48.187+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 663222779 ns, Reaching safepoint: 104245 ns, At safepoint: 2914548 ns, Leaving safepoint: 23544 ns, Total: 3042337 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:40:48.187+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:48.857+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:48.857+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:48.860+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:48.860+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669693034 ns, Reaching safepoint: 195185 ns, At safepoint: 2907465 ns, Leaving safepoint: 25788 ns, Total: 3128438 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:40:48.860+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:49.528+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:49.528+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:49.531+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:49.531+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668340311 ns, Reaching safepoint: 97643 ns, At safepoint: 2941969 ns, Leaving safepoint: 24536 ns, Total: 3064148 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:40:49.531+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:50.213+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:50.213+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:50.216+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:50.216+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 681640656 ns, Reaching safepoint: 100267 ns, At safepoint: 2838776 ns, Leaving safepoint: 33503 ns, Total: 2972546 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:40:50.216+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:50.896+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:50.896+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:50.898+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:50.899+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 680107024 ns, Reaching safepoint: 88205 ns, At safepoint: 2238992 ns, Leaving safepoint: 26650 ns, Total: 2353847 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:40:50.899+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:51.574+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:51.574+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:51.576+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:51.576+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675321344 ns, Reaching safepoint: 19246 ns, At safepoint: 2247959 ns, Leaving safepoint: 20799 ns, Total: 2288004 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:40:51.576+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:52.258+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:52.258+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:52.260+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:52.260+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 681624416 ns, Reaching safepoint: 94346 ns, At safepoint: 2146069 ns, Leaving safepoint: 29345 ns, Total: 2269760 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:40:52.260+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:52.941+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:52.941+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:52.943+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:52.943+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 680696117 ns, Reaching safepoint: 90429 ns, At safepoint: 2172017 ns, Leaving safepoint: 21811 ns, Total: 2284257 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:40:52.943+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:53.626+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:53.626+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:53.628+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:53.628+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 682810417 ns, Reaching safepoint: 200786 ns, At safepoint: 2248550 ns, Leaving safepoint: 33763 ns, Total: 2483099 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:40:53.628+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:54.318+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:54.318+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:54.321+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:54.321+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 689965184 ns, Reaching safepoint: 99075 ns, At safepoint: 2217883 ns, Leaving safepoint: 36909 ns, Total: 2353867 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:40:54.321+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:55.002+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:55.002+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:55.004+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:55.004+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 680947759 ns, Reaching safepoint: 99226 ns, At safepoint: 2193306 ns, Leaving safepoint: 35347 ns, Total: 2327879 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:40:55.004+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:55.693+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:55.693+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:55.695+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:55.695+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 689058155 ns, Reaching safepoint: 97212 ns, At safepoint: 2159143 ns, Leaving safepoint: 21079 ns, Total: 2277434 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:40:55.695+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:56.379+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:56.379+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:56.382+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:56.382+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 683932328 ns, Reaching safepoint: 93334 ns, At safepoint: 2404793 ns, Leaving safepoint: 55274 ns, Total: 2553401 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:40:56.382+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:57.066+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:57.067+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:57.069+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:57.069+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 684742194 ns, Reaching safepoint: 95709 ns, At safepoint: 2180893 ns, Leaving safepoint: 26901 ns, Total: 2303503 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:40:57.069+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:57.752+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:57.752+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:57.754+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:57.754+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 683356970 ns, Reaching safepoint: 115255 ns, At safepoint: 2193999 ns, Leaving safepoint: 22241 ns, Total: 2331495 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:40:57.754+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:58.433+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:58.433+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:58.435+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:58.435+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 678252001 ns, Reaching safepoint: 97994 ns, At safepoint: 2295629 ns, Leaving safepoint: 31008 ns, Total: 2424631 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:40:58.435+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:59.116+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:59.116+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:59.118+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:59.118+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 680434177 ns, Reaching safepoint: 99416 ns, At safepoint: 2196693 ns, Leaving safepoint: 34374 ns, Total: 2330483 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:40:59.118+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:40:59.795+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:40:59.795+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:40:59.797+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:40:59.797+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 677018111 ns, Reaching safepoint: 98836 ns, At safepoint: 2235445 ns, Leaving safepoint: 32742 ns, Total: 2367023 ns, Threads: 7 runnable, 42 total
+[2026-07-23T02:40:59.797+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:00.473+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:00.473+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:00.475+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:00.475+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675764693 ns, Reaching safepoint: 98916 ns, At safepoint: 2185352 ns, Leaving safepoint: 28443 ns, Total: 2312711 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:41:00.475+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:01.164+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:01.164+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:01.167+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:01.167+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 689036585 ns, Reaching safepoint: 99767 ns, At safepoint: 2287022 ns, Leaving safepoint: 34314 ns, Total: 2421103 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:41:01.167+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:01.842+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:01.842+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:01.844+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:01.844+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675175191 ns, Reaching safepoint: 109454 ns, At safepoint: 2218925 ns, Leaving safepoint: 34876 ns, Total: 2363255 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:01.844+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:02.519+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:02.519+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:02.521+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:02.521+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 674408304 ns, Reaching safepoint: 32811 ns, At safepoint: 2217483 ns, Leaving safepoint: 21149 ns, Total: 2271443 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:41:02.521+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:03.207+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:03.207+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:03.209+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:03.209+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 685747507 ns, Reaching safepoint: 88625 ns, At safepoint: 2167960 ns, Leaving safepoint: 24967 ns, Total: 2281552 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:41:03.209+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:03.893+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:03.893+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:03.895+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:03.895+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 683642555 ns, Reaching safepoint: 97592 ns, At safepoint: 2209788 ns, Leaving safepoint: 23574 ns, Total: 2330954 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:41:03.895+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:04.575+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:04.575+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:04.578+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:04.578+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 680287814 ns, Reaching safepoint: 102041 ns, At safepoint: 2222952 ns, Leaving safepoint: 26730 ns, Total: 2351723 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:04.578+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:05.253+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:05.253+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:05.256+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:05.256+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675498025 ns, Reaching safepoint: 98835 ns, At safepoint: 2303403 ns, Leaving safepoint: 38181 ns, Total: 2440419 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:41:05.256+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:05.931+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:05.931+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:05.933+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:05.933+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 674997498 ns, Reaching safepoint: 69280 ns, At safepoint: 2305136 ns, Leaving safepoint: 29365 ns, Total: 2403781 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:05.933+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:06.608+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:06.608+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:06.610+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:06.610+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675111201 ns, Reaching safepoint: 99155 ns, At safepoint: 2168731 ns, Leaving safepoint: 44524 ns, Total: 2312410 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:41:06.610+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:07.284+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:07.284+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:07.286+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:07.286+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 673107989 ns, Reaching safepoint: 94607 ns, At safepoint: 2335874 ns, Leaving safepoint: 21971 ns, Total: 2452452 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:41:07.286+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:07.958+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:07.958+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:07.960+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:07.960+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 672032286 ns, Reaching safepoint: 99536 ns, At safepoint: 2218554 ns, Leaving safepoint: 22913 ns, Total: 2341003 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:41:07.960+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:08.630+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:08.630+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:08.632+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:08.632+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669554897 ns, Reaching safepoint: 111018 ns, At safepoint: 2187686 ns, Leaving safepoint: 33332 ns, Total: 2332036 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:41:08.632+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:09.301+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:09.301+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:09.304+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:09.304+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669201496 ns, Reaching safepoint: 30026 ns, At safepoint: 2263979 ns, Leaving safepoint: 22742 ns, Total: 2316747 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:41:09.304+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:09.977+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:09.977+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:09.979+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:09.979+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 673307293 ns, Reaching safepoint: 98375 ns, At safepoint: 2243340 ns, Leaving safepoint: 29666 ns, Total: 2371381 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:41:09.979+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:10.667+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:10.667+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:10.669+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:10.669+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 687468109 ns, Reaching safepoint: 31889 ns, At safepoint: 2199839 ns, Leaving safepoint: 21010 ns, Total: 2252738 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:41:10.669+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:11.342+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:11.342+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:11.344+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:11.344+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 672576815 ns, Reaching safepoint: 99687 ns, At safepoint: 2156397 ns, Leaving safepoint: 20779 ns, Total: 2276863 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:11.344+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:12.018+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:12.018+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:12.020+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:12.020+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 673530982 ns, Reaching safepoint: 29696 ns, At safepoint: 2267205 ns, Leaving safepoint: 19296 ns, Total: 2316197 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:41:12.020+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:12.692+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:12.693+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:12.695+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:12.695+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 672572628 ns, Reaching safepoint: 100448 ns, At safepoint: 2233532 ns, Leaving safepoint: 27912 ns, Total: 2361892 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:41:12.695+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:13.370+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:13.370+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:13.373+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:13.373+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675490411 ns, Reaching safepoint: 100358 ns, At safepoint: 2283476 ns, Leaving safepoint: 30186 ns, Total: 2414020 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:13.373+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:14.050+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:14.050+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:14.052+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:14.052+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 677316711 ns, Reaching safepoint: 99065 ns, At safepoint: 2176376 ns, Leaving safepoint: 34414 ns, Total: 2309855 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:41:14.052+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:14.726+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:14.726+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:14.729+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:14.729+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 673920191 ns, Reaching safepoint: 98935 ns, At safepoint: 2177958 ns, Leaving safepoint: 34395 ns, Total: 2311288 ns, Threads: 11 runnable, 42 total
+[2026-07-23T02:41:14.729+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:15.421+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:15.421+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:15.423+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:15.423+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 692208866 ns, Reaching safepoint: 99185 ns, At safepoint: 2166527 ns, Leaving safepoint: 19857 ns, Total: 2285569 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:15.423+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:16.093+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:16.094+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:16.096+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:16.096+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 670394539 ns, Reaching safepoint: 91882 ns, At safepoint: 2184792 ns, Leaving safepoint: 24285 ns, Total: 2300959 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:16.096+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:16.771+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:16.771+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:16.773+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:16.773+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 674990555 ns, Reaching safepoint: 28784 ns, At safepoint: 2139756 ns, Leaving safepoint: 18796 ns, Total: 2187336 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:41:16.773+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:17.450+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:17.450+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:17.452+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:17.452+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 676920008 ns, Reaching safepoint: 89858 ns, At safepoint: 2166747 ns, Leaving safepoint: 34715 ns, Total: 2291320 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:41:17.452+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:18.128+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:18.128+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:18.130+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:18.130+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675432312 ns, Reaching safepoint: 92483 ns, At safepoint: 2319684 ns, Leaving safepoint: 21781 ns, Total: 2433948 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:18.130+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:18.799+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:18.799+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:18.802+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:18.802+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669422168 ns, Reaching safepoint: 33633 ns, At safepoint: 2159785 ns, Leaving safepoint: 22281 ns, Total: 2215699 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:41:18.802+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:19.474+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:19.474+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:19.476+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:19.476+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 672007610 ns, Reaching safepoint: 100408 ns, At safepoint: 2223403 ns, Leaving safepoint: 36068 ns, Total: 2359879 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:19.476+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:20.156+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:20.156+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:20.158+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:20.158+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 679790944 ns, Reaching safepoint: 94637 ns, At safepoint: 2280410 ns, Leaving safepoint: 21430 ns, Total: 2396477 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:41:20.158+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:20.826+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:20.826+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:20.829+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:20.829+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668138705 ns, Reaching safepoint: 123552 ns, At safepoint: 2171215 ns, Leaving safepoint: 37791 ns, Total: 2332558 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:20.829+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:21.122+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:21.122+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:21.123+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:21.123+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 292962362 ns, Reaching safepoint: 103203 ns, At safepoint: 951491 ns, Leaving safepoint: 19507 ns, Total: 1074201 ns, Threads: 6 runnable, 42 total
+[2026-07-23T02:41:21.123+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:21.123+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:21.123+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:21.123+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:21.123+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 37360 ns, Reaching safepoint: 71233 ns, At safepoint: 7875 ns, Leaving safepoint: 16721 ns, Total: 95829 ns, Threads: 6 runnable, 42 total
+[2026-07-23T02:41:21.123+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:21.501+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:21.501+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:21.503+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:21.503+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 378117071 ns, Reaching safepoint: 101800 ns, At safepoint: 2352856 ns, Leaving safepoint: 31078 ns, Total: 2485734 ns, Threads: 10 runnable, 46 total
+[2026-07-23T02:41:21.503+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:22.175+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:22.175+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:22.178+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:22.178+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 671691739 ns, Reaching safepoint: 101810 ns, At safepoint: 2282464 ns, Leaving safepoint: 27161 ns, Total: 2411435 ns, Threads: 5 runnable, 46 total
+[2026-07-23T02:41:22.178+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:22.851+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:22.851+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:22.853+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:22.853+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 673259654 ns, Reaching safepoint: 179046 ns, At safepoint: 2171716 ns, Leaving safepoint: 22262 ns, Total: 2373024 ns, Threads: 3 runnable, 44 total
+[2026-07-23T02:41:22.853+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:23.520+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:23.520+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:23.522+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:23.522+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666371226 ns, Reaching safepoint: 181239 ns, At safepoint: 2275922 ns, Leaving safepoint: 20278 ns, Total: 2477439 ns, Threads: 2 runnable, 44 total
+[2026-07-23T02:41:23.522+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:24.154+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:24.154+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:24.155+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:24.155+0200][info ][safepoint] Safepoint "ClassLoaderStatsOperation", Time since last: 631608183 ns, Reaching safepoint: 104175 ns, At safepoint: 807463 ns, Leaving safepoint: 20939 ns, Total: 932577 ns, Threads: 7 runnable, 44 total
+[2026-07-23T02:41:24.155+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:24.159+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:24.159+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:24.159+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:24.159+0200][info ][safepoint] Safepoint "JFRSafepointWrite", Time since last: 4280555 ns, Reaching safepoint: 84498 ns, At safepoint: 27041 ns, Leaving safepoint: 23924 ns, Total: 135463 ns, Threads: 5 runnable, 44 total
+[2026-07-23T02:41:24.159+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:24.197+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:24.197+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:24.199+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:24.199+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 38064365 ns, Reaching safepoint: 112210 ns, At safepoint: 2253740 ns, Leaving safepoint: 34885 ns, Total: 2400835 ns, Threads: 3 runnable, 44 total
+[2026-07-23T02:41:24.199+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:24.879+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:24.879+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:24.882+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:24.882+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 679779513 ns, Reaching safepoint: 99907 ns, At safepoint: 2239102 ns, Leaving safepoint: 37941 ns, Total: 2376950 ns, Threads: 4 runnable, 44 total
+[2026-07-23T02:41:24.882+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:25.554+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:25.554+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:25.556+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:25.556+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 672156860 ns, Reaching safepoint: 143659 ns, At safepoint: 2244052 ns, Leaving safepoint: 24115 ns, Total: 2411826 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:41:25.556+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:26.232+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:26.232+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:26.235+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:26.235+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 676070257 ns, Reaching safepoint: 100699 ns, At safepoint: 2223213 ns, Leaving safepoint: 30777 ns, Total: 2354689 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:26.235+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:26.909+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:26.909+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:26.911+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:26.911+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 674205406 ns, Reaching safepoint: 113452 ns, At safepoint: 2172979 ns, Leaving safepoint: 20559 ns, Total: 2306990 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:41:26.911+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:27.586+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:27.586+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:27.589+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:27.589+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675129716 ns, Reaching safepoint: 118452 ns, At safepoint: 2323380 ns, Leaving safepoint: 30066 ns, Total: 2471898 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:27.589+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:28.255+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:28.255+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:28.257+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:28.257+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665805958 ns, Reaching safepoint: 206727 ns, At safepoint: 2225197 ns, Leaving safepoint: 34484 ns, Total: 2466408 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:41:28.257+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:28.927+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:28.927+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:28.930+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:28.930+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 670379161 ns, Reaching safepoint: 93716 ns, At safepoint: 2133946 ns, Leaving safepoint: 31028 ns, Total: 2258690 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:28.930+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:29.605+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:29.605+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:29.607+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:29.607+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675532891 ns, Reaching safepoint: 97563 ns, At safepoint: 2161277 ns, Leaving safepoint: 35286 ns, Total: 2294126 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:41:29.607+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:30.278+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:30.278+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:30.280+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:30.280+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 670767137 ns, Reaching safepoint: 93896 ns, At safepoint: 2163461 ns, Leaving safepoint: 20999 ns, Total: 2278356 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:41:30.280+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:30.942+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:30.942+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:30.944+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:30.944+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 661012122 ns, Reaching safepoint: 100979 ns, At safepoint: 2194740 ns, Leaving safepoint: 24345 ns, Total: 2320064 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:41:30.944+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:31.615+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:31.615+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:31.617+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:31.617+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 670819957 ns, Reaching safepoint: 185668 ns, At safepoint: 2295999 ns, Leaving safepoint: 34184 ns, Total: 2515851 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:31.617+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:32.289+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:32.289+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:32.291+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:32.291+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 671827914 ns, Reaching safepoint: 97292 ns, At safepoint: 2216600 ns, Leaving safepoint: 27913 ns, Total: 2341805 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:41:32.291+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:32.958+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:32.958+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:32.960+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:32.960+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666694522 ns, Reaching safepoint: 97883 ns, At safepoint: 2192285 ns, Leaving safepoint: 34875 ns, Total: 2325043 ns, Threads: 8 runnable, 42 total
+[2026-07-23T02:41:32.960+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:33.645+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:33.645+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:33.647+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:33.647+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 684419632 ns, Reaching safepoint: 100337 ns, At safepoint: 2212363 ns, Leaving safepoint: 26379 ns, Total: 2339079 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:41:33.647+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:34.316+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:34.316+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:34.319+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:34.319+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669154479 ns, Reaching safepoint: 96601 ns, At safepoint: 2230636 ns, Leaving safepoint: 32010 ns, Total: 2359247 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:41:34.319+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:34.989+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:34.989+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:34.991+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:34.991+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 670241103 ns, Reaching safepoint: 98334 ns, At safepoint: 2265532 ns, Leaving safepoint: 34154 ns, Total: 2398020 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:41:34.991+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:35.665+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:35.666+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:35.668+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:35.668+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 674163347 ns, Reaching safepoint: 94267 ns, At safepoint: 2214717 ns, Leaving safepoint: 32160 ns, Total: 2341144 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:41:35.668+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:36.343+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:36.343+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:36.345+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:36.345+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675072690 ns, Reaching safepoint: 98595 ns, At safepoint: 2214786 ns, Leaving safepoint: 31349 ns, Total: 2344730 ns, Threads: 6 runnable, 42 total
+[2026-07-23T02:41:36.345+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:37.020+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:37.020+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:37.022+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:37.023+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675063904 ns, Reaching safepoint: 32831 ns, At safepoint: 2210319 ns, Leaving safepoint: 19126 ns, Total: 2262276 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:41:37.023+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:37.692+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:37.692+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:37.695+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:37.695+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669765181 ns, Reaching safepoint: 98705 ns, At safepoint: 2176826 ns, Leaving safepoint: 19747 ns, Total: 2295278 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:41:37.695+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:51.924+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:51.924+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:51.927+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:51.927+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 14229413586 ns, Reaching safepoint: 95729 ns, At safepoint: 2556196 ns, Leaving safepoint: 24005 ns, Total: 2675930 ns, Threads: 1 runnable, 44 total
+[2026-07-23T02:41:51.927+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:41:56.406+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:41:56.406+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:41:56.408+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:41:56.408+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4478911990 ns, Reaching safepoint: 25598 ns, At safepoint: 2505512 ns, Leaving safepoint: 17663 ns, Total: 2548773 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:41:56.408+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:00.890+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:00.890+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:00.892+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:00.892+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4481616776 ns, Reaching safepoint: 49814 ns, At safepoint: 2523304 ns, Leaving safepoint: 17543 ns, Total: 2590661 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:42:00.892+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:05.376+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:05.376+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:05.379+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:05.379+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4484082174 ns, Reaching safepoint: 34415 ns, At safepoint: 2506653 ns, Leaving safepoint: 17473 ns, Total: 2558541 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:42:05.379+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:09.858+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:09.858+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:09.861+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:09.861+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4479288259 ns, Reaching safepoint: 92293 ns, At safepoint: 2484672 ns, Leaving safepoint: 19166 ns, Total: 2596131 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:42:09.861+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:14.345+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:14.345+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:14.347+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:14.347+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4483730077 ns, Reaching safepoint: 30928 ns, At safepoint: 2534135 ns, Leaving safepoint: 16381 ns, Total: 2581444 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:42:14.347+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:18.829+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:18.829+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:18.832+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:18.832+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4482312073 ns, Reaching safepoint: 25759 ns, At safepoint: 2503036 ns, Leaving safepoint: 15319 ns, Total: 2544114 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:42:18.832+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:21.311+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:21.311+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:21.311+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:21.311+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 2478654651 ns, Reaching safepoint: 24596 ns, At safepoint: 403616 ns, Leaving safepoint: 6782 ns, Total: 434994 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:42:21.311+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:21.311+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:21.311+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:21.311+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:21.311+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 19777 ns, Reaching safepoint: 69370 ns, At safepoint: 8256 ns, Leaving safepoint: 5059 ns, Total: 82685 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:42:21.311+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:23.337+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:23.337+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:23.340+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:23.340+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 2004618043 ns, Reaching safepoint: 21534472 ns, At safepoint: 2441933 ns, Leaving safepoint: 17262 ns, Total: 23993667 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:42:23.340+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:27.803+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:27.803+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:27.805+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:27.805+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4462707848 ns, Reaching safepoint: 93555 ns, At safepoint: 2574561 ns, Leaving safepoint: 23884 ns, Total: 2692000 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:42:27.805+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:32.290+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:32.290+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:32.292+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:32.292+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4484292977 ns, Reaching safepoint: 28152 ns, At safepoint: 2570644 ns, Leaving safepoint: 17523 ns, Total: 2616319 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:42:32.292+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:36.774+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:36.775+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:36.777+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:36.777+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4482351361 ns, Reaching safepoint: 100869 ns, At safepoint: 2442444 ns, Leaving safepoint: 18284 ns, Total: 2561597 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:42:36.777+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:41.256+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:41.256+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:41.259+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:41.259+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4479287185 ns, Reaching safepoint: 108734 ns, At safepoint: 2525399 ns, Leaving safepoint: 17933 ns, Total: 2652066 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:42:41.259+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:45.741+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:45.741+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:45.743+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:45.743+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4481762011 ns, Reaching safepoint: 48120 ns, At safepoint: 2505511 ns, Leaving safepoint: 17473 ns, Total: 2571104 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:42:45.743+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:50.224+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:50.224+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:50.226+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:50.227+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4480530486 ns, Reaching safepoint: 112410 ns, At safepoint: 2517845 ns, Leaving safepoint: 29465 ns, Total: 2659720 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:42:50.227+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:54.709+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:54.709+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:54.711+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:54.711+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4482346919 ns, Reaching safepoint: 47809 ns, At safepoint: 2488730 ns, Leaving safepoint: 19387 ns, Total: 2555926 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:42:54.711+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:42:59.193+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:42:59.194+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:42:59.196+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:42:59.196+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4482012142 ns, Reaching safepoint: 106460 ns, At safepoint: 2489892 ns, Leaving safepoint: 20659 ns, Total: 2617011 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:42:59.196+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:03.677+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:03.677+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:03.680+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:03.680+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4481216403 ns, Reaching safepoint: 98044 ns, At safepoint: 2470546 ns, Leaving safepoint: 25808 ns, Total: 2594398 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:43:03.680+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:08.167+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:08.167+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:08.170+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:08.170+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4487198356 ns, Reaching safepoint: 93415 ns, At safepoint: 2456279 ns, Leaving safepoint: 18655 ns, Total: 2568349 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:43:08.170+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:12.647+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:12.647+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:12.650+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:12.650+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4477829555 ns, Reaching safepoint: 35937 ns, At safepoint: 2470315 ns, Leaving safepoint: 16421 ns, Total: 2522673 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:43:12.650+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:17.131+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:17.131+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:17.133+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:17.133+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4480910956 ns, Reaching safepoint: 45705 ns, At safepoint: 2435771 ns, Leaving safepoint: 18334 ns, Total: 2499810 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:43:17.133+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:21.398+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:21.398+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:21.398+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:21.398+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 4264124961 ns, Reaching safepoint: 28934 ns, At safepoint: 420548 ns, Leaving safepoint: 8386 ns, Total: 457868 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:43:21.398+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:21.398+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:21.398+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:21.398+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:21.398+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 25067 ns, Reaching safepoint: 6241 ns, At safepoint: 9368 ns, Leaving safepoint: 13375 ns, Total: 28984 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:43:21.398+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:21.614+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:21.614+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:21.616+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:21.616+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 215684593 ns, Reaching safepoint: 19116 ns, At safepoint: 2436352 ns, Leaving safepoint: 17573 ns, Total: 2473041 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:43:21.616+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:26.095+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:26.095+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:26.097+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:26.097+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4478431705 ns, Reaching safepoint: 39684 ns, At safepoint: 2480024 ns, Leaving safepoint: 18865 ns, Total: 2538573 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:43:26.097+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:30.576+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:30.576+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:30.579+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:30.579+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4478968982 ns, Reaching safepoint: 39544 ns, At safepoint: 2472530 ns, Leaving safepoint: 16471 ns, Total: 2528545 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:43:30.579+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:35.065+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:35.065+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:35.068+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:35.068+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4486570616 ns, Reaching safepoint: 104416 ns, At safepoint: 2437033 ns, Leaving safepoint: 17994 ns, Total: 2559443 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:43:35.068+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:39.553+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:39.553+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:39.556+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:39.556+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4485291628 ns, Reaching safepoint: 28273 ns, At safepoint: 2771730 ns, Leaving safepoint: 16861 ns, Total: 2816864 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:43:39.556+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:44.032+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:44.032+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:44.035+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:44.035+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4476207465 ns, Reaching safepoint: 28363 ns, At safepoint: 2441142 ns, Leaving safepoint: 19516 ns, Total: 2489021 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:43:44.035+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:49.421+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:49.421+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:49.421+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:49.421+0200][info ][safepoint] Safepoint "ClassLoaderStatsOperation", Time since last: 5385952438 ns, Reaching safepoint: 25538 ns, At safepoint: 799237 ns, Leaving safepoint: 9037 ns, Total: 833812 ns, Threads: 0 runnable, 43 total
+[2026-07-23T02:43:49.421+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:49.423+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:49.423+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:49.423+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:49.423+0200][info ][safepoint] Safepoint "JFRSafepointWrite", Time since last: 1241815 ns, Reaching safepoint: 5280 ns, At safepoint: 21210 ns, Leaving safepoint: 2965 ns, Total: 29455 ns, Threads: 0 runnable, 43 total
+[2026-07-23T02:43:49.423+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:56.997+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:56.997+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:56.999+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:56.999+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 7574031668 ns, Reaching safepoint: 227476 ns, At safepoint: 2440539 ns, Leaving safepoint: 38392 ns, Total: 2706407 ns, Threads: 3 runnable, 46 total
+[2026-07-23T02:43:56.999+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:57.689+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:57.689+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:57.692+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:57.692+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 689997342 ns, Reaching safepoint: 89267 ns, At safepoint: 2170805 ns, Leaving safepoint: 34013 ns, Total: 2294085 ns, Threads: 7 runnable, 46 total
+[2026-07-23T02:43:57.692+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:58.360+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:58.360+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:58.362+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:58.362+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668559380 ns, Reaching safepoint: 96521 ns, At safepoint: 2142411 ns, Leaving safepoint: 20429 ns, Total: 2259361 ns, Threads: 2 runnable, 46 total
+[2026-07-23T02:43:58.362+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:59.026+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:59.026+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:59.028+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:59.028+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 663632734 ns, Reaching safepoint: 99626 ns, At safepoint: 2175674 ns, Leaving safepoint: 27612 ns, Total: 2302912 ns, Threads: 3 runnable, 46 total
+[2026-07-23T02:43:59.028+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:43:59.698+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:43:59.698+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:43:59.700+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:43:59.700+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669475044 ns, Reaching safepoint: 90950 ns, At safepoint: 2123677 ns, Leaving safepoint: 33483 ns, Total: 2248110 ns, Threads: 3 runnable, 44 total
+[2026-07-23T02:43:59.700+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:00.365+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:00.365+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:00.367+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:00.367+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 664750056 ns, Reaching safepoint: 113202 ns, At safepoint: 2268258 ns, Leaving safepoint: 19917 ns, Total: 2401377 ns, Threads: 1 runnable, 44 total
+[2026-07-23T02:44:00.367+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:01.035+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:01.035+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:01.037+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:01.037+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 667798735 ns, Reaching safepoint: 27351 ns, At safepoint: 2252127 ns, Leaving safepoint: 23394 ns, Total: 2302872 ns, Threads: 0 runnable, 44 total
+[2026-07-23T02:44:01.037+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:01.710+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:01.710+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:01.712+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:01.712+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 672581752 ns, Reaching safepoint: 100849 ns, At safepoint: 2154153 ns, Leaving safepoint: 33673 ns, Total: 2288675 ns, Threads: 7 runnable, 44 total
+[2026-07-23T02:44:01.712+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:02.374+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:02.374+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:02.376+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:02.377+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 661877799 ns, Reaching safepoint: 93074 ns, At safepoint: 2257948 ns, Leaving safepoint: 30848 ns, Total: 2381870 ns, Threads: 6 runnable, 44 total
+[2026-07-23T02:44:02.377+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:03.037+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:03.038+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:03.040+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:03.040+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 660936616 ns, Reaching safepoint: 101851 ns, At safepoint: 2171696 ns, Leaving safepoint: 33212 ns, Total: 2306759 ns, Threads: 4 runnable, 44 total
+[2026-07-23T02:44:03.040+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:03.711+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:03.711+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:03.714+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:03.714+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 671487643 ns, Reaching safepoint: 98515 ns, At safepoint: 2205810 ns, Leaving safepoint: 33803 ns, Total: 2338128 ns, Threads: 2 runnable, 44 total
+[2026-07-23T02:44:03.714+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:04.379+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:04.380+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:04.404+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:04.404+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665842032 ns, Reaching safepoint: 217157 ns, At safepoint: 24380432 ns, Leaving safepoint: 19396 ns, Total: 24616985 ns, Threads: 3 runnable, 44 total
+[2026-07-23T02:44:04.404+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:05.062+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:05.062+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:05.064+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:05.064+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 657671883 ns, Reaching safepoint: 21571 ns, At safepoint: 2244933 ns, Leaving safepoint: 18635 ns, Total: 2285139 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:05.064+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:05.736+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:05.736+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:05.738+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:05.738+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 671597138 ns, Reaching safepoint: 101921 ns, At safepoint: 2234484 ns, Leaving safepoint: 31989 ns, Total: 2368394 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:05.738+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:06.406+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:06.406+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:06.409+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:06.409+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668354447 ns, Reaching safepoint: 31889 ns, At safepoint: 2169974 ns, Leaving safepoint: 19917 ns, Total: 2221780 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:06.409+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:07.075+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:07.075+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:07.077+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:07.077+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666162201 ns, Reaching safepoint: 153798 ns, At safepoint: 2260823 ns, Leaving safepoint: 36218 ns, Total: 2450839 ns, Threads: 6 runnable, 42 total
+[2026-07-23T02:44:07.077+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:07.742+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:07.742+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:07.744+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:07.744+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 664634701 ns, Reaching safepoint: 93225 ns, At safepoint: 2209076 ns, Leaving safepoint: 21140 ns, Total: 2323441 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:07.744+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:08.406+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:08.406+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:08.408+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:08.408+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 661403120 ns, Reaching safepoint: 33713 ns, At safepoint: 2214466 ns, Leaving safepoint: 22262 ns, Total: 2270441 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:08.408+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:09.068+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:09.068+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:09.070+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:09.070+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 660505960 ns, Reaching safepoint: 33102 ns, At safepoint: 2101906 ns, Leaving safepoint: 25958 ns, Total: 2160966 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:09.070+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:09.743+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:09.743+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:09.745+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:09.745+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 672576953 ns, Reaching safepoint: 27311 ns, At safepoint: 2140859 ns, Leaving safepoint: 18585 ns, Total: 2186755 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:09.745+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:10.411+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:10.411+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:10.413+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:10.413+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665532322 ns, Reaching safepoint: 115366 ns, At safepoint: 2234203 ns, Leaving safepoint: 31980 ns, Total: 2381549 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:10.413+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:11.087+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:11.087+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:11.090+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:11.090+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 674078164 ns, Reaching safepoint: 114073 ns, At safepoint: 2178099 ns, Leaving safepoint: 22301 ns, Total: 2314473 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:11.090+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:11.758+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:11.758+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:11.760+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:11.760+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668447601 ns, Reaching safepoint: 99196 ns, At safepoint: 2200039 ns, Leaving safepoint: 33122 ns, Total: 2332357 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:44:11.760+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:12.418+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:12.418+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:12.420+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:12.420+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 657359118 ns, Reaching safepoint: 99566 ns, At safepoint: 2176917 ns, Leaving safepoint: 31399 ns, Total: 2307882 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:12.420+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:13.079+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:13.079+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:13.082+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:13.082+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 659411380 ns, Reaching safepoint: 26951 ns, At safepoint: 2160505 ns, Leaving safepoint: 20298 ns, Total: 2207754 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:13.082+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:13.758+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:13.759+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:13.761+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:13.761+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 676807494 ns, Reaching safepoint: 98675 ns, At safepoint: 2117485 ns, Leaving safepoint: 21510 ns, Total: 2237670 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:44:13.761+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:14.427+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:14.427+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:14.429+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:14.429+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666284781 ns, Reaching safepoint: 98164 ns, At safepoint: 2162710 ns, Leaving safepoint: 23584 ns, Total: 2284458 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:14.429+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:15.092+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:15.092+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:15.095+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:15.095+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 663031690 ns, Reaching safepoint: 103764 ns, At safepoint: 2228012 ns, Leaving safepoint: 20748 ns, Total: 2352524 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:44:15.095+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:15.757+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:15.757+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:15.759+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:15.759+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 661999097 ns, Reaching safepoint: 126517 ns, At safepoint: 2193477 ns, Leaving safepoint: 32170 ns, Total: 2352164 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:15.759+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:16.419+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:16.419+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:16.422+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:16.422+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 660348115 ns, Reaching safepoint: 101109 ns, At safepoint: 2176505 ns, Leaving safepoint: 36729 ns, Total: 2314343 ns, Threads: 6 runnable, 42 total
+[2026-07-23T02:44:16.422+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:17.085+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:17.086+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:17.088+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:17.088+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 663809847 ns, Reaching safepoint: 98715 ns, At safepoint: 2193918 ns, Leaving safepoint: 26209 ns, Total: 2318842 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:17.088+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:17.754+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:17.754+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:17.756+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:17.756+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665953320 ns, Reaching safepoint: 92133 ns, At safepoint: 2452833 ns, Leaving safepoint: 34956 ns, Total: 2579922 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:17.756+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:18.416+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:18.416+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:18.418+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:18.418+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 659439793 ns, Reaching safepoint: 99176 ns, At safepoint: 2178569 ns, Leaving safepoint: 28664 ns, Total: 2306409 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:44:18.418+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:19.087+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:19.087+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:19.089+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:19.090+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669072952 ns, Reaching safepoint: 100468 ns, At safepoint: 2276142 ns, Leaving safepoint: 35286 ns, Total: 2411896 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:19.090+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:19.751+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:19.751+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:19.753+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:19.753+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 661278517 ns, Reaching safepoint: 96190 ns, At safepoint: 2175374 ns, Leaving safepoint: 21269 ns, Total: 2292833 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:19.753+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:20.417+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:20.417+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:20.419+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:20.419+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 663504936 ns, Reaching safepoint: 108954 ns, At safepoint: 2186695 ns, Leaving safepoint: 34965 ns, Total: 2330614 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:20.419+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:21.085+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:21.085+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:21.087+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:21.087+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666131124 ns, Reaching safepoint: 99737 ns, At safepoint: 2238982 ns, Leaving safepoint: 34094 ns, Total: 2372813 ns, Threads: 7 runnable, 42 total
+[2026-07-23T02:44:21.087+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:21.596+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:21.596+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:21.597+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:21.597+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 508501796 ns, Reaching safepoint: 99296 ns, At safepoint: 931605 ns, Leaving safepoint: 22923 ns, Total: 1053824 ns, Threads: 6 runnable, 42 total
+[2026-07-23T02:44:21.597+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:21.597+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:21.597+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:21.597+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:21.597+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 31819 ns, Reaching safepoint: 71995 ns, At safepoint: 8456 ns, Leaving safepoint: 15549 ns, Total: 96000 ns, Threads: 8 runnable, 42 total
+[2026-07-23T02:44:21.597+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:21.752+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:21.752+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:21.755+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:21.755+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 155117794 ns, Reaching safepoint: 93605 ns, At safepoint: 2270231 ns, Leaving safepoint: 18124 ns, Total: 2381960 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:44:21.755+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:22.428+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:22.428+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:22.430+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:22.430+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 672902954 ns, Reaching safepoint: 97803 ns, At safepoint: 2149344 ns, Leaving safepoint: 20108 ns, Total: 2267255 ns, Threads: 6 runnable, 42 total
+[2026-07-23T02:44:22.430+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:23.098+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:23.098+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:23.100+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:23.100+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 667801692 ns, Reaching safepoint: 87253 ns, At safepoint: 2344169 ns, Leaving safepoint: 26530 ns, Total: 2457952 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:23.100+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:23.775+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:23.775+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:23.778+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:23.778+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675172453 ns, Reaching safepoint: 173114 ns, At safepoint: 2315105 ns, Leaving safepoint: 30598 ns, Total: 2518817 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:23.778+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:24.448+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:24.448+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:24.450+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:24.450+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 670168774 ns, Reaching safepoint: 98414 ns, At safepoint: 2212994 ns, Leaving safepoint: 35336 ns, Total: 2346744 ns, Threads: 6 runnable, 42 total
+[2026-07-23T02:44:24.450+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:25.120+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:25.120+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:25.122+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:25.122+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669264711 ns, Reaching safepoint: 97322 ns, At safepoint: 2226980 ns, Leaving safepoint: 38402 ns, Total: 2362704 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:25.122+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:25.789+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:25.789+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:25.791+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:25.791+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 667227026 ns, Reaching safepoint: 103103 ns, At safepoint: 2235716 ns, Leaving safepoint: 31329 ns, Total: 2370148 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:25.791+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:26.466+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:26.466+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:26.468+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:26.468+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 674145600 ns, Reaching safepoint: 35476 ns, At safepoint: 2209999 ns, Leaving safepoint: 22602 ns, Total: 2268077 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:26.468+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:27.130+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:27.130+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:27.132+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:27.132+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 662098342 ns, Reaching safepoint: 99517 ns, At safepoint: 2160185 ns, Leaving safepoint: 38011 ns, Total: 2297713 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:27.132+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:27.793+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:27.793+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:27.795+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:27.795+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 660827713 ns, Reaching safepoint: 62256 ns, At safepoint: 2242018 ns, Leaving safepoint: 24667 ns, Total: 2328941 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:27.795+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:28.465+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:28.465+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:28.467+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:28.467+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669617241 ns, Reaching safepoint: 95288 ns, At safepoint: 2238833 ns, Leaving safepoint: 29665 ns, Total: 2363786 ns, Threads: 7 runnable, 42 total
+[2026-07-23T02:44:28.467+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:29.138+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:29.138+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:29.141+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:29.141+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 670898771 ns, Reaching safepoint: 99376 ns, At safepoint: 2293875 ns, Leaving safepoint: 34044 ns, Total: 2427295 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:29.141+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:29.816+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:29.817+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:29.819+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:29.819+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675545913 ns, Reaching safepoint: 301254 ns, At safepoint: 2306930 ns, Leaving safepoint: 33653 ns, Total: 2641837 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:29.819+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:30.485+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:30.485+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:30.487+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:30.487+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666186808 ns, Reaching safepoint: 99566 ns, At safepoint: 2139927 ns, Leaving safepoint: 23414 ns, Total: 2262907 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:30.487+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:31.157+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:31.157+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:31.160+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:31.160+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669969000 ns, Reaching safepoint: 91681 ns, At safepoint: 2260944 ns, Leaving safepoint: 31990 ns, Total: 2384615 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:31.160+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:31.828+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:31.828+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:31.830+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:31.830+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668025361 ns, Reaching safepoint: 97151 ns, At safepoint: 2248892 ns, Leaving safepoint: 26930 ns, Total: 2372973 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:31.830+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:32.496+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:32.497+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:32.499+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:32.499+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666355734 ns, Reaching safepoint: 100208 ns, At safepoint: 2207904 ns, Leaving safepoint: 17553 ns, Total: 2325665 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:32.499+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:33.164+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:33.164+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:33.166+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:33.166+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 664980309 ns, Reaching safepoint: 102291 ns, At safepoint: 2326006 ns, Leaving safepoint: 29315 ns, Total: 2457612 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:33.166+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:33.842+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:33.842+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:33.845+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:33.845+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 676010172 ns, Reaching safepoint: 29465 ns, At safepoint: 2264881 ns, Leaving safepoint: 11512 ns, Total: 2305858 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:44:33.845+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:34.522+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:34.523+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:34.525+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:34.525+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 677849145 ns, Reaching safepoint: 112280 ns, At safepoint: 2235125 ns, Leaving safepoint: 29846 ns, Total: 2377251 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:34.525+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:35.193+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:35.193+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:35.195+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:35.195+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 667784069 ns, Reaching safepoint: 92163 ns, At safepoint: 2195090 ns, Leaving safepoint: 20489 ns, Total: 2307742 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:35.195+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:35.856+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:35.856+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:35.858+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:35.858+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 660646243 ns, Reaching safepoint: 29676 ns, At safepoint: 2489141 ns, Leaving safepoint: 15769 ns, Total: 2534586 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:35.858+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:36.525+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:36.525+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:36.527+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:36.527+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666768908 ns, Reaching safepoint: 99917 ns, At safepoint: 2269870 ns, Leaving safepoint: 38052 ns, Total: 2407839 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:36.527+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:37.199+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:37.199+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:37.202+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:37.202+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 671968815 ns, Reaching safepoint: 99506 ns, At safepoint: 2219907 ns, Leaving safepoint: 34605 ns, Total: 2354018 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:37.202+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:37.868+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:37.868+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:37.870+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:37.870+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665991122 ns, Reaching safepoint: 90479 ns, At safepoint: 2231649 ns, Leaving safepoint: 19847 ns, Total: 2341975 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:44:37.870+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:38.546+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:38.546+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:38.548+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:38.548+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 676138392 ns, Reaching safepoint: 34705 ns, At safepoint: 2321808 ns, Leaving safepoint: 22281 ns, Total: 2378794 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:38.548+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:39.209+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:39.209+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:39.211+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:39.211+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 660576914 ns, Reaching safepoint: 98324 ns, At safepoint: 2202474 ns, Leaving safepoint: 34004 ns, Total: 2334802 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:44:39.211+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:39.873+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:39.873+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:39.876+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:39.876+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 661779696 ns, Reaching safepoint: 100528 ns, At safepoint: 2384054 ns, Leaving safepoint: 31600 ns, Total: 2516182 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:39.876+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:40.546+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:40.546+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:40.548+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:40.548+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 670139359 ns, Reaching safepoint: 97743 ns, At safepoint: 2212262 ns, Leaving safepoint: 20018 ns, Total: 2330023 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:44:40.548+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:41.220+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:41.220+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:41.222+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:41.222+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 671679674 ns, Reaching safepoint: 98744 ns, At safepoint: 2274620 ns, Leaving safepoint: 37490 ns, Total: 2410854 ns, Threads: 7 runnable, 42 total
+[2026-07-23T02:44:41.222+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:41.898+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:41.898+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:41.900+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:41.900+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675845644 ns, Reaching safepoint: 94557 ns, At safepoint: 2151509 ns, Leaving safepoint: 19466 ns, Total: 2265532 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:44:41.900+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:42.576+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:42.576+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:42.578+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:42.578+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 675334127 ns, Reaching safepoint: 47569 ns, At safepoint: 2208134 ns, Leaving safepoint: 16622 ns, Total: 2272325 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:42.578+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:43.243+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:43.243+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:43.245+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:43.245+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 664609224 ns, Reaching safepoint: 27391 ns, At safepoint: 2245665 ns, Leaving safepoint: 17513 ns, Total: 2290569 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:43.245+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:43.915+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:43.915+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:43.918+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:43.918+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 670414785 ns, Reaching safepoint: 139381 ns, At safepoint: 2260683 ns, Leaving safepoint: 33974 ns, Total: 2434038 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:43.918+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:44.583+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:44.583+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:44.586+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:44.586+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665601432 ns, Reaching safepoint: 146635 ns, At safepoint: 2286632 ns, Leaving safepoint: 38432 ns, Total: 2471699 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:44.586+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:45.254+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:45.254+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:45.256+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:45.256+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668037263 ns, Reaching safepoint: 26139 ns, At safepoint: 2272826 ns, Leaving safepoint: 12964 ns, Total: 2311929 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:45.256+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:45.924+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:45.924+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:45.926+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:45.926+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668105932 ns, Reaching safepoint: 33763 ns, At safepoint: 2181285 ns, Leaving safepoint: 22492 ns, Total: 2237540 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:44:45.926+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:46.596+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:46.596+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:46.598+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:46.598+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 669262978 ns, Reaching safepoint: 97232 ns, At safepoint: 2288014 ns, Leaving safepoint: 25598 ns, Total: 2410844 ns, Threads: 6 runnable, 42 total
+[2026-07-23T02:44:46.598+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:47.262+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:47.263+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:47.265+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:47.265+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 664399753 ns, Reaching safepoint: 158647 ns, At safepoint: 2277174 ns, Leaving safepoint: 16761 ns, Total: 2452582 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:47.265+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:47.934+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:47.934+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:47.936+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:47.936+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668842111 ns, Reaching safepoint: 166822 ns, At safepoint: 2199839 ns, Leaving safepoint: 35417 ns, Total: 2402078 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:47.936+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:48.602+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:48.602+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:48.604+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:48.605+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665923695 ns, Reaching safepoint: 160330 ns, At safepoint: 2215259 ns, Leaving safepoint: 33733 ns, Total: 2409322 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:48.605+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:49.269+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:49.269+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:49.271+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:49.271+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 664015974 ns, Reaching safepoint: 118492 ns, At safepoint: 2259220 ns, Leaving safepoint: 36398 ns, Total: 2414110 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:49.271+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:49.937+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:49.937+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:49.939+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:49.939+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666129201 ns, Reaching safepoint: 100237 ns, At safepoint: 2207564 ns, Leaving safepoint: 31930 ns, Total: 2339731 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:49.939+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:50.605+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:50.605+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:50.607+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:50.607+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665735824 ns, Reaching safepoint: 95098 ns, At safepoint: 2186714 ns, Leaving safepoint: 23314 ns, Total: 2305126 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:50.607+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:51.273+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:51.273+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:51.276+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:51.276+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 665910301 ns, Reaching safepoint: 24336 ns, At safepoint: 2226799 ns, Leaving safepoint: 19046 ns, Total: 2270181 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:44:51.276+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:51.947+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:51.947+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:51.949+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:51.949+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 671176041 ns, Reaching safepoint: 84718 ns, At safepoint: 2228774 ns, Leaving safepoint: 20919 ns, Total: 2334411 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:51.949+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:52.617+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:52.617+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:52.619+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:52.619+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 667772768 ns, Reaching safepoint: 31359 ns, At safepoint: 2220798 ns, Leaving safepoint: 18114 ns, Total: 2270271 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:44:52.619+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:53.297+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:53.297+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:53.299+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:53.299+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 677476278 ns, Reaching safepoint: 36348 ns, At safepoint: 2254271 ns, Leaving safepoint: 18074 ns, Total: 2308693 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:44:53.299+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:53.965+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:53.965+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:53.967+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:53.967+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 666139120 ns, Reaching safepoint: 93394 ns, At safepoint: 2225358 ns, Leaving safepoint: 23233 ns, Total: 2341985 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:44:53.967+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:54.648+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:54.648+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:54.650+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:54.650+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 680595268 ns, Reaching safepoint: 97693 ns, At safepoint: 2204668 ns, Leaving safepoint: 22563 ns, Total: 2324924 ns, Threads: 5 runnable, 42 total
+[2026-07-23T02:44:54.650+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:55.323+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:55.323+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:55.325+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:55.326+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 672778130 ns, Reaching safepoint: 98234 ns, At safepoint: 2234144 ns, Leaving safepoint: 34935 ns, Total: 2367313 ns, Threads: 4 runnable, 42 total
+[2026-07-23T02:44:55.326+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:55.994+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:55.994+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:55.997+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:55.997+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 668780946 ns, Reaching safepoint: 96351 ns, At safepoint: 2255022 ns, Leaving safepoint: 42239 ns, Total: 2393612 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:55.997+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:44:56.661+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:44:56.661+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:44:56.664+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:44:56.664+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 664486425 ns, Reaching safepoint: 98545 ns, At safepoint: 2254702 ns, Leaving safepoint: 20177 ns, Total: 2373424 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:44:56.664+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:10.074+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:10.074+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:10.077+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:10.077+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 13410415269 ns, Reaching safepoint: 95780 ns, At safepoint: 2456019 ns, Leaving safepoint: 22412 ns, Total: 2574211 ns, Threads: 5 runnable, 45 total
+[2026-07-23T02:45:10.077+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:14.484+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:14.484+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:14.487+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:14.487+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4407736904 ns, Reaching safepoint: 24125 ns, At safepoint: 2520330 ns, Leaving safepoint: 16921 ns, Total: 2561376 ns, Threads: 0 runnable, 44 total
+[2026-07-23T02:45:14.487+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:18.892+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:18.892+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:18.895+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:18.895+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4405456506 ns, Reaching safepoint: 20298 ns, At safepoint: 2519808 ns, Leaving safepoint: 14137 ns, Total: 2554243 ns, Threads: 0 runnable, 43 total
+[2026-07-23T02:45:18.895+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:21.783+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:21.783+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:21.783+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:21.783+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 2887799218 ns, Reaching safepoint: 23985 ns, At safepoint: 424504 ns, Leaving safepoint: 5090 ns, Total: 453579 ns, Threads: 0 runnable, 43 total
+[2026-07-23T02:45:21.783+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:21.783+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:21.783+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:21.783+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:21.783+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 19016 ns, Reaching safepoint: 3095 ns, At safepoint: 6282 ns, Leaving safepoint: 2916 ns, Total: 12293 ns, Threads: 0 runnable, 43 total
+[2026-07-23T02:45:21.783+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:23.300+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:23.300+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:23.303+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:23.303+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 1517125713 ns, Reaching safepoint: 29575 ns, At safepoint: 2537572 ns, Leaving safepoint: 17072 ns, Total: 2584219 ns, Threads: 1 runnable, 43 total
+[2026-07-23T02:45:23.303+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:27.715+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:27.715+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:27.717+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:27.717+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4411703985 ns, Reaching safepoint: 89417 ns, At safepoint: 2601261 ns, Leaving safepoint: 20709 ns, Total: 2711387 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:45:27.717+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:32.125+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:32.125+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:32.128+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:32.128+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4407809424 ns, Reaching safepoint: 25688 ns, At safepoint: 2486446 ns, Leaving safepoint: 15790 ns, Total: 2527924 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:45:32.128+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:34.796+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:34.817+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:34.818+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:34.818+0200][info ][safepoint] Safepoint "ClassLoaderStatsOperation", Time since last: 2668806981 ns, Reaching safepoint: 20719707 ns, At safepoint: 818783 ns, Leaving safepoint: 10069 ns, Total: 21548559 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:45:34.818+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:34.819+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:34.819+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:34.819+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:34.819+0200][info ][safepoint] Safepoint "JFRSafepointWrite", Time since last: 1363724 ns, Reaching safepoint: 10900 ns, At safepoint: 23534 ns, Leaving safepoint: 3647 ns, Total: 38081 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:45:34.819+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:36.536+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:36.536+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:36.538+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:36.538+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 1716311705 ns, Reaching safepoint: 99407 ns, At safepoint: 2524727 ns, Leaving safepoint: 34264 ns, Total: 2658398 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:45:36.538+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:40.952+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:40.952+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:40.955+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:40.955+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4414080398 ns, Reaching safepoint: 30367 ns, At safepoint: 2539635 ns, Leaving safepoint: 15810 ns, Total: 2585812 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:45:40.955+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:45.368+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:45.369+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:45.371+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:45.371+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4413502095 ns, Reaching safepoint: 28233 ns, At safepoint: 2460658 ns, Leaving safepoint: 14828 ns, Total: 2503719 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:45:45.371+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:49.787+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:49.787+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:49.790+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:49.790+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4415997709 ns, Reaching safepoint: 18585 ns, At safepoint: 2522193 ns, Leaving safepoint: 15198 ns, Total: 2555976 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:45:49.790+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:54.200+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:54.200+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:54.203+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:54.203+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4410471653 ns, Reaching safepoint: 93966 ns, At safepoint: 2519919 ns, Leaving safepoint: 25928 ns, Total: 2639813 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:45:54.203+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:45:58.617+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:45:58.617+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:45:58.620+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:45:58.620+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4414461515 ns, Reaching safepoint: 28163 ns, At safepoint: 2496254 ns, Leaving safepoint: 22261 ns, Total: 2546678 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:45:58.620+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:03.029+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:03.029+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:03.031+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:03.031+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4409058489 ns, Reaching safepoint: 107551 ns, At safepoint: 2478110 ns, Leaving safepoint: 30908 ns, Total: 2616569 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:46:03.031+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:07.445+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:07.445+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:07.447+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:07.447+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4413411340 ns, Reaching safepoint: 115076 ns, At safepoint: 2518125 ns, Leaving safepoint: 15549 ns, Total: 2648750 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:46:07.447+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:11.859+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:11.859+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:11.861+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:11.861+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4411403260 ns, Reaching safepoint: 91942 ns, At safepoint: 2510922 ns, Leaving safepoint: 14357 ns, Total: 2617221 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:46:11.861+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:16.275+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:16.275+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:16.278+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:16.278+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4413877404 ns, Reaching safepoint: 26860 ns, At safepoint: 2540638 ns, Leaving safepoint: 14767 ns, Total: 2582265 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:46:16.278+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:20.683+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:20.683+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:20.685+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:20.685+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4404937705 ns, Reaching safepoint: 22883 ns, At safepoint: 2469154 ns, Leaving safepoint: 15879 ns, Total: 2507916 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:46:20.685+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:21.887+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:21.887+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:21.887+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:21.887+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 1201471291 ns, Reaching safepoint: 18054 ns, At safepoint: 410328 ns, Leaving safepoint: 5390 ns, Total: 433772 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:46:21.887+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:21.887+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:21.887+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:21.887+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:21.887+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 17834 ns, Reaching safepoint: 3146 ns, At safepoint: 6311 ns, Leaving safepoint: 3557 ns, Total: 13014 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:46:21.887+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:25.104+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:25.104+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:25.106+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:25.106+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 3216480194 ns, Reaching safepoint: 29806 ns, At safepoint: 2416915 ns, Leaving safepoint: 15649 ns, Total: 2462370 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:46:25.106+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:29.521+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:29.521+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:29.524+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:29.524+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4414899701 ns, Reaching safepoint: 94377 ns, At safepoint: 2455728 ns, Leaving safepoint: 16310 ns, Total: 2566415 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:46:29.524+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:33.936+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:33.936+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:33.938+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:33.938+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4412180540 ns, Reaching safepoint: 30517 ns, At safepoint: 2401517 ns, Leaving safepoint: 17262 ns, Total: 2449296 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:46:33.938+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:38.353+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:38.353+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:38.356+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:38.356+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4415061756 ns, Reaching safepoint: 21420 ns, At safepoint: 2498388 ns, Leaving safepoint: 14708 ns, Total: 2534516 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:46:38.356+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:42.763+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:42.763+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:42.765+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:42.765+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4406744221 ns, Reaching safepoint: 28704 ns, At safepoint: 2405104 ns, Leaving safepoint: 16961 ns, Total: 2450769 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:46:42.765+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:47.183+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:47.183+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:47.186+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:47.186+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4418248715 ns, Reaching safepoint: 89668 ns, At safepoint: 2453494 ns, Leaving safepoint: 16621 ns, Total: 2559783 ns, Threads: 1 runnable, 42 total
+[2026-07-23T02:46:47.186+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:51.599+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:51.599+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:51.601+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:51.601+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4412982975 ns, Reaching safepoint: 98835 ns, At safepoint: 2457462 ns, Leaving safepoint: 17783 ns, Total: 2574080 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:46:51.601+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:46:56.018+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:46:56.018+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:46:56.021+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:46:56.021+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4416949733 ns, Reaching safepoint: 27201 ns, At safepoint: 2357454 ns, Leaving safepoint: 20659 ns, Total: 2405314 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:46:56.021+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:47:00.438+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:47:00.438+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:47:00.441+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:47:00.441+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4417403825 ns, Reaching safepoint: 89668 ns, At safepoint: 2385867 ns, Leaving safepoint: 19216 ns, Total: 2494751 ns, Threads: 2 runnable, 42 total
+[2026-07-23T02:47:00.441+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:47:04.851+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:47:04.851+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:47:04.853+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:47:04.853+0200][info ][safepoint] Safepoint "G1CollectForAllocation", Time since last: 4409784618 ns, Reaching safepoint: 98896 ns, At safepoint: 2452111 ns, Leaving safepoint: 20499 ns, Total: 2571506 ns, Threads: 3 runnable, 42 total
+[2026-07-23T02:47:04.853+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:47:08.543+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:47:08.543+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:47:08.543+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:47:08.543+0200][info ][safepoint] Safepoint "ClassLoaderStatsOperation", Time since last: 3689451009 ns, Reaching safepoint: 18414 ns, At safepoint: 835554 ns, Leaving safepoint: 7184 ns, Total: 861152 ns, Threads: 0 runnable, 46 total
+[2026-07-23T02:47:08.543+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:47:08.544+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:47:08.544+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:47:08.544+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:47:08.544+0200][info ][safepoint] Safepoint "JFRSafepointWrite", Time since last: 936083 ns, Reaching safepoint: 7233 ns, At safepoint: 21130 ns, Leaving safepoint: 3216 ns, Total: 31579 ns, Threads: 0 runnable, 46 total
+[2026-07-23T02:47:08.544+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:47:21.991+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:47:21.991+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:47:21.992+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:47:21.992+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 13446893630 ns, Reaching safepoint: 30297 ns, At safepoint: 679011 ns, Leaving safepoint: 14367 ns, Total: 723675 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:47:21.992+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:47:21.992+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:47:21.992+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:47:21.992+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:47:21.992+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 35246 ns, Reaching safepoint: 5691 ns, At safepoint: 12774 ns, Leaving safepoint: 4248 ns, Total: 22713 ns, Threads: 0 runnable, 42 total
+[2026-07-23T02:47:21.992+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:48:22.180+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:48:22.180+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:48:22.180+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:48:22.180+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 60187544646 ns, Reaching safepoint: 32591 ns, At safepoint: 383097 ns, Leaving safepoint: 10580 ns, Total: 426268 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:48:22.180+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:48:22.180+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:48:22.180+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:48:22.180+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:48:22.180+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 26119 ns, Reaching safepoint: 4378 ns, At safepoint: 8516 ns, Leaving safepoint: 3917 ns, Total: 16811 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:48:22.180+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:49:22.244+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:49:22.244+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:49:22.244+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:49:22.244+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 60064044670 ns, Reaching safepoint: 31709 ns, At safepoint: 328706 ns, Leaving safepoint: 6823 ns, Total: 367238 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:49:22.244+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:49:22.244+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:49:22.244+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:49:22.245+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:49:22.245+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 34574 ns, Reaching safepoint: 13676 ns, At safepoint: 6953 ns, Leaving safepoint: 2996 ns, Total: 23625 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:49:22.245+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:50:22.309+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:50:22.309+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:50:22.309+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:50:22.309+0200][info ][safepoint] Safepoint "PrintThreads", Time since last: 60064203924 ns, Reaching safepoint: 33693 ns, At safepoint: 337993 ns, Leaving safepoint: 5991 ns, Total: 377677 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:50:22.309+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:50:22.309+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:50:22.309+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:50:22.309+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:50:22.309+0200][info ][safepoint] Safepoint "FindDeadlocks", Time since last: 37280 ns, Reaching safepoint: 4569 ns, At safepoint: 7844 ns, Leaving safepoint: 3928 ns, Total: 16341 ns, Threads: 0 runnable, 26 total
+[2026-07-23T02:50:22.309+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:50:31.842+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:50:31.842+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:50:31.843+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:50:31.843+0200][info ][safepoint] Safepoint "ClassLoaderStatsOperation", Time since last: 9533022819 ns, Reaching safepoint: 89517 ns, At safepoint: 777246 ns, Leaving safepoint: 8676 ns, Total: 875439 ns, Threads: 1 runnable, 30 total
+[2026-07-23T02:50:31.843+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:50:31.843+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:50:31.844+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:50:31.844+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:50:31.844+0200][info ][safepoint] Safepoint "JFRSafepointWrite", Time since last: 383318 ns, Reaching safepoint: 78447 ns, At safepoint: 26469 ns, Leaving safepoint: 6402 ns, Total: 111318 ns, Threads: 3 runnable, 31 total
+[2026-07-23T02:50:31.844+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:50:31.845+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:50:31.845+0200][debug][safepoint] Safepoint synchronization complete
+[2026-07-23T02:50:31.845+0200][debug][safepoint] Leaving safepoint
+[2026-07-23T02:50:31.845+0200][info ][safepoint] Safepoint "JFROldObject", Time since last: 963695 ns, Reaching safepoint: 80591 ns, At safepoint: 103484 ns, Leaving safepoint: 7914 ns, Total: 191989 ns, Threads: 1 runnable, 31 total
+[2026-07-23T02:50:31.845+0200][debug][safepoint] Safepoint complete
+[2026-07-23T02:50:31.916+0200][debug][safepoint] Safepoint synchronization initiated
+[2026-07-23T02:50:31.916+0200][debug][safepoint] Safepoint synchronization complete

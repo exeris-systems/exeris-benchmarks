@@ -34,6 +34,12 @@ java -jar target/spring-benchmark-app-1.0.0-SNAPSHOT.jar
 - `EXERIS_GRAPH_NEO4J_PASSWORD` optional Neo4j password when backend is `neo4j`.
 - `EXERIS_GRAPH_NEO4J_DATABASE` optional Neo4j database, default `neo4j`.
 - `EXERIS_AXON_MODE` optional event backend mode label, default `event-sourcing-outbox`.
+- `EXERIS_SAGA_FAULT_MODE` optional saga fault mode: `terminal` (default) applies the
+  CONTRACT-v2 §4.1 deterministic payment decline — FNV-1a 64 over the UTF-8 bytes of the
+  orderId, declined when `Long.remainderUnsigned(hash, 1000) < 30` (exactly 3.0% of a
+  deterministic orderId population); `off` disables business-fault injection.
+- `EXERIS_SAGA_PAYMENT_FAIL_RATE` / `EXERIS_SAGA_FAILURE_MODE` — v1 probabilistic knobs,
+  IGNORED since CONTRACT-v2 (a WARN is logged at startup when either is set).
 
 ## Graph Backend Selection (Axon)
 

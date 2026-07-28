@@ -1,0 +1,20 @@
+{
+  "target_id": "quarkus-hibernate",
+  "pid": 905274,
+  "capture_utc": "2026-07-23T21:27:03Z",
+  "jcmd_available": true,
+  "captures": {
+    "vm_flags": {
+      "path": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/light/rung-24000rps/2-exeris-vs-quarkus-hibernate/run01/startup-sequence/quarkus-hibernate.jcmd-vm.flags.txt",
+      "status": "captured"
+    },
+    "vm_command_line": {
+      "path": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/light/rung-24000rps/2-exeris-vs-quarkus-hibernate/run01/startup-sequence/quarkus-hibernate.jcmd-vm.command_line.txt",
+      "status": "captured"
+    },
+    "jfr_check": {
+      "path": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/light/rung-24000rps/2-exeris-vs-quarkus-hibernate/run01/startup-sequence/quarkus-hibernate.jcmd-jfr.check.txt",
+      "status": "captured"
+    }
+  }
+}

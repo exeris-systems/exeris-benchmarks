@@ -30,7 +30,7 @@ public class AxonOrderSagaProjection {
                 ps.setLong(2, uid);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
-                        return Optional.of(new OrderStatusView(orderId, rs.getString(1), rs.getString(2)));
+                        return Optional.of(new OrderStatusView(orderId, toContractStatus(rs.getString(1)), rs.getString(2)));
                     }
                 }
             }
@@ -38,5 +38,29 @@ public class AxonOrderSagaProjection {
             throw new RuntimeException("orderStatus query failed for orderId=" + orderId, e);
         }
         return Optional.empty();
+    }
+
+    /**
+     * Maps raw {@code orders.status} values to the CONTRACT-v2 §3 outcome vocabulary
+     * (COMPLETED | COMPENSATED | FAILED_UNRECOVERED) at the read layer only — the domain
+     * writes stay untouched so they remain identical across stacks. In-progress statuses
+     * pass through unchanged. PAYMENT_REFUNDED is deliberately NOT mapped to COMPENSATED:
+     * it is a mid-compensation state (payment refunded, reservation restore pending), and
+     * surfacing it as terminal would let a poller observe COMPENSATED that can later
+     * regress to FAILED_UNRECOVERED if compensate-reservation exhausts its retry budget.
+     * CONFIRMED is NOT mapped to COMPLETED for the same reason: it is a mid-forward state
+     * (confirm-order done, complete-order pending), and surfacing it as terminal would let
+     * a poller observe COMPLETED that can later regress to COMPENSATED/FAILED_UNRECOVERED
+     * if complete-order exhausts its retry budget; it maps to non-terminal COMPLETING.
+     */
+    private static String toContractStatus(String dbStatus) {
+        return switch (dbStatus) {
+            case "COMPLETED" -> "COMPLETED";
+            case "CONFIRMED" -> "COMPLETING";
+            case "CANCELLED" -> "COMPENSATED";
+            case "PAYMENT_REFUNDED" -> "COMPENSATING";
+            case "FAILED" -> "FAILED_UNRECOVERED";
+            default -> dbStatus;
+        };
     }
 }

@@ -1,0 +1,67 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260722-205142-unknown",
+  "timestamp": "2026-07-22T18:51:42Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T174709Z-tls-tax/mode-plaintext/exeris-community/repeat-3/env.json",
+  "claim_scope": "exploratory",
+  "execution_class": "exploratory",
+  "comparison_axis": "within-tier",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "final_reason": "ok",
+  "transport_mode": "loopback-h1",
+  "tls": {
+    "enabled": false
+  },
+  "target": {
+    "repo": "exeris-benchmarks",
+    "version": "exeris-community-app",
+    "tier": "community",
+    "mode": "baseline-db",
+    "protocol": "h1",
+    "commit_sha": "unknown"
+  },
+  "seed_ref": {
+    "manifest_version": "1",
+    "scenario_id": "entity-read-by-id",
+    "schema_migration_version": "V1",
+    "entity_count": 1000,
+    "verified": true
+  },
+  "run_config": {
+    "duration_seconds": 300,
+    "warmup_seconds": 120,
+    "threads": 4,
+    "connections": 128,
+    "backend_network_mode": "bridge",
+    "endpoint_path": "/api/v1/user?id=1",
+    "execution_profile_id": "runtime-constrained-1024m-4vcpu-v1",
+    "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1",
+    "track_id": "track-c",
+    "result_namespace": "results/constrained/entity-read-by-id/20260722T174709Z-tls-tax/mode-plaintext/exeris-community/repeat-3",
+    "jit_representativeness": "representative"
+  },
+  "metrics": {
+    "throughput_rps": 56823.43,
+    "latency_mean_us": 8580.000000,
+    "latency_stdev_us": 16100.000000,
+    "latency_max_us": 439120.000000,
+    "latency_p50_us": 1920.000000,
+    "latency_p75_us": 10280.000000,
+    "latency_p90_us": 24560.000000,
+    "latency_p99_us": 80200.000000,
+    "total_requests": 17049343,
+    "total_errors": 0,
+    "error_rate_pct": 0.000000
+  },
+  "notes": "backendMode=default-vt targetRuntimeEffective=community targetBuild=jvm cpuAffinity=0-1,8-9 clientCpuAffinity=2-3,10-11",
+  "tags": [
+    "backend-mode:default-vt",
+    "target-runtime-effective:community",
+    "target-build:jvm"
+  ],
+  "raw_output": "Running 5m test @ http://localhost:8080/api/v1/user?id=1\n  4 threads and 128 connections\n  Thread Stats   Avg      Stdev     Max   +/- Stdev\n    Latency     8.58ms   16.10ms 439.12ms   90.07%\n    Req/Sec    14.28k     2.10k   30.62k    78.17%\n  Latency Distribution\n     50%    1.92ms\n     75%   10.28ms\n     90%   24.56ms\n     99%   80.20ms\n  17049343 requests in 5.00m, 1.98GB read\nRequests/sec:  56823.43\nTransfer/sec:      6.77MB\n",
+  "run_track": "constrained"
+}

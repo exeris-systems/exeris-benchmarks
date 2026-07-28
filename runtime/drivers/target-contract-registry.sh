@@ -53,6 +53,9 @@ normalize_target_alias() {
     #    (contrast: quarkus-hibernate runs default Quarkus — JDK NIO + JSSE).
     quarkus-tuned|quarkus-benchmark-app-tuned|quarkus-jdbc|quarkus-benchmark-app-jdbc) echo "quarkus-tuned" ;;
 
+    # 6) Restate durable-execution saga target (deployment unit: target JVM + restate-server)
+    restate|restate-benchmark-app) echo "restate" ;;
+
     *) echo "${raw_id}" ;;
   esac
 }

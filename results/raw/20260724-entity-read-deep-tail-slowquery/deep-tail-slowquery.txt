@@ -1,0 +1,38 @@
+=== enabling slow-statement logging (per-database, revertible) ===
+                name            | setting 
+    ----------------------------+---------
+     log_min_duration_statement | 20
+    (1 row)
+    
+############ community open-loop -R 48000 (exerisDT) 09:12:46UTC ############
+[exerisDT] attained_rps=47987.51
+[exerisDT] app-side CO-free percentiles:
+       50.000%    1.25ms
+       99.000%    2.90ms
+       99.900%    3.48ms
+       99.990%    9.61ms
+       99.999%   15.71ms
+      100.000%   26.06ms
+[exerisDT] PG statements slower than 20ms during the run:
+      slow_statement_lines=4
+      slowest=433.1ms  median=102.1ms  n=4
+      2026-07-28 09:12:47.021 UTC [1269635] LOG:  duration: 102.142 ms  statement: INSERT INTO friendships (user_id, friend_user_id)
+      2026-07-28 09:12:47.123 UTC [1269635] LOG:  duration: 100.881 ms  statement: INSERT INTO user_interests (user_id, interest_id)
+      2026-07-28 09:12:47.242 UTC [1269637] LOG:  duration: 54.380 ms  statement: INSERT INTO user_purchase_history (id, user_id, product_id, purchased_at, created_at)
+############ quarkus-tuned open-loop -R 30000 (qtunedDT) 09:20:55UTC ############
+[qtunedDT] attained_rps=29969.13
+[qtunedDT] app-side CO-free percentiles:
+       50.000%    1.28ms
+       99.000%    3.87ms
+       99.900%  903.17ms
+       99.990%    1.00s 
+       99.999%    1.01s 
+      100.000%    1.01s 
+[qtunedDT] PG statements slower than 20ms during the run:
+      slow_statement_lines=4
+      slowest=438.3ms  median=101.1ms  n=4
+      2026-07-28 09:20:56.521 UTC [1270933] LOG:  duration: 101.078 ms  statement: INSERT INTO friendships (user_id, friend_user_id)
+      2026-07-28 09:20:56.623 UTC [1270933] LOG:  duration: 101.061 ms  statement: INSERT INTO user_interests (user_id, interest_id)
+      2026-07-28 09:20:56.744 UTC [1270934] LOG:  duration: 54.657 ms  statement: INSERT INTO user_purchase_history (id, user_id, product_id, purchased_at, created_at)
+===== DEEP TAIL SLOW-QUERY DONE 09:29:05UTC =====
+[revert] ALTER DATABASE benchmark_db RESET log_min_duration_statement

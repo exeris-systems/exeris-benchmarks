@@ -30,7 +30,10 @@ TARGET_START_SCRIPT="./runtime/drivers/start-target.sh"
 TARGET_STOP_SCRIPT="./runtime/drivers/stop-target.sh"
 
 CAMPAIGN_TS=$(date -u +%Y%m%d-%H%M%S)
-CAMPAIGN_OUTPUT_DIR="results/raw/entity-read-by-id/${CAMPAIGN_TS}-full-triad-ab-ba"
+# BENCH_CAMPAIGN_OUTPUT_DIR_OVERRIDE lets a caller (e.g. the latency-curve wrapper, which
+# invokes this harness once per (endpoint,rung)) pin each invocation's output under its own
+# organized path instead of a fresh ${TS}-full-triad-ab-ba dir. Default is unchanged.
+CAMPAIGN_OUTPUT_DIR="${BENCH_CAMPAIGN_OUTPUT_DIR_OVERRIDE:-results/raw/entity-read-by-id/${CAMPAIGN_TS}-full-triad-ab-ba}"
 
 BENCH_DB_POOL_MIN_SIZE=${BENCH_DB_POOL_MIN_SIZE:-16}
 BENCH_DB_POOL_MAX_SIZE=${BENCH_DB_POOL_MAX_SIZE:-256}
@@ -45,7 +48,14 @@ BENCH_CONNECTIONS=${BENCH_CONNECTIONS:-}
 BENCH_THREADS=${BENCH_THREADS:-}
 BENCH_ENABLE_SAFEPOINT_DIAGNOSTICS=${BENCH_ENABLE_SAFEPOINT_DIAGNOSTICS:-1}
 BENCH_JFR_SETTINGS=${BENCH_JFR_SETTINGS:-profile}
-BENCH_JFR_MAX_SIZE_MB=${BENCH_JFR_MAX_SIZE_MB:-512}
+# COMPLETENESS (BUG 4b): the diagnostic JFR is a size-rotated recording (maxsize). At 512MB
+# it kept only a tail (~39s light / ~3.5min heavy) — an incomplete slice of the measurement
+# window. Default raised so the FULL window is retained without rotation, yielding a COMPLETE
+# recording for every arm. This is a non-rotating CEILING, not a fixed file size: the dump is
+# still only the actual recorded data (~2-3GB/target light, <1GB heavy), so heavy runs are
+# unchanged. Env-overridable. NOTE: complete light recordings are ~2-3GB each — ensure disk
+# headroom across the campaign (or lower BENCH_RUNS_PER_PAIR) since every leaf dumps per target.
+BENCH_JFR_MAX_SIZE_MB=${BENCH_JFR_MAX_SIZE_MB:-6144}
 BENCH_JFR_VTHREAD_PINNED=${BENCH_JFR_VTHREAD_PINNED:-0}
 BENCH_ENABLE_NATIVE_MEMORY_TRACKING=${BENCH_ENABLE_NATIVE_MEMORY_TRACKING:-1}
 BENCH_NATIVE_MEMORY_TRACKING_LEVEL=${BENCH_NATIVE_MEMORY_TRACKING_LEVEL:-summary}
@@ -210,6 +220,14 @@ apply_fair_resource_profile() {
   export EXERIS_DB_POOL_MAX_SIZE="$BENCH_DB_POOL_MAX_SIZE"
   export SERVER_CPU_AFFINITY="$BENCH_SERVER_CPU_AFFINITY"
   export LOADGEN_CPU_AFFINITY="$BENCH_LOADGEN_CPU_AFFINITY"
+
+  # FAIRNESS (BUG 4a): the Exeris telemetry subsystem (and its telemetry-JFR emission) is an
+  # Exeris-only overhead that spring/quarkus do not pay; enabling it on the Exeris arm would
+  # bias the cross-runtime comparison. Env defaults are already false, but enforce it here so
+  # an inherited/exported truthy value cannot defeat it. Unconditional (overrides any inherited
+  # value); harmless no-op for the spring/quarkus arms, which ignore these vars.
+  export EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false
+  export EXERIS_TELEMETRY_JFR_ENABLED=false
   export EXERIS_JAVA_OPTS="-Xms${BENCH_EXERIS_HEAP_MB}m -Xmx${BENCH_EXERIS_HEAP_MB}m -XX:MaxRAM=${BENCH_TOTAL_MEMORY_MB}m"
   export SPRING_JAVA_OPTS="-Xms${BENCH_SPRING_HEAP_MB}m -Xmx${BENCH_SPRING_HEAP_MB}m -XX:MaxRAM=${BENCH_TOTAL_MEMORY_MB}m"
   export QUARKUS_JAVA_OPTS="-Xms${BENCH_QUARKUS_HEAP_MB}m -Xmx${BENCH_QUARKUS_HEAP_MB}m -XX:MaxRAM=${BENCH_TOTAL_MEMORY_MB}m"
@@ -241,8 +259,21 @@ apply_fair_resource_profile() {
   # BENCH_JFR_STEADY_STATE=1 uses env/jfr-steady-state.jfc; BENCH_JFR_EXTRA_SETTINGS
   # overrides with a custom overlay. See docs/methodology.md.
   if [[ -n "${BENCH_JFR_EXTRA_SETTINGS:-}" ]]; then
-    jfr_settings="${jfr_settings},settings=${BENCH_JFR_EXTRA_SETTINGS}"
-    echo "Steady-state JFR overlay (custom): ${BENCH_JFR_EXTRA_SETTINGS}"
+    # The value is spliced verbatim into each target's StartFlightRecording
+    # settings=, and JFR resolves a relative path against the TARGET JVM's CWD
+    # (a target module dir, not the repo root) — so a bare 'env/foo.jfc' would
+    # silently fail to load there. Absolutize against REPO_ROOT and verify it
+    # exists, mirroring the vthread/steady overlays above.
+    local extra_jfc="${BENCH_JFR_EXTRA_SETTINGS}"
+    if [[ "$extra_jfc" != /* ]]; then
+      extra_jfc="${REPO_ROOT}/${extra_jfc}"
+    fi
+    if [[ ! -f "$extra_jfc" ]]; then
+      echo "ERROR: BENCH_JFR_EXTRA_SETTINGS set but overlay file not found: ${extra_jfc}" >&2
+      return 1
+    fi
+    jfr_settings="${jfr_settings},settings=${extra_jfc}"
+    echo "Steady-state JFR overlay (custom): ${extra_jfc}"
   elif [[ "${BENCH_JFR_STEADY_STATE:-0}" == "1" ]]; then
     local steady_jfc="${REPO_ROOT}/env/jfr-steady-state.jfc"
     if [[ ! -f "$steady_jfc" ]]; then
@@ -273,6 +304,9 @@ apply_fair_resource_profile() {
   "native_memory_tracking_level": "$(printf '%s' "$BENCH_NATIVE_MEMORY_TRACKING_LEVEL" | json_escape)",
   "jfr_settings": "$(printf '%s' "$jfr_settings" | json_escape)",
   "jfr_max_size_mb": ${BENCH_JFR_MAX_SIZE_MB},
+  "jfr_recording_complete_non_rotated": true,
+  "exeris_telemetry_subsystem_enabled": false,
+  "exeris_telemetry_jfr_enabled": false,
   "targets": {
     "exeris-community": {
       "java_opts": "$(printf '%s' "$EXERIS_JAVA_OPTS" | json_escape)",
@@ -304,6 +338,8 @@ EOF
   "db_pool_min": ${BENCH_DB_POOL_MIN_SIZE},
   "db_pool_max": ${BENCH_DB_POOL_MAX_SIZE},
   "require_perf_stat": ${BENCH_REQUIRE_PERF_STAT},
+  "exeris_telemetry_subsystem_enabled": false,
+  "exeris_telemetry_jfr_enabled": false,
   "server_cpu_affinity": "${SERVER_CPU_AFFINITY}",
   "loadgen_cpu_affinity": "$(printf '%s' "$LOADGEN_CPU_AFFINITY" | json_escape)",
   "native_memory_tracking_enabled": ${native_memory_tracking_enabled},
@@ -532,6 +568,23 @@ force_free_port() {
   return 1
 }
 
+# Tear down BOTH targets of a pair once the pair block is done. A pair's target
+# JVMs keep their JDBC connection pools open for the whole block; if they are
+# left running, the NEXT pair's prepare_scenario_infrastructure psql hits the
+# shared Postgres 'sorry, too many clients already' ceiling (max_connections)
+# because the previous pair's pools are still connected. Stopping here releases
+# those connections before the next pair's infra setup, and leaves a clean box
+# after the last pair. stop-target is by id (graceful); force_free_port is the
+# hard port-based backstop in case stop-target does not fully reap the JVM.
+stop_pair_targets() {
+  local ta=$1 ta_port=$2 tb=$3 tb_port=$4
+  echo "  [teardown] Stopping pair targets ${ta} (:${ta_port}) and ${tb} (:${tb_port}) to release DB connections..."
+  "$TARGET_STOP_SCRIPT" "$ta" >/dev/null 2>&1 || true
+  "$TARGET_STOP_SCRIPT" "$tb" >/dev/null 2>&1 || true
+  force_free_port "$ta" "$ta_port" || true
+  force_free_port "$tb" "$tb_port" || true
+}
+
 ensure_target_on_endpoint() {
   local target_id=$1
   local port=$2
@@ -629,9 +682,45 @@ build_target_artifact() {
   local target_id=$1
   local module_path=""
   local pom_path=""
+  # Empty for every pre-existing target: build with the module pom's own exeris.kernel.version
+  # and leave the artifact where it lands. Non-empty only for the serialisation-matrix arms,
+  # which pin a kernel version and stage the jar under a version-qualified name.
+  local kernel_version=""
 
   case "$target_id" in
     exeris-community)
+      module_path="targets/exeris-community-app"
+      ;;
+    exeris-blackbird)
+      # Same app jar as exeris-community (kernel 0.10.1) PLUS the ADR-052 Blackbird customizer
+      # uber-jar, added to the launch classpath by runtime/drivers/env/exeris-community-blackbird.env.
+      # Build the customizer module first, then fall through to build the shared app jar.
+      echo "[PREBUILD] Building blackbird customizer (targets/exeris-community-blackbird-customizer)..."
+      if ! mvn -q -f "targets/exeris-community-blackbird-customizer/pom.xml" -DskipTests package; then
+        echo "[PREBUILD] ERROR: Build failed for blackbird customizer"
+        return 1
+      fi
+      module_path="targets/exeris-community-app"
+      ;;
+    exeris-k0101|exeris-k0101-bb|exeris-k0102|exeris-k0102-bb)
+      # Serialisation-matrix arms (2x2: kernel version x Blackbird accessor). Same app module as
+      # exeris-community, but built against a PINNED kernel version and staged under a
+      # version-qualified name. Without the pin+stage, prebuild would build every target in turn
+      # and the 0.10.2 build would overwrite the 0.10.1 jar at the identical path — every arm would
+      # then launch whichever version was built last. Four campaigns, one runtime, no error raised.
+      case "$target_id" in
+        exeris-k0101*) kernel_version="0.10.1" ;;
+        exeris-k0102*) kernel_version="0.10.2" ;;
+      esac
+      if [[ "$target_id" == *-bb ]]; then
+        # Seam verified identical between v0.10.1 and v0.10.2 (zero commits touching
+        # */community/json/*), so ONE customizer jar serves both versions.
+        echo "[PREBUILD] Building blackbird customizer for ${target_id}..."
+        if ! mvn -q -f "targets/exeris-community-blackbird-customizer/pom.xml" -DskipTests package; then
+          echo "[PREBUILD] ERROR: Build failed for blackbird customizer"
+          return 1
+        fi
+      fi
       module_path="targets/exeris-community-app"
       ;;
     spring-hibernate)
@@ -639,6 +728,12 @@ build_target_artifact() {
       ;;
     quarkus-hibernate)
       module_path="targets/quarkus-benchmark-app"
+      ;;
+    quarkus-tuned)
+      module_path="targets/quarkus-benchmark-app-tuned"
+      ;;
+    spring-on-exeris)
+      module_path="targets/exeris-spring-runtime-app-comp"
       ;;
     *)
       echo "ERROR: No Maven module mapping defined for target ${target_id}"
@@ -648,11 +743,43 @@ build_target_artifact() {
 
   pom_path="${module_path}/pom.xml"
 
-  echo "[PREBUILD] Building ${target_id} from module ${module_path}..."
-  if ! mvn -q -f "$pom_path" -DskipTests package; then
+  local staged_jar=""
+  if [[ -n "$kernel_version" ]]; then
+    staged_jar="targets/_staging/exeris-community-app-k${kernel_version}.jar"
+    # exeris-kXXXX and exeris-kXXXX-bb share one jar (the customizer is a classpath toggle, not a
+    # different build), so the second arm of a version reuses the first arm's artifact. Keyed on
+    # what THIS campaign built, never on file existence — a leftover jar from an earlier run must
+    # not be silently reused, which is exactly the stale-artifact failure this task exists to prevent.
+    if [[ " ${PREBUILT_KERNEL_VERSIONS:-} " == *" ${kernel_version} "* ]]; then
+      echo "[PREBUILD] Reusing artifact staged earlier in this campaign: ${staged_jar}"
+      echo "[PREBUILD] Build completed for ${target_id}"
+      return 0
+    fi
+  fi
+
+  local -a mvn_args=(-q -f "$pom_path" -DskipTests package)
+  if [[ -n "$kernel_version" ]]; then
+    mvn_args+=("-Dexeris.kernel.version=${kernel_version}")
+    echo "[PREBUILD] Building ${target_id} from module ${module_path} (kernel pinned to ${kernel_version})..."
+  else
+    echo "[PREBUILD] Building ${target_id} from module ${module_path}..."
+  fi
+
+  if ! mvn "${mvn_args[@]}"; then
     echo "[PREBUILD] ERROR: Build failed for ${target_id} using module-local pom ${pom_path}; missing root reactor is intentionally avoided"
     return 1
   fi
+
+  if [[ -n "$staged_jar" ]]; then
+    mkdir -p targets/_staging
+    if ! cp -f "${module_path}/target/exeris-community-app-1.0.0-SNAPSHOT.jar" "$staged_jar"; then
+      echo "[PREBUILD] ERROR: Could not stage ${target_id} artifact to ${staged_jar}"
+      return 1
+    fi
+    PREBUILT_KERNEL_VERSIONS="${PREBUILT_KERNEL_VERSIONS:-} ${kernel_version}"
+    echo "[PREBUILD] Staged ${target_id} -> ${staged_jar} (kernel ${kernel_version})"
+  fi
+
   echo "[PREBUILD] Build completed for ${target_id}"
 
   return 0
@@ -664,9 +791,20 @@ prebuild_campaign_targets() {
   echo "PREBUILD CAMPAIGN TARGET ARTIFACTS"
   echo "============================================================"
 
-  build_target_artifact "exeris-community" || return 1
-  build_target_artifact "spring-hibernate" || return 1
-  build_target_artifact "quarkus-hibernate" || return 1
+  # Build exactly the targets referenced by the effective pair set (deduped),
+  # so a non-default BENCH_TRIAD_PAIRS (e.g. the quarkus-focused triad with
+  # quarkus-tuned) builds the right modules and skips unused ones.
+  local entry _name _ta _tb _label _pa _pb t
+  declare -A _built=()
+  for entry in "${TRIAD_PAIRS[@]}"; do
+    IFS=':' read -r _name _ta _tb _label _pa _pb <<< "$entry"
+    for t in "$_ta" "$_tb"; do
+      if [[ -z "${_built[$t]:-}" ]]; then
+        _built[$t]=1
+        build_target_artifact "$t" || return 1
+      fi
+    done
+  done
 
   echo "============================================================"
   echo "PREBUILD COMPLETED"
@@ -690,8 +828,8 @@ run_benchmark() {
     --target-b "$target_b"
     --scenario-id "$SCENARIO_ID"
     --contract-id "$BENCH_CONTRACT_ID"
-    --warmup-seconds 60
-    --measurement-seconds 120
+    --warmup-seconds "${WARMUP_SECONDS:-60}"
+    --measurement-seconds "${MEASUREMENT_SECONDS:-120}"
     --output-dir "$output_subdir"
   )
 
@@ -736,7 +874,7 @@ run_pair_block() {
   echo "Targets: A=${target_a}, B=${target_b}"
   echo "============================================================"
 
-  for run_num in {1..20}; do
+  for run_num in $(seq 1 "${BENCH_RUNS_PER_PAIR:-20}"); do
     local run_base_dir="${CAMPAIGN_OUTPUT_DIR}/${pair_name}/run$(printf '%02d' "$run_num")"
     local scenario_diag_dir="${run_base_dir}/logs/scenario-diagnostics"
     local startup_sequence_dir="${run_base_dir}/startup-sequence"
@@ -745,7 +883,7 @@ run_pair_block() {
 
     echo ""
     echo "------------------------------------------------------------"
-    echo "PAIR ${pair_label} | RUN $(printf '%02d' "$run_num")/20"
+    echo "PAIR ${pair_label} | RUN $(printf '%02d' "$run_num")/${BENCH_RUNS_PER_PAIR:-20}"
     echo "Output base: ${run_base_dir}"
     echo "------------------------------------------------------------"
 
@@ -773,7 +911,7 @@ run_pair_block() {
       echo "Skipping step [$STEP_COUNTER/$TOTAL_STEPS] [RUN $(printf '%02d' "$run_num")] pair ${pair_label} (ab) due to target health recovery failure"
       failed_steps=$((failed_steps + 1))
     else
-      run_benchmark "$pair_name" "$target_a" "$target_b" "ab" "$STEP_COUNTER" "$run_num" "$scenario_diag_dir" || ((failed_steps++))
+      run_benchmark "$pair_name" "$target_a" "$target_b" "ab" "$STEP_COUNTER" "$run_num" "$scenario_diag_dir" || failed_steps=$((failed_steps + 1))
     fi
 
     STEP_COUNTER=$((STEP_COUNTER + 1))
@@ -781,14 +919,20 @@ run_pair_block() {
       echo "Skipping step [$STEP_COUNTER/$TOTAL_STEPS] [RUN $(printf '%02d' "$run_num")] pair ${pair_label} (ba) due to target health recovery failure"
       failed_steps=$((failed_steps + 1))
     else
-      run_benchmark "$pair_name" "$target_a" "$target_b" "ba" "$STEP_COUNTER" "$run_num" "$scenario_diag_dir" || ((failed_steps++))
+      run_benchmark "$pair_name" "$target_a" "$target_b" "ba" "$STEP_COUNTER" "$run_num" "$scenario_diag_dir" || failed_steps=$((failed_steps + 1))
     fi
 
-    if [[ $run_num -lt 20 ]]; then
+    if [[ $run_num -lt "${BENCH_RUNS_PER_PAIR:-20}" ]]; then
       echo "Cooldown 10s before next run in pair block ${pair_label}..."
       sleep 10
     fi
   done
+
+  # Release this pair's target JVMs (and their Postgres connection pools) before
+  # the next pair block's prepare_scenario_infrastructure runs, and leave the box
+  # clean after the final pair. Without this, connections leak across pairs and
+  # the second/third pair's infra-setup psql fails with 'too many clients'.
+  stop_pair_targets "$target_a" "$target_a_port" "$target_b" "$target_b_port"
 }
 
 mkdir -p "$CAMPAIGN_OUTPUT_DIR"
@@ -808,19 +952,31 @@ echo "============================================================"
 
 failed_steps=0
 
+# Effective pair list — each entry: "name:target_a:target_b:label:port_a:port_b".
+# Default = the canonical exeris / spring / quarkus-hibernate triad (unchanged).
+# Override with BENCH_TRIAD_PAIRS (';'-separated entries, same field order) to run
+# a different set, e.g. the quarkus-focused triad (exeris vs quarkus-tuned, plus the
+# ORM/transport decomposition):
+#   BENCH_TRIAD_PAIRS="1-exeris-vs-quarkus-tuned:exeris-community:quarkus-tuned:1:9000:9003;2-exeris-vs-quarkus-hibernate:exeris-community:quarkus-hibernate:2:9000:9002;3-quarkus-hibernate-vs-tuned:quarkus-hibernate:quarkus-tuned:3:9002:9003"
+if [[ -n "${BENCH_TRIAD_PAIRS:-}" ]]; then
+  IFS=';' read -ra TRIAD_PAIRS <<< "$BENCH_TRIAD_PAIRS"
+else
+  TRIAD_PAIRS=(
+    "1-exeris-vs-quarkus:exeris-community:quarkus-hibernate:1:9000:9002"
+    "3-exeris-vs-spring:exeris-community:spring-hibernate:3:9000:9001"
+    "2-spring-vs-quarkus:spring-hibernate:quarkus-hibernate:2:9001:9002"
+  )
+fi
+
 if ! prebuild_campaign_targets; then
   echo "ERROR: Campaign aborted due to prebuild failure"
   exit 1
 fi
 
-# Pair 1 (AB/BA): Exeris vs Quarkus
-run_pair_block "1-exeris-vs-quarkus" "exeris-community" "quarkus-hibernate" "1" "9000" "9002"
-
-# Pair 3 (AB/BA): Exeris vs Spring
-run_pair_block "3-exeris-vs-spring" "exeris-community" "spring-hibernate" "3" "9000" "9001"
-
-# Pair 2 (AB/BA): Spring vs Quarkus
-run_pair_block "2-spring-vs-quarkus" "spring-hibernate" "quarkus-hibernate" "2" "9001" "9002"
+for _entry in "${TRIAD_PAIRS[@]}"; do
+  IFS=':' read -r _pname _pta _ptb _plabel _ppa _ppb <<< "$_entry"
+  run_pair_block "$_pname" "$_pta" "$_ptb" "$_plabel" "$_ppa" "$_ppb"
+done
 
 echo ""
 echo "============================================================"

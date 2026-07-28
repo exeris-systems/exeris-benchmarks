@@ -126,16 +126,41 @@ H2LOAD_H2C_MAX_CONCURRENT_STREAMS="${H2LOAD_H2C_MAX_CONCURRENT_STREAMS:-10}"
 TLS_ENABLED="${BENCHMARK_TLS_ENABLED:-0}"
 if [[ "$TLS_ENABLED" == "1" ]]; then TARGET_SCHEME="https"; CURL_INSECURE_OPT="-k"; else TARGET_SCHEME="http"; CURL_INSECURE_OPT=""; fi
 BASE_URL="${BASE_URL:-${TARGET_SCHEME}://localhost:${TARGET_PORT}}"
+# Endpoint path the load driver actually requests. Defaults to the aggregate read
+# (/api/v1/users) - byte-identical to the historical hard-coded behavior, so every
+# existing caller is unchanged. The constrained single-read matrix sets
+# ENTITY_READ_ENDPOINT_PATH=/api/v1/user?id=1 (the constrained wrapper derives it
+# from the fixed contract's `endpoint`), so preflight, warmup, and the measurement
+# window all hit the same path. For wrk the request path is chosen inside wrk.lua,
+# so it is forwarded via WRK_REQUEST_PATH (the command-line URL only pins host:port
+# for wrk); h2load and the curl preflight use the path in the URL directly.
+ENTITY_READ_ENDPOINT_PATH="${ENTITY_READ_ENDPOINT_PATH:-/api/v1/users}"
+case "$ENTITY_READ_ENDPOINT_PATH" in
+  /*) ;;
+  *) echo "ERROR: ENTITY_READ_ENDPOINT_PATH must be an absolute path starting with '/' (got: '$ENTITY_READ_ENDPOINT_PATH')" >&2; exit 1 ;;
+esac
+export WRK_REQUEST_PATH="$ENTITY_READ_ENDPOINT_PATH"
 SCENARIO_DIR="scenarios/entity-read-by-id"
 DB_COMPOSE_FILE="runtime/compose/entity-read-by-id-db.yml"
 # Backend container network mode (fairness gate). entity-read-by-id is a CROSS-STACK
 # comparison (exeris vs spring vs quarkus against the same Postgres), so bridge/NAT
 # taxes chattier runtimes asymmetrically. DB_HOST_NETWORK=1 (or BENCH_BACKEND_NETWORK=host)
 # layers the host-net override so the DB shares the host network. Recorded in result.json.
-DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.host-net.yml"
-if [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
+# DB network override selection (both host modes share the host network; only cpuset differs):
+#   BENCH_DB_TUNED=1  -> tuned override = host-net + PG cpuset isolation (the tuned-PG baseline).
+#   DB_HOST_NETWORK=1 -> plain host-net override = host-net, NO cpuset.
+# BENCH_DB_TUNED takes precedence: without this, a constrained/tuned run that also sets
+# DB_HOST_NETWORK=1 would recreate the DB via the plain host-net override and SILENTLY DROP the
+# cpuset isolation, reintroducing PG<->app core contention. `compose_db up -d` is idempotent, so
+# once the tuned override is applied the per-run re-invocations are no-ops (no DB churn).
+if [[ "${BENCH_DB_TUNED:-0}" == "1" ]]; then
+  DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.tuned.yml"
+  BACKEND_NETWORK_MODE="host"
+elif [[ "${DB_HOST_NETWORK:-0}" == "1" || "${BENCH_BACKEND_NETWORK:-}" == "host" ]]; then
+  DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.host-net.yml"
   BACKEND_NETWORK_MODE="host"
 else
+  DB_COMPOSE_HOSTNET_OVERRIDE="runtime/compose/entity-read-by-id-db.host-net.yml"
   BACKEND_NETWORK_MODE="bridge"
 fi
 DB_INIT_SQL_FILE="${REPO_ROOT}/runtime/compose/entity-read-by-id-init.sql"
@@ -1208,15 +1233,27 @@ if ! target_reachable; then
   fi
 
   echo "[step 6/9] Starting benchmark target app..."
+  # Cross-arm pgjdbc fairness (equalize adaptive-fetch/portals + protocol): exeris (via
+  # its QueryResult persistence layer) and quarkus (via Agroal) both drive the bundled
+  # pgjdbc driver, but through different layers whose fetch / portal / adaptive / prepare
+  # DEFAULTS can diverge. Pin the query-protocol params IDENTICALLY on both arms' URLs so
+  # the comparison measures the runtime, not JDBC driver-config drift. exeris honors
+  # pgjdbc URL params on exeris.persistence.jdbcUrl, quarkus/Agroal on the datasource URL,
+  # so a single shared param string covers both. Choice: extended protocol + server-side
+  # prepared statements (prepareThreshold=1) + fetch-all (defaultRowFetchSize=0 -> unnamed
+  # portal, no cursor) + adaptiveFetch OFF -> deterministic, identical query wire for both.
+  # Overridable via BENCH_PGJDBC_FAIR_PARAMS.
+  _pgjdbc_fair="${BENCH_PGJDBC_FAIR_PARAMS:-preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false}"
+  echo "[step 6/9] pgjdbc fairness params (identical on both arms): ${_pgjdbc_fair}"
   TARGET_CMD=(env \
     EXERIS_PORT="$TARGET_PORT" \
     EXERIS_HTTP_PORT="$TARGET_PORT" \
-    EXERIS_DB_JDBC_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db" \
+    EXERIS_DB_JDBC_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db?${_pgjdbc_fair}" \
     EXERIS_DB_USERNAME=benchmark \
     EXERIS_DB_PASSWORD=benchmark \
     EXERIS_DB_POOL_MIN_SIZE="$EXERIS_DB_POOL_MIN_SIZE" \
     EXERIS_DB_POOL_MAX_SIZE="$EXERIS_DB_POOL_MAX_SIZE" \
-    SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db" \
+    SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:$DB_PORT/benchmark_db?${_pgjdbc_fair}" \
     SPRING_DATASOURCE_USERNAME=benchmark \
     SPRING_DATASOURCE_PASSWORD=benchmark \
     SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE="$EXERIS_DB_POOL_MIN_SIZE" \
@@ -1346,7 +1383,7 @@ preflight_deadline=$(( SECONDS + ENTITY_READ_PREFLIGHT_READY_SECONDS ))
 preflight_attempts=0
 while :; do
   preflight_attempts=$(( preflight_attempts + 1 ))
-  if bench_run_endpoint_preflight "$BASE_URL/api/v1/users" "$PREFLIGHT_BODY_FILE" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
+  if bench_run_endpoint_preflight "$BASE_URL$ENTITY_READ_ENDPOINT_PATH" "$PREFLIGHT_BODY_FILE" "$ENTITY_READ_PREFLIGHT_TIMEOUT"; then
     preflight_ok=1
     break
   fi
@@ -1358,13 +1395,13 @@ while :; do
 done
 if [[ "$preflight_ok" -ne 1 ]]; then
   echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (after ${preflight_attempts} attempt(s) over ${ENTITY_READ_PREFLIGHT_READY_SECONDS}s)"
-  echo "ERROR: endpoint preflight failed for $BASE_URL/api/v1/users (status=$BENCH_PREFLIGHT_HTTP_CODE)" >&2
+  echo "ERROR: endpoint preflight failed for $BASE_URL$ENTITY_READ_ENDPOINT_PATH (status=$BENCH_PREFLIGHT_HTTP_CODE)" >&2
   echo "ERROR: preflight response body saved at $PREFLIGHT_BODY_FILE" >&2
   exit 1
 fi
 echo "[step 6/9] Endpoint preflight status: $BENCH_PREFLIGHT_HTTP_CODE (ready after ${preflight_attempts} attempt(s))"
 
-echo "[step 6/9] Payload preflight preview (/api/v1/users):"
+echo "[step 6/9] Payload preflight preview ($ENTITY_READ_ENDPOINT_PATH):"
 bench_print_preflight_payload_preview "$PREFLIGHT_BODY_FILE" 512
 
 if [[ "$TARGET_APP_STARTED" -eq 1 && "$BACKEND_EVIDENCE_REQUIRED" == "1" ]]; then
@@ -1408,9 +1445,9 @@ fi
 mark_run_phase warmup
 echo "[step 6/9] Warmup ($WARMUP, driver=$DRIVER)..."
 if [[ "$DRIVER" == "h2load" ]]; then
-  h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$WARMUP_SECONDS" "$BASE_URL/api/v1/users" > /dev/null 2>&1 || true
+  h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$WARMUP_SECONDS" "$BASE_URL$ENTITY_READ_ENDPOINT_PATH" > /dev/null 2>&1 || true
 else
-  wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL/api/v1/users" > /dev/null || true
+  wrk -t "$THREADS" -c "$CONNECTIONS" -d "$WARMUP" --script "$SCENARIO_DIR/wrk.lua" "$BASE_URL$ENTITY_READ_ENDPOINT_PATH" > /dev/null || true
 fi
 
 # Step 6.5: Reset pg_stat_statements counters before measurement
@@ -1480,7 +1517,7 @@ if [[ "$DRIVER" == "wrk2" ]]; then
   set +e
   LOAD_OUT=$(
     WRK_BASE_URL_OVERRIDE="$BASE_URL" \
-    WRK_PATH_OVERRIDE="/api/v1/users" \
+    WRK_PATH_OVERRIDE="$ENTITY_READ_ENDPOINT_PATH" \
     WRK2_THREADS_OVERRIDE="$THREADS" \
     WRK2_CONNECTIONS_OVERRIDE="$CONNECTIONS" \
     WRK2_DURATION_OVERRIDE="$DURATION" \
@@ -1504,9 +1541,9 @@ else
     # percentiles h2load itself omits can be computed offline. See
     # tools/aggregate-h2load-latency.sh (closed-loop / coordinated-omission caveat).
     H2LOAD_LOG_FILE="$OUTPUT_DIR/h2load-requests.log"
-    LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" --log-file="$H2LOAD_LOG_FILE" "$BASE_URL/api/v1/users")
+    LOAD_CMD=(h2load "${H2LOAD_FLAGS[@]}" -c "$CONNECTIONS" -t "$THREADS" -D "$DURATION_SECONDS" --log-file="$H2LOAD_LOG_FILE" "$BASE_URL$ENTITY_READ_ENDPOINT_PATH")
   else
-    LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL/api/v1/users")
+    LOAD_CMD=(wrk -t "$THREADS" -c "$CONNECTIONS" -d "$DURATION" --script "$SCENARIO_DIR/wrk.lua" --latency "$BASE_URL$ENTITY_READ_ENDPOINT_PATH")
   fi
 
   # Pin the load driver to a cpuset disjoint from the target (--cpu-affinity) so the driver does not
@@ -1648,7 +1685,26 @@ if command -v bench_summarize_resource_samples >/dev/null 2>&1 && [[ -f "$RESOUR
   echo "[step 7.5/9] Summarizing target resource usage -> $RESOURCE_METRICS_JSON"
   bench_summarize_resource_samples "$RESOURCE_SAMPLES_CSV" "$RESOURCE_METRICS_JSON" || true
   if [[ -f "$RESOURCE_METRICS_JSON" ]]; then
-    if [[ -n "$RESOURCE_TARGET_PID" && -d "/proc/$RESOURCE_TARGET_PID" ]] \
+    if [[ "${BENCHMARK_CONSTRAINED_SCOPE_ACTIVE:-0}" == "1" ]]; then
+      # Under a constrained systemd scope (tight MemoryMax + MemorySwapMax=0), jcmd is
+      # ITSELF a full JVM. Launching it inside the scope cgroup, alongside the target JVM
+      # that already sits near the cap, spikes cgroup memory well past MemoryMax. That
+      # draws a systemd-oomd / cgroup-OOM SIGTERM (rc 143) which kills this runner AFTER
+      # measurement but BEFORE step 8 writes result.json — silently losing throughput +
+      # total_requests (hence cpu/req) for exactly the low-memory points we care about.
+      # The durable metrics (RSS, cpu_time, cores) come from the /proc sampler, not jcmd,
+      # so skip the JVM heap/NMT breakdown here rather than risk the result artifact.
+      # (jcmd's own || true catches its exit status, but not an async SIGTERM to bash.)
+      if command -v jq >/dev/null 2>&1; then
+        tmp_rm="$(mktemp)"
+        if jq '. + {jvm_breakdown_note: "jcmd heap/NMT breakdown skipped under constrained scope: launching a jcmd JVM in the tight cgroup would spike memory past MemoryMax and OOM the run before result.json is written"}' \
+             "$RESOURCE_METRICS_JSON" > "$tmp_rm" 2>/dev/null; then
+          mv "$tmp_rm" "$RESOURCE_METRICS_JSON"
+        else
+          rm -f "$tmp_rm"
+        fi
+      fi
+    elif [[ -n "$RESOURCE_TARGET_PID" && -d "/proc/$RESOURCE_TARGET_PID" ]] \
        && command -v bench_augment_resource_metrics_with_jvm_breakdown >/dev/null 2>&1; then
       bench_augment_resource_metrics_with_jvm_breakdown "$RESOURCE_TARGET_PID" "$RESOURCE_METRICS_JSON" || true
     elif command -v jq >/dev/null 2>&1; then
@@ -1791,12 +1847,14 @@ RUN_CONFIG_JSON=$(jq -n \
   --argjson threads "$THREADS" \
   --argjson connections "$CONNECTIONS" \
   --arg backend_network_mode "${BACKEND_NETWORK_MODE:-bridge}" \
+  --arg endpoint_path "$ENTITY_READ_ENDPOINT_PATH" \
   '{
     duration_seconds: $duration_seconds,
     warmup_seconds: $warmup_seconds,
     threads: $threads,
     connections: $connections,
-    backend_network_mode: $backend_network_mode
+    backend_network_mode: $backend_network_mode,
+    endpoint_path: $endpoint_path
   }')
 
 METRICS_JSON=$(jq -n \

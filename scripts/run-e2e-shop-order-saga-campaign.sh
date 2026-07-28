@@ -13,6 +13,7 @@ Usage: run-e2e-shop-order-saga-campaign.sh [options]
 Options:
   --targets <list>              Comma-separated target app labels (required)
   --graph-track <name>          Graph track: neo4j|pgq_pure|age_compat (default: neo4j)
+  --fault-mode <mode>           Fault-class label per CONTRACT-v2 s4: terminal|transient (default: terminal)
   --repeats <n>                 Repetitions per target (default: 3)
   --profile <name>              Hardware profile label (default: perf-box-amd64)
   --output-dir <path>           Campaign output directory
@@ -29,6 +30,7 @@ EOF
 # --- Defaults ---
 CAMPAIGN_TARGETS=""
 GRAPH_TRACK="neo4j"
+FAULT_MODE="terminal"
 REPEATS=3
 PROFILE="perf-box-amd64"
 OUTPUT_DIR=""
@@ -50,6 +52,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --graph-track)
       GRAPH_TRACK="$2"
+      shift 2
+      ;;
+    --fault-mode)
+      FAULT_MODE="$2"
       shift 2
       ;;
     --repeats)
@@ -106,6 +112,14 @@ if ! [[ "$REPEATS" =~ ^[0-9]+$ ]] || [[ "$REPEATS" -le 0 ]]; then
   echo "ERROR: --repeats must be a positive integer (got: $REPEATS)" >&2
   exit 1
 fi
+
+case "$FAULT_MODE" in
+  terminal|transient) ;;
+  *)
+    echo "ERROR: --fault-mode must be 'terminal' or 'transient' (got: $FAULT_MODE)" >&2
+    exit 1
+    ;;
+esac
 
 CAMPAIGN_TS="$(date -u +%Y%m%dT%H%M%SZ)"
 if [[ -z "$OUTPUT_DIR" ]]; then
@@ -176,6 +190,7 @@ run_target_rep() {
     --target-app          "$target_app"
     --contract-id         "$(_derive_contract_id "$target_app")"
     --graph-track         "$GRAPH_TRACK"
+    --fault-mode          "$FAULT_MODE"
     --profile             "$PROFILE"
     --output-dir          "$run_dir"
     --force-restart-target
@@ -220,6 +235,7 @@ write_campaign_manifest() {
   "commit_sha":             "${commit_sha}",
   "targets":                "${CAMPAIGN_TARGETS}",
   "graph_track":            "${GRAPH_TRACK}",
+  "fault_mode":             "${FAULT_MODE}",
   "repeats":                ${REPEATS},
   "hardware_profile":       "${PROFILE}",
   "contract_id_mode":       "${_contract_id_mode}",
@@ -240,11 +256,11 @@ EOF
 # --- Main ---
 apply_resource_profile
 
-echo "rep,target_app,run_dir,runner_status,k6_exit_code,result_json_present" > "$STATUS_CSV"
+echo "rep,target_app,run_dir,runner_status,k6_exit_code,result_json_present,fault_mode,correctness_gate" > "$STATUS_CSV"
 
 any_fail=0
 
-echo "Campaign config: targets=${CAMPAIGN_TARGETS} repeats=${REPEATS} graph_track=${GRAPH_TRACK} profile=${PROFILE}"
+echo "Campaign config: targets=${CAMPAIGN_TARGETS} repeats=${REPEATS} graph_track=${GRAPH_TRACK} fault_mode=${FAULT_MODE} profile=${PROFILE}"
 [[ -n "${BENCH_CGROUP_MEMORY_LIMIT_MB:-}" ]] && echo "  cgroup_memory_limit_mb=${BENCH_CGROUP_MEMORY_LIMIT_MB}"
 [[ -n "${BENCH_CGROUP_CPU_QUOTA_PCT:-}"    ]] && echo "  cgroup_cpu_quota_pct=${BENCH_CGROUP_CPU_QUOTA_PCT}"
 
@@ -268,11 +284,17 @@ for target_app in "${TARGET_LIST[@]}"; do
       k6_exit_code="$(jq -r '.k6_exit_code // '"$rc" "$run_dir/result.json")"
     fi
 
+    # CONTRACT-v2 s4.1 correctness-gate verdict per rep (pass|fail|skipped|error|absent).
+    correctness_gate="absent"
+    if [[ -f "$run_dir/correctness-gate.json" ]]; then
+      correctness_gate="$(jq -r '.status // "unknown"' "$run_dir/correctness-gate.json" 2>/dev/null || echo "unknown")"
+    fi
+
     if [[ "$rc" -ne 0 ]]; then
       any_fail=1
     fi
 
-    echo "${rep},${target_app},${run_dir},${runner_status},${k6_exit_code},${result_json_present}" >> "$STATUS_CSV"
+    echo "${rep},${target_app},${run_dir},${runner_status},${k6_exit_code},${result_json_present},${FAULT_MODE},${correctness_gate}" >> "$STATUS_CSV"
   done
 done
 

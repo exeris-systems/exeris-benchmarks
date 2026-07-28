@@ -12,8 +12,15 @@
   },
   "tier": "community",
   "benchmark_family": "runtime",
-  "driver": ["wrk", "h2load", "wrk2"],
-  "transport": ["h1", "h2c"],
+  "driver": [
+    "wrk",
+    "h2load",
+    "wrk2"
+  ],
+  "transport": [
+    "h1",
+    "h2c"
+  ],
   "loopback": true,
   "loopback_caveat": "Results are not equivalent to network-path benchmarks. transport_mode=loopback-h1 is mandatory in all result artifacts.",
   "claim_scope": "comparison_eligible",
@@ -65,7 +72,10 @@
       "connections": 128,
       "warmup_seconds": 60,
       "duration_seconds": 120,
-      "backend_mode_values": ["default-vt", "locality-aware"],
+      "backend_mode_values": [
+        "default-vt",
+        "locality-aware"
+      ],
       "required_profile": "perf-box-amd64",
       "requires_backend_mode_evidence": false,
       "requires_cpu_pinning": true,
@@ -77,7 +87,10 @@
         "ci_level": 0.95,
         "relative_error_pct_max": 10,
         "min_rps_floor": 500,
-        "max_comparison_ratio_range": [0.25, 4.0],
+        "max_comparison_ratio_range": [
+          0.25,
+          4.0
+        ],
         "comparison_ratio_definition": "locality_aware_mean_rps / default_vt_mean_rps"
       },
       "seed_manifest_refs": {
@@ -318,6 +331,30 @@
         "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
       }
     },
+    "fixed_contract_p99_stable_h1_wrk2_single_read_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk2",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "driver": "wrk2",
+      "endpoint": "GET /api/v1/user?id=1",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "rate_rps": "calibrated",
+      "rate_rps_note": "Must be set to 60-80% of saturated throughput observed via wrk fixed_contract_cross_runtime_h1_single_read_v1 on the same hardware before first valid p99_stable run. For a latency-load CURVE, the offered rate is swept across sub-saturation rungs via BENCH_OFFERED_RPS.",
+      "claim_scope": "p99_stable",
+      "payload_profile": "single-user-by-id-v1",
+      "required_profile": "perf-box-amd64",
+      "note": "LIGHT single-read (GET /api/v1/user?id=1 -> {id, username}) counterpart of fixed_contract_p99_stable_h1_wrk2_v1 (heavy 3-query aggregate). wrk2 rate-controlled p99_stable; wrk is ineligible for this scope. Runtime-bound (DB is a hot single PK row, cache-resident) so latency reflects the runtime + pool + JSON path, not Postgres. NOT comparable across endpoints or windows -- contract_id is the isolation key. Intended for the tuned-PG baseline (BENCH_DB_TUNED=1).",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
     "fixed_contract_h2c_h2load_exploratory_v1": {
       "tier": "community",
       "protocol_mode": "h2c",
@@ -343,15 +380,137 @@
         "manifest_version": "1",
         "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
       }
+    },
+    "fixed_contract_cross_runtime_h1_v2": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 300,
+      "duration_seconds": 900,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      },
+      "capability_note": "Longer-window capability variant of _v1: identical workload (threads/connections/payload/protocol/seed), only warmup=300s + measurement=900s for steady-state p99.9 stability on a dedicated perf-box. NOT comparable across v1 (120s) and v2 (900s) windows — contract_id is the isolation key."
+    },
+    "fixed_contract_cross_runtime_v1": {
+      "tier": "community",
+      "benchmark_family": "runtime-wrk",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 60,
+      "duration_seconds": 120,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "capability_note": "Protocol-agnostic: no protocol_mode/transport_mode. Effective protocol is supplied by the run axis (--protocol-mode / BENCH_PROTOCOL_MODE_OVERRIDE); fail-closed if absent. Workload is byte-identical to fixed_contract_cross_runtime_h1_v1; only the wire protocol is a run axis. Isolation key is (contract_id, effective_protocol), not contract_id alone — h1 and h2 results of this contract never blend (enforced by G3 + the aggregation fingerprint's protocol_mode field).",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_cross_runtime_v2": {
+      "tier": "community",
+      "benchmark_family": "runtime-wrk",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 300,
+      "duration_seconds": 900,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "capability_note": "Protocol-agnostic long-window variant: workload byte-identical to fixed_contract_cross_runtime_h1_v2 (warmup=300s, measurement=900s); effective protocol supplied by the run axis (--protocol-mode / BENCH_PROTOCOL_MODE_OVERRIDE), fail-closed if absent. NOT comparable across v1 (120s) and v2 (900s) windows — (contract_id, effective_protocol) is the isolation key.",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      }
+    },
+    "fixed_contract_cross_runtime_h1_debug": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/users",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 5,
+      "duration_seconds": 15,
+      "payload_profile": "users-aggregate-10x10x10-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      },
+      "debug_note": "Short-window debug contract for reproducing harness bugs fast. NOT for eligible results."
+    },
+    "fixed_contract_cross_runtime_h1_single_read_v1": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/user?id=1",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 300,
+      "duration_seconds": 900,
+      "payload_profile": "single-user-by-id-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      },
+      "capability_note": "RUNTIME-BOUND lightweight variant: single-row indexed read (GET /api/v1/user?id=1 -> {id, username}) instead of the 3-query 10x10x10 aggregate. DB cost is trivial + cache-resident by design (one hot PK row), so throughput reflects the runtime + connection pool + JSON serialization path rather than Postgres. Complements the aggregate contracts, which the 2026-07-19 diagnosis showed are DB-CPU-bound (PG ~9.4 cores; exeris/quarkus both saturate ~11k so their gap is at the margin). Fixed id=1 removes DB-side variance; the response is byte-identical across targets. NOT comparable to aggregate or _v1/_v2 contracts (different endpoint/payload) — contract_id is the isolation key. Intended for the tuned-PG baseline (BENCH_DB_TUNED=1: host-net + PG cpuset)."
+    },
+    "fixed_contract_cross_runtime_h1_single_read_debug": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "benchmark_family": "runtime-wrk",
+      "transport_mode": "loopback-h1",
+      "mode": "baseline-db",
+      "endpoint": "GET /api/v1/user?id=1",
+      "threads": 4,
+      "connections": 128,
+      "warmup_seconds": 5,
+      "duration_seconds": 15,
+      "payload_profile": "single-user-by-id-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/entity-read-by-id/seed/verify-seed.sh"
+      },
+      "debug_note": "Short-window debug variant of the single-row runtime-bound read. NOT for eligible results."
     }
   },
   "measurement_windows": {
     "warmup_min_seconds": 60,
     "exploratory": {
       "min_seconds": 30,
-      "allowed_profiles": ["dev-isolated", "dev-laptop", "ci-runner"],
+      "allowed_profiles": [
+        "dev-isolated",
+        "dev-laptop",
+        "ci-runner"
+      ],
       "claim_scope": "exploratory",
-      "allowed_claims": ["descriptive_only"],
+      "allowed_claims": [
+        "descriptive_only"
+      ],
       "co_risk": true,
       "note": "No P99 claims. No comparison claims. wrk latency output is descriptive only."
     },
@@ -359,7 +518,10 @@
       "min_seconds": 60,
       "required_profile": "perf-box-amd64",
       "claim_scope": "comparison_eligible",
-      "allowed_claims": ["throughput", "p50_indicative"],
+      "allowed_claims": [
+        "throughput",
+        "p50_indicative"
+      ],
       "min_samples": 600,
       "ci_level": 0.95,
       "relative_error_pct_max": 10,
@@ -379,7 +541,10 @@
       "soak_duration_class": "guard",
       "min_execution_class": "guard",
       "claim_scope": "exploratory",
-      "allowed_claims": ["descriptive_only", "resource_trend"],
+      "allowed_claims": [
+        "descriptive_only",
+        "resource_trend"
+      ],
       "note": "10-minute constrained guard soak. Minimum for resource trend detection."
     },
     "constrained_regression": {
@@ -387,7 +552,10 @@
       "soak_duration_class": "regression",
       "min_execution_class": "regression",
       "claim_scope": "exploratory",
-      "allowed_claims": ["descriptive_only", "stability_assertion"],
+      "allowed_claims": [
+        "descriptive_only",
+        "stability_assertion"
+      ],
       "note": "30-minute constrained regression soak. Required for stability assertions."
     },
     "constrained_contract": {
@@ -395,7 +563,10 @@
       "soak_duration_class": "contract",
       "min_execution_class": "regression",
       "claim_scope": "exploratory",
-      "allowed_claims": ["descriptive_only", "efficiency_contract_v1"],
+      "allowed_claims": [
+        "descriptive_only",
+        "efficiency_contract_v1"
+      ],
       "note": "2-hour constrained contract soak. Required for efficiency_contract_v1 validation."
     }
   },
@@ -403,14 +574,38 @@
     "status": "deferred",
     "note": "Cross-tier comparison is not active. Constraints captured now to prevent schema drift.",
     "required_for_cross_tier_eligibility": [
-      { "field": "db_backend",             "required_value": "postgresql" },
-      { "field": "db_image",               "required_value": "postgres:16.2" },
-      { "field": "connection_pool_size",   "required_value": 10 },
-      { "field": "protocol",               "required_value": "h1" },
-      { "field": "seed_manifest_version",  "required_value": "1" },
-      { "field": "transport",              "required_value": "loopback" },
-      { "field": "concurrency_connections","required_value": 128 },
-      { "field": "concurrency_threads",    "required_value": 4 }
+      {
+        "field": "db_backend",
+        "required_value": "postgresql"
+      },
+      {
+        "field": "db_image",
+        "required_value": "postgres:16.2"
+      },
+      {
+        "field": "connection_pool_size",
+        "required_value": 10
+      },
+      {
+        "field": "protocol",
+        "required_value": "h1"
+      },
+      {
+        "field": "seed_manifest_version",
+        "required_value": "1"
+      },
+      {
+        "field": "transport",
+        "required_value": "loopback"
+      },
+      {
+        "field": "concurrency_connections",
+        "required_value": 128
+      },
+      {
+        "field": "concurrency_threads",
+        "required_value": 4
+      }
     ]
   },
   "comparison_axis": "within-tier"

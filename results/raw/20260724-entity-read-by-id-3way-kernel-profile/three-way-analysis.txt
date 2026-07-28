@@ -1,0 +1,108 @@
+================= STACK: community =================
+  samples=124295  kernel(leaf)=47679 (38.4%)  user=61.6%
+  serializer(jackson,incl)=9.1%   db-client(incl)=48.7%
+  syscalls_30s=16095135  rps=14351  => syscalls/req = 37.38
+  -- top KERNEL leaf frames --
+     12143 _raw_spin_unlock_irqrestore_[k]
+     1864 finish_task_switch.isra.0_[k]
+     1757 do_syscall_64_[k]
+     738 srso_alias_safe_ret_[k]
+     551 mod_memcg_state_[k]
+     530 _raw_spin_unlock_irq_[k]
+     526 __fdget_[k]
+     524 refill_stock_[k]
+  -- top USER leaf frames --
+     4882 [unknown_Java]
+     4468 org/postgresql/core/PGStream.receiveTupleV3
+     4219 Stub
+     4109 org/postgresql/jdbc/PgResultSet.getLong
+     2438 org/postgresql/core/VisibleBufferedInputStream.read
+     2332 org/postgresql/core/VisibleBufferedInputStream.ensureBytes
+     2291 tools/jackson/core/json/UTF8JsonGenerator._writeStringSegment
+     2109 java/util/concurrent/ForkJoinPool.deactivate
+  -- system-wide (Probe 3) top non-idle functions on cpuset --
+                 |
+                    |          
+                    |--17.26%--start_secondary
+                    |          |          
+                    |           --17.25%--cpu_startup_entry
+                    |                     |          
+                    |                                |          
+                    |                                |          |          
+                    |                                |                     |          
+                    |                                |                                |          
+                    |                                |          
+                    |                                |--3.55%--schedule_idle
+
+================= STACK: qtuned =================
+  samples=136656  kernel(leaf)=56965 (41.7%)  user=58.3%
+  serializer(jackson,incl)=11.8%   db-client(incl)=49.6%
+  syscalls_30s=15117787  rps=14010  => syscalls/req = 35.97
+  -- top KERNEL leaf frames --
+     11147 _raw_spin_unlock_irqrestore_[k]
+     1829 do_syscall_64_[k]
+     1213 finish_task_switch.isra.0_[k]
+     1075 refill_stock_[k]
+     1001 _raw_spin_unlock_irq_[k]
+     969 srso_alias_safe_ret_[k]
+     907 _copy_from_iter_[k]
+     822 __tcp_transmit_skb_[k]
+  -- top USER leaf frames --
+     4132 Stub
+     3991 org/postgresql/core/PGStream.receiveTupleV3
+     3621 com/fasterxml/jackson/core/json/UTF8JsonGenerator._writeStringSegment
+     3298 [unknown_Java]
+     3026 org/postgresql/jdbc/PgResultSet.getLong
+     2123 org/postgresql/core/VisibleBufferedInputStream.read
+     1920 read
+     1896 org/postgresql/core/VisibleBufferedInputStream.ensureBytes
+  -- system-wide (Probe 3) top non-idle functions on cpuset --
+                 |
+                    |          
+                    |--12.41%--start_secondary
+                    |          |          
+                    |           --12.41%--cpu_startup_entry
+                    |                     |          
+                    |                                |          
+                    |                                |          |          
+                    |                                |                     |          
+                    |                                |                                |          
+                    |                                |          
+                    |                                |--2.81%--schedule_idle
+
+================= STACK: qhib =================
+  samples=154970  kernel(leaf)=41664 (26.9%)  user=73.1%
+  serializer(jackson,incl)=9.0%   db-client(incl)=62.4%
+  syscalls_30s=8875846  rps=11528  => syscalls/req = 25.67
+  -- top KERNEL leaf frames --
+     7231 _raw_spin_unlock_irqrestore_[k]
+     1098 do_syscall_64_[k]
+     811 refill_stock_[k]
+     776 srso_alias_safe_ret_[k]
+     626 __tcp_transmit_skb_[k]
+     548 mod_memcg_state_[k]
+     533 tcp_sendmsg_locked_[k]
+     516 _raw_spin_unlock_irq_[k]
+  -- top USER leaf frames --
+     5182 [unknown_Java]
+     3922 java/lang/StringLatin1.toLowerCase
+     3673 org/postgresql/jdbc/PgResultSet.getString
+     3404 Stub
+     3184 java/lang/String.equals
+     3109 java/util/HashMap.getNode
+     2919 com/fasterxml/jackson/core/json/UTF8JsonGenerator._writeStringSegment
+     2469 org/hibernate/sql/results/internal/StandardRowReader.getResult
+  -- system-wide (Probe 3) top non-idle functions on cpuset --
+                 |
+                    |          
+                    |--5.24%--start_secondary
+                    |          |          
+                    |           --5.23%--cpu_startup_entry
+                    |                     |          
+                    |                                |          
+                    |                                           |          
+                    |                                                      |          
+                    |                                                                 |          
+                    |          
+                     --1.73%--x86_64_start_kernel
+

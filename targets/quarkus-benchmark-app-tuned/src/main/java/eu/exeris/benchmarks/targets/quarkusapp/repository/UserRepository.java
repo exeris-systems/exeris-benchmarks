@@ -35,6 +35,12 @@ public class UserRepository {
     private static final String TOP_USERS_SQL =
             "SELECT id, username FROM users ORDER BY id ASC LIMIT ?";
 
+    // Single-row indexed read (PK lookup) for the lightweight runtime-bound scenario:
+    // trivial DB cost (~microseconds) so throughput reflects the runtime + connection
+    // pool + JSON serialization path, not Postgres. Kept identical across targets.
+    private static final String USER_BY_ID_SQL =
+            "SELECT id, username FROM users WHERE id = ?";
+
     private static final String PING_SQL = "SELECT 1";
 
     @Inject
@@ -70,6 +76,26 @@ public class UserRepository {
         }
     }
 
+    public UserSummary findUserById(long id) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(USER_BY_ID_SQL)) {
+            statement.setLong(1, id);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    // Fairness (JDBC accessor equalization, 2026-07-20): read by column index rather
+                    // than by name, symmetric with the exeris target — avoids pgjdbc's per-call
+                    // column-name→index lookup (PgResultSet.findColumn). SQL: SELECT id, username.
+                    return new UserSummary(
+                            Long.toString(resultSet.getLong(1)),
+                            resultSet.getString(2));
+                }
+                return null;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to read user by id", exception);
+        }
+    }
+
     public boolean ping() {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(PING_SQL);
@@ -89,9 +115,11 @@ public class UserRepository {
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<UserSummary> users = new ArrayList<>(limit);
                 while (resultSet.next()) {
+                    // Fairness (JDBC accessor equalization, 2026-07-20): by-index read, symmetric
+                    // with the exeris target (no findColumn). SQL: SELECT id, username.
                     users.add(new UserSummary(
-                            Long.toString(resultSet.getLong("id")),
-                            resultSet.getString("username")));
+                            Long.toString(resultSet.getLong(1)),
+                            resultSet.getString(2)));
                 }
                 return users;
             }
@@ -127,9 +155,11 @@ public class UserRepository {
             statement.setInt(bindIndex, limit);
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    String userId = Long.toString(resultSet.getLong("user_id"));
-                    String friendId = Long.toString(resultSet.getLong("friend_user_id"));
-                    String friendUsername = resultSet.getString("friend_username");
+                    // Fairness (JDBC accessor equalization, 2026-07-20): by-index reads, symmetric
+                    // with exeris (no findColumn). SQL cols: 1=user_id, 2=friend_user_id, 3=friend_username.
+                    String userId = Long.toString(resultSet.getLong(1));
+                    String friendId = Long.toString(resultSet.getLong(2));
+                    String friendUsername = resultSet.getString(3);
                     friendsByUser.computeIfAbsent(userId, ignored -> new ArrayList<>())
                             .add(new FriendSummary(friendId, friendUsername));
                 }
@@ -169,10 +199,13 @@ public class UserRepository {
             statement.setInt(bindIndex, limit);
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    String userId = Long.toString(resultSet.getLong("user_id"));
-                    String interestId = Long.toString(resultSet.getLong("interest_id"));
-                    String name = resultSet.getString("interest_name");
-                    String category = resultSet.getString("interest_category");
+                    // Fairness (JDBC accessor equalization, 2026-07-20): by-index reads, symmetric
+                    // with exeris (no findColumn). SQL cols: 1=user_id, 2=interest_id, 3=interest_name,
+                    // 4=interest_category.
+                    String userId = Long.toString(resultSet.getLong(1));
+                    String interestId = Long.toString(resultSet.getLong(2));
+                    String name = resultSet.getString(3);
+                    String category = resultSet.getString(4);
                     interestsByUser.computeIfAbsent(userId, ignored -> new ArrayList<>())
                             .add(new InterestView(interestId, name, category));
                 }

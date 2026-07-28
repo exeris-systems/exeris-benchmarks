@@ -28,6 +28,7 @@ JVM_GC_OVERRIDE_CLI="${JVM_GC_OVERRIDE_CLI:-}"
 JVM_XMS_MB_CLI="${JVM_XMS_MB_CLI:-}"
 JVM_XMX_MB_CLI="${JVM_XMX_MB_CLI:-}"
 CPU_AFFINITY="${CPU_AFFINITY:-}"
+CLIENT_CPU_AFFINITY="${CLIENT_CPU_AFFINITY:-}"
 ENABLE_JFR="${BENCHMARK_ENABLE_JFR:-false}"
 JFR_SETTINGS="${BENCHMARK_JFR_SETTINGS:-profile}"
 BENCHMARK_SKIP_TARGET_BUILD="${BENCHMARK_SKIP_TARGET_BUILD:-1}"
@@ -111,6 +112,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --cpu-affinity)
       CPU_AFFINITY="$2"
+      shift 2
+      ;;
+    --client-cpu-affinity)
+      CLIENT_CPU_AFFINITY="$2"
       shift 2
       ;;
     --enable-jfr)
@@ -276,6 +281,9 @@ ensure_constrained_scope() {
   if [[ -n "$CPU_AFFINITY" ]]; then
     relaunch_args+=(--cpu-affinity "$CPU_AFFINITY")
   fi
+  if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then
+    relaunch_args+=(--client-cpu-affinity "$CLIENT_CPU_AFFINITY")
+  fi
   if [[ "$ENABLE_JFR" == "true" ]]; then
     relaunch_args+=(--enable-jfr --jfr-settings "$JFR_SETTINGS")
   fi
@@ -293,10 +301,44 @@ ensure_constrained_scope() {
     BENCHMARK_CONSTRAINED_DB_POOL_MIN_SIZE="${CONSTRAINED_DB_POOL_MIN_SIZE}"
     BENCHMARK_CONSTRAINED_DB_POOL_MAX_SIZE="${CONSTRAINED_DB_POOL_MAX_SIZE}"
     BENCHMARK_CONSTRAINED_DB_CONNECTION_TIMEOUT_MS="${CONSTRAINED_DB_CONNECTION_TIMEOUT_MS}"
+    ENTITY_READ_ENDPOINT_PATH="${ENTITY_READ_ENDPOINT_PATH}"
   )
+  # These vars are all fairness-defining and must survive the systemd-run relaunch:
+  #  - DB_HOST_NETWORK / BENCH_BACKEND_NETWORK / BENCH_DB_TUNED: backend container
+  #    network mode is a comparison fairness gate (docs/methodology.md) so a host-net
+  #    Postgres choice can never silently degrade to bridge/NAT.
+  #  - EXERIS_SUBSYSTEMS: subsystem selection (e.g. dropping the unused crypto
+  #    subsystem in a plaintext sweep) is a footprint/fairness control; it must not
+  #    revert to the http,persistence,crypto default after relaunch.
+  #  - EXERIS_ENABLE_TELEMETRY_SUBSYSTEM / EXERIS_TELEMETRY_JFR_ENABLED: Exeris-only
+  #    overhead toggles; an explicit =false must not be inherited-on.
+  #  - BENCHMARK_ALLOW_EXTERNAL_DB: when a pre-launched tuned Postgres (host-net +
+  #    fixed cpuset) is already bound to :5432, this tells the base runner to REUSE it
+  #    (DB_LAUNCH_MODE=external) instead of insisting on a managed DB. Without it the
+  #    base runner sees the occupied port, refuses reuse, and drops to the docker-run
+  #    fallback which recreates the container host-net but WITHOUT the cpuset — silently
+  #    unpinning the DB mid-sweep. Must survive the relaunch or every point re-clobbers it.
+  # Forwarded only-if-set, so runtimes/arms that don't set them are unaffected.
   local v
+  #  - WRK2_TARGET_RPS / WRK2_SKIP_DISCOVERY: fixed-rate wrk2 knobs for the memory-floor
+  #    experiment. The base runner delegates --driver wrk2 to run-wrk2.sh, which reads
+  #    these from the environment; without forwarding them past the scope relaunch the
+  #    floor run would fall back to closed-loop saturation discovery (a MAX-load pass that
+  #    OOMs a floor-sized cgroup and inflates the measured floor).
+  #  - JDK_JAVA_OPTIONS: extra JVM -D system properties for the target (the JVM reads it
+  #    automatically). Used to set exeris kernel config that has no dedicated env var,
+  #    e.g. -Dexeris.persistence.admission.queueDepthAllowanceRatio=N (ADR-035 admission
+  #    control) so the connection-pool sweep can raise exeris's acquire-queue depth to
+  #    cover the offered connections instead of shedding at small pools.
+  #  - BENCHMARK_LOADGEN_CGROUP_ESCAPE: memory-floor only. Tells run-wrk2.sh to re-exec
+  #    the load driver in its OWN transient scope under a sibling slice so the driver's
+  #    RSS is NOT charged to the target's constrained scope. Without forwarding it past
+  #    the relaunch the driver stays in-cgroup and the measured floor is target+loadgen.
   for v in BENCHMARK_TLS_ENABLED EXERIS_SSL_ENABLED EXERIS_TRANSPORT_CERT_PATH \
-           EXERIS_TRANSPORT_KEY_PATH BENCH_PROTOCOL_MODE_OVERRIDE; do
+           EXERIS_TRANSPORT_KEY_PATH BENCH_PROTOCOL_MODE_OVERRIDE \
+           DB_HOST_NETWORK BENCH_BACKEND_NETWORK BENCH_DB_TUNED BENCHMARK_ALLOW_EXTERNAL_DB \
+           EXERIS_SUBSYSTEMS EXERIS_ENABLE_TELEMETRY_SUBSYSTEM EXERIS_TELEMETRY_JFR_ENABLED \
+           WRK2_TARGET_RPS WRK2_SKIP_DISCOVERY JDK_JAVA_OPTIONS BENCHMARK_LOADGEN_CGROUP_ESCAPE; do
     [[ -n "${!v:-}" ]] && env_passthrough+=("${v}=${!v}")
   done
 
@@ -327,6 +369,28 @@ THREADS="$(jq -r '.threads' <<<"$CONTRACT_JSON")"
 CONNECTIONS="$(jq -r '.connections' <<<"$CONTRACT_JSON")"
 WARMUP_SECONDS="$(jq -r '.warmup_seconds' <<<"$CONTRACT_JSON")"
 DURATION_SECONDS="$(jq -r '.duration_seconds' <<<"$CONTRACT_JSON")"
+# Request path the base runner should drive. Derived from the contract's "GET /path"
+# endpoint (last whitespace field, mirroring run-comparative.sh's
+# extract_endpoint_path_from_method_endpoint), defaulting to the aggregate read so
+# every pre-existing constrained contract (endpoint "GET /api/v1/users") is byte-for-
+# byte unchanged. The single-read matrix contracts carry "GET /api/v1/user?id=1", so
+# without this forward the base runner would silently measure the aggregate under a
+# single-read label. Exported (inherited by the base runner) and passed through the
+# systemd-run relaunch below.
+CONTRACT_ENDPOINT="$(jq -r '.endpoint // empty' <<<"$CONTRACT_JSON")"
+if [[ -n "$CONTRACT_ENDPOINT" ]]; then
+  ENTITY_READ_ENDPOINT_PATH="$(awk '{print $NF}' <<<"$CONTRACT_ENDPOINT")"
+else
+  ENTITY_READ_ENDPOINT_PATH="/api/v1/users"
+fi
+case "$ENTITY_READ_ENDPOINT_PATH" in
+  /*) ;;
+  *)
+    echo "ERROR: Contract '$CONTRACT_ID' endpoint '$CONTRACT_ENDPOINT' did not yield an absolute request path (got: '$ENTITY_READ_ENDPOINT_PATH')" >&2
+    exit 1
+    ;;
+esac
+export ENTITY_READ_ENDPOINT_PATH
 # Size the pool to the contract's offered concurrency. Do NOT defer to an ambient
 # EXERIS_DB_POOL_* (a sourced runtime env file, e.g. exeris-community-runtime.env,
 # sets EXERIS_DB_POOL_MAX_SIZE=256): inheriting 256 into a 128M/0.5vCPU cgroup
@@ -569,6 +633,12 @@ if [[ -n "$CPU_AFFINITY" ]]; then
   # Base runner pins the target app to this cpuset via taskset (server-side pin,
   # orthogonal to the scope CPUQuota).
   LAUNCH_COMMAND+=("--cpu-affinity" "$CPU_AFFINITY")
+fi
+if [[ -n "$CLIENT_CPU_AFFINITY" ]]; then
+  # Base runner pins the load driver (wrk/h2load) to this cpuset via taskset, kept
+  # disjoint from the target pin so the load generator cannot steal cycles from the
+  # measured process — protecting the constrained RSS + CPU/req readings.
+  LAUNCH_COMMAND+=("--client-cpu-affinity" "$CLIENT_CPU_AFFINITY")
 fi
 if [[ "$ENABLE_JFR" == "true" ]]; then
   LAUNCH_COMMAND+=("--enable-jfr" "--jfr-settings" "$JFR_SETTINGS")

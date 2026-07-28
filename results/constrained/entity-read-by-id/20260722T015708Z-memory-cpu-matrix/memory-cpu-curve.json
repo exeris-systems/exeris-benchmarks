@@ -1,0 +1,2853 @@
+{
+  "schema_version": "1",
+  "matrix": "entity-read-by-id-memory-cpu",
+  "generated_at": "2026-07-22T06:56:11Z",
+  "manifest": {
+    "schema_version": "1",
+    "matrix": "entity-read-by-id-memory-cpu",
+    "generated_at": "2026-07-22T01:57:08Z",
+    "campaign_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix",
+    "separation_axes": {
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "benchmark_family": "runtime-wrk",
+      "mode": "baseline-db",
+      "purity": "pure",
+      "execution_class": "exploratory-constrained",
+      "track_id": "track-c",
+      "claim_scope": "descriptive_only",
+      "comparison_policy": "forbidden",
+      "comparison_axis": "within-tier"
+    },
+    "reproducibility": {
+      "benchmark_commit_sha": "unknown",
+      "hardware_profile": "perf-box-amd64",
+      "jvm_gc": "parallel",
+      "db_pool_min_size": 16,
+      "db_pool_max_size": 16,
+      "warmup_seconds": 120,
+      "duration_seconds": 300,
+      "threads": 4,
+      "connections": 128,
+      "endpoint": "GET /api/v1/user?id=1",
+      "repeats": 3,
+      "repeat_ordering": "interleaved (repeat is the outer loop)",
+      "cpu_partition_policy": {
+        "model": "per-point disjoint tuned-PG partition derived from each point vCPU (matrix_affinity_for_vcpu)",
+        "db_cpuset": "4-7,12-15 (externally pinned, reused across all points)",
+        "vcpu_le_4": "target 0-1,8-9 / loadgen 2-3,10-11 (fully disjoint; = 2026-07 tuned-PG triad partition)",
+        "vcpu_eq_8": "target 0-3,8-11 / loadgen 4-7,12-15 (loadgen co-located with DB; target isolated, throughput DB-bound at this point only)",
+        "target_override": null,
+        "client_override": null
+      },
+      "skip_target_build": 1,
+      "profiles_json": "/home/bench/exeris-benchmarks/runtime/profiles/entity-read-by-id-memory-cpu-sweep-profiles.json",
+      "scenario_json": "/home/bench/exeris-benchmarks/scenarios/entity-read-by-id/memory-cpu-sweep-scenario.json"
+    },
+    "heap_policy": {
+      "model": "per-arm architecture-appropriate heap fraction of memory.max, applied per point, passed via --jvm-xmx-mb (user decision; replaces the identical ~3/4*MaxRAM auto-derivation)",
+      "community_fraction_of_budget": 0.25,
+      "quarkus_fraction_of_budget": 0.75,
+      "rationale": "exeris-community 0.25 (crypto off + off-heap design => tiny heap need, ~16MB fits a 128MB budget; 0.25 gives 32MB @128MB with floor headroom); quarkus-tuned + quarkus-hibernate 0.75 (JVM-heap-standard, ~ container ergonomic).",
+      "absolute_overrides_mb": {
+        "exeris-community": null,
+        "quarkus-tuned": null,
+        "quarkus-hibernate": null
+      },
+      "precedence": "absolute MATRIX_XMX_MB_<arm> overrides the fraction when set",
+      "floor_policy": "no upward clamp; a tiny computed Xmx is passed as-is so a JVM OOM / fail-to-start at a low budget is a recorded RESULT (the floor), not a harness error",
+      "xms_policy": "Xms == Xmx per arm (fixed heap, both arms): -Xms and -Xmx are both set to the per-arm resolved value, so neither arm resizes its heap during measurement. Eliminates growth dynamics so steady-state RSS is well-defined and sampling-independent (same rationale as the min=max DB pool). Community fixed at 0.25*mem, quarkus fixed at 0.75*mem.",
+      "resolved": [
+        {
+          "arm": "exeris-community",
+          "memory_max_mb": 128,
+          "xmx_mb": 32,
+          "heap_fraction_of_budget": 0.2500,
+          "xmx_source": "fraction:0.25"
+        },
+        {
+          "arm": "exeris-community",
+          "memory_max_mb": 256,
+          "xmx_mb": 64,
+          "heap_fraction_of_budget": 0.2500,
+          "xmx_source": "fraction:0.25"
+        },
+        {
+          "arm": "exeris-community",
+          "memory_max_mb": 512,
+          "xmx_mb": 128,
+          "heap_fraction_of_budget": 0.2500,
+          "xmx_source": "fraction:0.25"
+        },
+        {
+          "arm": "exeris-community",
+          "memory_max_mb": 1024,
+          "xmx_mb": 256,
+          "heap_fraction_of_budget": 0.2500,
+          "xmx_source": "fraction:0.25"
+        },
+        {
+          "arm": "exeris-community",
+          "memory_max_mb": 2048,
+          "xmx_mb": 512,
+          "heap_fraction_of_budget": 0.2500,
+          "xmx_source": "fraction:0.25"
+        },
+        {
+          "arm": "quarkus-tuned",
+          "memory_max_mb": 128,
+          "xmx_mb": 96,
+          "heap_fraction_of_budget": 0.7500,
+          "xmx_source": "fraction:0.75"
+        },
+        {
+          "arm": "quarkus-tuned",
+          "memory_max_mb": 256,
+          "xmx_mb": 192,
+          "heap_fraction_of_budget": 0.7500,
+          "xmx_source": "fraction:0.75"
+        },
+        {
+          "arm": "quarkus-tuned",
+          "memory_max_mb": 512,
+          "xmx_mb": 384,
+          "heap_fraction_of_budget": 0.7500,
+          "xmx_source": "fraction:0.75"
+        },
+        {
+          "arm": "quarkus-tuned",
+          "memory_max_mb": 1024,
+          "xmx_mb": 768,
+          "heap_fraction_of_budget": 0.7500,
+          "xmx_source": "fraction:0.75"
+        },
+        {
+          "arm": "quarkus-tuned",
+          "memory_max_mb": 2048,
+          "xmx_mb": 1536,
+          "heap_fraction_of_budget": 0.7500,
+          "xmx_source": "fraction:0.75"
+        },
+        {
+          "arm": "quarkus-hibernate",
+          "memory_max_mb": 1024,
+          "xmx_mb": 768,
+          "heap_fraction_of_budget": 0.7500,
+          "xmx_source": "fraction:0.75",
+          "reference_point_only": true
+        }
+      ]
+    },
+    "fairness_controls": {
+      "applies_to": [
+        "exeris-community"
+      ],
+      "exeris_subsystems_community": "http,persistence",
+      "crypto_subsystem_disabled_for_community": true,
+      "exeris_telemetry_disabled_for_community": true,
+      "flags": [
+        "EXERIS_SUBSYSTEMS=http,persistence",
+        "EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false",
+        "EXERIS_TELEMETRY_JFR_ENABLED=false"
+      ],
+      "rationale": "Plaintext H1 sweep: the crypto subsystem is unused native memory Quarkus never allocates (ExerisCommunityApplication default is http,persistence,crypto) and is what blocks exeris from the 128MB floor, so EXERIS_SUBSYSTEMS drops it (default http,persistence). Exeris telemetry is disabled belt-and-suspenders (not in the default subsystem set; harmless). Applied ONLY to the exeris-community arm (Quarkus ignores these vars) and forwarded explicitly through the systemd-run relaunch so they cannot be inherited-on. Benchmark JFR is already off on the constrained path."
+    },
+    "target_provenance": [
+      {
+        "arm": "exeris-community",
+        "target_runtime": "community",
+        "jar_glob": "targets/exeris-community-app/target/exeris-community-app-*.jar",
+        "jar_path": "/home/bench/exeris-benchmarks/targets/exeris-community-app/target/exeris-community-app-1.0.0-SNAPSHOT.jar",
+        "jar_sha256": "ae822c31e7837dada7fb714e6c89f04cfe63cd7e81e5c1ecc18899cdc35958ad",
+        "jar_size_bytes": 20569065,
+        "jar_mtime_epoch": 1784676323
+      },
+      {
+        "arm": "quarkus-tuned",
+        "target_runtime": "quarkus-tuned",
+        "jar_glob": "targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-*-runner.jar",
+        "jar_path": "/home/bench/exeris-benchmarks/targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-1.0.0-SNAPSHOT-runner.jar",
+        "jar_sha256": "7b2c0a6ed78fb33835897ef1e12b3160a12d1defd14f1bc71ad0cdca87a19314",
+        "jar_size_bytes": 55463153,
+        "jar_mtime_epoch": 1784676328
+      },
+      {
+        "arm": "quarkus-hibernate",
+        "target_runtime": "quarkus",
+        "jar_glob": "targets/quarkus-benchmark-app/target/quarkus-benchmark-app-*-runner.jar",
+        "jar_path": "/home/bench/exeris-benchmarks/targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar",
+        "jar_sha256": "30c6e9f5999582ceb48a7c23a603a8bc4ccaf6516ffeae83ab71cdbc59fc6c94",
+        "jar_size_bytes": 75907312,
+        "jar_mtime_epoch": 1784676334
+      }
+    ],
+    "caveats": {
+      "latency": "wrk is closed-loop: recorded p99/p50 are COORDINATED-OMISSION figures (queueing ~= concurrency/throughput), for rank-ordering only, NOT a service-time tail. CO-free p99 needs wrk2 on a perf-box.",
+      "heap": "per-arm architecture-appropriate heaps (community 0.25, quarkus 0.75 of memory.max), declared per row (jvm.xmx_mb / jvm.heap_fraction_of_budget) - user decision. This is NOT an identical-knob configuration across arms; it is intentional and must be stated when reading the curve.",
+      "pg_rss": "postgres runs OUTSIDE the app cgroup budget; pg_rss_kb is a best-effort post-run docker-stats snapshot and is NEVER counted in the app memory budget.",
+      "comparison": "constrained/descriptive_only/track-c: cross-arm throughput comparison is NOT eligible here. Route comparative claims to a perf-box comparison-eligible run.",
+      "oom_is_a_result": "a point where an arm OOMs / will-not-start is recorded (outcome from constrained-execution-evidence.json), not a harness error."
+    }
+  },
+  "curve_reading": {
+    "memory_budget_curve": "filter points where vcpu == 4, order by memory_max_mb, read each arm summary (rps / cgroup_memory_peak_kb / cpu_per_req_ms). Heap fraction differs per arm (community 0.25, quarkus 0.75) by design - read heap.xmx_mb alongside.",
+    "cpu_cut": "filter points where memory_max_mb == 1024, order by vcpu, read each arm summary.",
+    "shared_point": "1024MB/4vCPU is on both axes."
+  },
+  "points": [
+    {
+      "memory_max_mb": 1024,
+      "vcpu": 2,
+      "axis": "cpu",
+      "on_memory_axis": false,
+      "on_cpu_axis": true,
+      "arms": {
+        "exeris-community": {
+          "target_runtime": "community",
+          "execution_profile_id": "runtime-constrained-1024m-2vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_2vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 256,
+            "heap_fraction_of_budget": 0.2500,
+            "xmx_source": "fraction:0.25",
+            "xmx_mb_effective": [
+              256
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": "http,persistence",
+            "crypto_subsystem_enabled": false,
+            "exeris_telemetry_subsystem_enabled": false,
+            "exeris_telemetry_jfr_enabled": false
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 31460.600000000002,
+            "stddev": 59.166577558619814,
+            "cv_pct": 0.18806563625175554,
+            "min": 31425.03,
+            "max": 31528.90
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.048016906821228035,
+            "stddev": 9.944191859999422e-05,
+            "cv_pct": 0.20709771866444224,
+            "min": 0.04791205311597448,
+            "max": 0.04810986724692454
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 215669.33333333334,
+            "stddev": 264.64567507014607,
+            "cv_pct": 0.12270899667553388,
+            "min": 215368,
+            "max": 215864
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 209496,
+            "stddev": 504.7771785649585,
+            "cv_pct": 0.24094836109756676,
+            "min": 208916,
+            "max": 209836
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 1.5144000000000002,
+            "stddev": 0.0012767145334803517,
+            "cv_pct": 0.08430497447704381,
+            "min": 1.5133,
+            "max": 1.5158
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4207.666666666667,
+            "stddev": 1.1547005383792517,
+            "cv_pct": 0.027442776005210768,
+            "min": 4207,
+            "max": 4209
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9852482411836193,
+            "stddev": 0.000403606402851913,
+            "cv_pct": 0.04096494527785647,
+            "min": 0.9850152189182861,
+            "max": 0.9857142857142858
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 48449,
+            "stddev": 1607.5114307525157,
+            "cv_pct": 3.317945531904716,
+            "min": 46838,
+            "max": 50053
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              342170.000000,
+              379950.000000,
+              347280.000000
+            ],
+            "median": 347280.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 31528.90,
+              "total_requests": 9461711,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 453.330000,
+              "cpu_per_req_ms": 0.04791205311597448,
+              "peak_rss_kb": 215776,
+              "cgroup_memory_peak_kb": 209836,
+              "xmx_mb": 256,
+              "xmx_mb_effective": 256,
+              "latency_p99_us": 342170.000000,
+              "throttled_periods": 4209,
+              "cpu_throttle_ratio": 0.9857142857142858,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 46838,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-2vcpu/exeris-community/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 31427.87,
+              "total_requests": 9429967,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 452.910000,
+              "cpu_per_req_ms": 0.048028800100785085,
+              "peak_rss_kb": 215864,
+              "cgroup_memory_peak_kb": 208916,
+              "xmx_mb": 256,
+              "xmx_mb_effective": 256,
+              "latency_p99_us": 379950.000000,
+              "throttled_periods": 4207,
+              "cpu_throttle_ratio": 0.9850152189182861,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 48456,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-2vcpu/exeris-community/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 31425.03,
+              "total_requests": 9430290,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 453.690000,
+              "cpu_per_req_ms": 0.04810986724692454,
+              "peak_rss_kb": 215368,
+              "cgroup_memory_peak_kb": 209736,
+              "xmx_mb": 256,
+              "xmx_mb_effective": 256,
+              "latency_p99_us": 347280.000000,
+              "throttled_periods": 4207,
+              "cpu_throttle_ratio": 0.9850152189182861,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 50053,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-2vcpu/exeris-community/repeat-3"
+            }
+          ]
+        },
+        "quarkus-tuned": {
+          "target_runtime": "quarkus-tuned",
+          "execution_profile_id": "runtime-constrained-1024m-2vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_2vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 768,
+            "heap_fraction_of_budget": 0.7500,
+            "xmx_source": "fraction:0.75",
+            "xmx_mb_effective": [
+              768
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": null,
+            "crypto_subsystem_enabled": null,
+            "exeris_telemetry_subsystem_enabled": null,
+            "exeris_telemetry_jfr_enabled": null
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 24465.063333333335,
+            "stddev": 397.3003398354116,
+            "cv_pct": 1.6239497704226047,
+            "min": 24034.64,
+            "max": 24817.75
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.06542025457198823,
+            "stddev": 0.0012993047089304077,
+            "cv_pct": 1.9860893502037003,
+            "min": 0.06429591966756139,
+            "max": 0.06684271034428065
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 434214.6666666667,
+            "stddev": 614.6001410131089,
+            "cv_pct": 0.14154292523815615,
+            "min": 433648,
+            "max": 434868
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 429914.6666666667,
+            "stddev": 907.4036220631552,
+            "cv_pct": 0.21106598411696162,
+            "min": 429056,
+            "max": 430864
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 1.6045333333333334,
+            "stddev": 0.00572392639132727,
+            "cv_pct": 0.3567346512793296,
+            "min": 1.6006,
+            "max": 1.6111
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4206.333333333333,
+            "stddev": 1.5275252316519468,
+            "cv_pct": 0.036314887827528654,
+            "min": 4205,
+            "max": 4208
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9844750531469466,
+            "stddev": 0.0005362378085450526,
+            "cv_pct": 0.05446941563739266,
+            "min": 0.9838558727187646,
+            "max": 0.984788205008191
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 48554.666666666664,
+            "stddev": 1603.002599290885,
+            "cv_pct": 3.30143878918103,
+            "min": 46950,
+            "max": 50156
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              49450.000000,
+              49960.000000,
+              49740.000000
+            ],
+            "median": 49740.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 24034.64,
+              "total_requests": 7212604,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 482.110000,
+              "cpu_per_req_ms": 0.06684271034428065,
+              "peak_rss_kb": 434128,
+              "cgroup_memory_peak_kb": 429824,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 49450.000000,
+              "throttled_periods": 4208,
+              "cpu_throttle_ratio": 0.984788205008191,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 46950,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-2vcpu/quarkus-tuned/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 24542.80,
+              "total_requests": 7364470,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 479.590000,
+              "cpu_per_req_ms": 0.06512213370412263,
+              "peak_rss_kb": 434868,
+              "cgroup_memory_peak_kb": 430864,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 49960.000000,
+              "throttled_periods": 4206,
+              "cpu_throttle_ratio": 0.9847810817138843,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 48558,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-2vcpu/quarkus-tuned/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 24817.75,
+              "total_requests": 7447751,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 478.860000,
+              "cpu_per_req_ms": 0.06429591966756139,
+              "peak_rss_kb": 433648,
+              "cgroup_memory_peak_kb": 429056,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 49740.000000,
+              "throttled_periods": 4205,
+              "cpu_throttle_ratio": 0.9838558727187646,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 50156,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-2vcpu/quarkus-tuned/repeat-3"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "memory_max_mb": 128,
+      "vcpu": 4,
+      "axis": "memory",
+      "on_memory_axis": true,
+      "on_cpu_axis": false,
+      "arms": {
+        "exeris-community": {
+          "target_runtime": "community",
+          "execution_profile_id": "runtime-constrained-128m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_128m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 32,
+            "heap_fraction_of_budget": 0.2500,
+            "xmx_source": "fraction:0.25",
+            "xmx_mb_effective": []
+          },
+          "fairness_controls": {
+            "exeris_subsystems": "http,persistence",
+            "crypto_subsystem_enabled": false,
+            "exeris_telemetry_subsystem_enabled": false,
+            "exeris_telemetry_jfr_enabled": false
+          },
+          "n_total": 3,
+          "n_ok": 0,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "unknown",
+            "unknown",
+            "unknown"
+          ],
+          "memory_failure_kinds": [],
+          "jit_representativeness": [],
+          "rps": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "cpu_per_req_ms": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "peak_rss_kb": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "avg_cores_used": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "throttled_periods": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "cpu_throttle_ratio": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 47370.333333333336,
+            "stddev": 1689.5000246621285,
+            "cv_pct": 3.566578290200185,
+            "min": 45681,
+            "max": 49060
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [],
+            "median": null
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "unknown",
+              "rps": 56301.75,
+              "total_requests": 16892611,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 922.620000,
+              "cpu_per_req_ms": 0.05461677889818217,
+              "peak_rss_kb": 140244,
+              "cgroup_memory_peak_kb": null,
+              "xmx_mb": 32,
+              "xmx_mb_effective": null,
+              "latency_p99_us": 48700.000000,
+              "throttled_periods": null,
+              "cpu_throttle_ratio": null,
+              "oom_kill_delta": null,
+              "hs_err_present": null,
+              "phase_reached": null,
+              "pg_rss_kb": 45681,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-128m-4vcpu/exeris-community/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "unknown",
+              "rps": 56472.57,
+              "total_requests": 16943658,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 921.570000,
+              "cpu_per_req_ms": 0.05439026212639561,
+              "peak_rss_kb": 140120,
+              "cgroup_memory_peak_kb": null,
+              "xmx_mb": 32,
+              "xmx_mb_effective": null,
+              "latency_p99_us": 48060.000000,
+              "throttled_periods": null,
+              "cpu_throttle_ratio": null,
+              "oom_kill_delta": null,
+              "hs_err_present": null,
+              "phase_reached": null,
+              "pg_rss_kb": 47370,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-128m-4vcpu/exeris-community/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "unknown",
+              "rps": null,
+              "total_requests": null,
+              "error_rate_pct": null,
+              "cpu_time_seconds": null,
+              "cpu_per_req_ms": null,
+              "peak_rss_kb": null,
+              "cgroup_memory_peak_kb": null,
+              "xmx_mb": 32,
+              "xmx_mb_effective": null,
+              "latency_p99_us": null,
+              "throttled_periods": null,
+              "cpu_throttle_ratio": null,
+              "oom_kill_delta": null,
+              "hs_err_present": null,
+              "phase_reached": null,
+              "pg_rss_kb": 49060,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-128m-4vcpu/exeris-community/repeat-3"
+            }
+          ]
+        },
+        "quarkus-tuned": {
+          "target_runtime": "quarkus-tuned",
+          "execution_profile_id": "runtime-constrained-128m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_128m_4vcpu_v1",
+          "endpoint_path": null,
+          "heap": {
+            "xmx_mb": 96,
+            "heap_fraction_of_budget": 0.7500,
+            "xmx_source": "fraction:0.75",
+            "xmx_mb_effective": []
+          },
+          "fairness_controls": {
+            "exeris_subsystems": null,
+            "crypto_subsystem_enabled": null,
+            "exeris_telemetry_subsystem_enabled": null,
+            "exeris_telemetry_jfr_enabled": null
+          },
+          "n_total": 3,
+          "n_ok": 0,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "unknown",
+            "unknown",
+            "unknown"
+          ],
+          "memory_failure_kinds": [],
+          "jit_representativeness": [],
+          "rps": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "cpu_per_req_ms": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "peak_rss_kb": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "avg_cores_used": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "throttled_periods": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "cpu_throttle_ratio": {
+            "n": 0,
+            "mean": null,
+            "stddev": null,
+            "cv_pct": null,
+            "min": null,
+            "max": null
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 47633,
+            "stddev": 1766.71418175097,
+            "cv_pct": 3.709013040856066,
+            "min": 45896,
+            "max": 49428
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [],
+            "median": null
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "unknown",
+              "rps": null,
+              "total_requests": null,
+              "error_rate_pct": null,
+              "cpu_time_seconds": null,
+              "cpu_per_req_ms": null,
+              "peak_rss_kb": null,
+              "cgroup_memory_peak_kb": null,
+              "xmx_mb": 96,
+              "xmx_mb_effective": null,
+              "latency_p99_us": null,
+              "throttled_periods": null,
+              "cpu_throttle_ratio": null,
+              "oom_kill_delta": null,
+              "hs_err_present": null,
+              "phase_reached": null,
+              "pg_rss_kb": 45896,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-128m-4vcpu/quarkus-tuned/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "unknown",
+              "rps": null,
+              "total_requests": null,
+              "error_rate_pct": null,
+              "cpu_time_seconds": null,
+              "cpu_per_req_ms": null,
+              "peak_rss_kb": null,
+              "cgroup_memory_peak_kb": null,
+              "xmx_mb": 96,
+              "xmx_mb_effective": null,
+              "latency_p99_us": null,
+              "throttled_periods": null,
+              "cpu_throttle_ratio": null,
+              "oom_kill_delta": null,
+              "hs_err_present": null,
+              "phase_reached": null,
+              "pg_rss_kb": 47575,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-128m-4vcpu/quarkus-tuned/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "unknown",
+              "rps": null,
+              "total_requests": null,
+              "error_rate_pct": null,
+              "cpu_time_seconds": null,
+              "cpu_per_req_ms": null,
+              "peak_rss_kb": null,
+              "cgroup_memory_peak_kb": null,
+              "xmx_mb": 96,
+              "xmx_mb_effective": null,
+              "latency_p99_us": null,
+              "throttled_periods": null,
+              "cpu_throttle_ratio": null,
+              "oom_kill_delta": null,
+              "hs_err_present": null,
+              "phase_reached": null,
+              "pg_rss_kb": 49428,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-128m-4vcpu/quarkus-tuned/repeat-3"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "memory_max_mb": 256,
+      "vcpu": 4,
+      "axis": "memory",
+      "on_memory_axis": true,
+      "on_cpu_axis": false,
+      "arms": {
+        "exeris-community": {
+          "target_runtime": "community",
+          "execution_profile_id": "runtime-constrained-256m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_256m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 64,
+            "heap_fraction_of_budget": 0.2500,
+            "xmx_source": "fraction:0.25",
+            "xmx_mb_effective": [
+              64
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": "http,persistence",
+            "crypto_subsystem_enabled": false,
+            "exeris_telemetry_subsystem_enabled": false,
+            "exeris_telemetry_jfr_enabled": false
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 56309.65666666667,
+            "stddev": 109.85078303468715,
+            "cv_pct": 0.19508338274013123,
+            "min": 56242.11,
+            "max": 56436.41
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.05440827062067921,
+            "stddev": 0.0001491127433635388,
+            "cv_pct": 0.2740626409597088,
+            "min": 0.054238151706555694,
+            "max": 0.054516336088400744
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 150552,
+            "stddev": 2292.9143028033122,
+            "cv_pct": 1.5230048772539138,
+            "min": 147996,
+            "max": 152428
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 143389.33333333334,
+            "stddev": 2573.204487275221,
+            "cv_pct": 1.794557815045671,
+            "min": 141500,
+            "max": 146320
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 3.073066666666667,
+            "stddev": 0.002653927906581776,
+            "cv_pct": 0.08636089595350277,
+            "min": 3.0705,
+            "max": 3.0758
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4196.333333333333,
+            "stddev": 2.5166114784235836,
+            "cv_pct": 0.05997167714092264,
+            "min": 4194,
+            "max": 4199
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9829013474272896,
+            "stddev": 0.0006181356752332749,
+            "cv_pct": 0.06288888267894065,
+            "min": 0.9822014051522249,
+            "max": 0.9833723653395785
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 47735.666666666664,
+            "stddev": 1889.788700710567,
+            "cv_pct": 3.9588610208521238,
+            "min": 45937,
+            "max": 49705
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              58490.000000,
+              62160.000000,
+              61250.000000
+            ],
+            "median": 61250.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 56436.41,
+              "total_requests": 16934021,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 918.470000,
+              "cpu_per_req_ms": 0.054238151706555694,
+              "peak_rss_kb": 147996,
+              "cgroup_memory_peak_kb": 142348,
+              "xmx_mb": 64,
+              "xmx_mb_effective": 64,
+              "latency_p99_us": 58490.000000,
+              "throttled_periods": 4196,
+              "cpu_throttle_ratio": 0.9831302717900656,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 45937,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-256m-4vcpu/exeris-community/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 56250.45,
+              "total_requests": 16877143,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 920.080000,
+              "cpu_per_req_ms": 0.054516336088400744,
+              "peak_rss_kb": 152428,
+              "cgroup_memory_peak_kb": 146320,
+              "xmx_mb": 64,
+              "xmx_mb_effective": 64,
+              "latency_p99_us": 62160.000000,
+              "throttled_periods": 4194,
+              "cpu_throttle_ratio": 0.9822014051522249,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 47565,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-256m-4vcpu/exeris-community/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 56242.11,
+              "total_requests": 16875611,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 919.220000,
+              "cpu_per_req_ms": 0.05447032406708119,
+              "peak_rss_kb": 151232,
+              "cgroup_memory_peak_kb": 141500,
+              "xmx_mb": 64,
+              "xmx_mb_effective": 64,
+              "latency_p99_us": 61250.000000,
+              "throttled_periods": 4199,
+              "cpu_throttle_ratio": 0.9833723653395785,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 49705,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-256m-4vcpu/exeris-community/repeat-3"
+            }
+          ]
+        },
+        "quarkus-tuned": {
+          "target_runtime": "quarkus-tuned",
+          "execution_profile_id": "runtime-constrained-256m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_256m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 192,
+            "heap_fraction_of_budget": 0.7500,
+            "xmx_source": "fraction:0.75",
+            "xmx_mb_effective": [
+              192
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": null,
+            "crypto_subsystem_enabled": null,
+            "exeris_telemetry_subsystem_enabled": null,
+            "exeris_telemetry_jfr_enabled": null
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 46615.23,
+            "stddev": 528.5010430453264,
+            "cv_pct": 1.1337518726075713,
+            "min": 46225.48,
+            "max": 47216.78
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.0702074310013632,
+            "stddev": 0.00092898188183895,
+            "cv_pct": 1.323195947478711,
+            "min": 0.06915217841184391,
+            "max": 0.07090190697703255
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 246320,
+            "stddev": 8396.643138778734,
+            "cv_pct": 3.4088353112937377,
+            "min": 237984,
+            "max": 254776
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 243164,
+            "stddev": 8887.878487018148,
+            "cv_pct": 3.6550963493848383,
+            "min": 233144,
+            "max": 250096
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 3.2810333333333332,
+            "stddev": 0.0059651767227244835,
+            "cv_pct": 0.18180786711679706,
+            "min": 3.2742,
+            "max": 3.2852
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4181,
+            "stddev": 2.6457513110645907,
+            "cv_pct": 0.06328034707162379,
+            "min": 4178,
+            "max": 4183
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9790805444777525,
+            "stddev": 0.0007499138629647985,
+            "cv_pct": 0.07659368447207855,
+            "min": 0.9782252399906345,
+            "max": 0.9796252927400468
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 47756,
+            "stddev": 1389.1857327225903,
+            "cv_pct": 2.9089239733700274,
+            "min": 46408,
+            "max": 49183
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              18970.000000,
+              18740.000000,
+              18770.000000
+            ],
+            "median": 18770.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 47216.78,
+              "total_requests": 14168028,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 979.750000,
+              "cpu_per_req_ms": 0.06915217841184391,
+              "peak_rss_kb": 246200,
+              "cgroup_memory_peak_kb": 246252,
+              "xmx_mb": 192,
+              "xmx_mb_effective": 192,
+              "latency_p99_us": 18970.000000,
+              "throttled_periods": 4178,
+              "cpu_throttle_ratio": 0.9782252399906345,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 46408,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-256m-4vcpu/quarkus-tuned/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 46403.43,
+              "total_requests": 13924259,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 982.610000,
+              "cpu_per_req_ms": 0.07056820761521312,
+              "peak_rss_kb": 237984,
+              "cgroup_memory_peak_kb": 233144,
+              "xmx_mb": 192,
+              "xmx_mb_effective": 192,
+              "latency_p99_us": 18740.000000,
+              "throttled_periods": 4183,
+              "cpu_throttle_ratio": 0.9796252927400468,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 47677,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-256m-4vcpu/quarkus-tuned/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 46225.48,
+              "total_requests": 13870854,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 983.470000,
+              "cpu_per_req_ms": 0.07090190697703255,
+              "peak_rss_kb": 254776,
+              "cgroup_memory_peak_kb": 250096,
+              "xmx_mb": 192,
+              "xmx_mb_effective": 192,
+              "latency_p99_us": 18770.000000,
+              "throttled_periods": 4182,
+              "cpu_throttle_ratio": 0.9793911007025761,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 49183,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-256m-4vcpu/quarkus-tuned/repeat-3"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "memory_max_mb": 512,
+      "vcpu": 4,
+      "axis": "memory",
+      "on_memory_axis": true,
+      "on_cpu_axis": false,
+      "arms": {
+        "exeris-community": {
+          "target_runtime": "community",
+          "execution_profile_id": "runtime-constrained-512m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_512m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 128,
+            "heap_fraction_of_budget": 0.2500,
+            "xmx_source": "fraction:0.25",
+            "xmx_mb_effective": [
+              128
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": "http,persistence",
+            "crypto_subsystem_enabled": false,
+            "exeris_telemetry_subsystem_enabled": false,
+            "exeris_telemetry_jfr_enabled": false
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 56080.159999999996,
+            "stddev": 484.0125755597687,
+            "cv_pct": 0.863072743657951,
+            "min": 55574.52,
+            "max": 56539.17
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.054631735335229636,
+            "stddev": 0.0005366458492002968,
+            "cv_pct": 0.9822969120555047,
+            "min": 0.05411900203117207,
+            "max": 0.0551894608873204
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 180717.33333333334,
+            "stddev": 7521.54487677454,
+            "cv_pct": 4.162049504626677,
+            "min": 173844,
+            "max": 188752
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 175128,
+            "stddev": 6380.571761213881,
+            "cv_pct": 3.643376137004865,
+            "min": 169304,
+            "max": 181948
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 3.0700333333333334,
+            "stddev": 0.004148895435333745,
+            "cv_pct": 0.1351417064527121,
+            "min": 3.0663,
+            "max": 3.0745
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4198.333333333333,
+            "stddev": 1.1547005383792517,
+            "cv_pct": 0.027503784161474833,
+            "min": 4197,
+            "max": 4199
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9832162366980631,
+            "stddev": 0.00013526902225871718,
+            "cv_pct": 0.013757810053360324,
+            "min": 0.983134223471539,
+            "max": 0.9833723653395785
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 47718.333333333336,
+            "stddev": 1577.3932082183355,
+            "cv_pct": 3.3056334914288756,
+            "min": 46121,
+            "max": 49275
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              64770.000000,
+              70390.000000,
+              71290.000000
+            ],
+            "median": 70390.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 55574.52,
+              "total_requests": 16675104,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 920.290000,
+              "cpu_per_req_ms": 0.0551894608873204,
+              "peak_rss_kb": 173844,
+              "cgroup_memory_peak_kb": 169304,
+              "xmx_mb": 128,
+              "xmx_mb_effective": 128,
+              "latency_p99_us": 64770.000000,
+              "throttled_periods": 4199,
+              "cpu_throttle_ratio": 0.9833723653395785,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 46121,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-512m-4vcpu/exeris-community/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 56126.79,
+              "total_requests": 16839803,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 919.230000,
+              "cpu_per_req_ms": 0.054586743087196445,
+              "peak_rss_kb": 188752,
+              "cgroup_memory_peak_kb": 181948,
+              "xmx_mb": 128,
+              "xmx_mb_effective": 128,
+              "latency_p99_us": 70390.000000,
+              "throttled_periods": 4199,
+              "cpu_throttle_ratio": 0.9831421212830719,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 47759,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-512m-4vcpu/exeris-community/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 56539.17,
+              "total_requests": 16964097,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 918.080000,
+              "cpu_per_req_ms": 0.05411900203117207,
+              "peak_rss_kb": 179556,
+              "cgroup_memory_peak_kb": 174132,
+              "xmx_mb": 128,
+              "xmx_mb_effective": 128,
+              "latency_p99_us": 71290.000000,
+              "throttled_periods": 4197,
+              "cpu_throttle_ratio": 0.983134223471539,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 49275,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-512m-4vcpu/exeris-community/repeat-3"
+            }
+          ]
+        },
+        "quarkus-tuned": {
+          "target_runtime": "quarkus-tuned",
+          "execution_profile_id": "runtime-constrained-512m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_512m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 384,
+            "heap_fraction_of_budget": 0.7500,
+            "xmx_source": "fraction:0.75",
+            "xmx_mb_effective": [
+              384
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": null,
+            "crypto_subsystem_enabled": null,
+            "exeris_telemetry_subsystem_enabled": null,
+            "exeris_telemetry_jfr_enabled": null
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 46433.28333333333,
+            "stddev": 1349.5243733380057,
+            "cv_pct": 2.906372921445369,
+            "min": 44923.20,
+            "max": 47521.42
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.070166712246951,
+            "stddev": 0.0016876395586247874,
+            "cv_pct": 2.4051854570086713,
+            "min": 0.06866608585848491,
+            "max": 0.07199369512660975
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 315637.3333333333,
+            "stddev": 6641.591777076737,
+            "cv_pct": 2.1041844787298305,
+            "min": 310616,
+            "max": 323168
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 311052,
+            "stddev": 7252.555963244958,
+            "cv_pct": 2.331621710596607,
+            "min": 306156,
+            "max": 319384
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 3.2599,
+            "stddev": 0.019887936041731374,
+            "cv_pct": 0.6100781018353745,
+            "min": 3.2376,
+            "max": 3.2758
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 3735.3333333333335,
+            "stddev": 609.4688944756191,
+            "cv_pct": 16.316318788388873,
+            "min": 3044,
+            "max": 4195
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.8750810552825045,
+            "stddev": 0.14290439646938927,
+            "cv_pct": 16.33041826316936,
+            "min": 0.7127136501990167,
+            "max": 0.9817458460098292
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 47920,
+            "stddev": 1700.5081593453176,
+            "cv_pct": 3.5486397315219484,
+            "min": 46244,
+            "max": 49644
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              19260.000000,
+              19120.000000,
+              19100.000000
+            ],
+            "median": 19120.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 47521.42,
+              "total_requests": 14259441,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 979.140000,
+              "cpu_per_req_ms": 0.06866608585848491,
+              "peak_rss_kb": 313128,
+              "cgroup_memory_peak_kb": 307616,
+              "xmx_mb": 384,
+              "xmx_mb_effective": 384,
+              "latency_p99_us": 19260.000000,
+              "throttled_periods": 4195,
+              "cpu_throttle_ratio": 0.9817458460098292,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 46244,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-512m-4vcpu/quarkus-tuned/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 44923.20,
+              "total_requests": 13479097,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 970.410000,
+              "cpu_per_req_ms": 0.07199369512660975,
+              "peak_rss_kb": 323168,
+              "cgroup_memory_peak_kb": 319384,
+              "xmx_mb": 384,
+              "xmx_mb_effective": 384,
+              "latency_p99_us": 19120.000000,
+              "throttled_periods": 3967,
+              "cpu_throttle_ratio": 0.9307836696386673,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 47872,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-512m-4vcpu/quarkus-tuned/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 46855.23,
+              "total_requests": 14058634,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 981.860000,
+              "cpu_per_req_ms": 0.06984035575575834,
+              "peak_rss_kb": 310616,
+              "cgroup_memory_peak_kb": 306156,
+              "xmx_mb": 384,
+              "xmx_mb_effective": 384,
+              "latency_p99_us": 19100.000000,
+              "throttled_periods": 3044,
+              "cpu_throttle_ratio": 0.7127136501990167,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 49644,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-512m-4vcpu/quarkus-tuned/repeat-3"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "memory_max_mb": 1024,
+      "vcpu": 4,
+      "axis": "shared",
+      "on_memory_axis": true,
+      "on_cpu_axis": true,
+      "arms": {
+        "exeris-community": {
+          "target_runtime": "community",
+          "execution_profile_id": "runtime-constrained-1024m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 256,
+            "heap_fraction_of_budget": 0.2500,
+            "xmx_source": "fraction:0.25",
+            "xmx_mb_effective": [
+              256
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": "http,persistence",
+            "crypto_subsystem_enabled": false,
+            "exeris_telemetry_subsystem_enabled": false,
+            "exeris_telemetry_jfr_enabled": false
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 56222.746666666666,
+            "stddev": 160.29103291617048,
+            "cv_pct": 0.28509996828597456,
+            "min": 56037.66,
+            "max": 56315.93
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.054545216112051854,
+            "stddev": 0.0002598059439525926,
+            "cv_pct": 0.47631297934336725,
+            "min": 0.05436743609132062,
+            "max": 0.05484337825788872
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 234009.33333333334,
+            "stddev": 3606.554773372135,
+            "cv_pct": 1.5412012512487259,
+            "min": 229976,
+            "max": 236924
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 228840,
+            "stddev": 3701.1414455543304,
+            "cv_pct": 1.6173489973581239,
+            "min": 224836,
+            "max": 232136
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 3.0689333333333337,
+            "stddev": 0.006201075175591268,
+            "cv_pct": 0.20205962469885091,
+            "min": 3.0644,
+            "max": 3.0760
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4197,
+            "stddev": 1,
+            "cv_pct": 0.02382654276864427,
+            "min": 4196,
+            "max": 4198
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9829807280418398,
+            "stddev": 0.00013299122238485348,
+            "cv_pct": 0.013529382478309667,
+            "min": 0.9828999765753104,
+            "max": 0.983134223471539
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 48165.666666666664,
+            "stddev": 1226.0033985814775,
+            "cv_pct": 2.545388621040183,
+            "min": 47053,
+            "max": 49480
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              78190.000000,
+              78170.000000,
+              79610.000000
+            ],
+            "median": 78190.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 56315.93,
+              "total_requests": 16897617,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 919.650000,
+              "cpu_per_req_ms": 0.054424833986946204,
+              "peak_rss_kb": 236924,
+              "cgroup_memory_peak_kb": 232136,
+              "xmx_mb": 256,
+              "xmx_mb_effective": 256,
+              "latency_p99_us": 78190.000000,
+              "throttled_periods": 4196,
+              "cpu_throttle_ratio": 0.9828999765753104,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 47053,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-4vcpu/exeris-community/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 56037.66,
+              "total_requests": 16813151,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 922.090000,
+              "cpu_per_req_ms": 0.05484337825788872,
+              "peak_rss_kb": 235128,
+              "cgroup_memory_peak_kb": 229548,
+              "xmx_mb": 256,
+              "xmx_mb_effective": 256,
+              "latency_p99_us": 78170.000000,
+              "throttled_periods": 4197,
+              "cpu_throttle_ratio": 0.983134223471539,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 47964,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-4vcpu/exeris-community/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 56314.65,
+              "total_requests": 16897431,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 918.670000,
+              "cpu_per_req_ms": 0.05436743609132062,
+              "peak_rss_kb": 229976,
+              "cgroup_memory_peak_kb": 224836,
+              "xmx_mb": 256,
+              "xmx_mb_effective": 256,
+              "latency_p99_us": 79610.000000,
+              "throttled_periods": 4198,
+              "cpu_throttle_ratio": 0.9829079840786701,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 49480,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-4vcpu/exeris-community/repeat-3"
+            }
+          ]
+        },
+        "quarkus-hibernate": {
+          "target_runtime": "quarkus",
+          "execution_profile_id": "runtime-constrained-1024m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 768,
+            "heap_fraction_of_budget": 0.7500,
+            "xmx_source": "fraction:0.75",
+            "xmx_mb_effective": [
+              768
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": null,
+            "crypto_subsystem_enabled": null,
+            "exeris_telemetry_subsystem_enabled": null,
+            "exeris_telemetry_jfr_enabled": null
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 42244.35666666667,
+            "stddev": 212.4850604944606,
+            "cv_pct": 0.502990404543488,
+            "min": 42108.59,
+            "max": 42489.23
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.07880112994165119,
+            "stddev": 0.00048739372569594623,
+            "cv_pct": 0.6185110874131374,
+            "min": 0.07846508640524397,
+            "max": 0.07936012319228922
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 527048,
+            "stddev": 11905.880899790658,
+            "cv_pct": 2.2589746853779276,
+            "min": 513548,
+            "max": 536048
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 519940,
+            "stddev": 16044,
+            "cv_pct": 3.0857406623841213,
+            "min": 501604,
+            "max": 531400
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 3.3335666666666666,
+            "stddev": 0.011456148276508012,
+            "cv_pct": 0.3436603920677956,
+            "min": 3.3219,
+            "max": 3.3448
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4120.333333333333,
+            "stddev": 116.34574909868144,
+            "cv_pct": 2.8236974945072757,
+            "min": 3986,
+            "max": 4189
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9629922679602334,
+            "stddev": 0.02706423264302481,
+            "cv_pct": 2.810430939424991,
+            "min": 0.9317438055165965,
+            "max": 0.9789670483757887
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 48425,
+            "stddev": 1750.0994257470059,
+            "cv_pct": 3.6140411476448238,
+            "min": 46817,
+            "max": 50289
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              17720.000000,
+              18430.000000,
+              18020.000000
+            ],
+            "median": 18020.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 42108.59,
+              "total_requests": 12634557,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 1002.680000,
+              "cpu_per_req_ms": 0.07936012319228922,
+              "peak_rss_kb": 513548,
+              "cgroup_memory_peak_kb": 501604,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 17720.000000,
+              "throttled_periods": 4189,
+              "cpu_throttle_ratio": 0.9789670483757887,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 46817,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-4vcpu/quarkus-hibernate/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 42135.25,
+              "total_requests": 12643459,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 993.500000,
+              "cpu_per_req_ms": 0.07857818022742036,
+              "peak_rss_kb": 536048,
+              "cgroup_memory_peak_kb": 531400,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 18430.000000,
+              "throttled_periods": 3986,
+              "cpu_throttle_ratio": 0.9317438055165965,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 48169,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-4vcpu/quarkus-hibernate/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 42489.23,
+              "total_requests": 12749747,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 1000.410000,
+              "cpu_per_req_ms": 0.07846508640524397,
+              "peak_rss_kb": 531548,
+              "cgroup_memory_peak_kb": 526816,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 18020.000000,
+              "throttled_periods": 4186,
+              "cpu_throttle_ratio": 0.9782659499883151,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 50289,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-4vcpu/quarkus-hibernate/repeat-3"
+            }
+          ]
+        },
+        "quarkus-tuned": {
+          "target_runtime": "quarkus-tuned",
+          "execution_profile_id": "runtime-constrained-1024m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 768,
+            "heap_fraction_of_budget": 0.7500,
+            "xmx_source": "fraction:0.75",
+            "xmx_mb_effective": [
+              768
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": null,
+            "crypto_subsystem_enabled": null,
+            "exeris_telemetry_subsystem_enabled": null,
+            "exeris_telemetry_jfr_enabled": null
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 46552.88999999999,
+            "stddev": 755.35210835742,
+            "cv_pct": 1.6225675964637643,
+            "min": 45947.49,
+            "max": 47399.35
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.07036722454976885,
+            "stddev": 0.0013273346831934845,
+            "cv_pct": 1.8862967691083175,
+            "min": 0.0688907565825949,
+            "max": 0.07146161737101155
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 468838.6666666667,
+            "stddev": 11913.857030086156,
+            "cv_pct": 2.5411421619276613,
+            "min": 458916,
+            "max": 482052
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 460004,
+            "stddev": 9586.783402163626,
+            "cv_pct": 2.0840652259901273,
+            "min": 454160,
+            "max": 471068
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 3.278133333333333,
+            "stddev": 0.009996165931662582,
+            "cv_pct": 0.3049346965243202,
+            "min": 3.2673,
+            "max": 3.2870
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4192.333333333333,
+            "stddev": 1.5275252316519468,
+            "cv_pct": 0.03643615882130747,
+            "min": 4191,
+            "max": 4194
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9818877776333164,
+            "stddev": 0.00048520402392006855,
+            "cv_pct": 0.04941542556824318,
+            "min": 0.9814988290398127,
+            "max": 0.9824314827828531
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 48141.666666666664,
+            "stddev": 1594.6668408584073,
+            "cv_pct": 3.3124462680112323,
+            "min": 46428,
+            "max": 49582
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              19620.000000,
+              19040.000000,
+              19170.000000
+            ],
+            "median": 19170.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 47399.35,
+              "total_requests": 14221937,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 979.760000,
+              "cpu_per_req_ms": 0.0688907565825949,
+              "peak_rss_kb": 482052,
+              "cgroup_memory_peak_kb": 471068,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 19620.000000,
+              "throttled_periods": 4194,
+              "cpu_throttle_ratio": 0.9824314827828531,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 46428,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-4vcpu/quarkus-tuned/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 45947.49,
+              "total_requests": 13786002,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 985.170000,
+              "cpu_per_req_ms": 0.07146161737101155,
+              "peak_rss_kb": 458916,
+              "cgroup_memory_peak_kb": 454784,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 19040.000000,
+              "throttled_periods": 4192,
+              "cpu_throttle_ratio": 0.9817330210772833,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 48415,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-4vcpu/quarkus-tuned/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 46311.83,
+              "total_requests": 13896816,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 983.190000,
+              "cpu_per_req_ms": 0.07074929969570008,
+              "peak_rss_kb": 465548,
+              "cgroup_memory_peak_kb": 454160,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 19170.000000,
+              "throttled_periods": 4191,
+              "cpu_throttle_ratio": 0.9814988290398127,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 49582,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-4vcpu/quarkus-tuned/repeat-3"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "memory_max_mb": 2048,
+      "vcpu": 4,
+      "axis": "memory",
+      "on_memory_axis": true,
+      "on_cpu_axis": false,
+      "arms": {
+        "exeris-community": {
+          "target_runtime": "community",
+          "execution_profile_id": "runtime-constrained-2048m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_2048m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 512,
+            "heap_fraction_of_budget": 0.2500,
+            "xmx_source": "fraction:0.25",
+            "xmx_mb_effective": [
+              512
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": "http,persistence",
+            "crypto_subsystem_enabled": false,
+            "exeris_telemetry_subsystem_enabled": false,
+            "exeris_telemetry_jfr_enabled": false
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 55521.31666666667,
+            "stddev": 478.82055640222296,
+            "cv_pct": 0.8624085038849455,
+            "min": 55086.42,
+            "max": 56034.43
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.05534847132762219,
+            "stddev": 0.0006244189266737799,
+            "cv_pct": 1.128159299969966,
+            "min": 0.05469670763353211,
+            "max": 0.05594137763288778
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 330282.6666666667,
+            "stddev": 6341.041344553221,
+            "cv_pct": 1.9198831741760254,
+            "min": 323028,
+            "max": 334768
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 325458.6666666667,
+            "stddev": 6286.208820372844,
+            "cv_pct": 1.931492218276415,
+            "min": 318288,
+            "max": 330020
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 3.0796333333333337,
+            "stddev": 0.00882288690471163,
+            "cv_pct": 0.2864914731638495,
+            "min": 3.0712,
+            "max": 3.0888
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4197,
+            "stddev": 1,
+            "cv_pct": 0.02382654276864427,
+            "min": 4196,
+            "max": 4198
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9828272880788704,
+            "stddev": 0.000355491553975866,
+            "cv_pct": 0.03617029749659721,
+            "min": 0.9824397096698665,
+            "max": 0.9831381733021077
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 48295,
+            "stddev": 1604.7918868189731,
+            "cv_pct": 3.322894475243758,
+            "min": 46643,
+            "max": 49848
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              75240.000000,
+              72270.000000,
+              73200.000000
+            ],
+            "median": 73200.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 56034.43,
+              "total_requests": 16811798,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 919.550000,
+              "cpu_per_req_ms": 0.05469670763353211,
+              "peak_rss_kb": 334768,
+              "cgroup_memory_peak_kb": 330020,
+              "xmx_mb": 512,
+              "xmx_mb_effective": 512,
+              "latency_p99_us": 75240.000000,
+              "throttled_periods": 4198,
+              "cpu_throttle_ratio": 0.9831381733021077,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 46643,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-2048m-4vcpu/exeris-community/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 55443.10,
+              "total_requests": 16635164,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 921.710000,
+              "cpu_per_req_ms": 0.05540732871644668,
+              "peak_rss_kb": 323028,
+              "cgroup_memory_peak_kb": 318288,
+              "xmx_mb": 512,
+              "xmx_mb_effective": 512,
+              "latency_p99_us": 72270.000000,
+              "throttled_periods": 4196,
+              "cpu_throttle_ratio": 0.9824397096698665,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 48394,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-2048m-4vcpu/exeris-community/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 55086.42,
+              "total_requests": 16527480,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 924.570000,
+              "cpu_per_req_ms": 0.05594137763288778,
+              "peak_rss_kb": 333052,
+              "cgroup_memory_peak_kb": 328068,
+              "xmx_mb": 512,
+              "xmx_mb_effective": 512,
+              "latency_p99_us": 73200.000000,
+              "throttled_periods": 4197,
+              "cpu_throttle_ratio": 0.982903981264637,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 49848,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-2048m-4vcpu/exeris-community/repeat-3"
+            }
+          ]
+        },
+        "quarkus-tuned": {
+          "target_runtime": "quarkus-tuned",
+          "execution_profile_id": "runtime-constrained-2048m-4vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_2048m_4vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 1536,
+            "heap_fraction_of_budget": 0.7500,
+            "xmx_source": "fraction:0.75",
+            "xmx_mb_effective": [
+              1536
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": null,
+            "crypto_subsystem_enabled": null,
+            "exeris_telemetry_subsystem_enabled": null,
+            "exeris_telemetry_jfr_enabled": null
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 47344.869999999995,
+            "stddev": 221.11404455619845,
+            "cv_pct": 0.4670285176750902,
+            "min": 47090.09,
+            "max": 47486.64
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.06877488775437751,
+            "stddev": 0.0004035600832470891,
+            "cv_pct": 0.5867840667197637,
+            "min": 0.06853123692895785,
+            "max": 0.0692407138171516
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 727466.6666666666,
+            "stddev": 4030.6155030383798,
+            "cv_pct": 0.554061881832622,
+            "min": 722816,
+            "max": 729948
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 719616,
+            "stddev": 7260.052892369311,
+            "cv_pct": 1.0088787481614236,
+            "min": 712340,
+            "max": 726860
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 3.2611000000000003,
+            "stddev": 0.004095119045888637,
+            "cv_pct": 0.12557477678969173,
+            "min": 3.2583,
+            "max": 3.2658
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4187.333333333333,
+            "stddev": 9.073771725877467,
+            "cv_pct": 0.21669571069600704,
+            "min": 4177,
+            "max": 4194
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.9807926080407451,
+            "stddev": 0.0014758784272125647,
+            "cv_pct": 0.15047813524622858,
+            "min": 0.9791373652133146,
+            "max": 0.981971435261063
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 48401.333333333336,
+            "stddev": 1659.1688682389547,
+            "cv_pct": 3.4279404181130437,
+            "min": 46756,
+            "max": 50074
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              19810.000000,
+              19580.000000,
+              19860.000000
+            ],
+            "median": 19810.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 47486.64,
+              "total_requests": 14249035,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 976.810000,
+              "cpu_per_req_ms": 0.06855271251702308,
+              "peak_rss_kb": 729948,
+              "cgroup_memory_peak_kb": 726860,
+              "xmx_mb": 1536,
+              "xmx_mb_effective": 1536,
+              "latency_p99_us": 19810.000000,
+              "throttled_periods": 4194,
+              "cpu_throttle_ratio": 0.981971435261063,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 46756,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-2048m-4vcpu/quarkus-tuned/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 47090.09,
+              "total_requests": 14129837,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 978.360000,
+              "cpu_per_req_ms": 0.0692407138171516,
+              "peak_rss_kb": 729636,
+              "cgroup_memory_peak_kb": 719648,
+              "xmx_mb": 1536,
+              "xmx_mb_effective": 1536,
+              "latency_p99_us": 19580.000000,
+              "throttled_periods": 4177,
+              "cpu_throttle_ratio": 0.9791373652133146,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 48374,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-2048m-4vcpu/quarkus-tuned/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 47457.88,
+              "total_requests": 14239492,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 975.850000,
+              "cpu_per_req_ms": 0.06853123692895785,
+              "peak_rss_kb": 722816,
+              "cgroup_memory_peak_kb": 712340,
+              "xmx_mb": 1536,
+              "xmx_mb_effective": 1536,
+              "latency_p99_us": 19860.000000,
+              "throttled_periods": 4191,
+              "cpu_throttle_ratio": 0.9812690236478576,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 50074,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-2048m-4vcpu/quarkus-tuned/repeat-3"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "memory_max_mb": 1024,
+      "vcpu": 8,
+      "axis": "cpu",
+      "on_memory_axis": false,
+      "on_cpu_axis": true,
+      "arms": {
+        "exeris-community": {
+          "target_runtime": "community",
+          "execution_profile_id": "runtime-constrained-1024m-8vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_8vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 256,
+            "heap_fraction_of_budget": 0.2500,
+            "xmx_source": "fraction:0.25",
+            "xmx_mb_effective": [
+              256
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": "http,persistence",
+            "crypto_subsystem_enabled": false,
+            "exeris_telemetry_subsystem_enabled": false,
+            "exeris_telemetry_jfr_enabled": false
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 94409.41000000002,
+            "stddev": 188.21507033179043,
+            "cv_pct": 0.1993604984204333,
+            "min": 94289.64,
+            "max": 94626.35
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.06680547959000346,
+            "stddev": 0.00011694880423919925,
+            "cv_pct": 0.1750587002098239,
+            "min": 0.06667103203185923,
+            "max": 0.06688365386654227
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 253916,
+            "stddev": 2912.749903441763,
+            "cv_pct": 1.1471312967444993,
+            "min": 251964,
+            "max": 257264
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 249860,
+            "stddev": 3192,
+            "cv_pct": 1.277515408628832,
+            "min": 247580,
+            "max": 253508
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 6.3196,
+            "stddev": 0.004807286136688666,
+            "cv_pct": 0.07606946858485768,
+            "min": 6.3162,
+            "max": 6.3251
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 4195,
+            "stddev": 2.6457513110645907,
+            "cv_pct": 0.06306916116959692,
+            "min": 4193,
+            "max": 4198
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.982589037135539,
+            "stddev": 0.0006750121986458307,
+            "cv_pct": 0.0686973061101555,
+            "min": 0.9821972358866246,
+            "max": 0.9833684703677676
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 49619.333333333336,
+            "stddev": 3049.359987494644,
+            "cv_pct": 6.145507774176686,
+            "min": 47165,
+            "max": 53033
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              12830.000000,
+              13050.000000,
+              12950.000000
+            ],
+            "median": 12950.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 94626.35,
+              "total_requests": 28390141,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 1892.800000,
+              "cpu_per_req_ms": 0.06667103203185923,
+              "peak_rss_kb": 252520,
+              "cgroup_memory_peak_kb": 248492,
+              "xmx_mb": 256,
+              "xmx_mb_effective": 256,
+              "latency_p99_us": 12830.000000,
+              "throttled_periods": 4193,
+              "cpu_throttle_ratio": 0.9821972358866246,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 47165,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-8vcpu/exeris-community/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 94312.24,
+              "total_requests": 28296600,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 1892.580000,
+              "cpu_per_req_ms": 0.06688365386654227,
+              "peak_rss_kb": 251964,
+              "cgroup_memory_peak_kb": 247580,
+              "xmx_mb": 256,
+              "xmx_mb_effective": 256,
+              "latency_p99_us": 13050.000000,
+              "throttled_periods": 4198,
+              "cpu_throttle_ratio": 0.9833684703677676,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 48660,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-8vcpu/exeris-community/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 94289.64,
+              "total_requests": 28289716,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 1891.500000,
+              "cpu_per_req_ms": 0.06686175287160889,
+              "peak_rss_kb": 257264,
+              "cgroup_memory_peak_kb": 253508,
+              "xmx_mb": 256,
+              "xmx_mb_effective": 256,
+              "latency_p99_us": 12950.000000,
+              "throttled_periods": 4194,
+              "cpu_throttle_ratio": 0.9822014051522249,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 53033,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-8vcpu/exeris-community/repeat-3"
+            }
+          ]
+        },
+        "quarkus-tuned": {
+          "target_runtime": "quarkus-tuned",
+          "execution_profile_id": "runtime-constrained-1024m-8vcpu-v1",
+          "contract_id": "fixed_contract_runtime_h1_constrained_single_read_1024m_8vcpu_v1",
+          "endpoint_path": "/api/v1/user?id=1",
+          "heap": {
+            "xmx_mb": 768,
+            "heap_fraction_of_budget": 0.7500,
+            "xmx_source": "fraction:0.75",
+            "xmx_mb_effective": [
+              768
+            ]
+          },
+          "fairness_controls": {
+            "exeris_subsystems": null,
+            "crypto_subsystem_enabled": null,
+            "exeris_telemetry_subsystem_enabled": null,
+            "exeris_telemetry_jfr_enabled": null
+          },
+          "n_total": 3,
+          "n_ok": 3,
+          "n_oom": 0,
+          "n_startup_failed": 0,
+          "n_readiness_timeout": 0,
+          "outcomes": [
+            "ok",
+            "ok",
+            "ok"
+          ],
+          "memory_failure_kinds": [
+            "none"
+          ],
+          "jit_representativeness": [
+            "representative"
+          ],
+          "rps": {
+            "n": 3,
+            "mean": 70209.48333333334,
+            "stddev": 867.5303400073856,
+            "cv_pct": 1.235631283438755,
+            "min": 69642.80,
+            "max": 71208.20
+          },
+          "cpu_per_req_ms": {
+            "n": 3,
+            "mean": 0.09116474214341114,
+            "stddev": 0.00036147870233505495,
+            "cv_pct": 0.39651151732148077,
+            "min": 0.0907597598405802,
+            "max": 0.09145474816806053
+          },
+          "peak_rss_kb": {
+            "n": 3,
+            "mean": 478044,
+            "stddev": 3979.8854254865178,
+            "cv_pct": 0.8325353786443335,
+            "min": 475100,
+            "max": 482572
+          },
+          "cgroup_memory_peak_kb": {
+            "n": 3,
+            "mean": 471005.3333333333,
+            "stddev": 5590.953168587029,
+            "cv_pct": 1.1870254481025755,
+            "min": 466384,
+            "max": 477220
+          },
+          "avg_cores_used": {
+            "n": 3,
+            "mean": 6.4132,
+            "stddev": 0.05543861470130718,
+            "cv_pct": 0.8644454359961827,
+            "min": 6.3684,
+            "max": 6.4752
+          },
+          "throttled_periods": {
+            "n": 3,
+            "mean": 31.333333333333332,
+            "stddev": 23.180451534284945,
+            "cv_pct": 73.98016447112217,
+            "min": 10,
+            "max": 56
+          },
+          "cpu_throttle_ratio": {
+            "n": 3,
+            "mean": 0.00733783439718626,
+            "stddev": 0.005428929496341939,
+            "cv_pct": 73.98544587519851,
+            "min": 0.0023413720440177946,
+            "max": 0.013114754098360656
+          },
+          "pg_rss_kb": {
+            "n": 3,
+            "mean": 50562,
+            "stddev": 1632.1712532697052,
+            "cv_pct": 3.22805912200804,
+            "min": 48763,
+            "max": 51948
+          },
+          "latency_p99_us": {
+            "label": "wrk-closed-loop-coordinated-omission",
+            "values": [
+              2510.000000,
+              2660.000000,
+              2600.000000
+            ],
+            "median": 2600.000000
+          },
+          "repeats": [
+            {
+              "repeat": 1,
+              "outcome": "ok",
+              "rps": 69777.45,
+              "total_requests": 20935053,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 1914.610000,
+              "cpu_per_req_ms": 0.09145474816806053,
+              "peak_rss_kb": 475100,
+              "cgroup_memory_peak_kb": 466384,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 2510.000000,
+              "throttled_periods": 10,
+              "cpu_throttle_ratio": 0.0023413720440177946,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 51948,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-8vcpu/quarkus-tuned/repeat-1"
+            },
+            {
+              "repeat": 2,
+              "outcome": "ok",
+              "rps": 69642.80,
+              "total_requests": 20894784,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 1907.270000,
+              "cpu_per_req_ms": 0.09127971842159267,
+              "peak_rss_kb": 476460,
+              "cgroup_memory_peak_kb": 469412,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 2660.000000,
+              "throttled_periods": 28,
+              "cpu_throttle_ratio": 0.006557377049180328,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 48763,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-8vcpu/quarkus-tuned/repeat-2"
+            },
+            {
+              "repeat": 3,
+              "outcome": "ok",
+              "rps": 71208.20,
+              "total_requests": 21364975,
+              "error_rate_pct": 0.000000,
+              "cpu_time_seconds": 1939.080000,
+              "cpu_per_req_ms": 0.0907597598405802,
+              "peak_rss_kb": 482572,
+              "cgroup_memory_peak_kb": 477220,
+              "xmx_mb": 768,
+              "xmx_mb_effective": 768,
+              "latency_p99_us": 2600.000000,
+              "throttled_periods": 56,
+              "cpu_throttle_ratio": 0.013114754098360656,
+              "oom_kill_delta": 0,
+              "hs_err_present": null,
+              "phase_reached": "measure_complete",
+              "pg_rss_kb": 50975,
+              "run_dir": "/home/bench/exeris-benchmarks/results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/point-1024m-8vcpu/quarkus-tuned/repeat-3"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

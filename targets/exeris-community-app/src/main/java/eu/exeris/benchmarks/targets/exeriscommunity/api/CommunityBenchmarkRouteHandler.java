@@ -108,6 +108,28 @@ public final class CommunityBenchmarkRouteHandler {
         }
     }
 
+    // Lightweight single-row read (runtime-bound scenario): GET /api/v1/user?id=N -> {id, username}.
+    // Mirrors handleUsers but reads one row by PK, so throughput reflects the runtime +
+    // pool + JSON serialization path rather than Postgres.
+    public void handleUserById(HttpExchange exchange) {
+        Map<String, String> queryParams = parseQueryParams(exchange.request().path());
+        String id = queryParams.get("id");
+        if (id == null || id.isBlank()) {
+            exchange.respond(HttpStatus.BAD_REQUEST);
+            return;
+        }
+        try {
+            UserSummary user = useCaseService.findUserById(id);
+            if (user == null) {
+                exchange.respond(HttpStatus.NOT_FOUND);
+                return;
+            }
+            exchange.respond(HttpStatus.OK, user);
+        } catch (RuntimeException exception) {
+            exchange.respond(HttpStatus.SERVICE_UNAVAILABLE);
+        }
+    }
+
     public void handleFriendsOfFriendsWithoutInterests(HttpExchange exchange) {
         Map<String, String> queryParams = parseQueryParams(exchange.request().path());
         UUID userId = parseRequiredUuid(queryParams.get("userId"));
@@ -205,9 +227,10 @@ public final class CommunityBenchmarkRouteHandler {
 
         withAuthenticatedUser(exchange, userId -> {
             try {
-                OrderResponse response = useCaseService.placeOrder(userId, request.cartId(), request.paymentMethod());
+                OrderResponse response = useCaseService.placeOrder(
+                    userId, request.cartId(), request.paymentMethod(), request.orderId());
                 exchange.respond(HttpStatus.ACCEPTED,
-                    new OrderBody(Long.toString(response.orderId()), response.sagaId(), response.status()));
+                    new OrderBody(response.orderId(), response.sagaId(), response.status()));
             } catch (IllegalArgumentException exception) {
                 exchange.respond(HttpStatus.NOT_FOUND);
             } catch (IllegalStateException exception) {
@@ -217,7 +240,7 @@ public final class CommunityBenchmarkRouteHandler {
     }
 
     public void handleOrderStatus(HttpExchange exchange) {
-        Long orderId = parseOrderIdFromPath(exchange.request().path());
+        String orderId = parseOrderIdFromPath(exchange.request().path());
         if (orderId == null) {
             exchange.respond(HttpStatus.BAD_REQUEST);
             return;
@@ -227,7 +250,7 @@ public final class CommunityBenchmarkRouteHandler {
             try {
                 OrderStatusResponse response = useCaseService.getOrderStatus(orderId);
                 exchange.respond(HttpStatus.OK,
-                    new OrderStatusBody(Long.toString(response.orderId()), response.sagaId(), response.status()));
+                    new OrderStatusBody(response.orderId(), response.sagaId(), response.status()));
             } catch (IllegalArgumentException exception) {
                 exchange.respond(HttpStatus.NOT_FOUND);
             }
@@ -241,17 +264,17 @@ public final class CommunityBenchmarkRouteHandler {
             rawOrderId = queryParams.get("orderId");
         }
 
-        Long orderId = parseRequiredLong(rawOrderId);
-        if (orderId == null) {
+        if (rawOrderId == null || rawOrderId.isBlank()) {
             exchange.respond(HttpStatus.BAD_REQUEST);
             return;
         }
+        String orderId = rawOrderId.trim();
 
         withAuthenticatedUser(exchange, userId -> {
             try {
                 OrderStatusResponse response = useCaseService.getOrderStatus(orderId);
                 exchange.respond(HttpStatus.OK,
-                    new OrderStatusBody(Long.toString(response.orderId()), response.sagaId(), response.status()));
+                    new OrderStatusBody(response.orderId(), response.sagaId(), response.status()));
             } catch (IllegalArgumentException exception) {
                 exchange.respond(HttpStatus.NOT_FOUND);
             }
@@ -376,7 +399,12 @@ public final class CommunityBenchmarkRouteHandler {
         return token.isBlank() ? null : token;
     }
 
-    private static Long parseOrderIdFromPath(String path) {
+    /**
+     * Extracts the API-level orderId path segment. Kept as an opaque string: the
+     * CONTRACT-v2 section 3 client-generated orderId (e.g. {@code seed-scenario-i0})
+     * is the public order identity; decimal DB ids (pre-v2 clients) parse the same way.
+     */
+    private static String parseOrderIdFromPath(String path) {
         if (path == null || path.isBlank()) {
             return null;
         }
@@ -385,25 +413,10 @@ public final class CommunityBenchmarkRouteHandler {
             return null;
         }
         String value = pathWithoutQuery.substring("/api/v1/orders/".length(), pathWithoutQuery.length() - "/status".length());
-        if (value.isBlank()) {
+        if (value.isBlank() || value.indexOf('/') >= 0) {
             return null;
         }
-        try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException exception) {
-            return null;
-        }
-    }
-
-    private static Long parseRequiredLong(String rawValue) {
-        if (rawValue == null || rawValue.isBlank()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(rawValue.trim());
-        } catch (NumberFormatException exception) {
-            return null;
-        }
+        return value;
     }
 
     private static Map<String, Object> toCartResponse(CartView cart) {

@@ -143,6 +143,18 @@ record `backend_network_mode` (`host` vs `bridge`). Bridge/NAT adds an asymmetri
 tax across stacks of differing DB-chattiness — a fairness hazard, not hygiene. See
 `docs/methodology.md` → "Backend container networking is a fairness gate".
 
+### Single-box loopback topology (recorded, not a violation)
+
+A dedicated bare-metal box that runs the driver, target, and backends **on one
+machine** (loopback) still qualifies as `perf-box-amd64` for CPU/memory
+determinism — loopback is a *more* deterministic path than the direct-L2 network
+above (no wire), fully consistent with "what we trust: relative within-profile
+comparisons". It is recorded, not hidden: the setup writes `perf-box-state.json`
+with `topology: single-box-loopback` and `capture-env.sh` fills `turbo_boost` +
+`isolated_cpus`. Provisioning + tuning: `tools/perf-box/`. Do NOT present
+single-box loopback numbers as network-path capacity, and keep driver/target
+cpusets disjoint (pinning discipline in `tools/perf-box/README.md`).
+
 ---
 
 ## perf-box-arm64
@@ -159,6 +171,74 @@ cross-architecture comparison runs.
 | Storage | NVMe SSD |
 | Network | loopback or dedicated NIC |
 | OS | Linux ≥ 5.15 |
+
+---
+
+## cloud-vm-do-cpu-optimized
+
+DigitalOcean CPU-Optimized droplet (dedicated vCPUs) used as a **single-box campaign
+runner**: target JVM, databases, and load driver co-located on one droplet, separated
+by **disjoint taskset cpusets** exactly as described under `dev-isolated` →
+"Target-bound local measurement". Used for exploratory and cross-runtime campaign
+runs when a dedicated bare-metal perf box is not available. Provisioning tooling:
+`tools/cloud/do/`.
+
+| Field | Value |
+|---|---|
+| `profile_id` | `cloud-vm-do-cpu-optimized` |
+| CPU | Dedicated cloud vCPU (Intel 2.6 GHz+); model string **recorded exactly per run** |
+| Cores | Recorded exactly (e.g., 8 vCPU) |
+| RAM | Recorded exactly (e.g., 16 GB) |
+| Storage | Virtualized SSD/NVMe |
+| Network | loopback (driver and target co-located) |
+| CPU pinning | **Required** — disjoint `--cpu-affinity` / `--client-cpu-affinity` cpusets, both recorded per run |
+| OS | Ubuntu 24.04 LTS; kernel version recorded exactly (`uname -r`) |
+| CPU governor | Not controllable (hypervisor-managed) — recorded as such |
+| Notes | See trade-offs below |
+
+Example split on an 8 vCPU droplet (target gets the *smaller* budget so it saturates
+first): target `0-1`, driver `2-5`, OS + containers `6-7`.
+
+### Trade-offs (state them, do not hide them)
+
+- **Hypervisor present**: no turbo/governor control, no `isolcpus`, and residual
+  neighbor noise is possible despite dedicated vCPUs. Two droplets on the same slug
+  can land on different physical CPU models — record the CPU model per run and never
+  compare across differing models without calling it out.
+- **Loopback, same box** — all `dev-isolated` local-measurement caveats apply
+  (pinning removes core-stealing, not cache/memory-bandwidth sharing).
+- Running two campaigns in parallel on **two separate droplets** is fine (they share
+  nothing); running two campaigns on **one** droplet concurrently is not.
+- A driver-split variant over the VPC private network (low-level drivers with
+  `*_BASE_URL_OVERRIDE` against a target on a second droplet) is a **different
+  measurement class** — different network model, no local PID access for
+  resource/JFR sampling. Do not mix its numbers with single-box runs of this
+  profile without an explicit caveat.
+- What we trust here: **relative within-profile comparisons** (same droplet, same
+  pinning split, same run window). What we do not trust: absolute production
+  capacity claims, or promotion of numbers to `perf-box-amd64`-grade baselines.
+  Absolute publication claims require an explicit caveat.
+
+---
+
+## cloud-vm-do-shared
+
+DigitalOcean Basic (shared vCPU) droplet — the fallback class when CPU-Optimized
+sizes are not unlocked on the account. Same tooling and topology options as
+`cloud-vm-do-cpu-optimized`, but vCPUs are **shared with neighbors**: steal time
+is possible and unmeasurable in advance. **Exploratory-only**: soak/drift runs and
+relative trends within a single run window. Never comparison-eligible, never a
+baseline source.
+
+| Field | Value |
+|---|---|
+| `profile_id` | `cloud-vm-do-shared` |
+| CPU | Shared cloud vCPU (e.g. `s-4vcpu-8gb-intel`); model + steal-time recorded per run |
+| Cores | Recorded exactly |
+| RAM | Recorded exactly |
+| Network | loopback or VPC private subnet (recorded; axes as in `cloud-vm-do-cpu-optimized`) |
+| OS | Ubuntu 24.04 LTS; kernel recorded exactly |
+| Notes | `vmstat` steal sample captured by `capture-env.sh`; claims limited to descriptive/trend statements |
 
 ---
 

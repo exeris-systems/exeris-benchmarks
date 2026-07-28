@@ -1,0 +1,30 @@
+{
+  "generated_at_utc": "2026-07-23T17:52:41Z",
+  "diagnostics_enabled": true,
+  "require_perf_stat": 0,
+  "loadgen_cpu_affinity": "2-3,10-11",
+  "native_memory_tracking_enabled": true,
+  "native_memory_tracking_level": "summary",
+  "jfr_settings": "profile",
+  "jfr_max_size_mb": 6144,
+  "jfr_recording_complete_non_rotated": true,
+  "exeris_telemetry_subsystem_enabled": false,
+  "exeris_telemetry_jfr_enabled": false,
+  "targets": {
+    "exeris-community": {
+      "java_opts": "-Xms256m -Xmx256m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Xlog:safepoint=debug:file=results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/exeris-community.safepoint.log:time,level,tags -XX:StartFlightRecording=filename=results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/exeris-community.jfr,settings=profile,maxsize=6144m,dumponexit=true",
+      "safepoint_log": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/exeris-community.safepoint.log",
+      "jfr_file": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/exeris-community.jfr"
+    },
+    "spring-hibernate": {
+      "java_opts": "-Xms1280m -Xmx1280m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Xlog:safepoint=debug:file=results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/spring-hibernate.safepoint.log:time,level,tags -XX:StartFlightRecording=filename=results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/spring-hibernate.jfr,settings=profile,maxsize=6144m,dumponexit=true",
+      "safepoint_log": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/spring-hibernate.safepoint.log",
+      "jfr_file": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/spring-hibernate.jfr"
+    },
+    "quarkus-hibernate": {
+      "java_opts": "-Xms1280m -Xmx1280m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Xlog:safepoint=debug:file=results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/quarkus-hibernate.safepoint.log:time,level,tags -XX:StartFlightRecording=filename=results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/quarkus-hibernate.jfr,settings=profile,maxsize=6144m,dumponexit=true",
+      "safepoint_log": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/quarkus-hibernate.safepoint.log",
+      "jfr_file": "results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/heavy/rung-8000rps/diagnostics/quarkus-hibernate.jfr"
+    }
+  }
+}

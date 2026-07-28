@@ -30,7 +30,7 @@
     },
     "hardware_profile": {
       "type": "string",
-      "enum": ["dev-laptop", "dev-isolated", "ci-runner", "perf-box-amd64", "perf-box-arm64", "docker-container", "linux-generic", "aarch64-generic"],
+      "enum": ["dev-laptop", "dev-isolated", "ci-runner", "perf-box-amd64", "perf-box-arm64", "docker-container", "cloud-vm-do-cpu-optimized", "cloud-vm-do-shared", "linux-generic", "aarch64-generic"],
       "description": "Hardware profile identifier from docs/hardware-profiles.md. Canonical values are preferred; legacy values `linux-generic` and `aarch64-generic` remain accepted for older artifacts."
     },
     "cpu": {

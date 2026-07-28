@@ -1,0 +1,25 @@
+== normalized runs: 45 ==
+
+## Memory curve (fixed 4 vCPU) — median across repeats
+arm | mem_mb | rps | cpu/req_ms | peak_rss_mb | smaps_rss_mb | avg_cores | pg_rss_mb | n | src
+exeris-community | 128 | 56387 | 0.0545 | 136 | 137 | 3.07465 | - | 3 | clean
+exeris-community | 256 | 56250 | 0.0545 | 147 | 148 | 3.0729 | - | 3 | clean
+exeris-community | 512 | 56126 | 0.0546 | 175 | 175 | 3.0693 | - | 3 | clean
+exeris-community | 1024 | 56314 | 0.0544 | 229 | 230 | 3.0664 | - | 3 | clean
+exeris-community | 2048 | 55443 | 0.0554 | 325 | 325 | 3.0789 | - | 3 | clean
+quarkus-hibernate | 1024 | 42135 | 0.0786 | 519 | 519 | 3.3340 | - | 3 | clean
+quarkus-tuned | 128 | - | - | - | - | - | - | 3 | clean
+quarkus-tuned | 256 | 46403 | 0.0706 | 240 | 241 | 3.2837 | - | 3 | clean
+quarkus-tuned | 512 | 46855 | 0.0698 | 305 | 306 | 3.2663 | - | 3 | clean
+quarkus-tuned | 1024 | 46311 | 0.0707 | 454 | 455 | 3.2801 | - | 3 | clean
+quarkus-tuned | 2048 | 47457 | 0.0686 | 712 | 712 | 3.2592 | - | 3 | clean
+
+## CPU cut (fixed 1024 MB) — median across repeats
+arm | vcpu | rps | cpu/req_ms | peak_rss_mb | avg_cores | n | src
+exeris-community | 2 | 31427 | 0.048 | 210 | 1.5141 | 3 | clean
+exeris-community | 4 | 56314 | 0.0544 | 229 | 3.0664 | 3 | clean
+exeris-community | 8 | 94312 | 0.0669 | 246 | 6.3175 | 3 | clean
+quarkus-hibernate | 4 | 42135 | 0.0786 | 519 | 3.3340 | 3 | clean
+quarkus-tuned | 2 | 24542 | 0.0651 | 423 | 1.6019 | 3 | clean
+quarkus-tuned | 4 | 46311 | 0.0707 | 454 | 3.2801 | 3 | clean
+quarkus-tuned | 8 | 69777 | 0.0913 | 465 | 6.3960 | 3 | clean

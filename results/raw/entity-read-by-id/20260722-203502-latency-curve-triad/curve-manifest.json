@@ -1,0 +1,30 @@
+{
+  "campaign": "latency-curve-triad 20260722-203502",
+  "driver": "wrk2-open-loop",
+  "claim": "comparison-eligible p99 (p99_stable)",
+  "window": "120s (60s warmup + 120s measure)",
+  "runs_per_pair": 1,
+  "order": "ab+ba",
+  "triad_pairs": "1-exeris-vs-quarkus-tuned:exeris-community:quarkus-tuned:1:9000:9003;2-exeris-vs-quarkus-hibernate:exeris-community:quarkus-hibernate:2:9000:9002;3-quarkus-hibernate-vs-tuned:quarkus-hibernate:quarkus-tuned:3:9002:9003",
+  "contracts": {
+    "heavy": "fixed_contract_p99_stable_h1_wrk2_v1",
+    "light": "fixed_contract_p99_stable_h1_wrk2_single_read_v1"
+  },
+  "rate_ladders": {
+    "heavy_rps": [
+      2000,
+      4000,
+      6000,
+      8000,
+      10000
+    ],
+    "light_rps": [
+      5000,
+      10000,
+      15000,
+      20000,
+      25000
+    ]
+  },
+  "note": "wrk2 fixed offered rate per rung (BENCH_DRIVER_MODE=open). Percentiles = true service time. Rungs are sub-saturation; open loop backs up past saturation. light ladder must be bounded by quarkus-hibernate single-read saturation."
+}

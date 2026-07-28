@@ -79,7 +79,7 @@
           "enum": ["external-baseline", "core-engine", "fd-owner", "memory-bio", "runtime-harness"],
           "description": "TLS micro-benchmark harness contract. Describes the observable transport and allocator model used by the benchmark, not product architecture. Use instead of 'tier' for TLS matrix rows (B/C/D families). Values: 'external-baseline' = third-party reference (JDK SSLEngine, Netty tcnative); 'core-engine' = engine-level benchmark with no full transport wiring (guard paths, state-machine, core JMH); 'fd-owner' = real loopback socket with kernel I/O crossing; 'memory-bio' = in-process inject/drain, no socket, no syscall; 'runtime-harness' = full runtime harness integration probe."
         },
-        "protocol": { "type": "string", "enum": ["h1", "h2", "h3"] },
+        "protocol": { "type": "string", "enum": ["h1", "h2", "h2c", "h3"] },
         "runtime_family": {
           "type": "string",
           "description": "Runtime framework/platform identity of the application under test.",
@@ -162,9 +162,12 @@
         "payload_file": { "type": "string" },
         "payload_size_bytes": { "type": "integer" },
         "backend_network_mode": { "type": "string", "enum": ["host", "bridge"], "description": "Container network mode of stateful backends (Postgres/Neo4j/Axon). 'bridge' adds an asymmetric NAT tax across stacks of differing DB-chattiness; pin and record it for cross-stack comparisons. See docs/methodology.md." },
+        "endpoint_path": { "type": "string", "description": "HTTP path the load driver actually requested (e.g. /api/v1/users for the 10x10x10 aggregate read, or /api/v1/user?id=1 for the runtime-bound single-row read). Recorded so the run's endpoint is self-evident from the artifact rather than implied by scenario id + contract." },
         "execution_profile_id": { "type": "string", "description": "Execution profile identifier (e.g. runtime-constrained-128m-0p5vcpu-v1)." },
         "contract_id": { "type": "string", "description": "Fixed contract identifier from scenario.json fixed_contracts." },
         "track_id": { "type": "string", "description": "Track identifier (e.g. track-c)." },
+        "protocol_mode": { "type": "string", "enum": ["h1","h2","h2c","h3"], "description": "Effective wire protocol resolved for this run (contract pin, else run axis). Mirrors .target.protocol; the (contract, protocol) separation key G3 falls back to." },
+        "transport_mode": { "type": "string", "description": "Effective transport for this run (e.g. loopback-h1). h2c collapses to loopback-h2." },
         "result_namespace": { "type": "string", "description": "Relative path namespace for result artifact directory." },
         "startup_iterations": { "type": "integer", "minimum": 1, "description": "Number of independent cold JVM launches aggregated by a cold-start/TTFR run. Each launch is a fresh process spawn; cold-start has high run-to-run variance so a single launch is not publishable." },
         "soak_duration_class": {

@@ -186,7 +186,15 @@
         <configuration>
           <release>${maven.compiler.release}</release>
           <parameters>true</parameters>
-          <enablePreview>false</enablePreview>
+          <!--
+            The exeris-spring-runtime / exeris-kernel 0.5.0-SNAPSHOT class files
+            are preview-flagged (Java SE 26 preview features), so loading them at
+            compile time requires enable-preview — same posture as
+            exeris-community-app. The launch scripts already pass
+            (-)-enable-preview to the target JVM (see tools/cloud/do/RUNBOOK.md,
+            scripts/run-entity-read-by-id.sh).
+          -->
+          <enablePreview>true</enablePreview>
         </configuration>
       </plugin>
 
@@ -278,6 +286,8 @@
         <version>3.2.5</version>
         <configuration>
           <useModulePath>false</useModulePath>
+          <!-- Preview-flagged class files (see maven-compiler-plugin above). -->
+          <argLine>--enable-preview</argLine>
         </configuration>
       </plugin>
     </plugins>

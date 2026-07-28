@@ -5,6 +5,8 @@ REPEATS=5
 CAMPAIGN_DIR="results/raw/entity-read-by-id/$(date +%Y%m%d-%H%M%S)-campaign"
 CPU_AFFINITY=""
 REQUIRE_PERF_STAT=0
+HARDWARE_PROFILE_DEFAULT="perf-box-amd64"
+HARDWARE_PROFILE="${BENCHMARK_HARDWARE_PROFILE:-$HARDWARE_PROFILE_DEFAULT}"
 MODES=("default-vt" "locality-aware")
 LOCALITY_MODE_ENABLED="${BENCHMARK_ENABLE_LOCALITY_MODE:-0}"
 BENCHMARK_LOCALITY_STRICT="${BENCHMARK_LOCALITY_STRICT:-0}"
@@ -65,8 +67,9 @@ campaign_fail_closed_if_constrained() {
 derive_mode_stats() {
   local status_file="$1"
   local mode="$2"
+  local expected_claim_scope="$3"
 
-  LC_ALL=C awk -F',' -v m="$mode" '
+  LC_ALL=C awk -F',' -v m="$mode" -v expected="$expected_claim_scope" '
     BEGIN {
       rows = 0
       sum_requests = 0
@@ -74,6 +77,7 @@ derive_mode_stats() {
       sum = 0
       sumsq = 0
       claim_ok = 1
+      expected_claim_ok = 1
       perf_all_true = 1
       min_rps_floor_pass = "false"
     }
@@ -86,6 +90,9 @@ derive_mode_stats() {
 
       if ($4 != "comparison_eligible") {
         claim_ok = 0
+      }
+      if ($4 != expected) {
+        expected_claim_ok = 0
       }
       if ($15 != "true") {
         perf_all_true = 0
@@ -130,6 +137,7 @@ derive_mode_stats() {
       min_samples_pass = "false"
       ci_gate_pass = "false"
       claim_scope_pass = "false"
+      expected_claim_scope_pass = "false"
       perf_all_true_str = "false"
 
       if (sum_requests >= 600) {
@@ -141,6 +149,9 @@ derive_mode_stats() {
       if (rows > 0 && claim_ok == 1) {
         claim_scope_pass = "true"
       }
+      if (rows > 0 && expected_claim_ok == 1) {
+        expected_claim_scope_pass = "true"
+      }
       if (rows > 0 && perf_all_true == 1) {
         perf_all_true_str = "true"
       }
@@ -149,7 +160,7 @@ derive_mode_stats() {
         min_rps_floor_pass = "true"
       }
 
-      printf "%d|%.0f|%d|%.6f|%.6f|%.6f|%.6f|%s|%s|%s|%s|%s\n", \
+      printf "%d|%.0f|%d|%.6f|%.6f|%.6f|%.6f|%s|%s|%s|%s|%s|%s\n", \
         rows, \
         sum_requests, \
         n_success, \
@@ -161,7 +172,8 @@ derive_mode_stats() {
         ci_gate_pass, \
         claim_scope_pass, \
         perf_all_true_str, \
-        min_rps_floor_pass
+        min_rps_floor_pass, \
+        expected_claim_scope_pass
     }
   ' "$status_file"
 }
@@ -208,6 +220,11 @@ while [[ $# -gt 0 ]]; do
       CPU_AFFINITY="$2"
       shift 2
       ;;
+    --hardware-profile)
+      require_value "$1" "${2:-}"
+      HARDWARE_PROFILE="$2"
+      shift 2
+      ;;
     --require-perf-stat)
       REQUIRE_PERF_STAT=1
       shift
@@ -225,6 +242,15 @@ require_positive_int "--repeats" "$REPEATS"
 
 if [[ "$MODE" != "backend-mode" && "$MODE" != "pairwise-runtime" ]]; then
   echo "ERROR: --mode must be one of: backend-mode, pairwise-runtime (got: $MODE)"
+  exit 1
+fi
+
+# Fail closed: the hardware profile is only plumbed through the backend-mode
+# path (run-entity-read-by-id.sh --profile). Silently ignoring it on the
+# pairwise path would risk mislabeled artifacts.
+if [[ "$MODE" == "pairwise-runtime" ]] && [[ "$HARDWARE_PROFILE" != "$HARDWARE_PROFILE_DEFAULT" ]]; then
+  echo "ERROR: --hardware-profile/BENCHMARK_HARDWARE_PROFILE is not plumbed for --mode pairwise-runtime (got: $HARDWARE_PROFILE)."
+  echo "       run-comparative.sh derives its own profile from the HARDWARE_PROFILE env var and the contract's required_profile gate."
   exit 1
 fi
 
@@ -314,6 +340,22 @@ if [[ "$MODE" == "pairwise-runtime" ]]; then
   exit $?
 fi
 
+# --- Hardware-profile claim-scope guard (backend-mode path) -----------------
+# comparison-eligible is pinned to perf-box-amd64: the runner's claim-scope
+# gate and the fixed_contract_backend_mode_h1_v1 asserts both hard-reject any
+# other profile. Rather than mislabeling non-perf-box hardware as the perf
+# box, auto-downgrade the whole campaign to exploratory: drop the fixed
+# contract pin and run every repeat with --claim-scope exploratory under the
+# truthful profile label.
+CLAIM_SCOPE="comparison-eligible"
+EXPECTED_ROW_CLAIM_SCOPE="comparison_eligible"
+if [[ "$HARDWARE_PROFILE" != "$HARDWARE_PROFILE_DEFAULT" ]]; then
+  CLAIM_SCOPE="exploratory"
+  EXPECTED_ROW_CLAIM_SCOPE="exploratory"
+  echo "WARN: [profile] hardware profile '$HARDWARE_PROFILE' is not $HARDWARE_PROFILE_DEFAULT; downgrading campaign to --claim-scope exploratory and dropping --contract fixed_contract_backend_mode_h1_v1 (comparison-eligible requires perf-box-amd64)."
+  echo "WARN: [profile] results are exploratory: do not promote them to baselines/ and do not mix them with perf-box-amd64 rows."
+fi
+
 if [[ -z "$CPU_AFFINITY" ]]; then
   echo "ERROR: Phase A comparison requires --cpu-affinity"
   exit 1
@@ -346,7 +388,7 @@ echo "runner_status,reproducibility_status,final_reason,claim_scope,benchmark_ex
 
 any_fail=0
 
-echo "Campaign config: repeats=$REPEATS cpu_affinity=$CPU_AFFINITY require_perf_stat=$REQUIRE_PERF_STAT"
+echo "Campaign config: repeats=$REPEATS cpu_affinity=$CPU_AFFINITY require_perf_stat=$REQUIRE_PERF_STAT hardware_profile=$HARDWARE_PROFILE claim_scope=$CLAIM_SCOPE"
 
 # --- Campaign preflight: validate toolchain and artifacts before committing to full repeats
 echo "[preflight] Validating campaign prerequisites..."
@@ -396,10 +438,15 @@ for backend_mode in "${MODES[@]}"; do
     mkdir -p "$run_dir"
 
     benchmark_exit_code=0
-    run_cmd=(./scripts/run-entity-read-by-id.sh
-      --contract fixed_contract_backend_mode_h1_v1
-      --claim-scope comparison-eligible
-      --profile perf-box-amd64
+    run_cmd=(./scripts/run-entity-read-by-id.sh)
+    if [[ "$CLAIM_SCOPE" == "comparison-eligible" ]]; then
+      # The fixed contract asserts --claim-scope comparison-eligible and
+      # --profile perf-box-amd64; it cannot be carried by a downgraded run.
+      run_cmd+=(--contract fixed_contract_backend_mode_h1_v1)
+    fi
+    run_cmd+=(
+      --claim-scope "$CLAIM_SCOPE"
+      --profile "$HARDWARE_PROFILE"
       --backend-mode "$backend_mode"
       --output-dir "$run_dir")
 
@@ -498,6 +545,8 @@ for backend_mode in "${MODES[@]}"; do
     if [[ "$final_reason" == "ok" ]]; then
       if [[ "$json_claim_scope" == "comparison_eligible" ]]; then
         claim_scope="comparison_eligible"
+      elif [[ "$json_claim_scope" == "exploratory" ]]; then
+        claim_scope="exploratory"
       else
         claim_scope="descriptive_only"
       fi
@@ -534,8 +583,8 @@ else
   any_fail=1
 fi
 
-IFS='|' read -r dv_rows dv_sum_requests dv_n_success dv_mean dv_stddev dv_ci95 dv_rel_err dv_min_samples_pass dv_ci_pass dv_claim_pass dv_perf_all_true dv_min_rps_floor_pass < <(derive_mode_stats "$STATUS_FILE" "default-vt")
-IFS='|' read -r la_rows la_sum_requests la_n_success la_mean la_stddev la_ci95 la_rel_err la_min_samples_pass la_ci_pass la_claim_pass la_perf_all_true la_min_rps_floor_pass < <(derive_mode_stats "$STATUS_FILE" "locality-aware")
+IFS='|' read -r dv_rows dv_sum_requests dv_n_success dv_mean dv_stddev dv_ci95 dv_rel_err dv_min_samples_pass dv_ci_pass dv_claim_pass dv_perf_all_true dv_min_rps_floor_pass dv_expected_claim_pass < <(derive_mode_stats "$STATUS_FILE" "default-vt" "$EXPECTED_ROW_CLAIM_SCOPE")
+IFS='|' read -r la_rows la_sum_requests la_n_success la_mean la_stddev la_ci95 la_rel_err la_min_samples_pass la_ci_pass la_claim_pass la_perf_all_true la_min_rps_floor_pass la_expected_claim_pass < <(derive_mode_stats "$STATUS_FILE" "locality-aware" "$EXPECTED_ROW_CLAIM_SCOPE")
 
 dv_perf_pass="true"
 la_perf_pass="true"
@@ -550,7 +599,11 @@ fi
 if [[ "$dv_ci_pass" != "true" || "$la_ci_pass" != "true" ]]; then
   any_fail=1
 fi
-if [[ "$dv_claim_pass" != "true" || "$la_claim_pass" != "true" ]]; then
+# Gate on the claim scope this campaign actually ran under: comparison_eligible
+# on perf-box-amd64, exploratory on a downgraded (non-perf-box) profile. A row
+# carrying any other scope (including a stray comparison_eligible row inside a
+# downgraded campaign) fails the gate.
+if [[ "$dv_expected_claim_pass" != "true" || "$la_expected_claim_pass" != "true" ]]; then
   any_fail=1
 fi
 if [[ "$REQUIRE_PERF_STAT" -eq 1 && ( "$dv_perf_pass" != "true" || "$la_perf_pass" != "true" ) ]]; then
@@ -595,7 +648,12 @@ jq -n \
   --argjson repeats "$REPEATS" \
   --argjson require_perf_stat "$REQUIRE_PERF_STAT" \
   --arg cpu_affinity "${CPU_AFFINITY:-none}" \
+  --arg hardware_profile "$HARDWARE_PROFILE" \
+  --arg claim_scope "$CLAIM_SCOPE" \
+  --arg expected_row_claim_scope "$EXPECTED_ROW_CLAIM_SCOPE" \
   --arg classification_gate_pass "$classification_gate_pass" \
+  --arg dv_expected_claim_pass "$dv_expected_claim_pass" \
+  --arg la_expected_claim_pass "$la_expected_claim_pass" \
   --arg dv_rows "$dv_rows" \
   --arg dv_sum_requests "$dv_sum_requests" \
   --arg dv_n_success "$dv_n_success" \
@@ -639,6 +697,9 @@ jq -n \
     config: {
       repeats: $repeats,
       cpu_affinity: $cpu_affinity,
+      hardware_profile: $hardware_profile,
+      claim_scope: $claim_scope,
+      expected_row_claim_scope: $expected_row_claim_scope,
       require_perf_stat: ($require_perf_stat == 1),
       locality_mode_enabled: ($locality_mode_enabled == 1),
       locality_strict: ($locality_strict == 1)
@@ -648,6 +709,7 @@ jq -n \
       min_samples_per_mode_pass: (to_bool($dv_min_samples_pass) and to_bool($la_min_samples_pass)),
       ci_per_mode_pass: (to_bool($dv_ci_pass) and to_bool($la_ci_pass)),
       comparison_eligible_all_rows_pass: (to_bool($dv_claim_pass) and to_bool($la_claim_pass)),
+      claim_scope_expected_all_rows_pass: (to_bool($dv_expected_claim_pass) and to_bool($la_expected_claim_pass)),
       perf_required_all_rows_pass: (
         if ($require_perf_stat == 1)
         then (to_bool($dv_perf_pass) and to_bool($la_perf_pass))
@@ -672,6 +734,7 @@ jq -n \
           min_samples_pass: to_bool($dv_min_samples_pass),
           ci_pass: to_bool($dv_ci_pass),
           comparison_eligible_all_rows_pass: to_bool($dv_claim_pass),
+          claim_scope_expected_pass: to_bool($dv_expected_claim_pass),
           perf_rows_all_present: to_bool($dv_perf_all_true),
           perf_gate_pass: to_bool($dv_perf_pass),
           min_rps_floor_pass: to_bool($dv_min_rps_floor_pass)
@@ -691,6 +754,7 @@ jq -n \
           min_samples_pass: to_bool($la_min_samples_pass),
           ci_pass: to_bool($la_ci_pass),
           comparison_eligible_all_rows_pass: to_bool($la_claim_pass),
+          claim_scope_expected_pass: to_bool($la_expected_claim_pass),
           perf_rows_all_present: to_bool($la_perf_all_true),
           perf_gate_pass: to_bool($la_perf_pass),
           min_rps_floor_pass: to_bool($la_min_rps_floor_pass)

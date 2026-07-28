@@ -1,0 +1,30 @@
+
+                                                                                             Java Methods that Execute the Most
+
+Method                                                                                                                                                                                                      Samples Percent
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- ------- -------
+com.fasterxml.jackson.core.json.UTF8JsonGenerator._verifyValueWrite(String)                                                                                                                                  18,862   8.75%
+java.lang.StringLatin1.toLowerCase(String, byte[], Locale)                                                                                                                                                   13,944   6.47%
+java.util.HashMap.putVal(int, Object, Object, boolean, boolean)                                                                                                                                              13,570   6.29%
+java.util.HashMap$TreeNode.getTreeNode(int, Object)                                                                                                                                                          12,588   5.84%
+com.fasterxml.jackson.core.json.JsonWriteContext.createChildObjectContext()                                                                                                                                  10,757   4.99%
+org.postgresql.core.VisibleBufferedInputStream.ensureBytes(int, boolean)                                                                                                                                      7,491   3.47%
+org.hibernate.jpa.spi.NativeQueryTupleTransformer.transformTuple(Object[], String[])                                                                                                                          4,881   2.26%
+java.lang.AbstractStringBuilder.needsNewBuffer(byte[], byte, int, byte)                                                                                                                                       4,671   2.17%
+org.hibernate.type.descriptor.jdbc.BasicExtractor.extract(ResultSet, int, WrapperOptions)                                                                                                                     4,524   2.10%
+java.util.HashMap.resize()                                                                                                                                                                                    4,293   1.99%
+java.util.BitSet.expandTo(int)                                                                                                                                                                                4,229   1.96%
+org.postgresql.core.Encoding.decode(byte[], int, int)                                                                                                                                                         3,927   1.82%
+java.util.concurrent.ConcurrentHashMap.get(Object)                                                                                                                                                            3,864   1.79%
+java.util.BitSet.clear()                                                                                                                                                                                      3,580   1.66%
+com.fasterxml.jackson.databind.ser.impl.IndexedListSerializer.serializeContents(List, JsonGenerator, SerializerProvider)                                                                                      3,511   1.63%
+org.postgresql.core.v3.QueryExecutorImpl.processResults(ResultHandler, int, boolean)                                                                                                                          3,440   1.59%
+java.lang.String.ascii(byte[], int, int)                                                                                                                                                                      2,893   1.34%
+java.util.Arrays.copyOf(Object[], int)                                                                                                                                                                        2,399   1.11%
+org.hibernate.jpa.spi.NativeQueryTupleTransformer$NativeTupleImpl.get(String, Class)                                                                                                                          2,239   1.04%
+org.postgresql.util.NumberParser.getFastLong(byte[], long, long)                                                                                                                                              2,226   1.03%
+java.util.HashMap.computeIfAbsent(Object, Function)                                                                                                                                                           2,114   0.98%
+jdk.internal.util.DecimalDigits.uncheckedGetCharsLatin1(long, int, byte[])                                                                                                                                    2,025   0.94%
+java.util.HashMap.getNode(Object)                                                                                                                                                                             1,984   0.92%
+org.hibernate.event.service.internal.EventListenerGroupImpl.fireEventOnEachListener(Object, BiConsumer)                                                                                                       1,770   0.82%
+eu.exeris.benchmarks.targets.quarkusapp.repository.UserRepository.findInterestsForUsers(List, int)                                                                                                            1,677   0.78%

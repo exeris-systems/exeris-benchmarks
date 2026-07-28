@@ -102,6 +102,7 @@ public class ShopSagaController {
         }
         Optional<OrderAcceptedView> accepted = shopOrderFlowService.createOrder(
                 authentication.getName(),
+                request.orderId(),
                 request.cartId(),
                 request.paymentMethod(),
                 shopSagaStateService

@@ -1,0 +1,193 @@
+{
+  "comparative_id": "99bd959b-b9ca-45cb-87f2-9a7869b57446",
+  "timestamp_utc": "2026-07-23T19:19:44Z",
+  "scenario_id": "entity-read-by-id",
+  "contract_id": "fixed_contract_p99_stable_h1_wrk2_single_read_v1",
+  "track_id": "track-ba-01",
+  "pair_id": "entity-read-by-id-fixed_contract_p99_stable_h1_wrk2_single_read_v1-exeris-community__quarkus-tuned",
+  "pair_order": "ba",
+  "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk2",
+  "ab_ba_orders_completed": [
+    "ab",
+    "ba"
+  ],
+  "pair_completion_evidence": {
+    "invocation_order": "ba",
+    "completed_orders": [
+      "ab",
+      "ba"
+    ],
+    "completion_marker_utc": "2026-07-23T19:19:44Z"
+  },
+  "pair_fingerprint": {
+    "scenario_id": "entity-read-by-id",
+    "contract_id": "fixed_contract_p99_stable_h1_wrk2_single_read_v1",
+    "canonical_unordered_targets": [
+      "exeris-community",
+      "quarkus-tuned"
+    ],
+    "tier": "community",
+    "protocol_mode": "h1",
+    "transport_mode": "loopback-h1",
+    "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk2"
+  },
+  "claim_status": "comparison_eligible",
+  "measurement_seconds": 120,
+  "warmup_seconds": 60,
+  "targets": [
+    {
+      "target_id": "exeris-community",
+      "maturity_level": "unknown",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "metrics": {
+        "throughput_rps": 5996.58,
+        "latency_p50_us": 880.000000,
+        "latency_p75_us": 1170.000000,
+        "latency_p90_us": 1470.000000,
+        "latency_p95_us": 1618.000000,
+        "latency_p99_us": 1810.000000,
+        "error_rate_pct": 0.0000,
+        "total_requests": 719593,
+        "total_errors": 0
+      }
+    },
+    {
+      "target_id": "quarkus-tuned",
+      "maturity_level": "unknown",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "metrics": {
+        "throughput_rps": 5996.55,
+        "latency_p50_us": 900.000000,
+        "latency_p75_us": 1200.000000,
+        "latency_p90_us": 1460.000000,
+        "latency_p95_us": 1634.000000,
+        "latency_p99_us": 1890.000000,
+        "error_rate_pct": 0.0000,
+        "total_requests": 719591,
+        "total_errors": 0
+      }
+    }
+  ],
+  "fairness_index": {
+    "error_symmetry": 1.0000,
+    "latency_symmetry": 1.0000,
+    "throughput_confidence": 1.0000,
+    "composite_score": 0.9000,
+    "interpretation": "highly_fair",
+    "computed_at": "2026-07-23T19:26:19Z",
+    "targets": [
+      "entity-read-by-id-20260723-191945-000000",
+      "entity-read-by-id-20260723-191945-000000"
+    ],
+    "asymmetry_notes": []
+  },
+  "gate_status": {
+    "track_isolation": {
+      "pass_fail": "PASS",
+      "reason": "track_id=track-ba-01",
+      "rejection_code": "none"
+    },
+    "eligibility": {
+      "pass_fail": "PASS",
+      "reason": "both artifacts are comparison_eligible/success/complete/ok",
+      "rejection_code": "none"
+    },
+    "equivalence": {
+      "pass_fail": "PASS",
+      "reason": "scenario/contract/tier/protocol/mode/payload/concurrency/windows/jvm_class equivalent",
+      "rejection_code": "none"
+    },
+    "ab_ba": {
+      "pass_fail": "PASS",
+      "reason": "pair_id=entity-read-by-id-fixed_contract_p99_stable_h1_wrk2_single_read_v1-exeris-community__quarkus-tuned; directional completion evidence present for order=ba",
+      "rejection_code": "none"
+    },
+    "drift": {
+      "pass_fail": "PASS",
+      "reason": "drift snapshot metadata present and within thresholds",
+      "rejection_code": "none"
+    },
+    "metadata": {
+      "pass_fail": "PASS",
+      "reason": "required reproducibility metadata complete",
+      "rejection_code": "none"
+    },
+    "pin_verification": {
+      "pass_fail": "PASS",
+      "reason": "all required pinned versions match actual versions",
+      "rejection_code": "none"
+    },
+    "schema": {
+      "pass_fail": "PASS",
+      "reason": "both artifacts validate against benchmark-result.schema.json",
+      "rejection_code": "none"
+    },
+    "quarantine": {
+      "pass_fail": "PASS",
+      "reason": "machine-readable rejection output enabled",
+      "rejection_code": "none"
+    },
+    "reporting_guard": {
+      "pass_fail": "PASS",
+      "reason": "reporting guard deferred (no --report-file provided)",
+      "rejection_code": "none"
+    }
+  },
+  "eligibility_gates": {
+    "track_isolation": {
+      "pass_fail": "PASS",
+      "reason": "track_id=track-ba-01",
+      "rejection_code": "none"
+    },
+    "eligibility": {
+      "pass_fail": "PASS",
+      "reason": "both artifacts are comparison_eligible/success/complete/ok",
+      "rejection_code": "none"
+    },
+    "equivalence": {
+      "pass_fail": "PASS",
+      "reason": "scenario/contract/tier/protocol/mode/payload/concurrency/windows/jvm_class equivalent",
+      "rejection_code": "none"
+    },
+    "ab_ba": {
+      "pass_fail": "PASS",
+      "reason": "pair_id=entity-read-by-id-fixed_contract_p99_stable_h1_wrk2_single_read_v1-exeris-community__quarkus-tuned; directional completion evidence present for order=ba",
+      "rejection_code": "none"
+    },
+    "drift": {
+      "pass_fail": "PASS",
+      "reason": "drift snapshot metadata present and within thresholds",
+      "rejection_code": "none"
+    },
+    "metadata": {
+      "pass_fail": "PASS",
+      "reason": "required reproducibility metadata complete",
+      "rejection_code": "none"
+    },
+    "pin_verification": {
+      "pass_fail": "PASS",
+      "reason": "all required pinned versions match actual versions",
+      "rejection_code": "none"
+    },
+    "schema": {
+      "pass_fail": "PASS",
+      "reason": "both artifacts validate against benchmark-result.schema.json",
+      "rejection_code": "none"
+    },
+    "quarantine": {
+      "pass_fail": "PASS",
+      "reason": "machine-readable rejection output enabled",
+      "rejection_code": "none"
+    },
+    "reporting_guard": {
+      "pass_fail": "PASS",
+      "reason": "reporting guard deferred (no --report-file provided)",
+      "rejection_code": "none"
+    }
+  },
+  "rejection_codes": []
+}

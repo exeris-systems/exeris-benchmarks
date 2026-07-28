@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-07-22T05:30:01Z",
+  "benchmark_commit_sha": "unknown",
+  "target_commit_sha": "unknown",
+  "scenario_id": "entity-read-by-id",
+  "scenario_classification": "runtime-baseline-db-read-path",
+  "contract": "fixed_contract_runtime_h1_constrained_single_read_256m_4vcpu_v1",
+  "jdk": {
+    "vendor": "temurin",
+    "version": "Picked up JAVA_TOOL_OPTIONS: -XX:+UseParallelGC -XX:ActiveProcessorCount=4 -XX:MaxRAM=256m -Xms64m -Xmx64m"
+  },
+  "jvm_flags": [
+    "-XX:+UseParallelGC",
+    "-XX:ActiveProcessorCount=4",
+    "-XX:MaxRAM=256m",
+    "-Xms64m",
+    "-Xmx64m"
+  ],
+  "hardware_profile_ref": "dev-laptop",
+  "kernel_version": "6.8.0-134-generic",
+  "os_scheduler": "eevdf",
+  "tool": {
+    "name": "wrk",
+    "version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer"
+  },
+  "axis_labels": {
+    "tier": "community",
+    "protocol_mode": "h1",
+    "benchmark_family": "runtime-wrk",
+    "transport_mode": "loopback-h1",
+    "execution_class": "exploratory",
+    "comparison_axis": "within-tier",
+    "claim_scope": "descriptive_only",
+    "jit_representativeness": "representative"
+  },
+  "mode": "baseline-db",
+  "wiring_model": "backend-mode:default-vt target-runtime-effective:community target-build:jvm",
+  "run_config": {
+    "threads": 4,
+    "connections": 128,
+    "warmup_seconds": 120,
+    "duration_seconds": 300,
+    "backend_network_mode": "host"
+  },
+  "seed_manifest_refs": {
+    "manifest_ref": "scenarios/entity-read-by-id/seed/seed-manifest.json",
+    "manifest_version": "1"
+  }
+}

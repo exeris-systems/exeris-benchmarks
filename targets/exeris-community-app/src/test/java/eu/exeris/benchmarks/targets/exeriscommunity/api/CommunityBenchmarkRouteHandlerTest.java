@@ -336,6 +336,76 @@ final class CommunityBenchmarkRouteHandlerTest {
     }
 
     @Test
+    void placeOrderRouteAdoptsClientGeneratedOrderIdVerbatim() {
+        // CONTRACT-v2 section 3: the client-generated seeded orderId in the POST body
+        // is the API-level order identity — and the section 4.1 decline key — so it
+        // must round-trip verbatim, never replaced by the server-side DB id.
+        BenchmarkTokenIssuer issuer = new BenchmarkTokenIssuer();
+        String token = issuer.issueToken(UUID.randomUUID());
+        TestSupport.CapturingAllocator allocator = new TestSupport.CapturingAllocator();
+        CommunityBenchmarkRouteHandler handler = new CommunityBenchmarkRouteHandler(
+            new StaticUseCaseService(),
+            new SecurityInterceptor(new BenchmarkJwtSecurityProvider(
+                Map.of(BenchmarkTokenIssuer.KID, issuer.publicKey()),
+                BenchmarkTokenIssuer.ISSUER,
+                BenchmarkTokenIssuer.AUD
+            )),
+            ignored -> OptionalLong.of(1L),
+            allocator
+        );
+
+        String clientOrderId = "exeris-saga-v2-measurement-i0";
+        TestSupport.AsyncCapturingExchange placeOrder = TestSupport.AsyncCapturingExchange.postJson(
+            "/api/v1/orders",
+            "{\"cart_id\":1,\"payment_method\":\"CARD\",\"order_id\":\"" + clientOrderId + "\"}",
+            Map.of("Authorization", "Bearer " + token),
+            allocator
+        );
+
+        handler.handlePlaceOrder(placeOrder);
+
+        assertEquals(HttpStatus.ACCEPTED, placeOrder.response().status());
+
+        Map<String, Object> responseBody = parseJsonResponse(placeOrder);
+        assertEquals(clientOrderId, responseBody.get("order_id"));
+
+        placeOrder.consumeBody();
+    }
+
+    @Test
+    void orderStatusRouteAcceptsClientGeneratedOrderIdPathSegment() {
+        BenchmarkTokenIssuer issuer = new BenchmarkTokenIssuer();
+        String token = issuer.issueToken(UUID.randomUUID());
+        TestSupport.CapturingAllocator allocator = new TestSupport.CapturingAllocator();
+        CommunityBenchmarkRouteHandler handler = new CommunityBenchmarkRouteHandler(
+            new StaticUseCaseService(),
+            new SecurityInterceptor(new BenchmarkJwtSecurityProvider(
+                Map.of(BenchmarkTokenIssuer.KID, issuer.publicKey()),
+                BenchmarkTokenIssuer.ISSUER,
+                BenchmarkTokenIssuer.AUD
+            )),
+            ignored -> OptionalLong.of(1L),
+            allocator
+        );
+
+        String clientOrderId = "exeris-saga-v2-measurement-i0";
+        TestSupport.AsyncCapturingExchange status = TestSupport.AsyncCapturingExchange.get(
+            "/api/v1/orders/" + clientOrderId + "/status",
+            Map.of("Authorization", "Bearer " + token),
+            allocator
+        );
+
+        handler.handleOrderStatus(status);
+
+        assertEquals(HttpStatus.OK, status.response().status());
+
+        Map<String, Object> responseBody = parseJsonResponse(status);
+        assertEquals(clientOrderId, responseBody.get("order_id"));
+
+        status.consumeBody();
+    }
+
+    @Test
     void orderStatusByQueryRouteAcceptsSnakeCaseOrderIdParam() {
         BenchmarkTokenIssuer issuer = new BenchmarkTokenIssuer();
         String token = issuer.issueToken(UUID.randomUUID());
@@ -464,6 +534,11 @@ final class CommunityBenchmarkRouteHandlerTest {
         }
 
         @Override
+        public UserSummary findUserById(String id) {
+            return new UserSummary(id, "user-" + id);
+        }
+
+        @Override
         public List<UserSummary> findFriendsOfFriendsWithoutInterests(UUID userId, int limit) {
             return List.of(new UserSummary(UUID.randomUUID().toString(), "fof-user"));
         }
@@ -489,12 +564,17 @@ final class CommunityBenchmarkRouteHandlerTest {
         }
 
         @Override
-        public OrderResponse placeOrder(long userId, long cartId, String paymentMethod) {
-            return new OrderResponse(9_007_199_254_740_993L, "saga-1", "SAGA_INITIATED");
+        public OrderResponse placeOrder(long userId, long cartId, String paymentMethod, String clientOrderId) {
+            // Mirrors the production adoption rule: client-generated orderId verbatim,
+            // decimal DB id fallback when the client supplies none.
+            String orderId = (clientOrderId == null || clientOrderId.isBlank())
+                ? "9007199254740993"
+                : clientOrderId.trim();
+            return new OrderResponse(orderId, "saga-1", "SAGA_INITIATED");
         }
 
         @Override
-        public OrderStatusResponse getOrderStatus(long orderId) {
+        public OrderStatusResponse getOrderStatus(String orderId) {
             return new OrderStatusResponse(orderId, "saga-1", "COMPLETED");
         }
     }
@@ -509,6 +589,11 @@ final class CommunityBenchmarkRouteHandlerTest {
         @Override
         public List<UserView> findTopUsersWithDetails(int userLimit, int friendLimit, int interestLimit) {
             return List.of();
+        }
+
+        @Override
+        public UserSummary findUserById(String id) {
+            return new UserSummary(id, "user-" + id);
         }
 
         @Override
@@ -537,12 +622,12 @@ final class CommunityBenchmarkRouteHandlerTest {
         }
 
         @Override
-        public OrderResponse placeOrder(long userId, long cartId, String paymentMethod) {
+        public OrderResponse placeOrder(long userId, long cartId, String paymentMethod, String clientOrderId) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public OrderStatusResponse getOrderStatus(long orderId) {
+        public OrderStatusResponse getOrderStatus(String orderId) {
             throw new UnsupportedOperationException();
         }
     }

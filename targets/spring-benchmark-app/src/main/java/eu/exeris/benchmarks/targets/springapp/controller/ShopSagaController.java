@@ -100,6 +100,7 @@ public class ShopSagaController {
                 authentication.getName(),
                 request.cartId(),
                 request.paymentMethod(),
+                request.orderId(),
                 shopSagaStateService
         );
         if (accepted.isEmpty()) {

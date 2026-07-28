@@ -7,8 +7,17 @@
     "fixed_contract_cross_runtime_h1_v1",
     "fixed_contract_cross_runtime_h1_iso_budget_sweep_v1",
     "fixed_contract_cross_runtime_h1_iso_budget_sweep_t8_v1",
-    "fixed_contract_cross_runtime_h1_franz_like_v1"
+    "fixed_contract_cross_runtime_h1_franz_like_v1",
+    "fixed_contract_cross_runtime_h1_v2",
+    "fixed_contract_cross_runtime_v1",
+    "fixed_contract_cross_runtime_v2",
+    "fixed_contract_cross_runtime_h1_debug",
+    "fixed_contract_cross_runtime_h1_single_read_v1",
+    "fixed_contract_cross_runtime_h1_single_read_debug",
+    "fixed_contract_p99_stable_h1_wrk2_v1",
+    "fixed_contract_p99_stable_h1_wrk2_single_read_v1"
   ],
+  "required_contracts_note": "The two fixed_contract_p99_stable_h1_wrk2_* contracts are the wrk2 CO-free latency (p99_stable) family (heavy aggregate + light single-read). Matched conditions to the wrk throughput contracts (128 conns, 4 threads, 60s/120s window, h1, loopback) so they are comparative-eligible on the same allowed_pairs. Isolation is by contract_id (as with v1/v2/single_read), reinforced by a -runtime-wrk2 workload_profile_key suffix that run-comparative.sh derives for runtime-wrk2 contracts: wrk2 latency data never aggregates with the wrk throughput family.",
   "comparison_axis": {
     "type": "runtime_pairwise",
     "scope": "within-tier-within-protocol",
@@ -45,12 +54,78 @@
       "maturity": "guard",
       "claim_scope": "comparison_eligible",
       "notes": "Comparison-eligible only for within-tier H1 (community, loopback-h1) under required_contract=fixed_contract_cross_runtime_h1_v1. No cross-tier inference."
+    },
+    {
+      "target_id": "quarkus-tuned",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "Pure-JDBC (Agroal + PreparedStatement, NO Hibernate/ORM) + native-epoll transport. Comparison-eligible within-tier H1 (community, loopback-h1). AXIS CAVEAT: differs from quarkus-hibernate on TWO axes at once — relational data-access (pure-JDBC vs Hibernate ORM) and Netty transport (native epoll vs JDK NIO); vs exeris-community the persistence layer is matched (both no-ORM) so the pair isolates runtime/transport efficiency. Reports must state these axes, not frame it as a bare quarkus number."
+    },
+    {
+      "target_id": "spring-on-exeris",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "COMPATIBILITY-mode target: the same Spring MVC + JPA app hosted on the Exeris ingress (ExerisCompatDispatcher, ADR-011) instead of Tomcat. Request-path endpoints only (the compat request-scope bug is fixed; saga is NOT eligible). PURE-vs-COMPAT is a mandatory separation axis: this is compat, never blend with pure-mode rows (native Exeris / Tomcat Spring / Quarkus) without the explicit compat caveat. CONFIDENTIALITY: excluded from the public docs path (CLAUDE.md); measurements are Community + Compatibility + H1, internal-only publication. Comparison-eligible within-tier H1 for the spring-hibernate__spring-on-exeris pair, which isolates the Exeris compat-ingress cost vs native Tomcat for one identical Spring app."
+    },
+    {
+      "target_id": "exeris-blackbird",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "The SAME exeris-community-app jar (kernel 0.10.1) with the ADR-052 Blackbird JsonMapperCustomizer uber-jar added to the launch classpath — Jackson-3 invokedynamic property accessors replacing the default megamorphic MethodHandle on the response-encode path. Comparison-eligible within-tier H1 ONLY for the exeris-community__exeris-blackbird pair; it is a WITHIN-EXERIS serialization-accessor A/B (both arms identical except Blackbird), NOT a cross-runtime target. Its default arm (exeris-community on 0.10.1) also cross-checks the 0.10.0 aggregate baseline (ADR-052 seam is default byte-identical)."
+    },
+    {
+      "target_id": "exeris-k0101",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "2x2 serialisation-matrix arm 1: exeris-community-app built with -Dexeris.kernel.version=0.10.1 and launched from a version-staged jar, default Jackson-3 MethodHandle accessors. Comparison-eligible ONLY inside the within-exeris matrix pairs; never a cross-runtime number."
+    },
+    {
+      "target_id": "exeris-k0101-bb",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "2x2 serialisation-matrix arm 2: same staged 0.10.1 jar as exeris-k0101 plus the ADR-052 Blackbird customizer on the launch classpath. A leaf counts only if the bootstrap breadcrumb proves the customizer applied. Within-exeris matrix pairs only."
+    },
+    {
+      "target_id": "exeris-k0102",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "2x2 serialisation-matrix arm 3: kernel pinned to 0.10.2, default accessors. Its contrast with exeris-k0101 covers the WHOLE v0.10.1..v0.10.2 encode/allocation batch (#241 + #244), not SegmentSink alone — label it that way. Within-exeris matrix pairs only."
+    },
+    {
+      "target_id": "exeris-k0102-bb",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "2x2 serialisation-matrix arm 4: kernel 0.10.2 plus Blackbird. The arm carrying the accessor-by-encode interaction. Same customizer jar as arm 2 (seam byte-identical across v0.10.1 and v0.10.2). Within-exeris matrix pairs only."
     }
   ],
   "allowed_pairs": [
     {
       "pair_id": "exeris-community__spring-hibernate",
-      "targets": ["exeris-community", "spring-hibernate"],
+      "targets": [
+        "exeris-community",
+        "spring-hibernate"
+      ],
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
@@ -58,7 +133,10 @@
     },
     {
       "pair_id": "exeris-community__quarkus-hibernate",
-      "targets": ["exeris-community", "quarkus-hibernate"],
+      "targets": [
+        "exeris-community",
+        "quarkus-hibernate"
+      ],
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
@@ -66,21 +144,127 @@
     },
     {
       "pair_id": "spring-hibernate__quarkus-hibernate",
-      "targets": ["spring-hibernate", "quarkus-hibernate"],
+      "targets": [
+        "spring-hibernate",
+        "quarkus-hibernate"
+      ],
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk"
+    },
+    {
+      "pair_id": "exeris-community__quarkus-tuned",
+      "targets": [
+        "exeris-community",
+        "quarkus-tuned"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "Both no-ORM: isolates runtime + transport efficiency (exeris native runtime vs Quarkus/Vert.x native-epoll + virtual threads), NOT ORM cost."
+    },
+    {
+      "pair_id": "quarkus-hibernate__quarkus-tuned",
+      "targets": [
+        "quarkus-hibernate",
+        "quarkus-tuned"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "Same runtime (Quarkus), differs on data-access (Hibernate ORM vs pure-JDBC) + transport (JDK NIO vs native epoll): quantifies the ORM+transport delta within Quarkus, the decomposition context for exeris-vs-quarkus-tuned."
+    },
+    {
+      "pair_id": "spring-hibernate__spring-on-exeris",
+      "targets": [
+        "spring-hibernate",
+        "spring-on-exeris"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "COMPATIBILITY-COST pair (Pure-vs-Compat axis): the same Spring MVC + JPA app, same iso-2048 heap, differing ONLY in the HTTP ingress — native Tomcat (spring-hibernate, pure) vs Exeris compatibility ingress (spring-on-exeris, compat). Quantifies the Exeris compat-seam overhead. Internal-only publication: spring-on-exeris is excluded from the public docs path; never frame as a pure-mode number."
+    },
+    {
+      "pair_id": "exeris-community__exeris-blackbird",
+      "targets": [
+        "exeris-community",
+        "exeris-blackbird"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "WITHIN-EXERIS serialization-accessor A/B (NOT cross-runtime): identical exeris-community-app on kernel 0.10.1, differing ONLY in the ADR-052 Blackbird customizer (default Jackson-3 MethodHandle accessors vs invokedynamic). Isolates whether Blackbird cuts the ~20% BeanPropertyWriter.get/invokeExact response-encode CPU measured 2026-07-19. Report as a within-exeris tuning delta, never as an exeris-vs-X number."
+    },
+    {
+      "pair_id": "exeris-k0101__exeris-k0101-bb",
+      "targets": [
+        "exeris-k0101",
+        "exeris-k0101-bb"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "2x2 serialisation matrix, ACCESSOR lever at the OLD encode path (arm1 vs arm2). Same staged 0.10.1 jar; only the Blackbird customizer's classpath presence differs. Within-exeris tuning delta only."
+    },
+    {
+      "pair_id": "exeris-k0102__exeris-k0102-bb",
+      "targets": [
+        "exeris-k0102",
+        "exeris-k0102-bb"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "2x2 serialisation matrix, ACCESSOR lever at the NEW encode path (arm3 vs arm4). Same staged 0.10.2 jar; only the Blackbird customizer differs. Comparing this delta against exeris-k0101__exeris-k0101-bb gives the interaction. Within-exeris tuning delta only."
+    },
+    {
+      "pair_id": "exeris-k0101__exeris-k0102",
+      "targets": [
+        "exeris-k0101",
+        "exeris-k0102"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "2x2 serialisation matrix, ENCODE lever at DEFAULT accessors (arm1 vs arm3). Measures the whole v0.10.1..v0.10.2 encode/allocation batch (#241 response streaming + #244 buffer-release accounting; #242 is inert for GET), NOT SegmentSink in isolation. Label accordingly. Within-exeris version delta only."
+    },
+    {
+      "pair_id": "exeris-k0101-bb__exeris-k0102-bb",
+      "targets": [
+        "exeris-k0101-bb",
+        "exeris-k0102-bb"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "2x2 serialisation matrix, ENCODE lever at BLACKBIRD accessors (arm2 vs arm4). The second, independent route to the interaction: (arm4-arm2)-(arm3-arm1) must agree with (arm4-arm3)-(arm2-arm1). Disagreement means one arm is not what it claims to be. Within-exeris version delta only."
     }
   ],
   "forbidden_pairs": [
     {
       "reason": "Community vs Enterprise cross-tier — protocol fairness unverified",
-      "targets": ["exeris-community", "exeris-kernel-enterprise"]
+      "targets": [
+        "exeris-community",
+        "exeris-kernel-enterprise"
+      ]
     },
     {
       "reason": "Cross-protocol comparisons are out of scope for this backend mode pair",
-      "protocol_modes": ["h1", "h2", "h3"]
+      "protocol_modes": [
+        "h1",
+        "h2",
+        "h3"
+      ]
     }
   ],
   "measurement_windows": {

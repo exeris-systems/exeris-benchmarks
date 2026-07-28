@@ -1,0 +1,30 @@
+
+                                                                                                    Allocation by Class
+
+Object Type                                                                                                                                                                                             Allocation Pressure
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- -------------------
+byte[]                                                                                                                                                                                                               44.07%
+java.lang.String                                                                                                                                                                                                     19.43%
+byte[][]                                                                                                                                                                                                              7.98%
+java.lang.Object[]                                                                                                                                                                                                    5.46%
+org.postgresql.core.Tuple                                                                                                                                                                                             5.44%
+eu.exeris.benchmarks.targets.exeriscommunity.domain.user.FriendSummary                                                                                                                                                2.69%
+eu.exeris.benchmarks.targets.exeriscommunity.domain.user.InterestView                                                                                                                                                 2.49%
+java.util.ArrayList                                                                                                                                                                                                   1.06%
+java.util.HashMap$Node                                                                                                                                                                                                0.90%
+java.lang.Integer                                                                                                                                                                                                     0.82%
+java.net.InetSocketAddress                                                                                                                                                                                            0.53%
+jdk.internal.vm.StackChunk                                                                                                                                                                                            0.52%
+eu.exeris.kernel.community.memory.CommunityLoanedBuffer                                                                                                                                                               0.50%
+java.net.InetSocketAddress$InetSocketAddressHolder                                                                                                                                                                    0.48%
+java.util.concurrent.ConcurrentHashMap$Node                                                                                                                                                                           0.42%
+java.util.concurrent.ForkJoinTask$AdaptedRunnableAction                                                                                                                                                               0.39%
+org.postgresql.jdbc.PgResultSet                                                                                                                                                                                       0.37%
+org.postgresql.jdbc.PgPreparedStatement                                                                                                                                                                               0.35%
+org.postgresql.core.v3.ExecuteRequest                                                                                                                                                                                 0.34%
+eu.exeris.benchmarks.targets.exeriscommunity.domain.user.UserView                                                                                                                                                     0.31%
+java.util.concurrent.locks.ReentrantLock$NonfairSync                                                                                                                                                                  0.25%
+eu.exeris.kernel.community.memory.CommunityReleaseAction                                                                                                                                                              0.25%
+tools.jackson.core.json.JsonWriteContext                                                                                                                                                                              0.24%
+eu.exeris.benchmarks.targets.exeriscommunity.domain.user.UserSummary                                                                                                                                                  0.24%
+java.util.HashMap$Node[]                                                                                                                                                                                              0.22%

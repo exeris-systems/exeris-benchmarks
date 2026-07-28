@@ -1,0 +1,31 @@
+{
+  "campaign": "20260723-155158-latency-curve-triad",
+  "type": "PINNED wrk2 CO-free latency-load curve — the pinned re-run of the superseded 20260722-203502",
+  "harness": "run-entity-read-by-id-latency-curve-triad.sh at commit 7550a8e (adds BENCH_SERVER_CPU_AFFINITY/LOADGEN + attain floor 99)",
+  "pinning": "VERIFIED live: targets 0-1,8-9 / loadgen 2-3,10-11 / DB 4-7,12-15 (tuned-PG). claim-status pinned_cpus=4. This is the fix vs 20260722-203502 (pinned_cpus=0, unpinned cpuset 0-15).",
+  "driver": "wrk2 open-loop fixed offered rate (percentiles = service time). Sequential single-target within each pair (run_wrk_target FIRST then SECOND, co-locator resident but not driven).",
+  "shape": "3 pairs x ab/ba x (5 heavy + 5 light) = 60 leaves. 120s window. n=4 per (target,rung) via pair/order redundancy in lean-co-resident pairs.",
+  "ladders": "heavy 2000/4000/6000/8000/10000 (below ~11k DB ceiling); light 6000/12000/18000/24000/30000 (sub-saturation: probed pinned light saturation qhib=44275, qtuned~48k, exeris~57k; top 30k=68% of qhib).",
+
+  "clean_light_p99_ms": {
+    "note": "per target from its LEAN-co-resident pair (exeris & qtuned from pair-1, qhib from pair-2), mean ab+ba, publishable-only.",
+    "exeris":            {"6k":1.81, "12k":1.77, "18k":1.54, "24k":1.96, "30k":2.16},
+    "quarkus-tuned":     {"6k":1.88, "12k":1.96, "18k":2.29, "24k":2.78, "30k":5.21},
+    "quarkus-hibernate": {"6k":2.02, "12k":2.04, "18k":2.39, "24k":3.20, "30k":7.31}
+  },
+  "light_finding": "CLEAN curves: exeris FLAT ~1.5-2.2ms across 6-30k (best tail), qtuned rises to 5.2ms@30k, qhib rises fastest to 7.3ms@30k. Ordering exeris<qtuned<qhib at every rung. In the clean (lean-co-resident) pairs, pinned ~= unpinned (~1.5-2.5ms overlap) — light single-read is cheap, so pinning did not change clean light latency; the pinned run extends to 30k and reveals the tail climb.",
+
+  "heavy_finding": "Pinning genuinely helped HEAVY: exeris/qtuned p99 improved -0.2 to -1.9ms (jitter removal); the unpinned qtuned 6k p99=138ms contention spike -> 3.12ms pinned. At 10k (near DB ceiling) in-harness (pair): exeris 16ms, qhib 19ms, qtuned 4.5ms. CORRECTION 2026-07-24 (MEASURED): exeris's 16ms was NOT a GC-tail from the 0.25x heap. A clean single-target open-loop counterfactual (exeris heavy @10k, 256m vs 768m heap) gives p99 2.94ms(256m) ~= 2.90ms(768m) -- heap-INDEPENDENT, isolated tail ~2.9ms not 16ms. The 16ms was co-residence/harness inflation (measured in a pair); heap only moves RSS (247->421MB). Both campaigns 0 non-publishable heavy leaves.",
+
+  "KEY_FINDING_pair3_coresidence": "The catastrophic 20-37s light degeneracy is PAIR 3 (qhib+qtuned, two heavy JVMs co-resident) and PINNING DID NOT FIX IT: pinned pair-3 qtuned p99 = 2430/8490ms@12k, 27510/22580ms@18k (vs unpinned 22020/32440ms). It is NOT an unpinning artifact — it is CO-RESIDENCE: the idle-but-resident heavy qhib JVM steals cycles from the driven qtuned on the shared slice. Non-monotonic (clean 6k -> broken 12-18k -> clean 24-30k) => transient (qhib JIT/GC warmup). Pair-1 (lean exeris co-resident) is pristine. This is the two-heavy-targets topology risk. A clean pair-3 comparison needs TRULY single-target (co-resident NOT launched); the pairwise harness cannot give it.",
+
+  "non_publishable_leaves": "3 (all pair-3 qtuned, correctly flagged by the attain<99% gate): light/12000 ba (qtuned attain 93%), light/18000 ab (79%), light/18000 ba (81%). The 12000 ab pair-3 leaf passed the attain gate (>=99%) but still had p99 2430ms — attain alone does not catch every co-residence tail spike.",
+
+  "supersedes_relation": "This is the pinned re-run of 20260722-203502 (SUPERSEDED, unpinned). Correction chain: my earlier curve-notes wrongly blamed a wrk2 parser bug + missing attain gate (both false — harness was correct, commit 11937a2), then attributed the collapse to unpinning (this re-run shows it is co-residence, not pinning). Net: the harness parser/gate were always correct; the light collapse is a co-residence topology effect that pinning does not resolve.",
+
+  "caveats": [
+    "Comparison-eligible per-target curve = lean-co-resident pairs (exeris & qtuned from pair-1, qhib from pair-2). Pair-3 (qhib-vs-qtuned) is co-residence-contaminated at 12-18k and must be excluded or re-measured single-target.",
+    "Heap asymmetry retained (exeris 0.25x / quarkus 0.75x of the triad budget) — but the exeris in-harness heavy tail (10k=16ms) is NOT GC-pause: a measured open-loop counterfactual shows p99 heap-independent (2.94ms@256m ~= 2.90ms@768m) and the isolated tail ~2.9ms; the 16ms was co-residence/harness inflation. Heap moves RSS only.",
+    "Raw JFR excluded (public-track); .log excluded from the committed tree (size)."
+  ]
+}

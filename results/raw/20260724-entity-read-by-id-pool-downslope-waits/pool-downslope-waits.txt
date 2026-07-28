@@ -1,0 +1,198 @@
+############ community pool=32 (exeris-p32) 08:28:38UTC ############
+[exeris-p32] sampling pg_stat_activity @10Hz for 60s (600 samples)...
+[exeris-p32] ===== WAIT PROFILE =====
+    --- mean client backends per sample / total samples ---
+     mean_backends_per_sample | samples 
+    --------------------------+---------
+                         6.39 |    3007
+    (1 row)
+    
+    --- wait_event_type distribution (share of backend-samples) ---
+       wait_type    | backend_samples |  pct  
+    ----------------+-----------------+-------
+     Client         |           13588 | 70.77
+     (running/none) |            5603 | 29.18
+     Timeout        |               9 |  0.05
+    (3 rows)
+    
+    --- REQUESTED FILTER: Lock / LWLock / Client detail ---
+     wait_event_type | wait_event | backend_samples |  pct  
+    -----------------+------------+-----------------+-------
+     Client          | ClientRead |           13588 | 70.77
+    (1 row)
+    
+    --- state distribution (active vs idle-in-txn vs idle = pool oversubscription signal) ---
+            state        | backend_samples |  pct  
+    ---------------------+-----------------+-------
+     idle in transaction |           12313 | 64.13
+     active              |            4963 | 25.85
+     idle                |            1924 | 10.02
+    (3 rows)
+    
+[exeris-p32] rps=14358.43  cpu_time_s=882.360000
+############ community pool=64 (exeris-p64) 08:35:47UTC ############
+[exeris-p64] sampling pg_stat_activity @10Hz for 60s (600 samples)...
+[exeris-p64] ===== WAIT PROFILE =====
+    --- mean client backends per sample / total samples ---
+     mean_backends_per_sample | samples 
+    --------------------------+---------
+                        12.23 |    3139
+    (1 row)
+    
+    --- wait_event_type distribution (share of backend-samples) ---
+       wait_type    | backend_samples |  pct  
+    ----------------+-----------------+-------
+     Client         |           34039 | 88.63
+     (running/none) |            4348 | 11.32
+     LWLock         |              17 |  0.04
+    (3 rows)
+    
+    --- REQUESTED FILTER: Lock / LWLock / Client detail ---
+     wait_event_type |     wait_event     | backend_samples |  pct  
+    -----------------+--------------------+-----------------+-------
+     Client          | ClientRead         |           34039 | 88.63
+     LWLock          | pg_stat_statements |              17 |  0.04
+    (2 rows)
+    
+    --- state distribution (active vs idle-in-txn vs idle = pool oversubscription signal) ---
+            state        | backend_samples |  pct  
+    ---------------------+-----------------+-------
+     idle in transaction |           30876 | 80.40
+     active              |            3915 | 10.19
+     idle                |            3613 |  9.41
+    (3 rows)
+    
+[exeris-p64] rps=14194.24  cpu_time_s=885.060000
+############ community pool=128 (exeris-p128) 08:42:57UTC ############
+[exeris-p128] sampling pg_stat_activity @10Hz for 60s (600 samples)...
+[exeris-p128] ===== WAIT PROFILE =====
+    --- mean client backends per sample / total samples ---
+     mean_backends_per_sample | samples 
+    --------------------------+---------
+                        24.44 |    3143
+    (1 row)
+    
+    --- wait_event_type distribution (share of backend-samples) ---
+       wait_type    | backend_samples |  pct  
+    ----------------+-----------------+-------
+     Client         |           72403 | 94.27
+     (running/none) |            4289 |  5.58
+     LWLock         |             112 |  0.15
+    (3 rows)
+    
+    --- REQUESTED FILTER: Lock / LWLock / Client detail ---
+     wait_event_type |     wait_event     | backend_samples |  pct  
+    -----------------+--------------------+-----------------+-------
+     Client          | ClientRead         |           72403 | 94.27
+     LWLock          | pg_stat_statements |             112 |  0.15
+    (2 rows)
+    
+    --- state distribution (active vs idle-in-txn vs idle = pool oversubscription signal) ---
+            state        | backend_samples |  pct  
+    ---------------------+-----------------+-------
+     idle in transaction |           65919 | 85.83
+     idle                |            6995 |  9.11
+     active              |            3890 |  5.06
+    (3 rows)
+    
+[exeris-p128] rps=13439.34  cpu_time_s=821.490000
+############ quarkus-tuned pool=32 (qtuned-p32) 08:50:06UTC ############
+[qtuned-p32] sampling pg_stat_activity @10Hz for 60s (600 samples)...
+[qtuned-p32] ===== WAIT PROFILE =====
+    --- mean client backends per sample / total samples ---
+     mean_backends_per_sample | samples 
+    --------------------------+---------
+                         6.25 |    3073
+    (1 row)
+    
+    --- wait_event_type distribution (share of backend-samples) ---
+       wait_type    | backend_samples |  pct  
+    ----------------+-----------------+-------
+     Client         |           13737 | 71.54
+     (running/none) |            5457 | 28.42
+     Timeout        |               7 |  0.04
+    (3 rows)
+    
+    --- REQUESTED FILTER: Lock / LWLock / Client detail ---
+     wait_event_type | wait_event | backend_samples |  pct  
+    -----------------+------------+-----------------+-------
+     Client          | ClientRead |           13737 | 71.54
+    (1 row)
+    
+    --- state distribution (active vs idle-in-txn vs idle = pool oversubscription signal) ---
+            state        | backend_samples |  pct  
+    ---------------------+-----------------+-------
+     idle in transaction |           12127 | 63.16
+     active              |            4763 | 24.81
+     idle                |            2311 | 12.04
+    (3 rows)
+    
+[qtuned-p32] rps=13877.19  cpu_time_s=958.190000
+############ quarkus-tuned pool=64 (qtuned-p64) 08:57:16UTC ############
+[qtuned-p64] sampling pg_stat_activity @10Hz for 60s (600 samples)...
+[qtuned-p64] ===== WAIT PROFILE =====
+    --- mean client backends per sample / total samples ---
+     mean_backends_per_sample | samples 
+    --------------------------+---------
+                        12.62 |    3042
+    (1 row)
+    
+    --- wait_event_type distribution (share of backend-samples) ---
+       wait_type    | backend_samples |  pct  
+    ----------------+-----------------+-------
+     Client         |           34495 | 89.83
+     (running/none) |            3891 | 10.13
+     LWLock         |              14 |  0.04
+    (3 rows)
+    
+    --- REQUESTED FILTER: Lock / LWLock / Client detail ---
+     wait_event_type |     wait_event     | backend_samples |  pct  
+    -----------------+--------------------+-----------------+-------
+     Client          | ClientRead         |           34495 | 89.83
+     LWLock          | pg_stat_statements |              14 |  0.04
+    (2 rows)
+    
+    --- state distribution (active vs idle-in-txn vs idle = pool oversubscription signal) ---
+            state        | backend_samples |  pct  
+    ---------------------+-----------------+-------
+     idle in transaction |           29319 | 76.35
+     idle                |            5492 | 14.30
+     active              |            3589 |  9.35
+    (3 rows)
+    
+[qtuned-p64] rps=13640.20  cpu_time_s=957.580000
+############ quarkus-tuned pool=128 (qtuned-p128) 09:04:25UTC ############
+[qtuned-p128] sampling pg_stat_activity @10Hz for 60s (600 samples)...
+[qtuned-p128] ===== WAIT PROFILE =====
+    --- mean client backends per sample / total samples ---
+     mean_backends_per_sample | samples 
+    --------------------------+---------
+                        25.91 |    2964
+    (1 row)
+    
+    --- wait_event_type distribution (share of backend-samples) ---
+       wait_type    | backend_samples |  pct  
+    ----------------+-----------------+-------
+     Client         |           72381 | 94.24
+     (running/none) |            4275 |  5.57
+     LWLock         |             141 |  0.18
+     Timeout        |               7 |  0.01
+    (4 rows)
+    
+    --- REQUESTED FILTER: Lock / LWLock / Client detail ---
+     wait_event_type |     wait_event     | backend_samples |  pct  
+    -----------------+--------------------+-----------------+-------
+     Client          | ClientRead         |           72381 | 94.24
+     LWLock          | pg_stat_statements |             141 |  0.18
+    (2 rows)
+    
+    --- state distribution (active vs idle-in-txn vs idle = pool oversubscription signal) ---
+            state        | backend_samples |  pct  
+    ---------------------+-----------------+-------
+     idle in transaction |           55746 | 72.58
+     idle                |           17236 | 22.44
+     active              |            3822 |  4.98
+    (3 rows)
+    
+[qtuned-p128] rps=12830.30  cpu_time_s=902.250000
+===== POOL DOWNSLOPE WAIT PROFILE DONE 09:11:35UTC =====

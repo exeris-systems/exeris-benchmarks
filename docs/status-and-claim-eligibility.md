@@ -85,6 +85,41 @@ Canonical handling for tooling:
 - Any other `claim_scope` value is excluded from comparative sections with an explicit exclusion reason.
 - Legacy synonyms are invalid and must fail validation; tools must not map them silently.
 
+### Document-level `claim_scope` for published reports — the claims-based rule
+
+The values above classify a **run**. A published report under `results/reports/` is not a run: it may
+assemble many campaigns of differing status, and the frontmatter `claim_scope` is what a listing, an RSS
+consumer or a filter sees when nothing else is read. The rule is therefore:
+
+> **A report's document-level `claim_scope` is the status of the evidence underneath its comparative
+> claims** — not the strongest status it contains, and not the weakest.
+>
+> A report MAY include material of weaker status, but only as **non-comparative support**. If any
+> comparative claim in the document rests on weaker evidence, the document takes that weaker value.
+
+Rationale: a stamp is a statement about what may be cited *from* the document, so it should track the
+claims, not the inventory. Stamping by the strongest value present over-claims — it would let one gated
+campaign license a document full of exploratory rankings. Stamping by the weakest (a "floor" rule)
+cannot over-claim, but it destroys the signal it exists to carry: a flagship gated dataset would advertise
+itself as non-comparable the moment any attribution work is added, and downstream filters on
+`comparison_eligible` would drop precisely the data they are looking for. Both failures are avoided by
+tying the stamp to the claims.
+
+Because this rule permits a strong stamp on a mixed document, it is only safe with the obligations below.
+They are **mandatory**, not stylistic:
+
+- **The stamp must be auditable from the body.** The report states, near the top, which campaigns carry the
+  stamped status — by name, so a reader can verify it against the artifacts without trusting the frontmatter.
+- **Every weaker section is labelled inline**, at the point of use, with its own status and an explicit
+  statement that no comparative claim rests on it (the section-level rule above).
+- **Weaker evidence may narrow, qualify or refute a claim, but never establish one.** Exploratory work that
+  *withdraws* a comparative claim is always admissible; exploratory work that would *create* one is not.
+- **The stamp ratchets down, never up.** Adding a comparative claim supported only by weaker evidence
+  re-stamps the document; the fix is to remove the claim, gate the evidence, or split the report.
+- **When a comparative reading is impossible rather than merely ungated, say so at the point of use** —
+  e.g. a measurement contaminated by co-residence or taken on a single arm licenses no ranking at all, and
+  the section must say that rather than leaving the document stamp to imply otherwise.
+
 ---
 
 ## CSV Schema (status.csv)

@@ -31,10 +31,12 @@ import org.springframework.stereotype.Component;
  *       terminal {@code complete-order}, which returns {@link FlowOutcome#COMPLETE}
  *       to short-circuit the engine to {@code FlowState.COMPLETED}.</li>
  *   <li>Failure path: {@code charge-payment} returns {@link FlowOutcome#FAIL}
- *       when {@link PaymentFailureSimulator#shouldFailOnce()} fires. The kernel
- *       transitions to {@code COMPENSATING} and executes the compensations in
- *       reverse order — {@code refund-payment} for step 1, then
- *       {@code restore-inventory} for step 0.</li>
+ *       when the orderId is in the CONTRACT-v2 section 4.1 deterministic
+ *       declined subset ({@link PaymentFailureSimulator#shouldDecline}). A
+ *       decline is business-terminal — never retried (section 5) — and the
+ *       kernel transitions to {@code COMPENSATING} and executes the
+ *       compensations in reverse (LIFO) order — {@code refund-payment} for
+ *       step 1, then {@code restore-inventory} for step 0.</li>
  * </ul>
  *
  * <h2>Lambda discipline</h2>
@@ -91,7 +93,7 @@ public class ShopOrderFlowDefinition implements ExerisFlowDefinition {
                         "charge-payment",
                         ctx -> {
                             ShopOrderFlowInputRegistry.Input in = inputRegistry.require(ctx);
-                            boolean ok = sqlSteps.chargePayment(in.dbOrderId(), in.sagaId());
+                            boolean ok = sqlSteps.chargePayment(in.dbOrderId(), in.orderId(), in.sagaId());
                             // Pre-migration projection wrote PAYMENT_PROCESSING for both
                             // PaymentProcessedEvent and PaymentFailedEvent. We preserve that
                             // surface; the compensation step transitions to PAYMENT_REFUNDED.
@@ -130,9 +132,23 @@ public class ShopOrderFlowDefinition implements ExerisFlowDefinition {
                 .transition(0, 1)
                 .transition(1, 2)
                 .transition(2, 3)
-                // Bench scenario uses the kernel-default timeout/retry — the explicit
-                // setters are intentionally omitted so observed numbers reflect the
-                // out-of-the-box Community FlowEngine defaults rather than a tuned variant.
+                // CONTRACT-v2 section 5 transient-fault retry budget, configured explicitly
+                // (defaults are not trusted): max 3 attempts total (1 initial + 2 retries)
+                // -> maxRetries(2), which per the FlowDefinitionBuilder contract counts
+                // step-level retries before backward compensation is triggered. Terminal
+                // declines (section 4.1) return FlowOutcome.FAIL, which the kernel routes
+                // straight to compensation — exempt from any retry budget (zero retries).
+                .maxRetries(2)
+                // TODO(CONTRACT-v2 section 5): the pinned backoff shape — exponential,
+                // initial 50 ms, factor 2, NO jitter — is not expressible in
+                // exeris-kernel-spi 0.5.0-SNAPSHOT: FlowDefinitionBuilder exposes only
+                // maxRetries(int) and timeoutDuration(long), no backoff hook. Also note:
+                // FlowDefinition.maxRetries is recorded in the definition, but the kernel
+                // core flow runtime routes both FAIL and thrown step exceptions straight to
+                // compensation without consulting it, so enforcement must be re-verified
+                // when transient injection (section 4.2) lands. Configure the explicit
+                // backoff here as soon as the SPI grows the API. Timeout stays at the
+                // kernel default — section 5 pins retry policy only.
                 .build();
     }
 }

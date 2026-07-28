@@ -1,0 +1,30 @@
+
+                                                                                                    Allocation by Class
+
+Object Type                                                                                                                                                                                             Allocation Pressure
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- -------------------
+byte[]                                                                                                                                                                                                               46.64%
+java.lang.String                                                                                                                                                                                                     16.08%
+byte[][]                                                                                                                                                                                                              6.21%
+org.postgresql.core.Tuple                                                                                                                                                                                             4.55%
+java.lang.Object[]                                                                                                                                                                                                    4.51%
+jdk.internal.vm.StackChunk                                                                                                                                                                                            4.23%
+eu.exeris.benchmarks.targets.quarkusapp.dto.FriendSummary                                                                                                                                                             2.20%
+eu.exeris.benchmarks.targets.quarkusapp.dto.InterestView                                                                                                                                                              2.08%
+java.util.ArrayList                                                                                                                                                                                                   0.74%
+java.util.HashMap$Node                                                                                                                                                                                                0.74%
+io.netty.channel.DefaultChannelPromise                                                                                                                                                                                0.45%
+org.postgresql.jdbc.PgResultSet                                                                                                                                                                                       0.39%
+java.util.HashMap$Node[]                                                                                                                                                                                              0.37%
+java.util.concurrent.ConcurrentHashMap$Node                                                                                                                                                                           0.36%
+java.util.concurrent.locks.ReentrantLock$NonfairSync                                                                                                                                                                  0.35%
+org.postgresql.jdbc.PgPreparedStatement                                                                                                                                                                               0.32%
+com.arjuna.ats.arjuna.common.Uid                                                                                                                                                                                      0.29%
+java.util.concurrent.ForkJoinTask$AdaptedRunnableAction                                                                                                                                                               0.28%
+eu.exeris.benchmarks.targets.quarkusapp.dto.UserView                                                                                                                                                                  0.28%
+java.util.HashMap                                                                                                                                                                                                     0.26%
+java.lang.Integer                                                                                                                                                                                                     0.26%
+java.net.InetSocketAddress$InetSocketAddressHolder                                                                                                                                                                    0.23%
+java.net.InetSocketAddress                                                                                                                                                                                            0.22%
+eu.exeris.benchmarks.targets.quarkusapp.dto.UserSummary                                                                                                                                                               0.21%
+com.fasterxml.jackson.core.json.JsonWriteContext                                                                                                                                                                      0.21%

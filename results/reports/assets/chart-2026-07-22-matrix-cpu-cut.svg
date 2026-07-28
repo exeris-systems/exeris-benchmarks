@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" font-family="Verdana,Helvetica,sans-serif" role="img" aria-label="CPU cut at fixed 1 GiB: throughput vs vCPU quota">
+<rect width="1200" height="470" fill="#0f172a"/>
+<text x="24" y="34" font-size="17" font-weight="bold" fill="#f8fafc">CPU cut — fixed 1 GiB budget, CFS quota 2 / 4 / 8 vCPU (target cpuset 0-1,8-9; 8 vCPU: 0-3,8-11)</text>
+<text x="24" y="54" font-size="11" fill="#94a3b8">medians of 3 interleaved repeats · same single-row contract · throttling and loadgen/DB co-location annotated — track-c, descriptive only</text>
+<rect x="24" y="70" width="14" height="14" rx="3" fill="#3987e5"/><text x="44" y="82" font-size="12" fill="#cbd5e1">exeris-community</text><rect x="240" y="70" width="14" height="14" rx="3" fill="#008300"/><text x="260" y="82" font-size="12" fill="#cbd5e1">quarkus-tuned</text>
+<text x="100" y="118" font-size="15" font-weight="bold" fill="#f8fafc">Throughput vs vCPU quota</text>
+<text x="100" y="136" font-size="11" fill="#94a3b8">requests / second (median)</text>
+<line x1="100" y1="384.0" x2="860" y2="384.0" stroke="#334155" stroke-width="1"/>
+<text x="94" y="388.0" font-size="10" fill="#94a3b8" text-anchor="end">0k</text>
+<line x1="100" y1="326.5" x2="860" y2="326.5" stroke="#334155" stroke-width="1"/>
+<text x="94" y="330.5" font-size="10" fill="#94a3b8" text-anchor="end">25k</text>
+<line x1="100" y1="269.0" x2="860" y2="269.0" stroke="#334155" stroke-width="1"/>
+<text x="94" y="273.0" font-size="10" fill="#94a3b8" text-anchor="end">50k</text>
+<line x1="100" y1="211.5" x2="860" y2="211.5" stroke="#334155" stroke-width="1"/>
+<text x="94" y="215.5" font-size="10" fill="#94a3b8" text-anchor="end">75k</text>
+<line x1="100" y1="154.0" x2="860" y2="154.0" stroke="#334155" stroke-width="1"/>
+<text x="94" y="158.0" font-size="10" fill="#94a3b8" text-anchor="end">100k</text>
+<text x="140.0" y="402" font-size="11" fill="#cbd5e1" text-anchor="middle">2 vCPU</text>
+<text x="480.0" y="402" font-size="11" fill="#cbd5e1" text-anchor="middle">4 vCPU</text>
+<text x="820.0" y="402" font-size="11" fill="#cbd5e1" text-anchor="middle">8 vCPU</text>
+<path d="M140.0,311.7 L480.0,254.5 L820.0,167.1" fill="none" stroke="#3987e5" stroke-width="2"/>
+<circle cx="140.0" cy="311.7" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="140.0" y="301.7" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">31.4k</text>
+<circle cx="480.0" cy="254.5" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="480.0" y="244.5" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">56.3k</text>
+<circle cx="820.0" cy="167.1" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="820.0" y="157.1" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">94.3k</text>
+<path d="M140.0,327.6 L480.0,277.5 L820.0,223.5" fill="none" stroke="#008300" stroke-width="2"/>
+<circle cx="140.0" cy="327.6" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="140.0" y="347.6" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">24.5k</text>
+<circle cx="480.0" cy="277.5" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="480.0" y="297.5" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">46.3k</text>
+<circle cx="820.0" cy="223.5" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="820.0" y="243.5" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">69.8k</text>
+<text x="140.0" y="420" font-size="9" fill="#94a3b8" text-anchor="middle">both arms CFS-throttled ~98% of periods</text>
+<text x="480.0" y="420" font-size="9" fill="#94a3b8" text-anchor="middle">no quota pressure</text>
+<text x="820.0" y="420" font-size="9" fill="#94a3b8" text-anchor="middle">exeris throttled ~98% of periods; quarkus ~0% · loadgen co-located with DB cpuset</text><text x="920" y="200" font-size="11" fill="#cbd5e1">scaling 2→4→8:</text><text x="920" y="220" font-size="11" fill="#cbd5e1">exeris ×1.79 / ×1.67</text><text x="920" y="240" font-size="11" fill="#cbd5e1">quarkus ×1.89 / ×1.51</text>
+<text x="24" y="440" font-size="10" fill="#94a3b8">CPU limit is a cgroup CFS quota, not a smaller cpuset — at 2 vCPU both arms run under ~98%-of-periods throttling (effective ~1.5–1.6 cores).</text>
+<text x="24" y="454" font-size="10" fill="#94a3b8">At 8 vCPU exeris keeps hitting the quota in bursts (~98% of periods, ~0.3 cores clipped) while quarkus never does — its ceiling there is its own runtime, not the quota.</text>
+</svg>

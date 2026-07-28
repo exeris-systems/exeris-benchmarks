@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="460" viewBox="0 0 1200 460" font-family="Verdana,Helvetica,sans-serif" role="img" aria-label="Heavy aggregate throughput — default vs DB-normalized config, verdict inversion">
+<rect width="1200" height="460" fill="#0f172a"/>
+<text x="24" y="28" font-size="17" font-weight="bold" fill="#f8fafc">HEAVY aggregate throughput — the DB-config normalization inverts the verdict (native MaxRAM, gated)</text>
+<text x="24" y="47" font-size="11" fill="#94a3b8">exeris-vs-quarkus-tuned · 8/8 comparison_eligible · rps = mean of ab+ba · default = 054802 (each stack's own fetch config), normalized = 091230 (identical fetch-all)</text>
+<rect x="24" y="60" width="14" height="14" rx="3" fill="#3987e5"/><text x="44" y="72" font-size="12" fill="#cbd5e1">exeris-community</text>
+<rect x="230" y="60" width="14" height="14" rx="3" fill="#22a06b"/><text x="250" y="72" font-size="12" fill="#cbd5e1">quarkus-tuned</text>
+<!-- gridlines across both panels (0 / 5k / 10k / 15k) -->
+<line x1="70" y1="378" x2="1130" y2="378" stroke="#334155" stroke-width="1"/><text x="64" y="382" font-size="10" fill="#94a3b8" text-anchor="end">0</text>
+<line x1="70" y1="297" x2="1130" y2="297" stroke="#1e293b" stroke-width="1"/><text x="64" y="301" font-size="10" fill="#94a3b8" text-anchor="end">5k</text>
+<line x1="70" y1="216" x2="1130" y2="216" stroke="#1e293b" stroke-width="1"/><text x="64" y="220" font-size="10" fill="#94a3b8" text-anchor="end">10k</text>
+<line x1="70" y1="135" x2="1130" y2="135" stroke="#1e293b" stroke-width="1"/><text x="64" y="139" font-size="10" fill="#94a3b8" text-anchor="end">15k rps</text>
+<line x1="600" y1="120" x2="600" y2="395" stroke="#334155" stroke-width="1" stroke-dasharray="3,3"/>
+<!-- ===== LEFT: DEFAULT ===== -->
+<text x="70" y="94" font-size="13" font-weight="bold" fill="#f8fafc">Default config (each stack out-of-the-box)</text>
+<text x="70" y="110" font-size="10.5" fill="#e08e0b">→ Quarkus leads +17–23 % (Exeris streams a multi-row result)</text>
+<rect x="150" y="196.4" width="45" height="181.6" fill="#3987e5"/><text x="172" y="190" font-size="10" fill="#f8fafc" text-anchor="middle">11.2k</text>
+<rect x="200" y="164.7" width="45" height="213.3" fill="#22a06b"/><text x="222" y="158" font-size="10" fill="#f8fafc" text-anchor="middle">13.2k</text>
+<rect x="360" y="211.2" width="45" height="166.8" fill="#3987e5"/><text x="382" y="205" font-size="10" fill="#f8fafc" text-anchor="middle">10.3k</text>
+<rect x="410" y="172.0" width="45" height="206.0" fill="#22a06b"/><text x="432" y="166" font-size="10" fill="#f8fafc" text-anchor="middle">12.7k</text>
+<text x="222" y="393" font-size="11" fill="#cbd5e1" text-anchor="middle">1024m</text>
+<text x="432" y="393" font-size="11" fill="#cbd5e1" text-anchor="middle">256m</text>
+<!-- ===== RIGHT: NORMALIZED ===== -->
+<text x="660" y="94" font-size="13" font-weight="bold" fill="#f8fafc">Normalized (identical DB fetch config)</text>
+<text x="660" y="110" font-size="10.5" fill="#3987e5">→ Exeris leads +5–7 % (the fair runtime isolation)</text>
+<rect x="740" y="158.9" width="45" height="219.1" fill="#3987e5"/><text x="762" y="152" font-size="10" fill="#f8fafc" text-anchor="middle">13.5k</text>
+<rect x="790" y="170.1" width="45" height="207.9" fill="#22a06b"/><text x="812" y="164" font-size="10" fill="#f8fafc" text-anchor="middle">12.8k</text>
+<rect x="950" y="159.8" width="45" height="218.2" fill="#3987e5"/><text x="972" y="153" font-size="10" fill="#f8fafc" text-anchor="middle">13.5k</text>
+<rect x="1000" y="174.4" width="45" height="203.6" fill="#22a06b"/><text x="1022" y="168" font-size="10" fill="#f8fafc" text-anchor="middle">12.6k</text>
+<text x="812" y="393" font-size="11" fill="#cbd5e1" text-anchor="middle">1024m</text>
+<text x="1022" y="393" font-size="11" fill="#cbd5e1" text-anchor="middle">256m</text>
+<!-- footers -->
+<text x="24" y="424" font-size="10" fill="#94a3b8">Normalizing to fetch-all (defaultRowFetchSize=0 / adaptiveFetch=false) lifts Exeris +21–31 % and trims Quarkus 1–2.5 % vs their defaults — so the fair (identical-config) comparison isolates the runtime and Exeris leads,</text>
+<text x="24" y="440" font-size="10" fill="#94a3b8">but out-of-the-box Quarkus is faster on the aggregate. A genuine Exeris config-default headroom item (ship fetch-all by default), not a runtime deficit. Light single-read is immune (one row is fetch-insensitive): +43 % either way.</text>
+</svg>

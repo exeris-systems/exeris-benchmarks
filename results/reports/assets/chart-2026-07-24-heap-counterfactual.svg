@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="492" viewBox="0 0 1000 492" font-family="Verdana,Helvetica,sans-serif" role="img" aria-label="Heap counterfactual — CO-free service-time percentiles, 256 vs 768 MiB heap">
+<rect width="1000" height="492" fill="#0f172a"/>
+<text x="24" y="30" font-size="16" font-weight="bold" fill="#f8fafc">Heap counterfactual — CO-free service-time percentiles (exeris HEAVY aggregate, open-loop wrk2 @10k)</text>
+<text x="24" y="50" font-size="11" fill="#94a3b8">only the heap differs: 256 MiB (0.25×) vs 768 MiB (0.75×) · 1024 MiB budget, pool 16, ratio 32, ParallelGC, ~2.0/4 vCPU · band = min–max, line = median (n=1+n=3) · track-c</text>
+<rect x="24" y="66" width="14" height="14" rx="3" fill="#f59e0b"/><text x="44" y="78" font-size="12" fill="#cbd5e1">exeris · 256 MiB heap (0.25×)</text>
+<rect x="248" y="66" width="14" height="14" rx="3" fill="#3987e5"/><text x="268" y="78" font-size="12" fill="#cbd5e1">exeris · 768 MiB heap (0.75×)</text>
+<!-- y gridlines (log: 1,2,5,10,20,40 ms) -->
+<line x1="90" y1="400" x2="940" y2="400" stroke="#334155" stroke-width="1"/><text x="84" y="404" font-size="10" fill="#94a3b8" text-anchor="end">1 ms</text>
+<line x1="90" y1="345.4" x2="940" y2="345.4" stroke="#1e293b" stroke-width="1"/><text x="84" y="349.4" font-size="10" fill="#94a3b8" text-anchor="end">2</text>
+<line x1="90" y1="273.1" x2="940" y2="273.1" stroke="#1e293b" stroke-width="1"/><text x="84" y="277.1" font-size="10" fill="#94a3b8" text-anchor="end">5</text>
+<line x1="90" y1="218.5" x2="940" y2="218.5" stroke="#334155" stroke-width="1"/><text x="84" y="222.5" font-size="10" fill="#94a3b8" text-anchor="end">10</text>
+<line x1="90" y1="163.9" x2="940" y2="163.9" stroke="#1e293b" stroke-width="1"/><text x="84" y="167.9" font-size="10" fill="#94a3b8" text-anchor="end">20</text>
+<line x1="90" y1="109.3" x2="940" y2="109.3" stroke="#1e293b" stroke-width="1"/><text x="84" y="113.3" font-size="10" fill="#94a3b8" text-anchor="end">40</text>
+<!-- x tier labels -->
+<text x="140" y="420" font-size="11" fill="#cbd5e1" text-anchor="middle">p50</text>
+<text x="327.5" y="420" font-size="11" fill="#cbd5e1" text-anchor="middle">p99</text>
+<text x="515" y="420" font-size="11" fill="#cbd5e1" text-anchor="middle">p99.9</text>
+<text x="702.5" y="420" font-size="11" fill="#cbd5e1" text-anchor="middle">p99.99</text>
+<text x="890" y="420" font-size="11" fill="#cbd5e1" text-anchor="middle">p99.999</text>
+<text x="515" y="437" font-size="9.5" fill="#64748b" text-anchor="middle">latency percentile (tiers equally spaced, not linear) · y = log scale</text>
+<!-- 256 MiB band + median (amber) -->
+<path d="M140,352.4 L327.5,282.7 L515,209.3 L702.5,141.5 L890,111.7 L890,124.7 L702.5,168.2 L515,290.2 L327.5,315.8 L140,369.6 Z" fill="#f59e0b" fill-opacity="0.13" stroke="none"/>
+<path d="M140,369.6 L327.5,314.6 L515,238.4 L702.5,157.8 L890,120.4" fill="none" stroke="#f59e0b" stroke-width="2.2"/>
+<circle cx="140" cy="369.6" r="4" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"/><circle cx="327.5" cy="314.6" r="4" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"/><circle cx="515" cy="238.4" r="4" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"/><circle cx="702.5" cy="157.8" r="4" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"/><circle cx="890" cy="120.4" r="4" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"/>
+<!-- 768 MiB band + median (blue) -->
+<path d="M140,365.0 L327.5,312.1 L515,235.0 L702.5,154.8 L890,122.2 L890,261.3 L702.5,285.2 L515,303.1 L327.5,316.1 L140,370.2 Z" fill="#3987e5" fill-opacity="0.13" stroke="none"/>
+<path d="M140,369.4 L327.5,315.7 L515,263.6 L702.5,194.1 L890,161.4" fill="none" stroke="#3987e5" stroke-width="2.2"/>
+<circle cx="140" cy="369.4" r="4" fill="#3987e5" stroke="#0f172a" stroke-width="1.5"/><circle cx="327.5" cy="315.7" r="4" fill="#3987e5" stroke="#0f172a" stroke-width="1.5"/><circle cx="515" cy="263.6" r="4" fill="#3987e5" stroke="#0f172a" stroke-width="1.5"/><circle cx="702.5" cy="194.1" r="4" fill="#3987e5" stroke="#0f172a" stroke-width="1.5"/><circle cx="890" cy="161.4" r="4" fill="#3987e5" stroke="#0f172a" stroke-width="1.5"/>
+<!-- annotations -->
+<line x1="327.5" y1="300" x2="327.5" y2="332" stroke="#475569" stroke-width="1" stroke-dasharray="2,2"/>
+<text x="335" y="352" font-size="10" fill="#cbd5e1">p50 &amp; p99 overlap → heap-independent (~1.5 / ~3 ms)</text>
+<text x="884" y="103" font-size="9.5" fill="#f59e0b" text-anchor="end">256 MiB: all ~33–39 ms</text>
+<text x="884" y="252" font-size="9.5" fill="#3987e5" text-anchor="end">768 MiB dips to ~6 ms in 2 of 4 reps…</text>
+<text x="884" y="134" font-size="9.5" fill="#3987e5" text-anchor="end">…but still spikes to ~34 ms in the other 2</text>
+<!-- footers -->
+<text x="24" y="462" font-size="10" fill="#94a3b8">Deep tail (p99.9+) is present at BOTH heaps and does not track heap size — 3× heap does not remove it → heap-orthogonal, NOT heap-starvation GC (and at ~2.0/4 vCPU, not throttle-saturation either).</text>
+<text x="24" y="478" font-size="10" fill="#94a3b8">The 184 ms closed-loop tail (HEAVY matrix, finding #5) was coordinated-omission queue depth: strip CO and the same arm's p99 is ~3 ms. Heap moves RSS only — smaps 247 → 421 MB (+174 MB), zero tail benefit.</text>
+</svg>

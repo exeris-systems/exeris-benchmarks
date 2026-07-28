@@ -1,0 +1,30 @@
+
+                                                                                                    Allocation by Class
+
+Object Type                                                                                                                                                                                             Allocation Pressure
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- -------------------
+byte[]                                                                                                                                                                                                               17.88%
+java.lang.String                                                                                                                                                                                                      9.10%
+eu.exeris.kernel.community.memory.CommunityLoanedBuffer                                                                                                                                                               4.71%
+java.lang.Object[]                                                                                                                                                                                                    3.12%
+eu.exeris.kernel.community.memory.CommunityReleaseAction                                                                                                                                                              2.41%
+org.postgresql.jdbc.PgResultSet                                                                                                                                                                                       2.38%
+org.postgresql.core.v3.ExecuteRequest                                                                                                                                                                                 2.29%
+org.postgresql.jdbc.PgPreparedStatement                                                                                                                                                                               2.09%
+jdk.internal.foreign.NativeMemorySegmentImpl                                                                                                                                                                          1.96%
+tools.jackson.core.json.UTF8JsonGenerator                                                                                                                                                                             1.82%
+java.util.HashMap$Node                                                                                                                                                                                                1.78%
+java.util.concurrent.ForkJoinTask$AdaptedRunnableAction                                                                                                                                                               1.67%
+eu.exeris.kernel.community.http.ReadResult                                                                                                                                                                            1.66%
+java.net.InetSocketAddress$InetSocketAddressHolder                                                                                                                                                                    1.65%
+eu.exeris.kernel.core.persistence.AdmissionDecisionEvent$JfrEvent                                                                                                                                                     1.58%
+tools.jackson.core.io.IOContext                                                                                                                                                                                       1.58%
+tools.jackson.databind.ser.SerializationContextExt$Impl                                                                                                                                                               1.52%
+java.net.InetSocketAddress                                                                                                                                                                                            1.51%
+java.util.concurrent.ConcurrentLinkedQueue$Node                                                                                                                                                                       1.37%
+tools.jackson.core.json.JsonWriteContext                                                                                                                                                                              1.33%
+java.lang.Integer                                                                                                                                                                                                     1.30%
+java.util.concurrent.ConcurrentHashMap$Node                                                                                                                                                                           1.30%
+java.util.ArrayList                                                                                                                                                                                                   1.18%
+java.util.HashMap$Node[]                                                                                                                                                                                              1.09%
+java.util.HashMap                                                                                                                                                                                                     1.03%

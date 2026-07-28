@@ -1,0 +1,30 @@
+
+                                                                                             Java Methods that Execute the Most
+
+Method                                                                                                                                                                                                      Samples Percent
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- ------- -------
+com.fasterxml.jackson.core.json.UTF8JsonGenerator._verifyValueWrite(String)                                                                                                                                   8,559  12.16%
+com.fasterxml.jackson.databind.ser.impl.IndexedListSerializer.serializeContents(List, JsonGenerator, SerializerProvider)                                                                                      5,138   7.30%
+org.postgresql.core.VisibleBufferedInputStream.ensureBytes(int, boolean)                                                                                                                                      4,793   6.81%
+org.postgresql.core.Encoding.decode(byte[], int, int)                                                                                                                                                         3,209   4.56%
+org.postgresql.util.NumberParser.getFastLong(byte[], long, long)                                                                                                                                              2,640   3.75%
+jdk.internal.util.DecimalDigits.uncheckedGetCharsLatin1(long, int, byte[])                                                                                                                                    2,262   3.21%
+java.util.HashMap.computeIfAbsent(Object, Function)                                                                                                                                                           2,082   2.96%
+com.fasterxml.jackson.core.json.UTF8JsonGenerator.writeFieldName(SerializableString)                                                                                                                          1,757   2.50%
+com.fasterxml.jackson.core.json.JsonWriteContext.createChildObjectContext()                                                                                                                                   1,755   2.49%
+org.postgresql.core.v3.QueryExecutorImpl.processResults(ResultHandler, int, boolean)                                                                                                                          1,753   2.49%
+java.lang.String.iso88591(byte[], int, int)                                                                                                                                                                   1,643   2.34%
+java.util.Arrays.copyOf(Object[], int)                                                                                                                                                                        1,519   2.16%
+java.util.concurrent.ConcurrentHashMap.get(Object)                                                                                                                                                            1,374   1.95%
+java.util.HashMap.getNode(Object)                                                                                                                                                                             1,192   1.69%
+java.util.concurrent.ForkJoinPool.deactivate(ForkJoinPool$WorkQueue, int)                                                                                                                                     1,092   1.55%
+eu.exeris.benchmarks.targets.quarkusapp.repository.UserRepository.queryInterestsForUsers(Connection, List, int)                                                                                               1,049   1.49%
+io.agroal.pool.wrapper.ResultSetWrapper.next()                                                                                                                                                                1,048   1.49%
+java.lang.String.equals(Object)                                                                                                                                                                                 937   1.33%
+java.util.Formatter.parse(String)                                                                                                                                                                               893   1.27%
+java.lang.StringLatin1.hashCode(byte[])                                                                                                                                                                         852   1.21%
+eu.exeris.benchmarks.targets.quarkusapp.repository.UserRepository.queryFriendsForUsers(Connection, List, int)                                                                                                   852   1.21%
+io.quarkus.vertx.utils.VertxOutputStream.write(byte[], int, int)                                                                                                                                                750   1.07%
+org.postgresql.core.v3.QueryExecutorImpl.sendBind(SimpleQuery, SimpleParameterList, Portal, boolean)                                                                                                            739   1.05%
+java.util.concurrent.ForkJoinPool.signalWork()                                                                                                                                                                  630   0.90%
+com.fasterxml.jackson.databind.ser.impl.IndexedListSerializer.serialize(List, JsonGenerator, SerializerProvider)                                                                                                584   0.83%

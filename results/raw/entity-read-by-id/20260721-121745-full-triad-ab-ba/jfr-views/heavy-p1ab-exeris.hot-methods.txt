@@ -1,0 +1,30 @@
+
+                                                                                             Java Methods that Execute the Most
+
+Method                                                                                                                                                                                                      Samples Percent
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- ------- -------
+java.lang.invoke.Invokers.checkCustomized(MethodHandle)                                                                                                                                                         882   8.81%
+java.lang.invoke.Invokers$Holder.invokeExact_MT(Object, Object, Object)                                                                                                                                         798   7.97%
+tools.jackson.core.json.UTF8JsonGenerator._verifyValueWrite(String)                                                                                                                                             759   7.58%
+org.postgresql.core.VisibleBufferedInputStream.ensureBytes(int, boolean)                                                                                                                                        557   5.56%
+tools.jackson.databind.ser.UnrolledBeanSerializer.serializeNonFiltered(Object, JsonGenerator, SerializationContext)                                                                                             488   4.87%
+org.postgresql.core.Encoding.decode(byte[], int, int)                                                                                                                                                           436   4.35%
+org.postgresql.core.v3.QueryExecutorImpl.processResults(ResultHandler, int, boolean)                                                                                                                            348   3.48%
+org.postgresql.util.NumberParser.getFastLong(byte[], long, long)                                                                                                                                                302   3.02%
+jdk.internal.util.DecimalDigits.uncheckedGetCharsLatin1(long, int, byte[])                                                                                                                                      289   2.89%
+java.util.HashMap.computeIfAbsent(Object, Function)                                                                                                                                                             241   2.41%
+java.lang.String.ascii(byte[], int, int)                                                                                                                                                                        232   2.32%
+java.lang.invoke.DirectMethodHandle$Holder.invokeSpecial(Object, Object, Object)                                                                                                                                230   2.30%
+org.postgresql.core.v3.QueryExecutorImpl.getAdaptiveFetchSize(boolean, ResultCursor)                                                                                                                            197   1.97%
+java.util.ArrayList.grow(int)                                                                                                                                                                                   171   1.71%
+eu.exeris.benchmarks.targets.exeriscommunity.infrastructure.persistence.UserRepository.queryInterestsForUsers(PersistenceConnection, List, int)                                                                 165   1.65%
+tools.jackson.databind.ser.jdk.IndexedListSerializer.serializeContentsUsingImpl(List, JsonGenerator, SerializationContext, ValueSerializer)                                                                     155   1.55%
+java.util.concurrent.locks.AbstractQueuedSynchronizer.signalNext(AbstractQueuedSynchronizer$Node)                                                                                                               140   1.40%
+org.postgresql.util.ByteConverter.int8(byte[], int)                                                                                                                                                             122   1.22%
+java.util.concurrent.ForkJoinPool.deactivate(ForkJoinPool$WorkQueue, int)                                                                                                                                       118   1.18%
+tools.jackson.core.json.UTF8JsonGenerator._flushBuffer()                                                                                                                                                        112   1.12%
+jdk.internal.foreign.SharedSession.acquire0()                                                                                                                                                                   110   1.10%
+java.lang.String.equals(Object)                                                                                                                                                                                 108   1.08%
+tools.jackson.core.json.JsonWriteContext.createChildObjectContext(Object)                                                                                                                                       102   1.02%
+java.lang.StringLatin1.hashCode(byte[])                                                                                                                                                                          99   0.99%
+org.postgresql.core.v3.QueryExecutorImpl.sendBind(SimpleQuery, SimpleParameterList, Portal, boolean)                                                                                                             91   0.91%

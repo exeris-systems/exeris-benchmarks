@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="460" viewBox="0 0 1200 460" font-family="Verdana,Helvetica,sans-serif" role="img" aria-label="Connection-pool sweep at 1 GiB / 4 vCPU: throughput and CPU per request vs pool size">
+<rect width="1200" height="460" fill="#0f172a"/>
+<text x="24" y="34" font-size="17" font-weight="bold" fill="#f8fafc">Connection-pool sweep — 1 GiB / 4 vCPU, pool min=max ∈ {4,8,16,32}, equalized builds</text>
+<text x="24" y="54" font-size="11" fill="#94a3b8">medians of 3 interleaved repeats · 24/24 runs clean, 0 errors · post-equalization jars (9f2b182 pgjdbc params, 1bf4767 admission ratio=32) · track-c, descriptive only</text>
+<rect x="24" y="70" width="14" height="14" rx="3" fill="#3987e5"/><text x="44" y="82" font-size="12" fill="#cbd5e1">exeris-community</text><rect x="240" y="70" width="14" height="14" rx="3" fill="#008300"/><text x="260" y="82" font-size="12" fill="#cbd5e1">quarkus-tuned</text>
+<text x="60" y="114" font-size="15" font-weight="bold" fill="#f8fafc">Throughput</text>
+<text x="60" y="132" font-size="11" fill="#94a3b8">requests / second (median)</text>
+<line x1="60" y1="380.0" x2="580" y2="380.0" stroke="#334155" stroke-width="1"/>
+<text x="54" y="384.0" font-size="10" fill="#94a3b8" text-anchor="end">0k</text>
+<line x1="60" y1="309.2" x2="580" y2="309.2" stroke="#334155" stroke-width="1"/>
+<text x="54" y="313.2" font-size="10" fill="#94a3b8" text-anchor="end">20k</text>
+<line x1="60" y1="238.5" x2="580" y2="238.5" stroke="#334155" stroke-width="1"/>
+<text x="54" y="242.5" font-size="10" fill="#94a3b8" text-anchor="end">40k</text>
+<line x1="60" y1="167.7" x2="580" y2="167.7" stroke="#334155" stroke-width="1"/>
+<text x="54" y="171.7" font-size="10" fill="#94a3b8" text-anchor="end">60k</text>
+<text x="100.0" y="398" font-size="11" fill="#cbd5e1" text-anchor="middle">pool 4</text>
+<text x="246.7" y="398" font-size="11" fill="#cbd5e1" text-anchor="middle">pool 8</text>
+<text x="393.3" y="398" font-size="11" fill="#cbd5e1" text-anchor="middle">pool 16</text>
+<text x="540.0" y="398" font-size="11" fill="#cbd5e1" text-anchor="middle">pool 32</text>
+<path d="M100.0,238.5 L246.7,180.8 L393.3,179.2 L540.0,178.0" fill="none" stroke="#3987e5" stroke-width="2"/>
+<circle cx="100.0" cy="238.5" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="100.0" y="228.5" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">40.0k</text>
+<circle cx="246.7" cy="180.8" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="246.7" y="170.8" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">56.3k</text>
+<circle cx="393.3" cy="179.2" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="393.3" y="169.2" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">56.7k</text>
+<circle cx="540.0" cy="178.0" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="540.0" y="168.0" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">57.1k</text>
+<path d="M100.0,261.5 L246.7,234.9 L393.3,215.2 L540.0,209.4" fill="none" stroke="#008300" stroke-width="2"/>
+<circle cx="100.0" cy="261.5" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="100.0" y="281.5" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">33.5k</text>
+<circle cx="246.7" cy="234.9" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="246.7" y="254.9" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">41.0k</text>
+<circle cx="393.3" cy="215.2" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="393.3" y="235.2" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">46.6k</text>
+<circle cx="540.0" cy="209.4" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="540.0" y="229.4" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">48.2k</text>
+<text x="246.7" y="120" font-size="9" fill="#94a3b8" text-anchor="middle">exeris at ceiling from pool 8</text><text x="660" y="114" font-size="15" font-weight="bold" fill="#f8fafc">CPU per request (app)</text>
+<text x="660" y="132" font-size="11" fill="#94a3b8">µs of process CPU per request (median) — lower is better</text>
+<line x1="660" y1="380.0" x2="1180" y2="380.0" stroke="#334155" stroke-width="1"/>
+<text x="654" y="384.0" font-size="10" fill="#94a3b8" text-anchor="end">0</text>
+<line x1="660" y1="303.3" x2="1180" y2="303.3" stroke="#334155" stroke-width="1"/>
+<text x="654" y="307.3" font-size="10" fill="#94a3b8" text-anchor="end">40</text>
+<line x1="660" y1="226.7" x2="1180" y2="226.7" stroke="#334155" stroke-width="1"/>
+<text x="654" y="230.7" font-size="10" fill="#94a3b8" text-anchor="end">80</text>
+<line x1="660" y1="150.0" x2="1180" y2="150.0" stroke="#334155" stroke-width="1"/>
+<text x="654" y="154.0" font-size="10" fill="#94a3b8" text-anchor="end">120</text>
+<text x="700.0" y="398" font-size="11" fill="#cbd5e1" text-anchor="middle">pool 4</text>
+<text x="846.7" y="398" font-size="11" fill="#cbd5e1" text-anchor="middle">pool 8</text>
+<text x="993.3" y="398" font-size="11" fill="#cbd5e1" text-anchor="middle">pool 16</text>
+<text x="1140.0" y="398" font-size="11" fill="#cbd5e1" text-anchor="middle">pool 32</text>
+<path d="M700.0,223.5 L846.7,275.7 L993.3,276.5 L1140.0,277.3" fill="none" stroke="#3987e5" stroke-width="2"/>
+<circle cx="700.0" cy="223.5" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="700.0" y="213.5" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">82</text>
+<circle cx="846.7" cy="275.7" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="846.7" y="265.7" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">54</text>
+<circle cx="993.3" cy="276.5" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="993.3" y="266.5" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">54</text>
+<circle cx="1140.0" cy="277.3" r="4.5" fill="#3987e5" stroke="#0f172a" stroke-width="2"/>
+<text x="1140.0" y="267.3" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">54</text>
+<path d="M700.0,184.6 L846.7,223.4 L993.3,245.4 L1140.0,250.8" fill="none" stroke="#008300" stroke-width="2"/>
+<circle cx="700.0" cy="184.6" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="700.0" y="174.6" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">102</text>
+<circle cx="846.7" cy="223.4" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="846.7" y="213.4" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">82</text>
+<circle cx="993.3" cy="245.4" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="993.3" y="235.4" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">70</text>
+<circle cx="1140.0" cy="250.8" r="4.5" fill="#008300" stroke="#0f172a" stroke-width="2"/>
+<text x="1140.0" y="240.8" font-size="10" font-weight="bold" fill="#f8fafc" text-anchor="middle">67</text>
+<text x="24" y="416" font-size="10" fill="#94a3b8">Exeris reaches its own ceiling (~56–57k) with 8 connections and stays flat at 54 µs/req; quarkus-tuned needs 16–32 connections to reach its ~47–48k ceiling. This is NOT DB saturation —</text>
+<text x="24" y="430" font-size="10" fill="#94a3b8">Postgres sits at ~40% of its cpuset with ~51 MB RSS (outside the app budget). Pool 4 starves both arms (admission queueing shows up as +cpu/req for both).</text>
+<text x="24" y="444" font-size="10" fill="#94a3b8">Levels are not mixable with the memory×CPU matrix above (pre-fence jars) nor with the triad report (different windows/GC/pool/scope).</text>
+</svg>

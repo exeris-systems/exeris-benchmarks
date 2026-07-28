@@ -1,0 +1,30 @@
+
+                                                                                             Java Methods that Execute the Most
+
+Method                                                                                                                                                                                                      Samples Percent
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- ------- -------
+java.util.concurrent.ConcurrentHashMap.get(Object)                                                                                                                                                            1,743   2.92%
+java.lang.ThreadLocal$ThreadLocalMap.getEntry(ThreadLocal)                                                                                                                                                    1,576   2.64%
+java.util.concurrent.ConcurrentHashMap.replaceNode(Object, Object, Object)                                                                                                                                    1,192   2.00%
+jdk.internal.vm.Continuation.yield(ContinuationScope)                                                                                                                                                         1,148   1.92%
+java.util.concurrent.ConcurrentHashMap.addCount(long, int)                                                                                                                                                    1,034   1.73%
+com.fasterxml.jackson.core.JsonFactory.createGenerator(OutputStream, JsonEncoding)                                                                                                                              820   1.37%
+java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool$WorkQueue)                                                                                                                                             792   1.33%
+com.arjuna.ats.arjuna.coordinator.RecordList.insert(AbstractRecord)                                                                                                                                             737   1.24%
+java.util.HashMap.putVal(int, Object, Object, boolean, boolean)                                                                                                                                                 721   1.21%
+java.util.ArrayList.grow(int)                                                                                                                                                                                   707   1.18%
+java.util.concurrent.ConcurrentHashMap.put(Object, Object)                                                                                                                                                      683   1.14%
+org.postgresql.core.v3.QueryExecutorImpl.processResults(ResultHandler, int, boolean)                                                                                                                            680   1.14%
+java.net.URI$Parser.parse(boolean)                                                                                                                                                                              650   1.09%
+java.util.HashMap$TreeNode.getTreeNode(int, Object)                                                                                                                                                             614   1.03%
+java.lang.StringLatin1.toLowerCase(String, byte[], Locale)                                                                                                                                                      582   0.98%
+io.netty.buffer.AbstractByteBuf.ensureAccessible()                                                                                                                                                              561   0.94%
+sun.nio.ch.NativeThread.current()                                                                                                                                                                               556   0.93%
+java.util.TreeMap.getFirstEntry()                                                                                                                                                                               554   0.93%
+io.quarkus.arc.impl.Scopes.scopeMatches(InjectableContext, InjectableBean)                                                                                                                                      551   0.92%
+jdk.internal.util.ArraysSupport.mismatch(byte[], int, byte[], int, int)                                                                                                                                         549   0.92%
+io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueue.offer(Object)                                                                                                                         543   0.91%
+java.util.concurrent.ConcurrentHashMap.remove(Object)                                                                                                                                                           540   0.91%
+io.quarkus.arc.impl.AbstractSharedContext.get(Contextual)                                                                                                                                                       533   0.89%
+com.arjuna.ats.jta.xa.XidImple.generateHash(int, byte[], int, int)                                                                                                                                              533   0.89%
+io.netty.util.AsciiString.hashCode(CharSequence)                                                                                                                                                                532   0.89%

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="492" viewBox="0 0 1200 492" font-family="Verdana,Helvetica,sans-serif">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f172a"/><stop offset="1" stop-color="#1e293b"/></linearGradient></defs>
+<rect width="1200" height="492" fill="url(#bg)"/>
+<text x="64" y="92" font-size="20" fill="#60a5fa" letter-spacing="3">PERFORMANCE · BENCHMARKING · JVM</text>
+<text x="64" y="168" font-size="52" font-weight="bold" fill="#f8fafc">The workload picks the margin</text>
+<text x="64" y="214" font-size="26" fill="#cbd5e1">— the config picked the winner</text>
+<text x="64" y="248" font-size="26" fill="#cbd5e1">a gate-passing cross-runtime triad on bare metal</text>
+<text x="64" y="312" font-size="17" fill="#94a3b8">entity-read-by-id · Exeris (Community) vs Quarkus-tuned vs Quarkus+Hibernate · h1 cleartext loopback · JDK 26 · perf-box-amd64</text>
+<rect x="64" y="344" width="200" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/><text x="80" y="370" font-size="12" fill="#93c5fd">light: throughput</text><text x="80" y="394" font-size="16" font-weight="bold" fill="#f8fafc">+39% / +57%</text>
+<rect x="282" y="344" width="200" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/><text x="298" y="370" font-size="12" fill="#93c5fd">heavy: default → normalized</text><text x="298" y="394" font-size="16" font-weight="bold" fill="#f8fafc">−10% → +6% vs tuned</text>
+<rect x="500" y="344" width="200" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/><text x="516" y="370" font-size="12" fill="#93c5fd">RSS, both workloads</text><text x="516" y="394" font-size="16" font-weight="bold" fill="#f8fafc">~1/2.7 – 1/2.9</text>
+<rect x="718" y="344" width="200" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/><text x="734" y="370" font-size="12" fill="#93c5fd">startup → 1st request</text><text x="734" y="394" font-size="16" font-weight="bold" fill="#f8fafc">1.15 s vs 2.2–2.4 s</text>
+<rect x="936" y="344" width="200" height="60" rx="6" fill="#1d4ed8" opacity="0.18" stroke="#3b82f6" stroke-width="1"/><text x="952" y="370" font-size="12" fill="#93c5fd">strict gate</text><text x="952" y="394" font-size="16" font-weight="bold" fill="#f8fafc">12/12 eligible</text>
+<line x1="64" y1="426" x2="1136" y2="426" stroke="#334155" stroke-width="1"/>
+<text x="64" y="452" font-size="14" fill="#cbd5e1">Track <tspan fill="#f8fafc" font-weight="bold">Community</tspan>  ·  Family <tspan fill="#f8fafc" font-weight="bold">Runtime</tspan>  ·  Scenario <tspan fill="#f8fafc" font-weight="bold">entity-read-by-id</tspan>  ·  claim_scope <tspan fill="#34d399" font-weight="bold">comparison_eligible</tspan>  ·  reproducibility <tspan fill="#34d399" font-weight="bold">complete</tspan>  ·  axis <tspan fill="#f8fafc" font-weight="bold">within-tier</tspan></text>
+<text x="64" y="476" font-size="14" fill="#94a3b8">Arkadiusz Przychocki  ·  2026-07-21  ·  profile <tspan fill="#cbd5e1">perf-box-amd64</tspan> (dedicated bare metal, boost off, pinned cpusets)</text>
+</svg>

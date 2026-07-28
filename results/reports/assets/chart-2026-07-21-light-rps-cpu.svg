@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" font-family="Verdana,Helvetica,sans-serif" role="img" aria-label="Light contract: throughput and CPU per request per target">
+<rect width="1200" height="340" fill="#0f172a"/>
+<text x="24" y="34" font-size="17" font-weight="bold" fill="#f8fafc">Runtime-bound single-row read — the runtime lens</text>
+<text x="24" y="54" font-size="11" fill="#94a3b8">fixed_contract_cross_runtime_h1_single_read_v1 · GET /api/v1/user?id=1 (~125 B) · perf-box-amd64 · mean of 4 gate-passing legs (2 pairs × AB/BA), rps spread ≤ 1.6%</text>
+<text x="24" y="76" font-size="15" font-weight="bold" fill="#f8fafc">Throughput</text>
+<text x="24" y="94" font-size="11" fill="#94a3b8">requests / second — higher is better</text>
+<line x1="156.0" y1="110" x2="156.0" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="156.0" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
+<line x1="238.8" y1="110" x2="238.8" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="238.8" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">20,000</text>
+<line x1="321.6" y1="110" x2="321.6" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="321.6" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">40,000</text>
+<line x1="404.5" y1="110" x2="404.5" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="404.5" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">60,000</text>
+<line x1="487.3" y1="110" x2="487.3" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="487.3" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">80,000</text>
+<line x1="156" y1="110" x2="156" y2="280" stroke="#94a3b8" stroke-width="1"/>
+<text x="148" y="150.5" font-size="12" fill="#cbd5e1" text-anchor="end">exeris-community</text>
+<path d="M157,134.5 h317.1 q4,0 4,4 v16 q0,4 -4,4 h-317.1 z" fill="#3987e5" opacity="1.0"/>
+<text x="486.1" y="150.5" font-size="12" font-weight="bold" fill="#f8fafc">77,531</text>
+<text x="148" y="199.0" font-size="12" fill="#cbd5e1" text-anchor="end">quarkus-tuned</text>
+<path d="M157,183.0 h226.6 q4,0 4,4 v16 q0,4 -4,4 h-226.6 z" fill="#3987e5" opacity="1.0"/>
+<text x="395.6" y="199.0" font-size="12" font-weight="bold" fill="#f8fafc">55,673</text>
+<text x="148" y="247.5" font-size="12" fill="#cbd5e1" text-anchor="end">quarkus-hibernate</text>
+<path d="M157,231.5 h200.9 q4,0 4,4 v16 q0,4 -4,4 h-200.9 z" fill="#3987e5" opacity="1.0"/>
+<text x="369.9" y="247.5" font-size="12" font-weight="bold" fill="#f8fafc">49,482</text><text x="624" y="76" font-size="15" font-weight="bold" fill="#f8fafc">CPU per request (app)</text>
+<text x="624" y="94" font-size="11" fill="#94a3b8">µs of process CPU per request — lower is better</text>
+<line x1="756.0" y1="110" x2="756.0" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="756.0" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
+<line x1="838.8" y1="110" x2="838.8" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="838.8" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">20</text>
+<line x1="921.6" y1="110" x2="921.6" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="921.6" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">40</text>
+<line x1="1004.5" y1="110" x2="1004.5" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="1004.5" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">60</text>
+<line x1="1087.3" y1="110" x2="1087.3" y2="280" stroke="#334155" stroke-width="1"/>
+<text x="1087.3" y="296" font-size="10" fill="#94a3b8" text-anchor="middle">80</text>
+<line x1="756" y1="110" x2="756" y2="280" stroke="#94a3b8" stroke-width="1"/>
+<text x="748" y="150.5" font-size="12" fill="#cbd5e1" text-anchor="end">exeris-community</text>
+<path d="M757,134.5 h208.4 q4,0 4,4 v16 q0,4 -4,4 h-208.4 z" fill="#3987e5" opacity="1.0"/>
+<text x="977.4" y="150.5" font-size="12" font-weight="bold" fill="#f8fafc">51.3</text>
+<text x="748" y="199.0" font-size="12" fill="#cbd5e1" text-anchor="end">quarkus-tuned</text>
+<path d="M757,183.0 h281.3 q4,0 4,4 v16 q0,4 -4,4 h-281.3 z" fill="#3987e5" opacity="1.0"/>
+<text x="1050.3" y="199.0" font-size="12" font-weight="bold" fill="#f8fafc">68.9</text>
+<text x="748" y="247.5" font-size="12" fill="#cbd5e1" text-anchor="end">quarkus-hibernate</text>
+<path d="M757,231.5 h316.5 q4,0 4,4 v16 q0,4 -4,4 h-316.5 z" fill="#3987e5" opacity="1.0"/>
+<text x="1085.5" y="247.5" font-size="12" font-weight="bold" fill="#f8fafc">77.4</text>
+<text x="24" y="312" font-size="10" fill="#94a3b8">Target cpuset saturated (95–100% busy) in every leg; loadgen ≤ 26%, Postgres ≤ 42% — throughput tracks target efficiency.</text>
+<text x="24" y="326" font-size="10" fill="#94a3b8">CPU/req = cpu_time_seconds ÷ total_requests (resource-metrics.json).</text>
+</svg>

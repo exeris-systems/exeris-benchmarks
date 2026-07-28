@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="474" viewBox="0 0 1200 474" font-family="Verdana,Helvetica,sans-serif" role="img" aria-label="Open-loop wrk2 CO-free p99 latency curves, light and heavy">
+<rect width="1200" height="474" fill="#0f172a"/>
+<text x="24" y="30" font-size="17" font-weight="bold" fill="#f8fafc">Open-loop wrk2 — CO-free service-time p99 vs offered rate (pinned, lean-co-resident pairs)</text>
+<text x="24" y="50" font-size="11" fill="#94a3b8">campaign 20260723-155158 · driver.mode=open, percentiles publishable=true only · mean AB+BA · pair-3 (two heavy JVMs) excluded — co-residence · comparison-eligible</text>
+<rect x="24" y="64" width="14" height="14" rx="3" fill="#3987e5"/><text x="44" y="76" font-size="12" fill="#cbd5e1">exeris-community</text>
+<rect x="230" y="64" width="14" height="14" rx="3" fill="#22a06b"/><text x="250" y="76" font-size="12" fill="#cbd5e1">quarkus-tuned</text>
+<rect x="410" y="64" width="14" height="14" rx="3" fill="#e08e0b"/><text x="430" y="76" font-size="12" fill="#cbd5e1">quarkus-hibernate</text>
+<!-- ===== LEFT PANEL: LIGHT ===== -->
+<text x="70" y="104" font-size="13" font-weight="bold" fill="#f8fafc">LIGHT single-read — Exeris flat, and lowest at every rung</text>
+<line x1="70" y1="380" x2="580" y2="380" stroke="#334155" stroke-width="1"/><text x="64" y="384" font-size="10" fill="#94a3b8" text-anchor="end">0</text>
+<line x1="70" y1="307.5" x2="580" y2="307.5" stroke="#1e293b" stroke-width="1"/><text x="64" y="311.5" font-size="10" fill="#94a3b8" text-anchor="end">2</text>
+<line x1="70" y1="235" x2="580" y2="235" stroke="#1e293b" stroke-width="1"/><text x="64" y="239" font-size="10" fill="#94a3b8" text-anchor="end">4</text>
+<line x1="70" y1="162.5" x2="580" y2="162.5" stroke="#1e293b" stroke-width="1"/><text x="64" y="166.5" font-size="10" fill="#94a3b8" text-anchor="end">6</text>
+<line x1="70" y1="90" x2="580" y2="90" stroke="#1e293b" stroke-width="1"/><text x="64" y="94" font-size="10" fill="#94a3b8" text-anchor="end">8 ms</text>
+<text x="110" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">6k</text><text x="227" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">12k</text><text x="345" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">18k</text><text x="462" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">24k</text><text x="580" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">30k rps</text>
+<path d="M110,314.4 L227,315.8 L345,324.2 L462,308.9 L580,301.7" fill="none" stroke="#3987e5" stroke-width="2.4"/>
+<path d="M110,311.8 L227,308.9 L345,297.0 L462,279.2 L580,191.1" fill="none" stroke="#22a06b" stroke-width="2.4"/>
+<path d="M110,306.8 L227,306.1 L345,293.4 L462,264.0 L580,115.0" fill="none" stroke="#e08e0b" stroke-width="2.4"/>
+<circle cx="110" cy="314.4" r="3.5" fill="#3987e5"/><circle cx="227" cy="315.8" r="3.5" fill="#3987e5"/><circle cx="345" cy="324.2" r="3.5" fill="#3987e5"/><circle cx="462" cy="308.9" r="3.5" fill="#3987e5"/><circle cx="580" cy="301.7" r="3.5" fill="#3987e5"/>
+<circle cx="110" cy="311.8" r="3.5" fill="#22a06b"/><circle cx="227" cy="308.9" r="3.5" fill="#22a06b"/><circle cx="345" cy="297.0" r="3.5" fill="#22a06b"/><circle cx="462" cy="279.2" r="3.5" fill="#22a06b"/><circle cx="580" cy="191.1" r="3.5" fill="#22a06b"/>
+<circle cx="110" cy="306.8" r="3.5" fill="#e08e0b"/><circle cx="227" cy="306.1" r="3.5" fill="#e08e0b"/><circle cx="345" cy="293.4" r="3.5" fill="#e08e0b"/><circle cx="462" cy="264.0" r="3.5" fill="#e08e0b"/><circle cx="580" cy="115.0" r="3.5" fill="#e08e0b"/>
+<text x="574" y="303" font-size="9" fill="#e08e0b" text-anchor="end">7.31</text>
+<text x="574" y="185" font-size="9" fill="#22a06b" text-anchor="end">5.21</text>
+<text x="520" y="330" font-size="9" fill="#3987e5" text-anchor="middle">exeris flat 1.5–2.2 ms</text>
+<!-- ===== RIGHT PANEL: HEAVY ===== -->
+<text x="680" y="104" font-size="13" font-weight="bold" fill="#f8fafc">HEAVY aggregate — converge below ceiling, split at 10k</text>
+<line x1="680" y1="380" x2="1180" y2="380" stroke="#334155" stroke-width="1"/><text x="674" y="384" font-size="10" fill="#94a3b8" text-anchor="end">0</text>
+<line x1="680" y1="317.9" x2="1180" y2="317.9" stroke="#1e293b" stroke-width="1"/><text x="674" y="321.9" font-size="10" fill="#94a3b8" text-anchor="end">3</text>
+<line x1="680" y1="255.7" x2="1180" y2="255.7" stroke="#1e293b" stroke-width="1"/><text x="674" y="259.7" font-size="10" fill="#94a3b8" text-anchor="end">6</text>
+<line x1="680" y1="193.6" x2="1180" y2="193.6" stroke="#1e293b" stroke-width="1"/><text x="674" y="197.6" font-size="10" fill="#94a3b8" text-anchor="end">9</text>
+<line x1="680" y1="131.4" x2="1180" y2="131.4" stroke="#1e293b" stroke-width="1"/><text x="674" y="135.4" font-size="10" fill="#94a3b8" text-anchor="end">12 ms</text>
+<text x="710" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">2k</text><text x="827" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">4k</text><text x="945" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">6k</text><text x="1062" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">8k</text><text x="1180" y="398" font-size="10" fill="#cbd5e1" text-anchor="middle">10k rps</text>
+<path d="M710,291.1 L827,325.5 L945,289.3 L1062,308.3 L1180,106.1" fill="none" stroke="#3987e5" stroke-width="2.4"/>
+<path d="M710,330.9 L827,310.6 L945,326.4 L1062,318.5 L1180,301.5" fill="none" stroke="#22a06b" stroke-width="2.4"/>
+<path d="M710,327.0 L827,323.4 L945,285.1 L1062,271.5 L1180,154.4" fill="none" stroke="#e08e0b" stroke-width="2.4"/>
+<circle cx="710" cy="291.1" r="3.5" fill="#3987e5"/><circle cx="827" cy="325.5" r="3.5" fill="#3987e5"/><circle cx="945" cy="289.3" r="3.5" fill="#3987e5"/><circle cx="1062" cy="308.3" r="3.5" fill="#3987e5"/><circle cx="1180" cy="106.1" r="3.5" fill="#3987e5"/>
+<circle cx="710" cy="330.9" r="3.5" fill="#22a06b"/><circle cx="827" cy="310.6" r="3.5" fill="#22a06b"/><circle cx="945" cy="326.4" r="3.5" fill="#22a06b"/><circle cx="1062" cy="318.5" r="3.5" fill="#22a06b"/><circle cx="1180" cy="301.5" r="3.5" fill="#22a06b"/>
+<circle cx="710" cy="327.0" r="3.5" fill="#e08e0b"/><circle cx="827" cy="323.4" r="3.5" fill="#e08e0b"/><circle cx="945" cy="285.1" r="3.5" fill="#e08e0b"/><circle cx="1062" cy="271.5" r="3.5" fill="#e08e0b"/><circle cx="1180" cy="154.4" r="3.5" fill="#e08e0b"/>
+<text x="1174" y="103" font-size="9" fill="#3987e5" text-anchor="end">13.2</text>
+<text x="1174" y="150" font-size="9" fill="#e08e0b" text-anchor="end">10.9</text>
+<text x="1174" y="312" font-size="9" fill="#22a06b" text-anchor="end">3.8</text>
+<line x1="1180" y1="112" x2="1120" y2="128" stroke="#475569" stroke-width="1" stroke-dasharray="2,2"/>
+<text x="1116" y="126" font-size="9" fill="#94a3b8" text-anchor="end">co-residence, not heap</text>
+<text x="1116" y="139" font-size="9" fill="#94a3b8" text-anchor="end">(isolated: ~2.9 ms, heap-indep.)</text>
+<text x="24" y="440" font-size="10" fill="#94a3b8">LIGHT: Exeris holds ~1.5–2.2 ms p99 flat across a 5× rate range; Quarkus-tuned rises to 5.2 and Hibernate to 7.3 — ordering exeris &lt; tuned &lt; hibernate at every rung (the first CO-free eligible latency result favoring Exeris).</text>
+<text x="24" y="456" font-size="10" fill="#94a3b8">HEAVY: below the ~11k DB ceiling all three sit at ~2.4–5 ms (tuned marginally tightest). At 10k the tuned tail stays 3.8 ms while Exeris/Hibernate climb — but Exeris's climb is co-residence (isolated open-loop @10k = ~2.9 ms, heap-independent), not a runtime tail.</text>
+</svg>

@@ -42,12 +42,17 @@ All rungs valid (attained ≈ offered: 29969 / 29992 / 29969 / 47987 rps).
   ~57k ceiling) it stays tight (p99.9 4.12 ms, max 45 ms) — graceful degradation toward saturation. The closed-loop
   148 ms was pure coordinated-omission amplification of exeris's ~22 ms real extreme, which is itself just the
   occasional ~23 ms young-GC pause (matches Step 1) — benign and heap-independent. **No 3am problem in exeris.**
-- **quarkus-tuned showed a single ~1 s stall — RARE, not systematic (see §7 cross-check below).** This run
-  measured p99.9 = 913 ms, p99.99–max ≈ 1.0 s. §7's independent campaign at the *same* 30k rung (lean-co-resident
-  pair-1, n=2) measured **p99.9 = 12.22 ms**, so this is **not** a reproducible per-run property. Arithmetic
-  explains the shape: at 30k × 300 s = 9 M requests, one ~1 s stall delays every request scheduled during it
-  (~30 k = 0.33 % > 0.1 %), which alone drives p99.9 → ~913 ms and p99.99/max → ~1.0 s. **One event in one
-  window.** §7's 120 s windows are less likely to catch it. Frequency is unestablished (n=1); needs repeats.
+- **quarkus-tuned showed a ~1 s stall: p99.9 = 913 ms, p99.99–max ≈ 1.0 s.**
+  > **SUPERSEDED — this was later REPRODUCED (n=2).** A subsequent independent run
+  > (`../20260724-entity-read-deep-tail-slowquery/`) measured p99.9 = 903 ms / max 1.01 s at the same
+  > configuration — within ~1 % of this run. The "rare single-event outlier / not a property" reading below
+  > and in the §7 cross-check is **retracted**: the stall is reproducible at matched 256 m heap, and it is
+  > **not database-side** (PostgreSQL logged zero workload statements > 20 ms). The arithmetic below still
+  > correctly describes the percentile *shape*; what was wrong was inferring the event was random. §7's
+  > 12.22 ms at the same rung is explained by configuration, not by this being a fluke — §7 gave quarkus
+  > 0.75× budget heap while this series matches it to exeris at 256 m, and §7's window is 120 s vs 300 s here.
+  Arithmetic for the shape: at 30k × 300 s = 9 M requests, one ~1 s stall delays every request scheduled
+  during it (~30 k = 0.33 % > 0.1 %), which alone drives p99.9 → ~900 ms and p99.99/max → ~1.0 s.
 - **quarkus-hibernate** here is comparable to exeris (p99.9 4.38 ms, max 35.7 ms) — notably better than §7's
   co-resident 19.91 ms at the same rung, consistent with §7's own co-residence thesis.
 
@@ -75,8 +80,10 @@ check of this run — and an unpublished axis that strengthens §7's own light c
 3. **p99.9 strengthens §7's headline.** §7's published p99 shows separation only emerging at 24–30 k
    (2.16 vs 5.21 vs 7.31). At p99.9 exeris is **flat 1.94–2.60 ms while both quarkus arms run 3–8× higher across
    the entire ladder, from 6 k up**. §7 under-states its own result by publishing p99 alone.
-4. **This run's quarkus-tuned 913 ms is NOT corroborated** — §7 measures 12.22 ms at the same rung (see above).
-   Treated as a rare single-event outlier, not a property.
+4. **This run's quarkus-tuned 913 ms vs §7's 12.22 ms at the same rung.** *(Updated: the 913 ms was later
+   reproduced at 903 ms in `../20260724-entity-read-deep-tail-slowquery/`, so it is a real, repeatable effect
+   — not the outlier this section originally called it. The gap to §7 is a configuration difference: matched
+   256 m heap here vs quarkus at 0.75× budget in §7, plus 300 s vs 120 s windows.)*
 5. **Heavy (context):** §7's heavy p99.9 at 10 k is exeris 37.3 (pair-1) / 40.4 (pair-2) vs quarkus-tuned 13.8 —
    exeris's near-ceiling heavy tail is worse at p99.9 in *both* pairs, and hibernate's pair-3 99.7 ms vs pair-2
    31.3 ms reproduces §7's "heavier neighbor → fatter tail" signature. Nothing here contradicts §7's reading that
@@ -87,8 +94,10 @@ check of this run — and an unpublished axis that strengthens §7's own light c
 The tail investigation **removes an exeris concern** and does **not** establish a quarkus one. Exeris's light tail
 is the tightest measured — flat p99.9 ≈ 2–4 ms from 6 k to 48 k — driven only by benign young-GC pauses that a
 larger heap does not improve; the alarming 148 ms closed-loop max was pure coordinated-omission amplification.
-The quarkus-tuned ~1 s event seen here is a **single unreproduced outlier** that §7's independent data contradicts
-at the same rung; it is logged as an open question, not a finding. The durable, cross-validated result is that
+The quarkus-tuned ~1 s event seen here **reproduced (n=2, 913 → 903 ms)** in
+`../20260724-entity-read-deep-tail-slowquery/` and is **not database-side**; it is real at matched 256 m heap,
+though its cause is unproven and the heap match itself is the leading suspect, so it must not be stated as an
+unqualified "quarkus has a 1 s tail". The durable, cross-validated result is that
 **exeris owns the light service-time tail at p99.9 by 3–8× across the whole ladder** — a stronger statement than
 §7 published, and it comes from §7's own gated data.
 

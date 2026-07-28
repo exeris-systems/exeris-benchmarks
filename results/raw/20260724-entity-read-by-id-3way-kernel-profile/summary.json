@@ -33,7 +33,7 @@
       "target_runtime": "community",
       "db_driver": "pgjdbc",
       "rps": 14351.23,
-      "cpu_time_s_measurement": 917.60,
+      "cpu_time_s_measurement": 917.6,
       "avg_cores": 3.0635,
       "cpu_per_req_us": 213.1,
       "rss_avg_mib": 301.0,
@@ -52,7 +52,7 @@
     "quarkus_tuned": {
       "target_app": "quarkus-benchmark-app-tuned",
       "target_runtime": "quarkus-tuned",
-      "db_driver": "vertx-pg-reactive",
+      "db_driver": "agroal+pgjdbc (pure JDBC, no ORM)",
       "rps": 14009.59,
       "cpu_time_s_measurement": 1000.55,
       "avg_cores": 3.3362,
@@ -68,7 +68,8 @@
       "syscalls_per_req": 35.97,
       "derived_kernel_cpu_per_req_us": 99,
       "derived_user_cpu_per_req_us": 139,
-      "derived_us_per_syscall": 2.76
+      "derived_us_per_syscall": 2.76,
+      "db_driver_correction": "Corrected 2026-07-28: previously mislabelled 'vertx-pg-reactive'. application.properties declares quarkus.datasource.jdbc.* and 'Pure-JDBC archetype: no Hibernate/ORM on any path -- Agroal DataSource + PreparedStatement'; this bundle's own top user frames for quarkus-tuned are org/postgresql/core/PGStream.receiveTupleV3 and PgResultSet.getLong (pgjdbc). All three stacks use pgjdbc, so the pgjdbc fairness params apply to all three and quarkus-tuned vs quarkus-hibernate isolates the Hibernate ORM layer exactly."
     },
     "quarkus_hibernate": {
       "target_app": "quarkus-benchmark-app",
@@ -111,6 +112,6 @@
     "Loopback kernel: no NIC/GSO/TSO/IRQ-coalescing; softirq inline. Fair across stacks; does not transfer to real network.",
     "Exploratory: not run through comparative strict gate; no gated throughput claim.",
     "Profiler fractions warmup-inclusive; durable metrics measurement-only; derived per-req kernel/user split approximate.",
-    "Per-stack DB drivers differ, so syscalls/req and db% reflect transport AND query-plan strategy."
+    "All three stacks use pgjdbc (exeris pgjdbc / qtuned Agroal+pgjdbc no ORM / qhib Agroal+pgjdbc+Hibernate). syscalls/req and db-client% reflect pooling/connection management and query strategy, NOT different transports."
   ]
 }

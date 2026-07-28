@@ -26,7 +26,7 @@ All three stacks, identical: heap `-Xms256m -Xmx256m` (verified in each `constra
 DB pool 32/32, target cpuset `0-1,8-9`, load cpuset `2-3,10-11`, 120 s warmup + 300 s measurement,
 4 wrk threads / 128 conns, ParallelGC, 1024 MB `-XX:MaxRAM` budget, same pre-launched tuned PostgreSQL,
 same `GET /api/v1/users` aggregate (10×10×10). Stacks: `community` = exeris-community-app;
-`quarkus-tuned` = quarkus-benchmark-app-tuned (reactive vertx-pg); `quarkus` = quarkus-benchmark-app
+`quarkus-tuned` = quarkus-benchmark-app-tuned (**Agroal pool + pgjdbc, pure JDBC, no ORM**); `quarkus` = quarkus-benchmark-app
 (Hibernate + Agroal/pgjdbc) = "quarkus-hibernate".
 
 ## Durable metrics (measurement-window, warmup-free — `resource-metrics.json`)
@@ -86,8 +86,16 @@ Derived (CPU/req × fraction — approximate, since fractions are warmup-inclusi
   comparative *throughput* claim is made here. The rps values are context (they match prior aggregate runs).
 - **Profiler fractions are warmup-inclusive** (agent from launch); the *durable* metrics are measurement-only.
   Derived kernel-/user-CPU/req multiply the two and are therefore approximate.
-- **Per-stack DB drivers differ** (exeris pgjdbc / qtuned vertx-pg reactive / qhib Hibernate+pgjdbc). The
-  syscalls/req and db-client% therefore reflect transport *and* query-plan strategy, not transport alone.
+- **All three stacks use the same JDBC driver — pgjdbc.** *(Corrected 2026-07-28: an earlier revision of this
+  file described quarkus-tuned as "vertx-pg reactive". That was wrong. `application.properties` declares
+  `quarkus.datasource.jdbc.*` and states "Pure-JDBC archetype: no Hibernate/ORM on any path … Agroal
+  DataSource + PreparedStatement", and the profile's own top user frames for quarkus-tuned are
+  `org/postgresql/core/PGStream.receiveTupleV3` and `PgResultSet.getLong` — pgjdbc frames a reactive client
+  would never emit. The evidence was already in this bundle.)* The stacks are therefore
+  exeris (pgjdbc) / quarkus-tuned (Agroal + pgjdbc, no ORM) / quarkus-hibernate (Agroal + pgjdbc + Hibernate).
+  Two consequences, both strengthening: the pgjdbc fairness params apply identically to **all three**, and
+  **quarkus-tuned vs quarkus-hibernate isolates the Hibernate ORM layer exactly** — same pool, same driver,
+  ORM the only difference. The remaining per-stack difference is pooling/connection management, not transport.
 - **Durable CPU/req is measured under the profiler** (async-profiler agent attached). The light companion's
   `bottleneck-diagnostic/` quantifies the overhead as ~+3–8 µs/req (exeris-heavier), so these absolutes are
   slightly inflated and *under*-state exeris's lead; the clean gap is larger. The comparison is unaffected.

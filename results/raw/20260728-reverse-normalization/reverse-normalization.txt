@@ -1,0 +1,21 @@
+############ community [fa-exeris] 12:47:38UTC ############
+    params: preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false
+    verified applied: preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false
+[fa-exeris] rps=14308  cpu_time_s=884.4  CPU/req=206.0us
+############ quarkus-tuned [fa-qtuned] 12:54:48UTC ############
+    params: preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false
+    verified applied: preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false
+[fa-qtuned] rps=13872  cpu_time_s=963.9  CPU/req=231.6us
+############ quarkus-tuned [ad-qtuned] 13:01:57UTC ############
+    params: preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=100&adaptiveFetch=true
+    verified applied: preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=100&adaptiveFetch=true
+[ad-qtuned] rps=11869  cpu_time_s=976.2  CPU/req=274.2us
+############ community [ad-exeris] 13:09:07UTC ############
+    params: preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=100&adaptiveFetch=true
+    verified applied: preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=100&adaptiveFetch=true
+[ad-exeris] rps=12427  cpu_time_s=898.1  CPU/req=240.9us
+===== REVERSE NORMALIZATION DONE 13:16:16UTC =====
+  FETCH-ALL  exeris=14308  qtuned=13872  gap=+3.1%
+  ADAPTIVE   exeris=12427  qtuned=11869  gap=+4.7%
+  READ: gap keeps its SIGN under both -> §8 conclusion is independent of normalization direction.
+        gap FLIPS sign -> §8 must be restated as "ranking depends on which fetch mode you equalize to".

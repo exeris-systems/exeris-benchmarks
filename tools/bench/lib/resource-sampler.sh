@@ -233,6 +233,107 @@ bench_summarize_resource_samples() {
     }' > "$json_file"
 }
 
+# Resolve HOW to invoke jcmd without endangering the run, and report the mode.
+#
+# jcmd is itself a full JVM. Started inside a constrained systemd scope whose
+# cgroup already sits near MemoryMax, it spikes the cgroup past the cap and draws
+# a systemd-oomd SIGTERM — which kills the runner AFTER measurement but BEFORE
+# result.json is written, silently losing the leaf. That hazard is why NMT used to
+# be skipped outright on the constrained path, which is exactly the path the
+# matched-heap footprint question needs data from.
+#
+# Escaping to a SIBLING slice bills jcmd's memory elsewhere (same idiom as the
+# loadgen escape in run-wrk2.sh) and makes NMT available under constraint. If the
+# escape is unavailable we still refuse to run jcmd: a missing NMT file degrades a
+# diagnostic; a lost result.json destroys the measurement.
+#
+# Sets BENCH_JCMD_PREFIX (array) and BENCH_JCMD_MODE. Returns 1 => do not run jcmd.
+BENCH_JCMD_PREFIX=()
+BENCH_JCMD_MODE="direct"
+_bench_resolve_jcmd_prefix() {
+  BENCH_JCMD_PREFIX=()
+  BENCH_JCMD_MODE="direct"
+
+  if ! command -v jcmd >/dev/null 2>&1; then
+    BENCH_JCMD_MODE="skipped_jcmd_unavailable"
+    return 1
+  fi
+
+  if [[ "${BENCHMARK_CONSTRAINED_SCOPE_ACTIVE:-0}" == "1" ]]; then
+    if command -v systemd-run >/dev/null 2>&1; then
+      BENCH_JCMD_PREFIX=(systemd-run --user --scope --quiet --collect --slice=benchdiag.slice)
+      BENCH_JCMD_MODE="systemd-run-escape:benchdiag.slice"
+    else
+      BENCH_JCMD_MODE="skipped_constrained_scope_no_systemd_run"
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
+# Capture the two RAW artifacts needed to decompose resident footprint into
+# HEAP-RESIDENT vs NON-HEAP-RESIDENT (triad report §5, the one open question that
+# section declares). Attribution itself happens offline in
+# tools/extract-footprint-decomposition.sh — raw evidence here, arithmetic there.
+#
+# WHY NOT smaps_rollup: the per-sample loop above reads /proc/<pid>/smaps_rollup,
+# which is a SUM over all mappings. A sum cannot answer "how much of RSS is the
+# heap", and the naive alternative — RSS minus declared -Xmx — is arithmetically
+# invalid: without AlwaysPreTouch, -Xms COMMITS pages it never TOUCHES, so the
+# resident heap is strictly smaller than the declared heap (measured on a probe
+# JVM: 262144 kB committed, 201512 kB resident). §5 withdrew a row built that way.
+# The sound method needs per-mapping Rss (this smaps dump) joined against the heap
+# ADDRESS RANGE (NMT `detail`, below).
+#
+# ORDERING IS DELIBERATE: smaps is dumped FIRST. Reading /proc costs nothing in the
+# target's cgroup and cannot fail the run; jcmd is a whole JVM and can. If jcmd is
+# skipped or dies we still hold the residency half of the evidence.
+bench_capture_footprint_snapshot() {
+  local pid="$1"
+  local out_dir="$2"
+  local label="${3:-measurement-end}"
+  local smaps_out nmt_out
+  local nmt_status="captured" nmt_mode="direct"
+
+  if [[ -z "$pid" || ! -d "/proc/$pid" ]]; then
+    return 0
+  fi
+  [[ -d "$out_dir" ]] || mkdir -p "$out_dir" || return 0
+
+  smaps_out="$out_dir/footprint-smaps-${label}.txt.gz"
+  nmt_out="$out_dir/footprint-nmt-detail-${label}.txt"
+
+  if ! gzip -c "/proc/$pid/smaps" > "$smaps_out" 2>/dev/null; then
+    rm -f "$smaps_out"
+    echo "WARN: could not read /proc/$pid/smaps — footprint decomposition unavailable" >&2
+    return 0
+  fi
+
+  if ! _bench_resolve_jcmd_prefix; then
+    nmt_status="$BENCH_JCMD_MODE"
+    nmt_mode="none"
+  else
+    nmt_mode="$BENCH_JCMD_MODE"
+  fi
+
+  if [[ "$nmt_status" == "captured" ]]; then
+    # NB: `${arr[@]}` on an EMPTY array under `set -u` is safe in bash 4.4+, which
+    # is what the perf box and CI both run; the prefix is empty in the direct case.
+    if ! "${BENCH_JCMD_PREFIX[@]}" jcmd "$pid" VM.native_memory detail scale=KB > "$nmt_out" 2>/dev/null; then
+      nmt_status="failed"
+      rm -f "$nmt_out"
+    elif ! grep -q 'for Java Heap' "$nmt_out" 2>/dev/null; then
+      # NMT off at JVM launch (-XX:NativeMemoryTracking) prints a refusal, not a map.
+      nmt_status="unavailable_nmt_not_enabled_at_launch"
+      rm -f "$nmt_out"
+    fi
+  fi
+
+  echo "  footprint snapshot [$label]: smaps=$(basename "$smaps_out") nmt=$nmt_status ($nmt_mode)"
+  printf '%s\n' "$nmt_status" > "$out_dir/.footprint-nmt-status-${label}" 2>/dev/null || true
+}
+
 bench_augment_resource_metrics_with_jvm_breakdown() {
   local pid="$1"
   local json_file="$2"
@@ -245,12 +346,26 @@ bench_augment_resource_metrics_with_jvm_breakdown() {
   if [[ -z "$pid" || ! -f "$json_file" ]]; then
     return 0
   fi
-  if ! command -v jcmd >/dev/null 2>&1; then
+  # Escape-aware: under a constrained scope this used to be skipped wholesale by the
+  # caller, which is why the matched-heap campaigns carry no NMT at all. The helper
+  # either yields a safe invocation or refuses — it never runs a bare jcmd inside a
+  # tight cgroup.
+  if ! _bench_resolve_jcmd_prefix; then
+    if command -v jq >/dev/null 2>&1 && [[ -f "$json_file" ]]; then
+      tmp_json="$(mktemp)"
+      if jq --arg reason "$BENCH_JCMD_MODE" \
+           '. + {jvm_breakdown_note: ("jcmd heap/NMT breakdown not captured: " + $reason)}' \
+           "$json_file" > "$tmp_json" 2>/dev/null; then
+        mv "$tmp_json" "$json_file"
+      else
+        rm -f "$tmp_json"
+      fi
+    fi
     return 0
   fi
 
-  heap_info="$(jcmd "$pid" GC.heap_info 2>/dev/null || true)"
-  nmt_summary="$(jcmd "$pid" VM.native_memory summary scale=KB 2>/dev/null || true)"
+  heap_info="$("${BENCH_JCMD_PREFIX[@]}" jcmd "$pid" GC.heap_info 2>/dev/null || true)"
+  nmt_summary="$("${BENCH_JCMD_PREFIX[@]}" jcmd "$pid" VM.native_memory summary scale=KB 2>/dev/null || true)"
 
   if [[ -n "$heap_info" ]]; then
     heap_used_kb="$(printf '%s\n' "$heap_info" | \

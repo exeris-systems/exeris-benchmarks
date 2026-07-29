@@ -1685,27 +1685,25 @@ if command -v bench_summarize_resource_samples >/dev/null 2>&1 && [[ -f "$RESOUR
   echo "[step 7.5/9] Summarizing target resource usage -> $RESOURCE_METRICS_JSON"
   bench_summarize_resource_samples "$RESOURCE_SAMPLES_CSV" "$RESOURCE_METRICS_JSON" || true
   if [[ -f "$RESOURCE_METRICS_JSON" ]]; then
-    if [[ "${BENCHMARK_CONSTRAINED_SCOPE_ACTIVE:-0}" == "1" ]]; then
-      # Under a constrained systemd scope (tight MemoryMax + MemorySwapMax=0), jcmd is
-      # ITSELF a full JVM. Launching it inside the scope cgroup, alongside the target JVM
-      # that already sits near the cap, spikes cgroup memory well past MemoryMax. That
-      # draws a systemd-oomd / cgroup-OOM SIGTERM (rc 143) which kills this runner AFTER
-      # measurement but BEFORE step 8 writes result.json — silently losing throughput +
-      # total_requests (hence cpu/req) for exactly the low-memory points we care about.
-      # The durable metrics (RSS, cpu_time, cores) come from the /proc sampler, not jcmd,
-      # so skip the JVM heap/NMT breakdown here rather than risk the result artifact.
-      # (jcmd's own || true catches its exit status, but not an async SIGTERM to bash.)
-      if command -v jq >/dev/null 2>&1; then
-        tmp_rm="$(mktemp)"
-        if jq '. + {jvm_breakdown_note: "jcmd heap/NMT breakdown skipped under constrained scope: launching a jcmd JVM in the tight cgroup would spike memory past MemoryMax and OOM the run before result.json is written"}' \
-             "$RESOURCE_METRICS_JSON" > "$tmp_rm" 2>/dev/null; then
-          mv "$tmp_rm" "$RESOURCE_METRICS_JSON"
-        else
-          rm -f "$tmp_rm"
-        fi
-      fi
-    elif [[ -n "$RESOURCE_TARGET_PID" && -d "/proc/$RESOURCE_TARGET_PID" ]] \
+    # Footprint decomposition evidence (triad report §5): per-mapping smaps + the NMT
+    # heap address range, captured while the target is still serving-warm. Cheap and
+    # fail-safe — smaps first, NMT second — and attributed offline by
+    # tools/extract-footprint-decomposition.sh. Never derive a heap/non-heap split by
+    # subtracting -Xmx from RSS: without AlwaysPreTouch, committed > resident.
+    if command -v bench_capture_footprint_snapshot >/dev/null 2>&1 \
+       && [[ -n "$RESOURCE_TARGET_PID" && -d "/proc/$RESOURCE_TARGET_PID" ]]; then
+      bench_capture_footprint_snapshot \
+        "$RESOURCE_TARGET_PID" "$(dirname "$RESOURCE_METRICS_JSON")" "measurement-end" || true
+    fi
+
+    if [[ -n "$RESOURCE_TARGET_PID" && -d "/proc/$RESOURCE_TARGET_PID" ]] \
        && command -v bench_augment_resource_metrics_with_jvm_breakdown >/dev/null 2>&1; then
+      # Constrained-scope safety now lives in the sampler lib: it escapes jcmd to a
+      # sibling slice (benchdiag.slice) or declines and records the reason, so it can
+      # never OOM the run the way a bare in-scope jcmd would. The branch that used to
+      # skip NMT wholesale under BENCHMARK_CONSTRAINED_SCOPE_ACTIVE is therefore gone —
+      # that skip is exactly why the matched-heap campaigns carry no NMT at all, and
+      # why §5's composition question could not be answered from existing artifacts.
       bench_augment_resource_metrics_with_jvm_breakdown "$RESOURCE_TARGET_PID" "$RESOURCE_METRICS_JSON" || true
     elif command -v jq >/dev/null 2>&1; then
       # Native image / external target / undetected pid: no jcmd surface for a heap

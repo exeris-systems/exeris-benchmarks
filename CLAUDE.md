@@ -207,6 +207,7 @@ Follow `docs/regression-policy.md`. Never refresh a baseline to mask a regressio
 - For TLS rows: buffer / transport / allocator model labels populated; B3 vs B4 not framed as handler-free apples-to-apples; B3/B4 vs B5/B6 differences stated.
 - Reproducibility metadata captured (SHA, JDK/tool versions, JVM flags, hardware profile, scenario id).
 - Confidentiality reviewed: raw JFR/flamegraphs/diagnostics not leaked into public artifacts.
+- **All four summarizing surfaces swept** when any section changed — frontmatter `summary:`, TL;DR, revision history, conclusions. A correct section body does not imply correct summaries: three consecutive review rounds on the triad report found every remaining defect living *only* in these four places. Watch two specifics — a summary must not strengthen the body's quantifier ("rises to 39–59 %" ≠ "dominates"), and a bound must be the one measured on the axis being claimed (a ≤ 2 % throughput order-effect says nothing about RSS, where the same control read +13.5 %). Cross-cutting facts such as the pgjdbc fetch-config normalization belong on this sweep too.
 
 ## Where to read more
 

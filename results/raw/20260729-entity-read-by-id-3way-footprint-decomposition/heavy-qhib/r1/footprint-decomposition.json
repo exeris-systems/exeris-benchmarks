@@ -1,0 +1,37 @@
+{
+  "tool": "extract-footprint-decomposition",
+  "scale": "KB",
+  "heap": {
+    "smaps_resident_kb": 187916,
+    "smaps_mapped_kb": 262144,
+    "nmt_reserved_kb": 262144,
+    "nmt_committed_kb": 262144,
+    "committed_not_resident_kb": 74228,
+    "residency_ratio": 0.7168426513671875
+  },
+  "non_heap": {
+    "smaps_resident_kb": 255880,
+    "nmt_committed_kb": 161293,
+    "instrument_cost": {
+      "nmt_tracking_overhead_kb": 4933,
+      "nmt_tracking_committed_kb": 5215,
+      "note": "NMT `detail` stores per-callsite data in native memory, so it inflates non-heap. Reported so the figure can be stated net-of-instrument. Valid to compare across arms only when every arm ran the same NMT level."
+    },
+    "smaps_resident_net_of_nmt_kb": 250665
+  },
+  "total": {
+    "smaps_resident_kb": 443796,
+    "smaps_mapped_kb": 4172828,
+    "nmt_committed_kb": 423437
+  },
+  "attribution": {
+    "method": "nmt_detail_heap_range_containment_over_smaps_rss",
+    "heap_mappings_matched": 1,
+    "total_mappings": 282,
+    "note": "Heap residency is measured, never derived by subtracting declared -Xmx from RSS: without AlwaysPreTouch, -Xms commits pages it never touches, so committed > resident. See triad report §5."
+  },
+  "provenance": {
+    "nmt_source": "/tmp/foot3way/r1/heavy-qhib-run/footprint-nmt-detail-measurement-end.txt",
+    "smaps_source": "/tmp/foot3way/r1/heavy-qhib-run/footprint-smaps-measurement-end.txt.gz"
+  }
+}

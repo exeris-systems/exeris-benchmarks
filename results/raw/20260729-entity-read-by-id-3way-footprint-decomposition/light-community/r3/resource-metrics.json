@@ -1,0 +1,33 @@
+{
+  "sample_count": 294,
+  "cpu_time_seconds": 917.070000,
+  "host_logical_cpus": 16,
+  "cpu_util_percent_of_one_core": 305.6829,
+  "avg_cores_used": 3.0568,
+  "cpu_util_percent_of_host_total": 19.1050,
+  "rss_kb_min": 232760,
+  "rss_kb_avg": 233995,
+  "peak_rss_kb": 239836,
+  "vmsize_kb_min": 4040836,
+  "vmsize_kb_avg": 4040836,
+  "peak_vmsize_kb": 4040836,
+  "threads_min": 33,
+  "threads_avg": 33,
+  "peak_threads": 34,
+  "vmhwm_kb_max": 240364,
+  "smaps_rss_kb_avg": 234566,
+  "smaps_rss_kb_max": 240364,
+  "cgroup_memory_current_kb_avg": 218919,
+  "cgroup_memory_current_kb_max": 224092,
+  "jvm": {
+    "pid": 3969980,
+    "heap_used_kb": 19767,
+    "nmt_total_reserved_kb": 1719150,
+    "nmt_total_committed_kb": 352886,
+    "nmt_java_heap_reserved_kb": 262144,
+    "nmt_java_heap_committed_kb": 262144,
+    "offheap_kb_estimate": 90742,
+    "offheap_estimate_source": "nmt_minus_java_heap",
+    "nmt_enabled": true
+  }
+}

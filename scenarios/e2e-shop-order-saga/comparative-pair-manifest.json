@@ -357,7 +357,8 @@
       "resolution model per stack (all three inline as of 2026-07-30)",
       "arrival rate and measured peak concurrency (50/s, ~342)",
       "whole-deployment footprint per component (target JVM + Postgres + Neo4j + Axon Server), not target JVM alone",
-      "graph access-pattern caveat wherever recommend_latency_ms appears (1 Cypher query vs 1+N traversals)"
+      "graph access-pattern caveat wherever recommend_latency_ms appears (1 Cypher query vs 1+N traversals)",
+      "workload shape (§2.1) named on every reported figure"
     ],
     "must_not_include": [
       "Absolute claims like 'X% faster' without framework overhead attribution",
@@ -369,7 +370,8 @@
       "unqualified percentage speed claims across mixed graph_backend_family",
       "recommend_latency_ms presented as a runtime-speed comparison (the stacks issue different work there)",
       "target-JVM-only RSS presented as the deployment footprint (Axon Server sits outside it)",
-      "any aggregation of these results with runs under the superseded h2c-named contracts"
+      "any aggregation of these results with runs under the superseded h2c-named contracts",
+      "any saga-orchestration claim from shape A results — no step parks, so no engine saga machinery is exercised"
     ]
   },
   "claim_scope_enforcement_gap": {
@@ -378,5 +380,7 @@
     "finding": "scripts/run-comparative.sh claim_scope_for_target() recognises only the literal strings comparison_eligible and descriptive_only, so it cannot express the per-step scope above. It will happily pass a recommend_latency_ms comparison that the contracts qualify as platform-natural-only.",
     "consequence": "A strict-gate PASS attests protocol/payload/concurrency fairness. It does NOT attest that every per-step metric is comparable. recommend_latency_ms must carry the graph-SPI caveat in any row that includes it.",
     "resolved_since_last_revision": "order_create_latency_ms and order_poll_latency_ms are no longer restricted - the section 3 target changes removed the resolution-model asymmetry that made them incomparable."
-  }
+  },
+  "workload_shape": "A-straight-through",
+  "workload_shape_note": "CONTRACT-v2 §2.1. This manifest governs shape A only. Shapes B and C have their own contract ids and workload_profile_keys; results MUST NEVER be aggregated or compared across shapes."
 }

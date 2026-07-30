@@ -684,7 +684,9 @@
         "order_poll_latency_ms": "not_applicable_inline_resolution"
       },
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
-      "superseded_contract": "exeris_community_h2c_v1"
+      "superseded_contract": "exeris_community_h2c_v1",
+      "workload_shape": "A-straight-through",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A: every step completes inline, nothing parks. Measures the REQUEST PATH. End-to-end saga latency is a legitimate headline here and only here. This shape does NOT exercise saga orchestration, durability or recovery — no engine parks — so results under it MUST NOT support a saga-orchestration claim. Shapes B (short park) and C (long park, N-tier capacity) answer that."
     },
     "quarkus_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -741,7 +743,9 @@
         "order_poll_latency_ms": "not_applicable_inline_resolution"
       },
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
-      "superseded_contract": "quarkus_axon_neo4j_v1"
+      "superseded_contract": "quarkus_axon_neo4j_v1",
+      "workload_shape": "A-straight-through",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A: every step completes inline, nothing parks. Measures the REQUEST PATH. End-to-end saga latency is a legitimate headline here and only here. This shape does NOT exercise saga orchestration, durability or recovery — no engine parks — so results under it MUST NOT support a saga-orchestration claim. Shapes B (short park) and C (long park, N-tier capacity) answer that."
     },
     "spring_boot_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -799,7 +803,9 @@
         "order_poll_latency_ms": "not_applicable_inline_resolution"
       },
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
-      "superseded_contract": "spring_boot_axon_neo4j_v1"
+      "superseded_contract": "spring_boot_axon_neo4j_v1",
+      "workload_shape": "A-straight-through",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A: every step completes inline, nothing parks. Measures the REQUEST PATH. End-to-end saga latency is a legitimate headline here and only here. This shape does NOT exercise saga orchestration, durability or recovery — no engine parks — so results under it MUST NOT support a saga-orchestration claim. Shapes B (short park) and C (long park, N-tier capacity) answer that."
     }
   },
   "baseline_only_contracts": {

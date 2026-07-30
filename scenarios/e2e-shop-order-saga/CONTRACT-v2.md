@@ -95,6 +95,84 @@ Structural requirements (normative in v2):
   comparison tables; it may be reported as a separate Exeris-only
   experiment under this contract's workload, clearly labeled as such.
 
+## 2.1 Workload shapes (added 2026-07-30)
+
+The scenario defines **three workload shapes**. They exercise different
+capabilities, they make different metrics meaningful, and results under them
+**MUST NEVER be aggregated or compared across shapes**. Each carries its own
+`workload_profile_key` and its own contract ids.
+
+Why three rather than one: until 2026-07-30 this scenario had only shape A and
+called it a saga benchmark. It is not one. A saga in which no step ever waits
+for the outside world is a transaction script with compensation — and a
+transaction script is exactly what one of the compared stacks implements, which
+is why its approach looked competitive. A saga engine earns its keep when a step
+must wait, possibly for a long time, and when the process may die while it
+waits. Shapes B and C exist to measure that.
+
+### Shape A — straight-through (`…-inline-r50-v2`)
+
+Every step completes inline; the saga finishes in tens of milliseconds. This is
+the shape all results before 2026-07-30 were taken under.
+
+- **Answers:** what does the request path cost when the whole saga completes
+  within one request?
+- **Meaningful:** end-to-end latency, CPU per saga, RSS, throughput. This is the
+  ONLY shape in which saga latency is a legitimate headline metric.
+- **Does NOT answer:** anything about orchestration, durability or recovery. No
+  step parks, so no engine's saga machinery is exercised. Claims about saga
+  orchestration MUST NOT cite shape A.
+
+### Shape B — short park (`…-park100-v3`)
+
+`S_pay` dispatches to the external payment gateway and parks; the gateway
+answers after ~100 ms.
+
+- **Answers:** what does one asynchronous hop cost, and does the engine handle
+  it without pinning a resource per in-flight saga?
+- **Meaningful:** CPU per saga, resources held while parked (threads, DB
+  connections, sockets), wake throughput.
+- **Read with care:** end-to-end latency is dominated by the gateway delay,
+  which is identical for every stack, so it loses most of its discriminating
+  power. Report it only alongside the delay.
+
+### Shape C — long park (`…-parkN-v3`)
+
+`S_pay` parks and is **not** released until the harness decides. Sagas
+accumulate. This is the corporate-approval shape: a park may last days.
+
+Phase structure (normative):
+
+| phase | what happens | measured |
+|---|---|---|
+| A accumulate | orders arrive, **no callbacks issued** | parked count reached; the point at which a stack stops accepting |
+| B hold | N parked, system otherwise idle | **bytes of RSS per parked saga**, idle CPU at N, threads, DB connections held |
+| C restart | target killed and restarted | parked sagas surviving; wall-clock to recover N |
+| D release | callbacks flood in | wake throughput, wake latency |
+
+**N tiers** (run as a ladder, each a separate run):
+`N = 10 000–50 000` · `N = 100 000` · `N = 100 000+ to failure`.
+
+- **Answers:** can a stack hold N parked sagas at all; what does one cost; do
+  they survive a restart; how fast can they be woken.
+- **Meaningful:** parked capacity ceiling, bytes per parked saga, idle CPU at N,
+  restart survival ratio, recovery time, wake throughput.
+- **FORBIDDEN:** end-to-end saga duration. In shape C the park duration is
+  business time chosen by the harness, not system time. Reporting it as latency
+  would be meaningless.
+
+**Expected discriminator, stated in advance so the run can falsify it:** a stack
+that parks by blocking a request thread has a capacity ceiling at its thread
+pool — a few hundred — and cannot express a days-long park at all. A stack that
+parks by persisting state is bounded by its state store. If that is what the
+ladder shows, it is a categorical difference, not a percentage one, and it
+should be reported as such.
+
+Shape C is also the only shape in which **§6 G1 is measurable**. The first crash
+injection (W3a, 2026-07-30) stranded 1–3 sagas per stack because shape A keeps
+only ~1.2 sagas in flight at any instant; at N = 10 000 parked, crash recovery
+has a denominator worth reporting.
+
 ## 3. Order identity and request model
 
 - Client: k6, identical script for all stacks, HTTP/1.1 (negotiated
@@ -214,6 +292,22 @@ headline tables (reported in an appendix, flagged non-compliant). Fast and
 wrong is not a result.
 
 ## 8. Metrics and reporting split (breaking change vs v1)
+
+**Which metrics are legitimate depends on the §2.1 workload shape.** A metric
+that is a headline in one shape is meaningless in another, so every reported
+figure MUST name its shape.
+
+| metric | shape A (straight-through) | shape B (short park) | shape C (long park) |
+|---|---|---|---|
+| end-to-end saga latency | **headline** | secondary — dominated by the gateway delay; always state the delay | **FORBIDDEN** — park duration is business time chosen by the harness |
+| CPU per saga | yes | yes | yes (per completed saga; exclude the hold phase) |
+| RSS | yes | yes | **as bytes per parked saga** — the headline for C |
+| throughput | yes | yes | as **wake throughput** in the release phase |
+| resources held per in-flight saga (threads, DB connections) | n/a | **headline** | **headline** |
+| parked capacity ceiling | n/a | n/a | **headline** |
+| restart survival + recovery time | n/a | n/a | **headline** (the only place §6 G1 is measurable) |
+
+The remaining rules apply to every shape:
 
 - Latency is reported **separately** for `COMPLETED` and `COMPENSATED`
   populations. Mixing them (v1 style) blends two structurally different

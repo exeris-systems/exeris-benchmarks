@@ -56,7 +56,39 @@ population and the exact-compensation oracle keep working untouched.
   collapses — or be restructured into an actual saga. That trade-off is the
   thing worth measuring, and today's scenario hides it.
 
-## Decisions needed
+## Decisions — RESOLVED 2026-07-30
+
+1. **Stub runs as a separate process.** Every stack pays the same external
+   latency and it is part of the §1 deployment unit, so it is sampled by the
+   whole-deployment footprint like Axon Server and restate-server.
+2. **Two callback delays, by fault class** — the delay sets parked concurrency,
+   so it is a workload parameter, not an implementation detail:
+   - **perf runs: 100 ms.** Long enough to force a real park, short enough not
+     to swamp runtime differences. ~5 parked at 50/s.
+   - **crash runs: 1 s.** Correctness-only, so latency domination is irrelevant,
+     and it maximises the parked population (~50 parked at 50/s, versus the
+     ~1.2 in-flight that made the first W3a useless).
+   Identical across stacks within a run; stamped into the contract either way.
+3. **New contract ids and a new `workload_profile_key`.** Straight-through
+   results must never aggregate with parking results.
+4. **quarkus-hibernate is restructured into a genuine async saga.** The declared
+   axis is `cross-framework-saga-orchestration`; the current handler is
+   Axon-as-command-bus with the saga inlined, which is not idiomatic Axon.
+   Restructuring makes it MORE platform-natural, not less. The transaction-script
+   shape stays worth measuring, but as a **separate labelled target**, not as
+   the quarkus peer.
+5. **spring-on-exeris is included** — same Flow engine as exeris-community, so
+   parking comes free, and it becomes the cleanest hosting-cost isolation in the
+   scenario.
+
+**Consequence of the delay that must be carried into reporting:** with a parking
+step, end-to-end saga latency is dominated by the stub (identical for every
+stack), so latency loses most of its discriminating power. The metrics that
+still discriminate are CPU per saga, RSS, throughput at a given parked
+concurrency, and recovery behaviour. Any report on the parking workload must
+lead with those, not with saga duration.
+
+## Original decision list (kept for provenance)
 
 1. **Who runs the stub?** A separate process is fairer (every stack pays the
    same external latency and it is part of the deployment unit, §1). In-target

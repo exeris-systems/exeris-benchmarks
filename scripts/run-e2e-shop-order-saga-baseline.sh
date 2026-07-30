@@ -525,17 +525,28 @@ ensure_benchmark_infra() {
   # unexplained; `ALTER USER postgres WITH PASSWORD` restores it immediately.
   # Repair, re-verify, and abort if it still fails — losing a rep to this is
   # avoidable, and silently seeding half a database is not acceptable.
-  if ! docker exec exeris-e2e-saga-postgres env PGPASSWORD=postgres \
-        psql -h 127.0.0.1 -U postgres -tAc 'select 1' >/dev/null 2>&1; then
-    echo "WARN: Postgres TCP auth for role 'postgres' is failing; attempting to reset the role password." >&2
+  # The probe MUST take a password-authenticated path. An earlier version used
+  # `psql -h 127.0.0.1` from inside the container, which pg_hba maps to
+  # `host all all 127.0.0.1/32 trust` — no password is ever checked, so the
+  # probe passed while the seed (a separate container reaching Postgres over the
+  # docker network, matching `host all all all scram-sha-256`) still failed.
+  # Mirror the seed's path exactly: another container, over the compose network.
+  _pg_net="$(docker inspect exeris-e2e-saga-postgres \
+    --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{break}}{{end}}' 2>/dev/null || true)"
+  _pg_auth_probe() {
+    [[ -z "$_pg_net" ]] && return 0   # cannot probe; leave it to the seed's own fail-closed
+    docker run --rm --network "$_pg_net" -e PGPASSWORD=postgres postgres:16.2 \
+      psql -h exeris-e2e-saga-postgres -U postgres -tAc 'select 1' >/dev/null 2>&1
+  }
+  if ! _pg_auth_probe; then
+    echo "WARN: Postgres password auth (docker-network path, as the seed uses) is failing; resetting the role password." >&2
     docker exec exeris-e2e-saga-postgres \
       psql -U postgres -tAc "alter user postgres with password 'postgres'" >/dev/null 2>&1 || true
-    if ! docker exec exeris-e2e-saga-postgres env PGPASSWORD=postgres \
-          psql -h 127.0.0.1 -U postgres -tAc 'select 1' >/dev/null 2>&1; then
-      echo "ERROR: Postgres TCP auth still failing after password reset; the seed would fail and the run would be measured against an incomplete database." >&2
+    if ! _pg_auth_probe; then
+      echo "ERROR: Postgres password auth still failing after reset; the seed would fail and the run would be measured against an incomplete database." >&2
       exit 72
     fi
-    echo "Postgres TCP auth repaired."
+    echo "Postgres password auth repaired (role password reset to the compose-declared value)."
   fi
 
   echo "Running DB seed migrations (benchmark-db-seed)..."

@@ -1023,6 +1023,18 @@ AXON_STATS_CSV="$LOGS_DIR/axonserver-docker-stats.csv"
 AXON_STATS_PID=""
 RESTATE_STATS_CSV="$LOGS_DIR/restate-server-docker-stats.csv"
 RESTATE_STATS_PID=""
+# CONTRACT-v2 §1/§8 whole-deployment footprint. The shared backends are part of
+# every stack's deployment unit and were previously unsampled, which measured
+# only where work LIVES, not what it COSTS: exeris-community runs the saga
+# in-process and checkpoints flow state to Postgres (v5 tables), while the Axon
+# stacks push saga progression to a separate Axon Server container. Sampling
+# only the target JVM flatters whichever stack externalises the most work.
+POSTGRES_STATS_CSV="$LOGS_DIR/postgres-docker-stats.csv"
+POSTGRES_STATS_PID=""
+NEO4J_STATS_CSV="$LOGS_DIR/neo4j-docker-stats.csv"
+NEO4J_STATS_PID=""
+BACKEND_IDLE_BASELINE_JSON="$LOGS_DIR/backend-idle-baseline.json"
+DEPLOYMENT_FOOTPRINT_JSON="$OUTPUT_DIR/deployment-footprint.json"
 # OS-level sidecars (opt-in via BENCH_OS_SIDECARS=1, default OFF). pidstat gives
 # per-thread %wait (C2 starvation) + context switches; mpstat gives per-CPU
 # %usr/%sys/%soft/%idle (network/softirq burn). See tools/bench/lib/os-sampler.sh.
@@ -1248,6 +1260,46 @@ _start_container_stats_sampler() {
   _CONTAINER_STATS_SAMPLER_PID="$!"
 }
 
+# --- Shared-backend sampling (CONTRACT-v2 §1 deployment unit) ---------------
+#
+# Postgres and Neo4j serve EVERY stack and are part of every deployment unit, so
+# they are sampled on every run, not conditionally like axonserver/restate.
+#
+# Idle baseline first: Postgres RSS is dominated by fixed shared_buffers and is
+# essentially identical on every stack, so a raw Σ RSS would be swamped by a
+# constant and would COMPRESS the real between-stack differences. Capturing the
+# pre-load value lets the rollup report both raw and delta-over-idle, and makes
+# the attributable part explicit. CPU needs no such correction — a shared
+# backend's CPU under load is caused by the stack's query pattern.
+_capture_backend_idle_baseline() {
+  local _c _cpu _mem _line
+  local _json="{}"
+  for _c in exeris-e2e-saga-postgres exeris-e2e-saga-neo4j; do
+    _line="$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}}' "$_c" 2>/dev/null || true)"
+    [[ -z "$_line" ]] && continue
+    _cpu="${_line%%,*}"; _cpu="${_cpu//%/}"
+    _mem="${_line#*,}"; _mem="${_mem%% /*}"
+    _json="$(jq -c --arg c "$_c" --arg cpu "$_cpu" --arg mem "$_mem" \
+      '. + {($c): {cpu_pct_idle: ($cpu|tonumber? // null), mem_usage_idle_raw: $mem}}' <<<"$_json")"
+  done
+  jq -n --argjson b "$_json" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{captured_at_utc: $at, note: "Sampled after backend readiness and before load. Postgres RSS is mostly fixed shared_buffers and identical across stacks; subtract this to get the attributable part.", backends: $b}' \
+    > "$BACKEND_IDLE_BASELINE_JSON"
+}
+_capture_backend_idle_baseline
+
+for _shared in "exeris-e2e-saga-postgres:$POSTGRES_STATS_CSV:POSTGRES" \
+               "exeris-e2e-saga-neo4j:$NEO4J_STATS_CSV:NEO4J"; do
+  _sc="${_shared%%:*}"; _rest_s="${_shared#*:}"; _scsv="${_rest_s%%:*}"; _svar="${_rest_s##*:}"
+  if docker inspect --format '{{.Id}}' "$_sc" >/dev/null 2>&1; then
+    _start_container_stats_sampler "$_sc" "$_scsv"
+    printf -v "${_svar}_STATS_PID" '%s' "$_CONTAINER_STATS_SAMPLER_PID"
+    echo "Shared-backend docker stats sampler started (container: ${_sc})."
+  else
+    echo "Warning: ${_sc} not found; its share of the deployment footprint will be missing." >&2
+  fi
+done
+
 # Start Axon Server docker stats sampler (if axon contract detected)
 AXON_STATS_PID=""
 if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
@@ -1332,6 +1384,90 @@ if [[ -n "$RESTATE_STATS_PID" ]]; then
   wait "$RESTATE_STATS_PID" 2>/dev/null || true
   RESTATE_STATS_PID=""
 fi
+
+# Stop shared-backend samplers
+for _p in POSTGRES NEO4J; do
+  _pid="${!_p:+}"; eval "_pid=\${${_p}_STATS_PID:-}"
+  if [[ -n "$_pid" ]]; then
+    kill "$_pid" >/dev/null 2>&1 || true
+    wait "$_pid" 2>/dev/null || true
+    eval "${_p}_STATS_PID=''"
+  fi
+done
+
+# --- CONTRACT-v2 §1/§8 whole-deployment footprint rollup --------------------
+#
+# Σ over every process in the deployment unit, not just the target JVM. Reports
+# per-component figures alongside the sum so a reader can see WHERE the cost
+# sits — the whole point when one stack runs the saga in-process and another
+# externalises it to Axon Server.
+#
+# Two deliberate asymmetries in how the numbers are formed:
+#  * shared backends (Postgres, Neo4j) also report rss_delta_over_idle_mb,
+#    because their raw RSS is mostly fixed allocation identical on every stack;
+#    the sum of raw RSS is reported but is the WEAKER comparator.
+#  * CPU is summed without correction — a shared backend's CPU under load is
+#    attributable to the stack driving it.
+_csv_stat() { # <csv> <col-index-1based> <mean|max>
+  local f="$1" c="$2" mode="$3"
+  [[ -s "$f" ]] || { printf 'null\n'; return 0; }
+  awk -F, -v c="$c" -v m="$mode" 'NR>1 && $c ~ /^[0-9.]+$/ {
+      n++; s+=$c; if ($c>mx) mx=$c
+    } END {
+      if (n==0) { print "null" } else if (m=="max") { printf "%.1f\n", mx } else { printf "%.2f\n", s/n }
+    }' "$f"
+}
+
+_component_json() { # <name> <csv> <role>
+  local name="$1" csv="$2" role="$3"
+  [[ -s "$csv" ]] || return 0
+  jq -n --arg n "$name" --arg role "$role" \
+    --argjson cpu_avg "$(_csv_stat "$csv" 2 mean)" \
+    --argjson cpu_max "$(_csv_stat "$csv" 2 max)" \
+    --argjson rss_avg "$(_csv_stat "$csv" 3 mean)" \
+    --argjson rss_max "$(_csv_stat "$csv" 3 max)" \
+    '{component:$n, role:$role, cpu_pct_avg:$cpu_avg, cpu_pct_max:$cpu_max,
+      rss_mb_avg:$rss_avg, rss_mb_max:$rss_max}'
+}
+
+{
+  _comp_target="$(jq -n \
+    --argjson cores "$(jq -r '.avg_cores_used // null' "$RESOURCE_METRICS_JSON" 2>/dev/null || echo null)" \
+    --argjson rssmax "$(jq -r 'if .peak_rss_kb then ((.peak_rss_kb/1024)*10|floor/10) else null end' "$RESOURCE_METRICS_JSON" 2>/dev/null || echo null)" \
+    '{component:"target-jvm", role:"target", cores_used_avg:$cores, rss_mb_max:$rssmax}')"
+
+  _comps="$(printf '%s\n' \
+    "$(_component_json exeris-e2e-saga-postgres "$POSTGRES_STATS_CSV" shared-backend)" \
+    "$(_component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend)" \
+    "$(_component_json exeris-e2e-saga-axonserver "$AXON_STATS_CSV" stack-specific)" \
+    "$(_component_json exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV" stack-specific)" \
+    | jq -s '.')"
+
+  jq -n \
+    --arg contract "$CONTRACT_ID" --arg target "$TARGET_APP" \
+    --argjson target_comp "$_comp_target" \
+    --argjson components "$_comps" \
+    --slurpfile idle "$BACKEND_IDLE_BASELINE_JSON" \
+    --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{
+      schema_version: "1",
+      contract_ref: "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#1",
+      contract_id: $contract,
+      target_app: $target,
+      target: $target_comp,
+      components: $components,
+      sum_container_cpu_pct_avg: ([$components[].cpu_pct_avg // 0] | add),
+      sum_container_rss_mb_max:  ([$components[].rss_mb_max  // 0] | add),
+      backend_idle_baseline: ($idle[0] // null),
+      interpretation: {
+        why: "CONTRACT-v2 §1 makes the unit of comparison the whole deployment. exeris-community runs the saga in-process and checkpoints flow state to Postgres; the Axon stacks run saga progression in a separate Axon Server container. Target-JVM-only figures measure where the work lives, not what it costs.",
+        rss_caveat: "sum_container_rss_mb_max includes Postgres, whose RSS is dominated by fixed shared_buffers and is near-identical on every stack. Summing it raw COMPRESSES real between-stack differences; use backend_idle_baseline to take the delta, and prefer CPU for shared backends.",
+        cpu_note: "Container CPU is summed without correction: a shared backend'"'"'s CPU under load is attributable to the stack driving it.",
+        units: "cpu_pct is docker-stats percent-of-one-core; target cores_used_avg is cores. Do not add the two without converting."
+      },
+      generated_at_utc: $generated_at_utc
+    }' > "$DEPLOYMENT_FOOTPRINT_JSON" 2>/dev/null || echo '{"schema_version":"1","error":"footprint rollup failed"}' > "$DEPLOYMENT_FOOTPRINT_JSON"
+}
 
 # Capture JFR dump and metadata after the run
 if [[ "$ENABLE_JFR" == "true" ]]; then
@@ -2104,6 +2240,7 @@ echo "logs dir: $LOGS_DIR"
 echo "jcmd diagnostics: $JCMD_DIAGNOSTICS_JSON"
 echo "endpoint preflight: $ENDPOINT_PREFLIGHT_TXT"
 echo "claim status: $CLAIM_STATUS_JSON"
+echo "deployment footprint: $DEPLOYMENT_FOOTPRINT_JSON"
 echo "correctness gate: $CORRECTNESS_GATE_JSON (status: ${GATE_STATUS})"
 echo "result: $RESULT_JSON"
 echo "runtime log metadata: $RUNTIME_LOG_METADATA_JSON"

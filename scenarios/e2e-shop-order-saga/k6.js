@@ -560,7 +560,15 @@ export default function () {
   orderCounter.add(1);
   // issued = this deterministic orderId was submitted; input to the §4.1 exact oracle
   // (observed_compensations == |declined ∩ issued|).
-  sagaIssuedTotal.add(1);
+  //
+  // The `oidx` tag carries the per-scenario iterationInTest index of THIS issuance, so the
+  // harness can reconstruct the exactly-issued orderId list from the NDJSON stream
+  // (`${seed}-${scenario}-i${oidx}`) and feed it to fnv1a64.py --ids-file. Without it the
+  // oracle can only regenerate a *dense* 0..N-1 population from counts, which diverges from
+  // reality as soon as one iteration aborts before order creation (register/cart failure) —
+  // and the gate then fails closed, discarding an otherwise-valid run. One tag value per
+  // issued order; identical in every stack, so it introduces no cross-stack asymmetry.
+  sagaIssuedTotal.add(1, { oidx: String(exec.scenario.iterationInTest) });
 
   const orderOk = check(orderRes, {
     // 200 = CONTRACT-v2 §3 request-response (final outcome in the response body);

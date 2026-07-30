@@ -1334,6 +1334,11 @@ GATE_OBSERVED=""
 GATE_ISSUED=""
 GATE_POP_COUNTS=""
 GATE_DENSITY_NOTE=""
+# ids_file  = oracle ran over the exactly-issued orderId list read back from the
+#             `oidx`-tagged NDJSON (no density assumption).
+# regenerated = oracle ran over a dense 0..N-1 range per scenario rebuilt from
+#             counts (pre-tag artifacts); guarded by the density check below.
+GATE_POPULATION_SOURCE="none"
 # Defaults MUST match ORDER_SEED / generateOrderId() in scenarios/e2e-shop-order-saga/k6.js.
 GATE_ORDER_SEED="${K6_ORDER_SEED:-exeris-saga-v2}"
 GATE_ORDER_ID_FORMAT="{seed}-{scenario}-i{index}"
@@ -1386,6 +1391,73 @@ else
     GATE_STATUS="error"
     GATE_REASON="python3 unavailable; expected declines not computable — failing closed on a v2-capable run"
   else
+    # --- Preferred population source: the exactly-issued orderId list ---------
+    #
+    # k6.js tags every saga_issued_total sample with `oidx` = the per-scenario
+    # iterationInTest of that issuance, so the NDJSON stream names the issued
+    # population directly. Reconstructing `${seed}-${scenario}-i${oidx}` and
+    # passing it via --ids-file makes the oracle exact with no density
+    # assumption at all — an iteration that aborted before order creation
+    # simply never contributed a sample. The count-based path below stays as
+    # the fallback for artifacts produced before the tag existed, and keeps its
+    # fail-closed density check.
+    GATE_IDS_FILE="$LOGS_DIR/gate-issued-order-ids.txt"
+    _gate_ids_ok="false"
+    if [[ -s "$K6_OUTPUT_JSON" ]]; then
+      # Emit one id per issuance; drop a stray CR (CRLF-contaminated streams)
+      # before it silently changes the hashed orderId.
+      jq -r --arg seed "$GATE_ORDER_SEED" \
+        'select(.type=="Point" and .metric=="saga_issued_total")
+         | (.data.tags.scenario // "") as $s
+         | (.data.tags.oidx // "") as $i
+         | if $s == "" or $i == "" then "__UNTAGGED__" else "\($seed)-\($s)-i\($i)" end' \
+        "$K6_OUTPUT_JSON" 2>/dev/null | tr -d '\r' > "$GATE_IDS_FILE" || true
+
+      _gate_ids_total="$(wc -l < "$GATE_IDS_FILE" | tr -d ' ')"
+      _gate_ids_untagged="$(grep -c '^__UNTAGGED__$' "$GATE_IDS_FILE" 2>/dev/null || true)"
+      _gate_ids_untagged="${_gate_ids_untagged:-0}"
+      _gate_ids_unique="$(sort -u "$GATE_IDS_FILE" | grep -c . 2>/dev/null || true)"
+      _gate_ids_unique="${_gate_ids_unique:-0}"
+
+      if [[ "$_gate_ids_untagged" -gt 0 ]]; then
+        echo "Correctness gate: ${_gate_ids_untagged}/${_gate_ids_total} saga_issued_total samples carry no oidx tag; falling back to the count-based population." >&2
+      elif [[ "$_gate_ids_total" -eq 0 ]]; then
+        : # no samples in the stream — let the count-based path report it
+      elif [[ "$_gate_ids_total" -ne "$_gate_ids_unique" ]]; then
+        # Duplicate (scenario, index) pairs cannot happen for a dense
+        # per-scenario iterationInTest; treat as a corrupted/merged stream and
+        # fail closed rather than silently hashing a wrong population.
+        GATE_STATUS="error"
+        GATE_REASON="issued orderId list has duplicates (${_gate_ids_total} samples, ${_gate_ids_unique} unique) in $(basename "$K6_OUTPUT_JSON"); population untrustworthy"
+      elif [[ "$_gate_ids_total" -ne "$GATE_ISSUED" ]]; then
+        GATE_STATUS="error"
+        GATE_REASON="issued orderId list size (${_gate_ids_total}) != summary saga_issued_total (${GATE_ISSUED}); inconsistent k6 artifacts"
+      else
+        _gate_ids_ok="true"
+      fi
+    fi
+
+    if [[ "$_gate_ids_ok" == "true" ]]; then
+      GATE_POPULATION_SOURCE="ids_file"
+      # Per-scenario breakdown is reporting metadata only here — the oracle runs
+      # over the literal id list, not over a regenerated dense range. Read the
+      # scenario back from the stream rather than parsing it out of the composed
+      # id (the seed itself contains '-').
+      GATE_POP_COUNTS="$(jq -r 'select(.type=="Point" and .metric=="saga_issued_total")
+                                | .data.tags.scenario // "unknown"' \
+                           "$K6_OUTPUT_JSON" 2>/dev/null | tr -d '\r' \
+        | sort | uniq -c \
+        | awk '{printf "%s%s=%s", (NR>1 ? "," : ""), $2, $1}')"
+      GATE_EXPECTED="$(python3 "$FNV1A64_HELPER" --ids-file "$GATE_IDS_FILE" 2>&1)" || true
+      if [[ ! "$GATE_EXPECTED" =~ ^[0-9]+$ ]]; then
+        GATE_STATUS="error"
+        GATE_REASON="fnv1a64.py --ids-file did not produce an integer (output: ${GATE_EXPECTED:-empty})"
+        GATE_EXPECTED=""
+      fi
+    elif [[ "$GATE_STATUS" == "error" ]]; then
+      : # already failed closed above
+    else
+
     # Per-scenario issued counts and completed-iteration counts from the k6
     # NDJSON stream (--out json=). iterations > issued in any scenario means an
     # iteration aborted BEFORE order creation → the issued index set is no
@@ -1436,6 +1508,7 @@ else
         GATE_STATUS="error"
         GATE_REASON="per-scenario issued sum (${_gate_total_issued}) != summary saga_issued_total (${GATE_ISSUED}); inconsistent k6 artifacts"
       else
+        GATE_POPULATION_SOURCE="regenerated"
         GATE_EXPECTED="$(python3 "$FNV1A64_HELPER" --seed "$GATE_ORDER_SEED" --counts "$GATE_POP_COUNTS" 2>&1)" || true
         if [[ ! "$GATE_EXPECTED" =~ ^[0-9]+$ ]]; then
           GATE_STATUS="error"
@@ -1444,6 +1517,8 @@ else
         fi
       fi
     fi
+
+    fi  # end: exact ids_file path vs. count-based fallback
   fi
 fi
 
@@ -1473,6 +1548,7 @@ jq -n \
   --arg order_seed       "$GATE_ORDER_SEED" \
   --arg order_id_format  "$GATE_ORDER_ID_FORMAT" \
   --arg pop_counts       "$GATE_POP_COUNTS" \
+  --arg pop_source       "$GATE_POPULATION_SOURCE" \
   --arg density_note     "$GATE_DENSITY_NOTE" \
   --arg fault_mode       "$FAULT_MODE" \
   --arg durability_tier  "$DURABILITY_TIER" \
@@ -1499,7 +1575,12 @@ jq -n \
                          else ($pop_counts | split(",") | map(split("=") | {(.[0]): (.[1] | tonumber)}) | add)
                          end),
     density_note:     (if $density_note == "" then null else $density_note end),
-    population_assumption: "one dense iteration-index sequence 0..N-1 per k6 scenario (exec.scenario.iterationInTest); density checked via per-scenario completed iterations vs saga_issued_total from the k6 NDJSON stream (see fnv1a64.py)",
+    population_source: $pop_source,
+    population_assumption:
+      (if $pop_source == "ids_file"
+       then "none: the oracle ran over the exactly-issued orderId list reconstructed from the oidx-tagged saga_issued_total samples in the k6 NDJSON stream (fnv1a64.py --ids-file). Iterations that aborted before order creation contribute no sample and are correctly absent from the population."
+       else "one dense iteration-index sequence 0..N-1 per k6 scenario (exec.scenario.iterationInTest); density checked via per-scenario completed iterations vs saga_issued_total from the k6 NDJSON stream (see fnv1a64.py)"
+       end),
     helper_ref:       "tools/bench/lib/fnv1a64.py",
     reason:           $reason,
     generated_at_utc: $generated_at_utc

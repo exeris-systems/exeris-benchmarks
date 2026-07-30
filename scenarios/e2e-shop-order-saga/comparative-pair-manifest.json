@@ -91,7 +91,16 @@
       "saga_orchestration": "flow-native",
       "graph_backend": "graph-l2-native",
       "event_backend": "events-l3-outbox",
-      "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=exeris_community_h2c_v1. No cross-tier inference."
+      "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=exeris_community_h2c_v1. No cross-tier inference.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "coverage_limited_saga_engine_not_equivalent",
+        "order_poll_latency_ms": "coverage_limited_saga_engine_not_equivalent"
+      },
+      "claim_scope_note": "The per-target claim_scope above is a WIRING-level verdict (this target has a fixed_contracts row for track_a_neo4j). It is NOT a blanket metric-level verdict. scenario.json sets contract-level claim_scope=coverage_limited_saga_engine_not_equivalent for all three of these contracts, with the per-step split recorded in per_step_metric_claim_scope: the saga steps (order_create, order_poll) are NOT comparison-eligible, because the Axon stacks perform no synchronous DB writes in the HTTP request path while exeris-community performs three (INSERT orders + INSERT order_items + UPDATE saga_id), and the Axon status poll is served from an in-memory projection (status_poll_comparison_excluded). scenario.json is the stricter and therefore governing source."
     },
     {
       "target_id": "quarkus-hibernate",
@@ -103,7 +112,16 @@
       "saga_framework": "axon-framework",
       "graph_backend": "neo4j-bolt",
       "event_backend": "axon-event-sourcing-outbox",
-      "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=quarkus_axon_neo4j_v1. Axon Framework overhead ~3-5% (documented, expected)."
+      "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=quarkus_axon_neo4j_v1. Axon Framework overhead ~3-5% (documented, expected).",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "coverage_limited_saga_engine_not_equivalent",
+        "order_poll_latency_ms": "coverage_limited_saga_engine_not_equivalent"
+      },
+      "claim_scope_note": "The per-target claim_scope above is a WIRING-level verdict (this target has a fixed_contracts row for track_a_neo4j). It is NOT a blanket metric-level verdict. scenario.json sets contract-level claim_scope=coverage_limited_saga_engine_not_equivalent for all three of these contracts, with the per-step split recorded in per_step_metric_claim_scope: the saga steps (order_create, order_poll) are NOT comparison-eligible, because the Axon stacks perform no synchronous DB writes in the HTTP request path while exeris-community performs three (INSERT orders + INSERT order_items + UPDATE saga_id), and the Axon status poll is served from an in-memory projection (status_poll_comparison_excluded). scenario.json is the stricter and therefore governing source."
     },
     {
       "target_id": "spring-hibernate",
@@ -115,7 +133,16 @@
       "saga_framework": "axon-framework",
       "graph_backend": "neo4j-bolt",
       "event_backend": "axon-event-sourcing-outbox",
-      "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=spring_boot_axon_neo4j_v1. Axon Framework + Spring Boot overhead ~4-7% (documented, expected)."
+      "notes": "Comparison-eligible for within-tier H2C (community, loopback-h2c) under required_contract=spring_boot_axon_neo4j_v1. Axon Framework + Spring Boot overhead ~4-7% (documented, expected).",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "coverage_limited_saga_engine_not_equivalent",
+        "order_poll_latency_ms": "coverage_limited_saga_engine_not_equivalent"
+      },
+      "claim_scope_note": "The per-target claim_scope above is a WIRING-level verdict (this target has a fixed_contracts row for track_a_neo4j). It is NOT a blanket metric-level verdict. scenario.json sets contract-level claim_scope=coverage_limited_saga_engine_not_equivalent for all three of these contracts, with the per-step split recorded in per_step_metric_claim_scope: the saga steps (order_create, order_poll) are NOT comparison-eligible, because the Axon stacks perform no synchronous DB writes in the HTTP request path while exeris-community performs three (INSERT orders + INSERT order_items + UPDATE saga_id), and the Axon status poll is served from an in-memory projection (status_poll_comparison_excluded). scenario.json is the stricter and therefore governing source."
     }
   ],
   "allowed_pairs": [
@@ -123,7 +150,10 @@
       "pair_id": "exeris-community__quarkus-hibernate",
       "baseline": "exeris-community",
       "candidate": "quarkus-hibernate",
-      "targets": ["exeris-community", "quarkus-hibernate"],
+      "targets": [
+        "exeris-community",
+        "quarkus-hibernate"
+      ],
       "tier": "community",
       "protocol_mode": "h2c",
       "transport_mode": "loopback-h2c",
@@ -142,7 +172,10 @@
       "pair_id": "exeris-community__spring-hibernate",
       "baseline": "exeris-community",
       "candidate": "spring-hibernate",
-      "targets": ["exeris-community", "spring-hibernate"],
+      "targets": [
+        "exeris-community",
+        "spring-hibernate"
+      ],
       "tier": "community",
       "protocol_mode": "h2c",
       "transport_mode": "loopback-h2c",
@@ -161,7 +194,10 @@
       "pair_id": "quarkus-hibernate__spring-hibernate",
       "baseline": "quarkus-hibernate",
       "candidate": "spring-hibernate",
-      "targets": ["quarkus-hibernate", "spring-hibernate"],
+      "targets": [
+        "quarkus-hibernate",
+        "spring-hibernate"
+      ],
       "tier": "community",
       "protocol_mode": "h2c",
       "transport_mode": "loopback-h2c",
@@ -179,23 +215,39 @@
   "forbidden_pairs": [
     {
       "reason": "Community vs Enterprise cross-tier — protocol fairness requires separate contracts",
-      "targets": ["exeris-community", "exeris-kernel-enterprise"]
+      "targets": [
+        "exeris-community",
+        "exeris-kernel-enterprise"
+      ]
     },
     {
       "reason": "Cross-protocol comparisons are out of scope (H1 vs H2C vs H3 must be segregated)",
-      "protocol_modes": ["h1", "h2c", "h3"]
+      "protocol_modes": [
+        "h1",
+        "h2c",
+        "h3"
+      ]
     },
     {
       "reason": "Network-path vs loopback transport modes cannot be compared directly",
-      "transport_modes": ["loopback-h2c", "network-h2c"]
+      "transport_modes": [
+        "loopback-h2c",
+        "network-h2c"
+      ]
     },
     {
       "reason": "Cross-backend comparisons are invalid (neo4j vs postgres-graph/pgq)",
-      "backend_families": ["neo4j", "postgres-graph"]
+      "backend_families": [
+        "neo4j",
+        "postgres-graph"
+      ]
     },
     {
       "reason": "AGE compatibility runs are not performance-equivalent to PGQ pure runs",
-      "backend_equivalence_classes": ["postgres_graph_age_compat", "postgres_graph_pgq_pure"]
+      "backend_equivalence_classes": [
+        "postgres_graph_age_compat",
+        "postgres_graph_pgq_pure"
+      ]
     }
   ],
   "claim_scope_rules": {
@@ -305,7 +357,17 @@
       "Cross-transport comparisons (loopback vs network)",
       "Saga success rate without compensation state breakdown",
       "backend superiority claims from cross-family runs",
-      "unqualified percentage speed claims across mixed graph_backend_family"
+      "unqualified percentage speed claims across mixed graph_backend_family",
+      "order_create_latency_ms or order_poll_latency_ms compared across exeris-community and the Axon stacks (contract-level claim scope coverage_limited_saga_engine_not_equivalent; see claim_scope_enforcement_gap)"
+    ]
+  },
+  "claim_scope_enforcement_gap": {
+    "severity": "must-read-before-publishing",
+    "finding": "scripts/run-comparative.sh claim_scope_for_target() recognises only the literal strings comparison_eligible and descriptive_only; any other value falls through to .maturity, which is comparison_eligible here. The per-step restriction above therefore CANNOT be enforced by the strict gate as currently written — a saga-step comparison would pass the gate while violating the contract-level claim scope.",
+    "consequence": "Strict-gate PASS on this scenario means protocol/payload/concurrency fairness, NOT that order_create_latency_ms or order_poll_latency_ms may be compared across these targets. Those two metrics must be excluded from every comparative row and from every headline claim until the gap is closed.",
+    "options_not_yet_decided": [
+      "teach claim_scope_for_target() a per-metric scope so non-saga steps stay eligible while saga steps are rejected (preferred; no loss of legitimate coverage)",
+      "set maturity=exploratory on these targets, which makes the gate return descriptive_only for the whole scenario (strictest, but also disables the legitimately-eligible auth/recommend/cart comparisons)"
     ]
   }
 }

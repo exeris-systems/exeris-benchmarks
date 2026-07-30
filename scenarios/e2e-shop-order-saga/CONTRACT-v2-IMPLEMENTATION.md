@@ -5,7 +5,7 @@
 | Contract | `CONTRACT-v2.md` v2.0 (DRAFT) |
 | Scope of this ledger | The current change set only (branch `claude/exeris-benchmarks-droplets-5fd00e`), not overall contract compliance |
 | Purpose | Anti-overclaim ledger: what of v2 is actually implemented right now, what is partial, what is deferred. Any claim in a report that relies on a `partial` or `deferred` row MUST carry the corresponding caveat |
-| Last updated | 2026-07-30 — surface reconciliation only (README v2.0 banner + stack roster, `docs/scenario-catalog.md` entry, `docs/benchmark-target-labels-and-scenario-contracts.md` restate + saga-v2 fields, §10 v1 raw-run re-classification, caveated `contract_revision:2.0` pointers in `scenario.json`/manifest). No harness/target/oracle code changed; the §1–§9 statuses below are unchanged since 2026-07-17 and were verified against the change-set source, not against run evidence |
+| Last updated | 2026-07-30 — (a) surface reconciliation (README v2.0 banner + stack roster, `docs/scenario-catalog.md` entry, `docs/benchmark-target-labels-and-scenario-contracts.md` restate + saga-v2 fields, §10 v1 raw-run re-classification, caveated `contract_revision:2.0` pointers in `scenario.json`/manifest); (b) **campaign-enablement hardening** — §7 exact-population wiring (`oidx` tag + `--ids-file`), campaign-runner fail-closed contract-id derivation, and a campaign-level §4.1 gate rollup (see the pre-campaign hardening note below). No target/stack code changed; §1–§6 and §8–§10 statuses are unchanged since 2026-07-17 and were verified against source, not against run evidence |
 
 Status enum: **implemented-now** (in this change set, exercisable end-to-end) ·
 **partial** (some normative requirements of the section met, others not) ·
@@ -30,7 +30,7 @@ Stack labels used below map to targets as follows:
 | §4.2 Transient infrastructure fault | deferred | Policy configuration only: the §5 retry settings a transient run would use, plus runner plumbing (`--fault-mode transient` labels the run and flips the §7 gate to the inverse assertion expected-compensations = 0) | No transient-fault injector exists in any stack; no `fault=transient` runs are meaningful yet; the inverse assertion (transient faults produce zero compensations) is plumbed but exercises nothing |
 | §5 Retry policy | partial (pinned as config where expressible) | Terminal decline = zero retries on all six targets: on five by construction — the decline is modeled as a value/event (`FlowOutcome.FAIL`, `PaymentDeclinedEvent`), never as an exception, so it cannot reach any retry machinery; on restate the decline IS an exception (`TerminalException`), which Restate by documented semantics never retries at either layer. restate transient retry pinned at BOTH layers: per-step `RetryPolicy.exponential(50 ms, 2).setMaxAttempts(3)` on every journaled `Restate.run` block (forward steps AND compensations) plus an SDK-declared service-level invocation retry policy (initial 50 ms, factor 2, maxAttempts 3, onMaxAttempts=KILL) so server defaults (max-attempts=70, on-max-attempts=pause) are never trusted; no jitter knob exists in Restate — deterministic exponential backoff is exactly the §5 no-jitter requirement. Transient-retry policy pinned explicitly per stack: spring-axon — Axon `ExponentialBackOffIntervalRetryScheduler` on the CommandGateway, 50 ms initial, factor 2, maxRetryCount 2 (`AxonBusConfig`); quarkus ×2 — deliberately NO Axon RetryScheduler; in-service `OrderSagaRetryPolicy` (3 attempts total, 50 ms initial, factor 2, no jitter), exhaustion routes to backward recovery / `FAILED_UNRECOVERED`; exeris-community and spring-on-exeris — retry *budget* pinned via `maxRetries(2)` in the flow definition | On the two Exeris-flow stacks the pinned backoff shape (exponential, 50 ms initial, factor 2, no jitter) is NOT expressible in exeris-kernel-spi 0.10.0 — the builder exposes only `maxRetries`/`timeoutDuration`, recorded as in-code TODOs — and no consumer of `FlowDefinition.maxRetries` was found in the kernel 0.10.0 flow runtime, so even budget *enforcement* is unverified there. Everything is config-level: no transient injector exists (§4.2), so retry behavior (budget, backoff timing, exhaustion routing) is unexercised on every stack |
 | §6 Three guarantees | partial | G2 verified at *count* level via the interim §7 gate; G3 approximated client-side: terminal-outcome resolution is threshold-enforced (`saga_status_resolved > 0.98`, `saga_unresolved < 0.01`, poll budget 25 × 1 s), not guaranteed per-orderId | No per-orderId compensation ledger, no LIFO-order verification (G2 set/order semantics unverified); no post-run drain scan (G3 as specified — a thresholded client-side approximation is weaker than "every issued orderId"); no crash injection (W3), so G1 "despite crash injection" is not exercised |
-| §7 Oracles (external, shared) | deferred | **Interim substitute:** exact compensation-count gate in `run-e2e-shop-order-saga-baseline.sh` — expected count computed from the seeded population with `fnv1a64.py` (same pinned FNV-1a 64-bit function) and compared for exact-integer equality against `saga_compensated_total` from the k6 summary; hard pass/fail, emitted as a correctness-gate JSON; zero observed compensations counts as 0, not as "skip" (the v1 Axon defect class fails the gate) | No external oracle service exists. The interim gate is a count-granularity approximation of O2 only and is **strictly weaker** than the full oracle: no per-`(orderId, stepId, direction)` ledger, no LIFO sequence check, no O1 duplicate-execution detection, no O3 orphaned-effect detection — a stack could pass the count gate while violating O1/O3. **Population wiring is now matched** (previous gap closed): the gate derives per-scenario issued counts from the k6 NDJSON stream and invokes `fnv1a64.py --seed/--counts` with the helper's default template `{seed}-{scenario}-i{index}`, which is lockstep-guarded against `generateOrderId()` in k6.js by `--self-test`; density is checked per scenario (completed iterations vs `saga_issued_total`) and the gate fails closed to `error` — never PASS — when the issued index set is non-dense, per-scenario samples are missing, or the k6 artifacts are inconsistent. **Remaining wiring gap:** the non-dense case is detected but not recovered — the helper's `--ids-file` mode (evaluate over the actually-issued id list) is not wired into the runner, so a run with pre-order-creation aborts yields gate `error` (no §4.1 evidence either way) instead of an exact verdict over the true population |
+| §7 Oracles (external, shared) | deferred | **Interim substitute:** exact compensation-count gate in `run-e2e-shop-order-saga-baseline.sh` — expected count computed from the seeded population with `fnv1a64.py` (same pinned FNV-1a 64-bit function) and compared for exact-integer equality against `saga_compensated_total` from the k6 summary; hard pass/fail, emitted as a correctness-gate JSON; zero observed compensations counts as 0, not as "skip" (the v1 Axon defect class fails the gate) | No external oracle service exists. The interim gate is a count-granularity approximation of O2 only and is **strictly weaker** than the full oracle: no per-`(orderId, stepId, direction)` ledger, no LIFO sequence check, no O1 duplicate-execution detection, no O3 orphaned-effect detection — a stack could pass the count gate while violating O1/O3. **Population wiring is matched and no longer assumes density** (both prior gaps closed): k6.js tags every `saga_issued_total` sample with `oidx` = that issuance's `exec.scenario.iterationInTest`, so the runner reconstructs the **exactly-issued** orderId list (`{seed}-{scenario}-i{oidx}`) from the NDJSON stream and runs the oracle over it via `fnv1a64.py --ids-file`; the emitted `correctness-gate.json` records which population source was used (`population_source: ids_file`). An iteration that aborts before order creation simply contributes no sample, so the previous non-dense `error` outcome no longer occurs and the verdict is exact. The count-based `--seed/--counts` path is retained as the fallback for pre-tag artifacts (`population_source: regenerated`) and keeps its per-scenario density check. The gate still fails closed to `error` — never PASS — on untrusted inputs: duplicate `(scenario, index)` pairs, an id-list size that disagrees with the summary's `saga_issued_total`, missing per-scenario samples, or a helper that returns a non-integer. The `{seed}-{scenario}-i{index}` template stays lockstep-guarded against `generateOrderId()` by `--self-test` |
 | §8 Metrics and reporting split | partial | Implemented: latency split by outcome population (`COMPLETED` vs `COMPENSATED`) at p50/p99 via dedicated k6 Trends (`saga_completed_duration` / `saga_compensated_duration`) consumed by the baseline runner and `run-summary.sh`; throughput as ops/s and ops/s/core (effective-core detection: cgroup quota > explicit override > nproc); run labeling `fault=terminal` \| `fault=transient` stamped into gate and result JSON | Deferred: full HdrHistogram artifacts; p999/max per population; Σ RSS whole-deployment footprint rollup (incl. Axon Server / Neo4j processes); setup-time (`git clone` → first contract run) metric. Caveat on what IS implemented: outcome-split p50/p99 come from the k6 end-of-run summary, i.e. aggregated over warmup+measurement+cooldown, not filtered to the measurement phase — label them whole-run. Additionally the saga-duration Trends embed the per-stack terminal-outcome resolution model (§3): on the polled stacks (spring-axon, exeris-community, spring-on-exeris) they include up-to-1 s poll quantization per attempt; on the inline stacks (restate, quarkus ×2) they do not — cross-model latency rows MUST name each stack's resolution model. Durability tier IS now declared per run: the baseline stamps `durability_tier` + `durability_tier_source` (label-only, env-overridable) into run-metadata/result/correctness-gate JSON. Not addressed by this change set (unchanged, not re-audited here): ≥ 5 measured-run variance reporting; allocations/op and GC pause totals |
 | §9 Per-stack deviation register | partial | Stub register per stack added in **Appendix A of this file** (headings (a)–(d) per contract §9); (c) retry-configuration entries carry code-verified content on every stack; the restate entry additionally has (a), (b) and (d) populated from code/README review | (a) idiom deviations, (b) administrative-termination semantics, and (d) adversarial tuning remain unpopulated/unaudited for the five pre-existing stacks, and the register lives in this ledger rather than in the per-stack report sections the contract requires. Reports must not cite §9 compliance until entries are filled and moved into the report |
 | §10 Retroactive validity of v1 results | partial | v1 raw runs re-classified: `results/raw/e2e-shop-order-saga/README-v1-retroactive-status.md` applies the §10 table to all 23 v1 run dirs (15 baseline + 8 campaign), evidence-classified by the **absence** of v2 gate artifacts (no `fault_class`, `durability_tier`, correctness-gate, FNV oracle, or outcome-split trend in any dir), with a hard no-cross-version-aggregation rule. Shared surfaces reconciled to CONTRACT-v2: README v2.0 banner + stack roster, `docs/scenario-catalog.md` entry, `docs/benchmark-target-labels-and-scenario-contracts.md` (restate baseline-only note + saga-v2 required fields), and a caveated `contract_revision:2.0` pointer in `scenario.json` / `comparative-pair-manifest.json` (machine rows stay v1-active, no v2-compliance claim) | Still deferred: the actual per-run re-labelling of happy-path numbers to `COMPLETED`-population, the recommended §8 outcome-split re-runs, and any §4.1 re-test of the v1 Axon compensation finding. v1 mixed-population latency tables remain non-citable |
@@ -70,6 +70,83 @@ shapes via curl; ids chosen from the normative decline rule (`"5"` declined, `"1
   a G-guarantee asymmetry that MUST be declared in any future crash-injection (W3)
   work; irrelevant for fault-only runs.
 
+## Pre-campaign hardening — 2026-07-30 (harness only; no run evidence)
+
+Three changes made to let a v2 campaign be switched on without silently
+producing unusable or mislabelled artifacts. All three are source-verified;
+none of them is evidence about any stack's behavior.
+
+1. **§7 exact population (`oidx` → `--ids-file`).** `scenarios/e2e-shop-order-saga/k6.js`
+   now tags each `saga_issued_total` sample with the issuance's
+   `exec.scenario.iterationInTest`; `run-e2e-shop-order-saga-baseline.sh`
+   reconstructs the issued id list from those tags and evaluates the oracle
+   over it. This removes the density assumption rather than working around it:
+   verified on a synthetic 10 000-id population where dropping one *declined*
+   index makes the exact answer 311 while dense regeneration returns 312 — i.e.
+   the fallback path would have produced a false `fail`, and the pre-change
+   runner a wasted `error`. The tag is identical in every stack (same script),
+   so it introduces no cross-stack asymmetry; live-verified against k6 that the
+   tag co-exists with the `scenario` system tag and does not alter the summary
+   counter.
+2. **Campaign contract-id derivation fails closed.**
+   `run-e2e-shop-order-saga-campaign.sh` previously warned and fell back to the
+   hard-coded `exeris_community_h2c_v1` when no `fixed_contracts` row matched a
+   target label. Because the campaign always passes `--contract-id` down, that
+   fallback also satisfied the baseline's own "was a contract id supplied"
+   check — so a mistyped or aliased target label (e.g. `spring-app-axon`) would
+   have stamped an Exeris h2c contract id and protocol axis onto a Spring run.
+   All contract ids are now resolved in a preflight pass that aborts the
+   campaign before any target starts, listing the valid `target_app` values for
+   the requested graph track.
+3. **Campaign-level §4.1 rollup.** `status.csv` gains `contract_id`,
+   `graph_track`, `baseline_exit_code` and `durability_tier` columns, and the
+   campaign emits `campaign-gate-summary.json` (per-rep verdicts, verdict
+   counts, durability-tier uniformity check, `campaign_gate_status`).
+
+4. **Restate is drivable without becoming comparable.** `scenario.json` gains a
+   `baseline_only_contracts` namespace holding `restate_saga_h1_v1`,
+   deliberately kept OUT of `fixed_contracts` and OUT of
+   `graph_tracks.*.required_contracts` so nothing that walks those two
+   structures can pick it up, and with no `comparative-pair-manifest.json` row.
+   The campaign resolves it, prints `[BASELINE-ONLY]` at preflight, and stamps
+   `baseline_only: true` into `status.csv` and `campaign-gate-summary.json`.
+   The contract records its four comparison disqualifiers explicitly (h1 facade,
+   inline resolution model, external `restate-server` outside the per-process
+   sampler, in-memory status projection). Guardrail 4 below is unchanged: a
+   Restate *run* is now easy; a Restate *comparison* remains forbidden.
+
+**Open finding — per-step claim scope is not gate-enforceable.**
+`comparative-pair-manifest.json` labels exeris-community, quarkus-hibernate and
+spring-hibernate `claim_scope: comparison_eligible`, while `scenario.json` sets
+`coverage_limited_saga_engine_not_equivalent` on all three contracts *and* on
+`graph_tracks.neo4j`, with a per-step split: `auth`/`recommend`/`cart` eligible,
+`order_create_latency_ms` and `order_poll_latency_ms` **not** — the Axon stacks
+perform no synchronous DB writes in the HTTP request path where exeris-community
+performs three, and their status poll is an in-memory projection
+(`status_poll_comparison_excluded`). `scenario.json` is the stricter and
+therefore governing source. The manifest now carries
+`per_step_metric_claim_scope` and a `claim_scope_enforcement_gap` block, but the
+restriction is **not enforced**: `claim_scope_for_target()` in
+`scripts/run-comparative.sh` recognises only the literal strings
+`comparison_eligible` and `descriptive_only` and otherwise falls through to
+`maturity`, so a saga-step comparison would pass the strict gate while violating
+the contract. Until that is fixed, a strict-gate PASS on this scenario attests
+protocol/payload/concurrency fairness only — **the headline
+Exeris-Flow-vs-Axon saga-latency comparison is not available from track A at
+all**, and the two saga-step metrics must be excluded from every comparative row.
+The fix is a design decision (per-metric scope in the gate, vs. demoting the
+whole scenario to `descriptive_only`) and is deliberately left open here rather
+than resolved by silently flipping a flag.
+
+**What this explicitly does NOT add.** The saga runners still emit only
+`claim-status.json`; they do not emit `stage7-gate-report.csv`,
+`stage7-gate-summary.json` or `rejection-codes.json`. A saga campaign therefore
+produces per-run v2 evidence, **not** a comparative strict-gate verdict, and no
+cross-target comparative math may be published from a campaign directory alone —
+that requires a separate promotion step (as was done for `entity-read-by-id`).
+`campaign-gate-summary.json` is a §4.1 count rollup and must never be cited as
+comparative eligibility.
+
 ## Claim guardrails implied by this matrix
 
 Until the corresponding rows move to `implemented-now`:
@@ -77,10 +154,14 @@ Until the corresponding rows move to `implemented-now`:
 1. Compensation-correctness claims must be phrased as **count-level** ("observed
    compensation count equals the exact expected integer"), never as O1/O2/O3
    compliance, exactly-once verification, or LIFO-order verification — and only
-   from a run whose correctness-gate JSON reports `status: pass`. The gate now
-   regenerates the population with the matched orderId format and per-scenario
-   counts and fails closed (`error`) on non-dense issuance, so `error`/`skipped`
-   gate runs support no §4.1 claim in either direction; see §7.
+   from a run whose correctness-gate JSON reports `status: pass`. The gate
+   evaluates the exactly-issued orderId population read back from the k6 stream
+   (`population_source: ids_file`) or, for pre-tag artifacts, a density-checked
+   regeneration (`population_source: regenerated`), and fails closed (`error`)
+   on any untrusted input, so `error`/`skipped` gate runs support no §4.1 claim
+   in either direction; see §7. For a campaign, `campaign-gate-summary.json`
+   rolls the per-rep verdicts up — cite it only when
+   `campaign_gate_status: pass`, and never as a comparative-eligibility verdict.
 2. No headline latency claims beyond p50/p99 per outcome population; no
    p999/max/tail-artifact claims. Outcome-split percentiles from the end-of-run
    k6 summary must be labeled whole-run unless phase-filtered. Any latency row

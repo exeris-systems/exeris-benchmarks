@@ -156,6 +156,15 @@ EOF
   echo "Resource profile written to ${profile_path}"
 }
 
+# Derive the fixed-contract id for a target, or FAIL CLOSED.
+#
+# The campaign always passes --contract-id down to the baseline, which makes the
+# baseline treat the id as operator-supplied (_CONTRACT_ID_EXPLICIT=true) and
+# skip its own "no contract id given" abort. A fallback here would therefore
+# launder a guessed id past that check and stamp it onto every artifact of the
+# run (contract_id + protocol axis). A target label with no matching
+# fixed_contracts row for this graph track is an operator error, not a default:
+# abort before any target is started.
 _derive_contract_id() {
   local target_app="$1"
   if [[ "${_CONTRACT_ID_EXPLICIT}" == "true" ]]; then
@@ -173,11 +182,68 @@ _derive_contract_id() {
       select(.value.target_app == $ta) | .key)' \
     "$SCENARIO_JSON" 2>/dev/null | head -1)"
   if [[ -z "$contract_id" ]]; then
-    echo "[WARN] _derive_contract_id: no contract for target_app='$target_app' graph_track='$GRAPH_TRACK'; using fallback '$CONTRACT_ID'" >&2
-    echo "$CONTRACT_ID"
-  else
-    echo "$contract_id"
+    # Second chance: the baseline-only namespace. These contracts are runnable
+    # but deliberately kept out of fixed_contracts / graph_tracks so no
+    # comparative tooling can pick them up (restate today). Driving one is
+    # allowed; it is recorded as baseline_only so nothing downstream mistakes
+    # the run for a comparison-eligible arm.
+    contract_id="$(jq -r --arg ta "$target_app" \
+      '(.baseline_only_contracts // {}) | to_entries[]
+       | select(.value | type == "object")
+       | select(.value.target_app == $ta) | .key' \
+      "$SCENARIO_JSON" 2>/dev/null | head -1)"
+    if [[ -n "$contract_id" ]]; then
+      BASELINE_ONLY_TARGET["$target_app"]="true"
+      echo "$contract_id"
+      return 0
+    fi
   fi
+  if [[ -z "$contract_id" ]]; then
+    {
+      echo "ERROR: no fixed contract for target_app='${target_app}' on graph_track='${GRAPH_TRACK}' in ${SCENARIO_JSON#$REPO_ROOT/}."
+      echo "ERROR: refusing to fall back to '${CONTRACT_ID}' — the campaign passes --contract-id explicitly, so a guessed id"
+      echo "ERROR: bypasses the baseline's own fail-closed check and mislabels the run's contract_id and protocol axis."
+      echo "ERROR: known target_app values for graph_track='${GRAPH_TRACK}':"
+      jq -r --arg gt "$GRAPH_TRACK" \
+        '(.graph_tracks[$gt].required_contracts // [])[] as $cid
+         | "ERROR:   \(.fixed_contracts[$cid].target_app // "?")  ->  \($cid)"' \
+        "$SCENARIO_JSON" 2>/dev/null || true
+      echo "ERROR: baseline-only target_app values:"
+      jq -r '(.baseline_only_contracts // {}) | to_entries[]
+             | select(.value | type == "object")
+             | "ERROR:   \(.value.target_app // "?")  ->  \(.key)  (baseline_only)"' \
+        "$SCENARIO_JSON" 2>/dev/null || true
+      echo "ERROR: for anything else, pass --contract-id explicitly."
+    } >&2
+    return 1
+  fi
+  echo "$contract_id"
+}
+
+# Resolve every contract id up front so an unknown target aborts the campaign
+# before any target process, database seed, or measurement window is spent.
+declare -A RESOLVED_CONTRACT_ID=()
+declare -A BASELINE_ONLY_TARGET=()
+resolve_all_contract_ids() {
+  local target_app cid
+  for target_app in "$@"; do
+    # _derive_contract_id runs in a subshell for its stdout, so the
+    # BASELINE_ONLY_TARGET write inside it does not propagate; re-derive the
+    # flag here from the resolved id.
+    if ! cid="$(_derive_contract_id "$target_app")"; then
+      echo "ERROR: campaign aborted during contract-id preflight (target_app='${target_app}')." >&2
+      exit 1
+    fi
+    RESOLVED_CONTRACT_ID["$target_app"]="$cid"
+    if jq -e --arg cid "$cid" '(.baseline_only_contracts // {}) | has($cid)' \
+         "$SCENARIO_JSON" >/dev/null 2>&1; then
+      BASELINE_ONLY_TARGET["$target_app"]="true"
+      echo "  contract-id preflight: ${target_app} -> ${cid}  [BASELINE-ONLY: descriptive single-stack run; NOT comparison-eligible]"
+    else
+      BASELINE_ONLY_TARGET["$target_app"]="false"
+      echo "  contract-id preflight: ${target_app} -> ${cid}"
+    fi
+  done
 }
 
 run_target_rep() {
@@ -188,7 +254,7 @@ run_target_rep() {
 
   local -a args=(
     --target-app          "$target_app"
-    --contract-id         "$(_derive_contract_id "$target_app")"
+    --contract-id         "${RESOLVED_CONTRACT_ID[$target_app]}"
     --graph-track         "$GRAPH_TRACK"
     --fault-mode          "$FAULT_MODE"
     --profile             "$PROFILE"
@@ -253,18 +319,78 @@ EOF
   echo "Campaign manifest: ${CAMPAIGN_MANIFEST_JSON}"
 }
 
+# Campaign-level rollup of the per-rep CONTRACT-v2 s4.1 correctness gate.
+#
+# This is NOT the comparative strict gate (stage7-gate-report.csv /
+# claim-status.json / rejection-codes.json): it says only that every rep's
+# compensation COUNT matched the exact expected integer. It is O2-at-count-
+# granularity, per CONTRACT-v2-IMPLEMENTATION.md s7 — no LIFO order, no O1
+# duplicate-execution, no O3 orphaned-effect evidence. Comparative eligibility
+# is decided by a separate promotion step, not here.
+write_campaign_gate_summary() {
+  local summary_json="$OUTPUT_DIR/campaign-gate-summary.json"
+  local generated_at_utc
+  generated_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  jq -n \
+    --argjson reps "[${gate_rows}]" \
+    --arg scenario_id  "e2e-shop-order-saga" \
+    --arg campaign_ts  "$CAMPAIGN_TS" \
+    --arg fault_mode   "$FAULT_MODE" \
+    --arg graph_track  "$GRAPH_TRACK" \
+    --arg generated_at_utc "$generated_at_utc" \
+    '($reps | map(.correctness_gate)) as $verdicts
+     | {
+         schema_version: "1",
+         gate_id:   "contract_v2_s4_1_exact_compensation_campaign_rollup",
+         gate_name: "every rep: observed_compensations == expected_declines",
+         contract_ref: "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
+         scope_note: "Count-granularity O2 rollup only. NOT a comparative strict-gate verdict and NOT evidence of O1/O3 or LIFO ordering; see CONTRACT-v2-IMPLEMENTATION.md s7.",
+         scenario_id: $scenario_id,
+         campaign_ts: $campaign_ts,
+         fault_mode:  $fault_mode,
+         graph_track: $graph_track,
+         reps_total:  ($reps | length),
+         baseline_only_targets: ($reps | map(select(.baseline_only)) | map(.target_app) | unique),
+         comparison_eligible_targets_note: "Presence here means only that a target has a fixed_contracts row for this graph track. Comparative eligibility additionally requires the strict-gate artifacts, which this campaign does NOT emit.",
+         verdict_counts: ($verdicts | group_by(.) | map({key: .[0], value: length}) | from_entries),
+         durability_tiers: ($reps | map(.durability_tier) | unique),
+         durability_tier_uniform: (($reps | map(.durability_tier) | unique | length) <= 1),
+         campaign_gate_status:
+           (if ($reps | length) == 0 then "error"
+            elif ($verdicts | all(. == "pass")) then "pass"
+            elif ($verdicts | any(. == "fail")) then "fail"
+            else "not_evaluated" end),
+         reps: $reps,
+         generated_at_utc: $generated_at_utc
+       }' > "$summary_json"
+
+  local _campaign_gate
+  _campaign_gate="$(jq -r '.campaign_gate_status' "$summary_json")"
+  echo "Campaign correctness-gate rollup: ${_campaign_gate} (${summary_json})"
+  if [[ "$_campaign_gate" != "pass" ]]; then
+    echo "WARN: not every rep passed the CONTRACT-v2 s4.1 gate; no s4.1 correctness claim may cite this campaign." >&2
+  fi
+  if [[ "$(jq -r '.durability_tier_uniform' "$summary_json")" != "true" ]]; then
+    echo "WARN: durability tiers are not uniform across reps; CONTRACT-v2 s8 forbids cross-tier comparison." >&2
+  fi
+}
+
 # --- Main ---
-apply_resource_profile
-
-echo "rep,target_app,run_dir,runner_status,k6_exit_code,result_json_present,fault_mode,correctness_gate" > "$STATUS_CSV"
-
-any_fail=0
-
 echo "Campaign config: targets=${CAMPAIGN_TARGETS} repeats=${REPEATS} graph_track=${GRAPH_TRACK} fault_mode=${FAULT_MODE} profile=${PROFILE}"
 [[ -n "${BENCH_CGROUP_MEMORY_LIMIT_MB:-}" ]] && echo "  cgroup_memory_limit_mb=${BENCH_CGROUP_MEMORY_LIMIT_MB}"
 [[ -n "${BENCH_CGROUP_CPU_QUOTA_PCT:-}"    ]] && echo "  cgroup_cpu_quota_pct=${BENCH_CGROUP_CPU_QUOTA_PCT}"
 
 IFS=',' read -ra TARGET_LIST <<< "$CAMPAIGN_TARGETS"
+resolve_all_contract_ids "${TARGET_LIST[@]}"
+
+apply_resource_profile
+
+echo "rep,target_app,contract_id,baseline_only,graph_track,run_dir,runner_status,k6_exit_code,baseline_exit_code,result_json_present,fault_mode,durability_tier,correctness_gate" > "$STATUS_CSV"
+
+any_fail=0
+gate_rows=""
+
 for target_app in "${TARGET_LIST[@]}"; do
   for rep in $(seq 1 "$REPEATS"); do
     run_label="${target_app}-rep-${rep}"
@@ -284,21 +410,32 @@ for target_app in "${TARGET_LIST[@]}"; do
       k6_exit_code="$(jq -r '.k6_exit_code // '"$rc" "$run_dir/result.json")"
     fi
 
-    # CONTRACT-v2 s4.1 correctness-gate verdict per rep (pass|fail|skipped|error|absent).
+    # CONTRACT-v2 s4.1 correctness-gate verdict per rep (pass|fail|skipped|error|absent)
+    # and the s8 durability-tier label the baseline stamped for this run.
     correctness_gate="absent"
+    durability_tier="unknown"
     if [[ -f "$run_dir/correctness-gate.json" ]]; then
       correctness_gate="$(jq -r '.status // "unknown"' "$run_dir/correctness-gate.json" 2>/dev/null || echo "unknown")"
+      durability_tier="$(jq -r '.durability_tier // "unknown"' "$run_dir/correctness-gate.json" 2>/dev/null || echo "unknown")"
     fi
 
     if [[ "$rc" -ne 0 ]]; then
       any_fail=1
     fi
 
-    echo "${rep},${target_app},${run_dir},${runner_status},${k6_exit_code},${result_json_present},${FAULT_MODE},${correctness_gate}" >> "$STATUS_CSV"
+    echo "${rep},${target_app},${RESOLVED_CONTRACT_ID[$target_app]},${BASELINE_ONLY_TARGET[$target_app]},${GRAPH_TRACK},${run_dir},${runner_status},${k6_exit_code},${rc},${result_json_present},${FAULT_MODE},${durability_tier},${correctness_gate}" >> "$STATUS_CSV"
+    gate_rows+="${gate_rows:+,}$(jq -nc \
+      --arg t "$target_app" --arg c "${RESOLVED_CONTRACT_ID[$target_app]}" \
+      --arg g "$correctness_gate" --arg d "$durability_tier" \
+      --arg s "$runner_status" --argjson r "$rep" --argjson x "$rc" \
+      --argjson b "${BASELINE_ONLY_TARGET[$target_app]}" \
+      '{rep:$r, target_app:$t, contract_id:$c, baseline_only:$b, runner_status:$s,
+        baseline_exit_code:$x, durability_tier:$d, correctness_gate:$g}')"
   done
 done
 
 write_campaign_manifest
+write_campaign_gate_summary
 
 overall_status="pass"
 if [[ "$any_fail" -ne 0 ]]; then
@@ -308,6 +445,7 @@ fi
 echo "Campaign complete. Status: ${overall_status}"
 echo "Manifest: ${CAMPAIGN_MANIFEST_JSON}"
 echo "Status CSV: ${STATUS_CSV}"
+echo "Gate rollup: ${OUTPUT_DIR}/campaign-gate-summary.json"
 
 if [[ "$any_fail" -ne 0 ]]; then
   exit 1

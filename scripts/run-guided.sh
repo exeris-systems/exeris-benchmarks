@@ -426,7 +426,7 @@ derive_saga_contract() {
     | $cids[] as $cid
     | if .fixed_contracts[$cid].target_app == $ta then $cid else empty end' \
     "$scenario_json" 2>/dev/null | head -1)"
-  printf '%s\n' "${cid:-exeris_community_h2c_v1}"
+  printf '%s\n' "${cid:-exeris_community_h1_v2}"
 }
 
 # Authoritatively resolve protocol_mode (h1/h2/h3) rather than asking the user:

@@ -24,7 +24,7 @@ Usage: run-e2e-shop-order-saga-baseline.sh [options]
 
 Options:
   --base-url <url>         Base URL for target app (default: https://localhost:8080)
-  --contract-id <id>       Contract id (default: exeris_community_h2c_v1).
+  --contract-id <id>       Contract id (default: exeris_community_h1_v2).
                            Restate runs MUST pass this explicitly with a
                            restate-appropriate id: the h2c default is never
                            stamped onto a restate (h1 facade) run — the runner
@@ -619,7 +619,7 @@ _BASE_URL_EXPLICIT="false"
 _CONTRACT_ID_EXPLICIT="false"
 BASE_URL="http://localhost:9000"
 CURL_INSECURE_OPT=""
-CONTRACT_ID="exeris_community_h2c_v1"
+CONTRACT_ID="exeris_community_h1_v2"
 TARGET_APP="exeris-community"
 TARGET_APP_LOG_FILE=""
 AUTO_START_INFRA="true"
@@ -767,7 +767,7 @@ esac
 
 # Restate contract-id fail-closed check: restate is not a scenario.json fixed
 # contract, so the runner cannot derive a restate contract id — and the default
-# (exeris_community_h2c_v1) is an h2c contract while the restate facade is
+# (exeris_community_h1_v2) is an exeris contract while the restate facade is a
 # HTTP/1.1. Stamping the h2c default onto a restate run would mislabel every
 # artifact (protocol axis + contract id), so abort instead of defaulting.
 if [[ "$TARGET_APP" == *restate* || "$CONTRACT_ID" == *restate* ]]; then

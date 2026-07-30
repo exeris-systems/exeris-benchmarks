@@ -30,11 +30,32 @@ comparisons (engine-only, journal-only) are out of scope.
 
 ## 2. Scenario definition
 
-> **CARRY-OVER from v1.** The business step sequence, payload schema, VU
-> count, and think time are unchanged from contract v1 and are normative as
-> defined there. They are referenced here as S1…Sn with the payment step
-> designated **S_pay**. Do not redefine them in this document — link, don't
-> duplicate.
+> **CARRY-OVER from v1, AMENDED 2026-07-30.** The business step sequence and
+> payload schema are unchanged from contract v1 and are normative as defined
+> there. They are referenced here as S1…Sn with the payment step designated
+> **S_pay**. Do not redefine them in this document — link, don't duplicate.
+>
+> **The load model is NOT carried over.** v1's "VU count" wording described a
+> closed-loop model this scenario has never actually run: the k6 script uses
+> `constant-arrival-rate` executors, under which the VU numbers are a *pool
+> ceiling*, not concurrency. The normative load model in v2.1 is:
+>
+> - `constant-arrival-rate`, **50 sessions/s** in the measurement window,
+>   identical on every stack (measured peak concurrency ~342);
+> - think time unchanged at 800–2500 ms random.
+>
+> 50/s was chosen from a measured sweep (3 / 25 / 50 / 200 sessions/s). It is
+> the highest rate clean on every stack: at 100/s exeris-community loses its
+> entire measurement phase to connection resets (§ open findings in
+> `CONTRACT-v2-IMPLEMENTATION.md`). The previous default of 3/s left the target
+> at 0.7 % of a 16-core box and inflated CPU-per-request roughly threefold with
+> idle overhead, so results under it are not comparable with results under this
+> model.
+>
+> **Runs under the pre-amendment load model MUST NOT be aggregated with runs
+> under this one.** The change is carried by a new `workload_profile_key`
+> (`…-h1-loopback-runtime-k6-inline-r50-v2`) and by new contract ids; the
+> h2c-named contracts are marked `superseded`.
 
 Structural requirements (normative in v2):
 
@@ -53,9 +74,21 @@ Structural requirements (normative in v2):
   `ctx.run`, and Exeris) performs the same domain writes (orders/
   order_items, inventory reserve/restore, outbox, compensation updates)
   against the same Postgres instance class and schema. Neo4j is the shared
-  READ-SIDE recommendation graph: it serves the recommendation step
-  identically on every stack, is seeded identically from the Postgres seed
-  baseline before each run, and is never written to by any saga step.
+  READ-SIDE recommendation graph: it is seeded identically from the Postgres
+  seed baseline before each run and is never written to by any saga step.
+  **CORRECTED 2026-07-30 — it does NOT serve the recommendation step
+  identically.** The datastore and dataset are shared; the *access pattern* is
+  not. quarkus and spring issue ONE Cypher query expressing the two-hop join
+  (`User -PURCHASED_BY-> Product -SIMILAR_TO-> Product`) server-side.
+  exeris-community issues **1 + N traversals**, because `GraphTraversal`
+  (exeris-kernel-spi) carries exactly one `GraphEdgeDescriptor` and no
+  `GraphSession` method accepts a heterogeneous edge path — a two-edge-type
+  path is not expressible in a single call, so the N+1 is forced by the SPI
+  rather than chosen by the adapter. Measured throughput-matched: 2.6× the
+  Neo4j CPU per iteration and 2.5× the recommendation latency for
+  exeris-community. Consequently `recommend_latency_ms` is comparable only in
+  the platform-natural sense (each stack's own idiomatic access) and MUST NOT
+  be read as a runtime-speed comparison.
 - **Graph driver pinned:** all cross-stack comparison runs use the Neo4j
   driver for the read-side recommendation path. The Exeris graph
   capability's driver swap (pgq ↔ neo4j) is explicitly OUT OF SCOPE for

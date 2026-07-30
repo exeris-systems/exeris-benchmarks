@@ -106,14 +106,48 @@ simply stopped.
 **Both predictions below were falsified.** quarkus was expected to fail and did;
 exeris was expected to PASS and did not. The prediction that mattered was wrong.
 
-**Why exeris did not pass, and the sub-finding that explains it:**
+**Why exeris did not pass — and why that is NOT a defect.**
 `exeris_saga_state` grew by only **21 rows** across an entire run issuing
-thousands of sagas (2640 → 2661). Flow state is therefore NOT checkpointed per
-saga on the fast path — so a crash mid-saga has essentially nothing to resume
-from. The durable flow store exists, but it is not what makes a normal in-flight
-saga recoverable. Any claim that exeris offers crash-durable sagas needs to
-state what actually triggers a snapshot; on this evidence it is not "every
-saga".
+thousands of sagas (2640 → 2661), so flow state is not checkpointed per saga on
+the fast path. The kernel TCK explains exactly why, and it means this test was
+probing a guarantee the kernel never makes.
+
+`exeris-kernel-tck/.../flow/AbstractSagaRecoveryTck.java` specifies recovery for
+**PARKED** flows:
+
+> *Mid-Saga Kill — engine is force-closed while a flow is PARKED; after rebuild
+> the snapshot must exist and the flow must resume from the checkpoint step.*
+
+and the test body pins the trigger — `FlowStepAction step1 = _ -> FlowOutcome.PARK`,
+asserting *"FlowSnapshotStore.save() MUST be called on PARK transition"* and
+*"Checkpoint state must be PARKED"*. There is also a restart-under-load variant
+in which N parked instances all resume to `COMPLETED` behind an idempotency
+fence. So the guarantee is real, TCK-verified, and **scoped to parked flows**.
+
+Every step of this benchmark's saga returns `CONTINUE` / `COMPLETE` / `FAIL` —
+it **never parks**. No park means no snapshot means nothing to resume. Exeris
+behaved exactly as its contract says.
+
+**The finding is therefore about the SCENARIO, not the stack.** CONTRACT-v2's
+saga is straight-through: no step awaits an external system, so no step parks.
+A straight-through sequence with compensation is, structurally, a transaction
+script — which is precisely what quarkus implements, and why its approach is
+competitive here. Saga orchestration machinery earns its keep when a step must
+await an external event (park) or when the process can die mid-flight and must
+resume. **This workload exercises neither**, on any stack.
+
+Consequences:
+
+1. W3a as run does not discriminate between the stacks and cannot. All three
+   were asked to do something none of them claims.
+2. To test the guarantee that actually exists, the workload needs a **parking
+   step** — e.g. `charge-payment` parking while awaiting an external payment
+   confirmation, which is also the realistic shape of that step. That is a
+   CONTRACT-v2 §2 scenario change, not a harness change.
+3. The whole-deployment CPU comparison should be read in this light: none of the
+   stacks is paying for durable orchestration in this workload, so the cost
+   differences are transport, ORM, graph access and event plumbing — not
+   durability.
 
 **This run is UNDER-POWERED and must not be used to rank the stacks.** At 50
 sessions/s with ~25 ms sagas, Little's law puts ~1.2 sagas in flight at any

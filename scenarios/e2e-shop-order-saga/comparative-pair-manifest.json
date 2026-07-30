@@ -3,6 +3,9 @@
   "schema_version": "2",
   "scenario_id": "e2e-shop-order-saga",
   "scenario_version": "1",
+  "contract_revision": "2.0",
+  "contract_authority": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md",
+  "contract_revision_note": "Authoritative spec is CONTRACT-v2.md v2.0 (DRAFT). scenario_version stays 1 on purpose: the compatible_targets / allowed_pairs below are the v1-active comparison set and are NOT asserted to be v2-machine-compliant. Restate (baseline-only) and spring-on-exeris (H1 vs H2C protocol mismatch) are deliberately excluded from comparative rows. No row here asserts v2 correctness-gate compliance; per-section v2 enforcement status is in scenarios/e2e-shop-order-saga/CONTRACT-v2-IMPLEMENTATION.md.",
   "comparative_tier": 1,
   "comparison_axis": {
     "type": "runtime_pairwise",

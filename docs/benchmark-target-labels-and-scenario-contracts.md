@@ -83,6 +83,24 @@ A legacy id naming a saga comparator (e.g. `spring-app-axon`) carried Axon-Frame
 axis semantics. Those semantics are preserved as scenario-manifest metadata
 (`saga_framework`, `framework_difference`, `target_backend_support`), NOT in the
 id — the id names the physical app; the axis label lives in the contract.
+
+### Saga-only baseline target (`restate`)
+
+`restate` is a **scenario-scoped, baseline-only** target for
+`e2e-shop-order-saga` (CONTRACT-v2). It is **not** one of the canonical
+comparison ids above and is intentionally absent from any `scenario.json`
+`fixed_contract` and from every `comparative-pair-manifest.json` row. It is
+listed as a runnable row in `runtime/drivers/target-asset-matrix.json`
+(port 9004, `protocol_mode: h1`) and whitelisted in
+`tools/verify-target-asset-matrix.sh` as a justified-unused-runnable target.
+Its k6-facing facade speaks **HTTP/1.1 only** — an h1-vs-h2c protocol
+mismatch against the canonical H2C saga contracts and therefore a strict-gate
+disqualifier (same class as `spring-on-exeris`). Its deployment unit includes
+an external `restate-server` container whose CPU/RSS is sampled separately
+(`logs/restate-server-docker-stats.csv`). **No comparative claim may reference
+`restate`** until it is wired as a fixed contract + manifest row and the
+protocol mismatch is resolved or the comparison is explicitly scoped h1-vs-h1.
+
 ## Runtime Target Contract Registry
 
 Runtime driver scripts resolve launch settings through `runtime/drivers/target-contract-registry.sh`.
@@ -141,6 +159,30 @@ Required fields:
 - `duration_policy`: Warmup and measurement windows.
 - `fairness_constraints`: Explicit equivalence requirements.
 - `required_artifacts`: Artifact checklist for comparison eligibility.
+
+### Saga (CONTRACT-v2) additional required fields
+
+For the `e2e-shop-order-saga` scenario only, contract revision `2.0`
+(`scenarios/e2e-shop-order-saga/CONTRACT-v2.md`) adds these required
+per-run/per-row fields on top of the list above. They are **scenario-scoped**,
+not global contract fields:
+
+- `fault_class`: `terminal` or `transient` (§4). Never mixed in one run;
+  headline claims come from `terminal` runs only.
+- `durability_tier`: `T1` (process-durable) or `T2` (fsync node-durable),
+  declared per run (§8). **Cross-tier comparison is forbidden** in all tables
+  and prose.
+- `latency_population`: `COMPLETED` or `COMPENSATED` — latency is reported
+  **separately** per population (§8); mixed-population latency tables are
+  non-citable under v2.
+- `resolution_model`: `inline` (terminal outcome in the order-POST body) or
+  `polled` (status-poll loop) — cross-model latency rows must name each stack's
+  model (§3 measurement-model asymmetry).
+
+Enforcement status of each is tracked in
+`scenarios/e2e-shop-order-saga/CONTRACT-v2-IMPLEMENTATION.md`; a `partial` or
+`deferred` row there means the field may be declared but its guarantee is not
+yet fully verified.
 
 ## Comparative Pair Manifests and Execution Tooling
 

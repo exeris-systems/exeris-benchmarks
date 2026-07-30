@@ -308,6 +308,53 @@ Artifacts (under `results/cold-start-ttfr/<target>/<ts>/`): `result.json` (aggre
 
 ---
 
+### e2e-shop-order-saga
+
+| Field | Value |
+|---|---|
+| Scenario ID | `e2e-shop-order-saga` |
+| Endpoints | `POST /auth/register` → `GET /products/recommended` → `POST /cart/add` → `GET /cart` → `POST /orders` (saga pivot) |
+| Mode | `stateful-e2e-saga` |
+| Tier | Community (first) |
+| Driver | k6 |
+| Transport | H2C (loopback) for the canonical Axon/Exeris contracts; H1 for the spring-on-exeris and Restate stacks |
+| Authoritative contract | **`scenarios/e2e-shop-order-saga/CONTRACT-v2.md` (v2.0, DRAFT)** — supersedes v1 |
+
+> **CONTRACT v2.0.** The normative spec is `CONTRACT-v2.md`; what is actually enforced today (`implemented-now` / `partial` / `deferred`, per §) is in `CONTRACT-v2-IMPLEMENTATION.md`. Breaking changes vs v1: deterministic per-`orderId` terminal decline (`stableHash64` = FNV-1a 64, `mod 1000 < 30` = exactly 3.0 %); `fault=terminal|transient` run classes; pinned retry (terminal 0 / transient max-3, 50 ms×2, no jitter); exact compensation oracle; latency split by `COMPLETED` vs `COMPENSATED` population; per-run durability-tier (T1/T2) with **cross-tier comparison forbidden** (§8). No claim may rely on a `partial`/`deferred` row without its caveat.
+
+> **LOOPBACK CAVEAT:** canonical contracts run `transport_mode=loopback-h2c`; all result artifacts must carry it. Loopback is not equivalent to network-path.
+
+#### Saga substrate axis
+
+Postgres is the shared **domain** datastore for every stack (identical order/inventory/outbox writes, same schema); Neo4j is the shared **read-side** recommendation graph, seeded identically and never written by a saga step (CONTRACT-v2 §2, Postgres-amended 2026-07-17). The Exeris pgq↔neo4j driver swap is an Exeris-only side experiment, out of scope for comparison tables.
+
+| Stack | Saga substrate | Status |
+|---|---|---|
+| `exeris-community` | Exeris Flow (L4 native) | comparison-eligible (`exeris_community_h2c_v1`) |
+| `quarkus-hibernate` | Axon Framework | comparison-eligible (`quarkus_axon_neo4j_v1`) |
+| `spring-hibernate` | Axon Framework | comparison-eligible (`spring_boot_axon_neo4j_v1`) |
+| `spring-on-exeris` | `exeris-spring-runtime-flow` (compat) | exploratory only — H1 vs H2C protocol mismatch; separate category (not a pure-Spring stack) |
+| `restate` | Restate durable execution (server + JVM SDK) | **baseline-only, NOT comparison-eligible** — no fixed_contract / manifest row; H1 facade |
+
+Flow-vs-Axon is the axis under test; Axon is first-class for pure Spring/Quarkus and was never withdrawn.
+
+#### Claim scope
+
+| Scope | VUs | Measurement | Required profile | Allowed claims |
+|---|---|---|---|---|
+| `exploratory` | 100 | warmup only | dev-laptop, ci-runner | descriptive; RPS trends |
+| `comparison-eligible` | 100 | 180 s | **perf-box-amd64** | throughput, p50/p99 per outcome population, saga success rate |
+
+#### Seed
+
+PostgreSQL (postgres:16.2) + Neo4j (5.16-community) per `scenarios/e2e-shop-order-saga/seed/seed-manifest.json`; Neo4j is projected from the Postgres baseline via `seed-neo4j-from-postgres.sh`. Pre-run `verify-seed.sh` exit 0 is mandatory; results without it are invalid.
+
+#### Cross-runtime status
+
+Comparative execution is constrained to the H2C loopback Neo4j track (`track_a_neo4j`) pairs declared in `comparative-pair-manifest.json` (exeris-community / quarkus-hibernate / spring-hibernate). PGQ and AGE tracks are `planned` / `compatibility_only`. **Restate and spring-on-exeris are excluded from comparative tables** (baseline-only and protocol-mismatch respectively). This is structural readiness; no published comparative result exists. v1 raw runs under `results/raw/e2e-shop-order-saga/` are re-classified per CONTRACT-v2 §10 — see `README-v1-retroactive-status.md` there; do not aggregate them with v2 runs.
+
+---
+
 ## Scaffolded matrix scenarios (layout-ready)
 
 The following directories are scaffolded and ready for tool-specific scripts:

@@ -9,14 +9,54 @@
 
 ---
 
+> ## ⚠️ CONTRACT v2.0 — read `CONTRACT-v2.md` first
+>
+> The **authoritative** specification for this scenario is
+> [`CONTRACT-v2.md`](./CONTRACT-v2.md) (v2.0, status *DRAFT — pending
+> claims-audit*). v2.0 **supersedes v1** with breaking changes: deterministic
+> per-`orderId` terminal payment decline (`stableHash64` pinned to FNV-1a
+> 64-bit, `mod 1000 < 30` = **exactly 3.0 %**), separated
+> `fault=terminal|transient` classes, a pinned retry policy (terminal = 0
+> retries; transient = max 3, 50 ms × 2, no jitter), an exact compensation
+> oracle, latency reported **separately** for `COMPLETED` vs `COMPENSATED`
+> populations, whole-deployment Σ RSS / ops·s⁻¹·core⁻¹ / setup-time, and a
+> per-run **durability-tier** declaration (T1/T2) with **cross-tier
+> comparison forbidden** (§8).
+>
+> **What is actually enforced right now** is tracked section-by-section in
+> [`CONTRACT-v2-IMPLEMENTATION.md`](./CONTRACT-v2-IMPLEMENTATION.md)
+> (`implemented-now` / `partial` / `deferred`). No claim may rely on a
+> `partial` or `deferred` row without its caveat. The prose below this banner
+> is **v1-era carry-over**, kept for the workload/seed/step detail it still
+> describes correctly; **on any conflict, `CONTRACT-v2.md` wins.**
+
 ## Purpose
 
-This scenario tests end-to-end order saga orchestration across three community implementation tiers:
-- **Exeris:** Native Flow (L4 Sagas) + Graph (L2) + Events (L3 transactional outbox)
-- **Quarkus:** Axon Framework (Saga) + Neo4j Bolt (Graph) + Outbox Pattern (Events)
-- **Spring Boot:** Axon Framework (Saga) + Neo4j Bolt (Graph) + Outbox Pattern (Events)
+This scenario measures an end-to-end e-commerce order **saga** across runtimes
+whose saga substrate is the axis under test:
 
-**Workload:** Realistic e-commerce workflow with multi-step saga validation and compensation paths.
+- **Exeris Community** — native **Flow** (L4 saga) + Events (L3 transactional
+  outbox). Postgres domain datastore, Neo4j read-side recommendation graph.
+  *comparison-eligible.*
+- **Quarkus 3 + Axon Framework** — Axon saga substrate; identical Postgres
+  domain writes, Neo4j Bolt read-side. *comparison-eligible.*
+- **Spring Boot + Axon Framework** — Axon saga substrate; identical Postgres
+  domain writes, Neo4j Bolt read-side. *comparison-eligible.*
+- **Spring-on-Exeris (compat)** — Spring MVC hosted on the Exeris runtime, saga
+  via `exeris-spring-runtime-flow` (the same Flow engine as Exeris Community). A
+  **separate category** from pure Spring; H1 facade → protocol-mismatch,
+  *exploratory only.*
+- **Restate** (server + JVM SDK) — the 4th `CONTRACT-v2` stack. Present and
+  live-verified as a **baseline-only** target; **NOT comparison-eligible** (no
+  `scenario.json` fixed_contract / manifest row; H1 facade). See the Restate
+  note below.
+
+**Flow-vs-Axon is the axis under test** — Axon remains the first-class saga
+substrate for the pure Spring and Quarkus stacks and was never withdrawn from
+the benchmark.
+
+**Workload:** Realistic e-commerce workflow with a payment pivot, multi-step
+saga validation, and LIFO compensation paths.
 
 ---
 

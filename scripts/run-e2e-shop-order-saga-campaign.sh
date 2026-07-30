@@ -355,7 +355,17 @@ write_campaign_gate_summary() {
          comparison_eligible_targets_note: "Presence here means only that a target has a fixed_contracts row for this graph track. Comparative eligibility additionally requires the strict-gate artifacts, which this campaign does NOT emit.",
          verdict_counts: ($verdicts | group_by(.) | map({key: .[0], value: length}) | from_entries),
          durability_tiers: ($reps | map(.durability_tier) | unique),
-         durability_tier_uniform: (($reps | map(.durability_tier) | unique | length) <= 1),
+         # CONTRACT-v2 s8 forbids cross-TIER comparison, so uniformity is judged
+         # on the tier class (the leading T<n> token), not on the full label.
+         # The stacks legitimately carry different suffixes for the same tier
+         # ("T2-fsync-node-durable" for restate-server vs
+         # "T2-fsync-node-durable-postgres" for the Postgres-backed stacks);
+         # comparing raw strings would raise a s8 alarm on every mixed campaign
+         # and train readers to ignore it. Full labels stay above.
+         durability_tier_classes: ($reps | map(.durability_tier | capture("^(?<t>T[0-9]+)").t? // .) | unique),
+         durability_tier_uniform:
+           (($reps | map(.durability_tier | capture("^(?<t>T[0-9]+)").t? // .) | unique | length) <= 1),
+         durability_labels_uniform: (($reps | map(.durability_tier) | unique | length) <= 1),
          campaign_gate_status:
            (if ($reps | length) == 0 then "error"
             elif ($verdicts | all(. == "pass")) then "pass"
@@ -372,7 +382,9 @@ write_campaign_gate_summary() {
     echo "WARN: not every rep passed the CONTRACT-v2 s4.1 gate; no s4.1 correctness claim may cite this campaign." >&2
   fi
   if [[ "$(jq -r '.durability_tier_uniform' "$summary_json")" != "true" ]]; then
-    echo "WARN: durability tiers are not uniform across reps; CONTRACT-v2 s8 forbids cross-tier comparison." >&2
+    echo "WARN: durability TIERS differ across reps ($(jq -rc '.durability_tier_classes' "$summary_json")); CONTRACT-v2 s8 forbids cross-tier comparison." >&2
+  elif [[ "$(jq -r '.durability_labels_uniform' "$summary_json")" != "true" ]]; then
+    echo "Note: same durability tier, differing labels across reps ($(jq -rc '.durability_tiers' "$summary_json")) — no s8 violation; declare the per-stack label in reports."
   fi
 }
 

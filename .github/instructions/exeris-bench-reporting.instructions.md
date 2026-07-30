@@ -34,7 +34,10 @@ section body:
 
 1. frontmatter `summary:`
 2. TL;DR bullets
-3. revision history
+3. revision history — **including every dated byline**: the frontmatter `updated:`, the
+   `*By … (updated YYYY-MM-DD)*` line and the `**Updated:**` field in the metadata line are
+   three separate places, and they drift apart. Applying this checklist on 2026-07-30 found
+   the latter two still reading `2026-07-28` after two rounds of edits had moved the first.
 4. the conclusions section
 
 This is a recurring, empirically-established failure mode in this repo, not a

@@ -187,7 +187,21 @@ tools/compute-fairness-index.sh --result-a A.json --result-b B.json --output fai
 tools/verify-classification.sh <status.csv>              # validates runner_status / reproducibility_status / final_reason / claim_scope enums
 tools/verify-target-asset-matrix.sh                      # checks runtime/drivers/target-asset-matrix.json vs scenarios/**/comparative-pair-manifest.json
 tools/benchmark-runner-with-metrics.sh <cmd...>          # wraps with /usr/bin/time -v, writes <output>.with-metrics.json
+
+# JVM footprint attribution — a pair, deliberately split by what they measure:
+tools/extract-footprint-decomposition.sh <nmt-detail.txt[.gz]> <smaps.txt[.gz]> [out.json]
+#   RESIDENT split: heap vs non-heap, and anonymous vs file-backed, by joining smaps Rss
+#   per mapping against the Java Heap address range in NMT's virtual memory map.
+tools/extract-nmt-category-breakdown.sh <nmt-capture.txt[.gz]> [out.json]
+#   COMMITTED split: non-heap by NMT category (class metadata / code / GC / thread / …).
 ```
+
+Never derive a heap/non-heap split by subtracting `-Xmx` from RSS — without `AlwaysPreTouch`,
+`-Xms` commits pages it never touches, so resident < committed and the subtraction can go
+negative (measured: −23 096 kB). And never sum across the two tools: one reports resident
+bytes, the other committed. NMT has no per-category residency, so a category's committed size
+is only an upper bound on its resident size — quote the coverage ratio alongside any category
+claim so the unattributed remainder stays visible.
 
 ### Updating a baseline
 
@@ -207,7 +221,7 @@ Follow `docs/regression-policy.md`. Never refresh a baseline to mask a regressio
 - For TLS rows: buffer / transport / allocator model labels populated; B3 vs B4 not framed as handler-free apples-to-apples; B3/B4 vs B5/B6 differences stated.
 - Reproducibility metadata captured (SHA, JDK/tool versions, JVM flags, hardware profile, scenario id).
 - Confidentiality reviewed: raw JFR/flamegraphs/diagnostics not leaked into public artifacts.
-- **All four summarizing surfaces swept** when any section changed — frontmatter `summary:`, TL;DR, revision history, conclusions. A correct section body does not imply correct summaries: three consecutive review rounds on the triad report found every remaining defect living *only* in these four places. Watch two specifics — a summary must not strengthen the body's quantifier ("rises to 39–59 %" ≠ "dominates"), and a bound must be the one measured on the axis being claimed (a ≤ 2 % throughput order-effect says nothing about RSS, where the same control read +13.5 %). Cross-cutting facts such as the pgjdbc fetch-config normalization belong on this sweep too.
+- **All four summarizing surfaces swept** when any section changed — frontmatter `summary:`, TL;DR, revision history, conclusions. A correct section body does not imply correct summaries: three consecutive review rounds on the triad report found every remaining defect living *only* in these four places. Watch two specifics — a summary must not strengthen the body's quantifier ("rises to 39–59 %" ≠ "dominates"), and a bound must be the one measured on the axis being claimed (a ≤ 2 % throughput order-effect says nothing about RSS, where the same control read +13.5 %). Cross-cutting facts such as the pgjdbc fetch-config normalization belong on this sweep too. The revision-history leg includes **all three dated bylines** (frontmatter `updated:`, the `*By … (updated …)*` line, the `**Updated:**` metadata field) — they drift apart, and two of them sat two days stale through two edit rounds.
 
 ## Where to read more
 

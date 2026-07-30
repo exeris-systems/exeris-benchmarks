@@ -1910,7 +1910,14 @@ done
 # result.json records the window split explicitly — a fairness/reproducibility
 # field: throughput is steady-state from the measurement window, not a flat average.
 _k6_dur_to_s() {
-  local d="${1:-}" total=0 num unit rest="$d"
+  # NOTE: `rest="$d"` must NOT share a `local` statement with `d`. Bash expands
+  # every word of the command BEFORE `local` performs any assignment, so `$d`
+  # is still unset at expansion time and `set -u` aborts the script here. That
+  # killed the runner immediately after the correctness gate, so result.json —
+  # the run's primary artifact — was never assembled on ANY run.
+  local d="${1:-}"
+  local total=0 num unit
+  local rest="$d"
   [[ -z "$rest" ]] && { printf '0\n'; return 0; }
   while [[ "$rest" =~ ^([0-9]+)(ms|h|m|s)(.*)$ ]]; do
     num="${BASH_REMATCH[1]}"; unit="${BASH_REMATCH[2]}"; rest="${BASH_REMATCH[3]}"

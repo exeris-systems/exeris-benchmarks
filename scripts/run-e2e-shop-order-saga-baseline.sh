@@ -527,13 +527,45 @@ ensure_benchmark_infra() {
     "$SEED_NEO4J_SCRIPT" 2>&1 | tee "$NEO4J_SEED_LOG"
   fi
 
+  # Name of the anonymous volume currently backing the Axon Server event store,
+  # or empty when the container does not exist. Always succeeds (callers run
+  # under `set -e`).
+  _axon_events_volume_name() {
+    docker inspect exeris-e2e-saga-axonserver \
+      --format '{{range .Mounts}}{{if eq .Destination "/axonserver/events"}}{{.Name}}{{end}}{{end}}' \
+      2>/dev/null || true
+  }
+
   if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
     echo "Axon target detected (contract=${CONTRACT_ID}); starting benchmark-axonserver."
-    docker compose -f "$BENCHMARK_COMPOSE_FILE" rm -f --volumes benchmark-axonserver 2>/dev/null || true
+    # Fresh event store per rep. `rm -f` WITHOUT `-s` silently skips a RUNNING
+    # container ("No stopped containers") — the anonymous volumes the image
+    # declares (/axonserver/data, /axonserver/events, ...) then survive and
+    # `up --force-recreate` re-attaches them, so the event store carries over
+    # between reps. Because CONTRACT-v2 s3 issues the SAME deterministic
+    # orderId set every run and spring-hibernate uses that orderId as its
+    # aggregate identifier, the carried-over store rejects every re-created
+    # aggregate with AXONIQ-2000 "Invalid sequence number 0" and the rep is
+    # worthless. `-s` (stop first) is what the restate block below already
+    # does; the two must not diverge.
+    _axon_events_vol_before="$(_axon_events_volume_name)"
+    docker compose -f "$BENCHMARK_COMPOSE_FILE" rm -sf --volumes benchmark-axonserver 2>/dev/null || true
     if ! docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up -d --force-recreate benchmark-axonserver; then
       echo "Warning: docker compose failed to start benchmark-axonserver; checking health anyway." >&2
     fi
     wait_for_compose_service_health "$BENCHMARK_COMPOSE_FILE" "benchmark-axonserver" "false"
+
+    # Assert the wipe actually happened. Checking the volume identity is
+    # mechanism-independent: if /axonserver/events is the same volume as before,
+    # prior events are still there no matter why. Fail closed — a silently
+    # carried-over event store does not crash the run, it produces a run whose
+    # saga outcomes are an artifact of the previous rep.
+    _axon_events_vol_after="$(_axon_events_volume_name)"
+    if [[ -n "$_axon_events_vol_before" && "$_axon_events_vol_before" == "$_axon_events_vol_after" ]]; then
+      echo "ERROR: Axon Server event store was NOT reset — /axonserver/events is still volume ${_axon_events_vol_after} after rm --volumes + --force-recreate." >&2
+      echo "ERROR: CONTRACT-v2 s3 reissues the same deterministic orderId set every run, so a carried-over event store makes every aggregate a duplicate (AXONIQ-2000) and the rep's saga outcomes meaningless." >&2
+      exit 66
+    fi
     echo "Initializing Axon Server cluster and default context..."
     for _axon_init_attempt in $(seq 1 15); do
       _axon_init_http="$(curl -s -o /dev/null -w "%{http_code}" \

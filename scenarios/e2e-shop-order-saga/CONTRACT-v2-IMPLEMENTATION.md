@@ -200,6 +200,33 @@ warmup is still draining (`MEASURE_START` equals the warmup duration, but warmup
 carries `gracefulStop: '10s'`), which transiently doubles offered load and open
 connections. Warmup and cooldown, either side, are clean.
 
+**Persistence admission control is excluded on two independent grounds.**
+
+- *Direct A/B* (maintainer-requested): `queueDepthAllowanceRatio` default vs 32
+  at rate 100 — `status0` 3000 in BOTH arms, zero measurement registrations in
+  both, err_rate 0.16657 vs 0.16676. No effect. Caveat: the jar string is
+  `.persistence.admission.queueDepthAllowanceRatio` with a LEADING DOT, i.e. the
+  prefix is applied at runtime, so the two `-D` forms passed were candidates and
+  the knob taking effect was not independently verified.
+- *The target's own JFR*, sampled INSIDE the failing measurement window
+  (`ConnectionEstablished` spans 17:05:56–17:06:06; warmup ended ~17:05:50):
+  **15012 `AdmissionDecision` events, every one `accepted = true` /
+  `decisionReason = "ACCEPT"`, peak `queueDepth` 10, `saturation 0.0`.** The
+  controller is nowhere near any threshold, so the ratio is irrelevant whatever
+  value it held. This is what makes the null A/B result unambiguous.
+
+Requests are failing before they reach persistence at all — consistent with a
+drop between accept and response.
+
+**Transport instrumentation is silent, which itself needs explaining.**
+`eu.exeris.kernel.core.transport.QueueBackpressureAlert` and
+`IngressQueueDepth` recorded **zero** events during a run in which every
+measurement-phase session failed. Either they are not wired into this path or
+nothing tripped them while connections were being dropped; both are worth
+knowing. `ConnectionEstablished` shows exactly 1000 events, but the recording
+spans only ~10 s of a 60 s run (size-capped JFR keeping a tail), so that number
+is NOT evidence of a 1000-connection cap and must not be read as one.
+
 **What is NOT established.** The mechanism inside the target. This needs
 product-side investigation of exeris-community's HTTP/transport connection
 handling; it is not benchmark work and no further benchmark-side hypothesis

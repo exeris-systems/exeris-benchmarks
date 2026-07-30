@@ -19,7 +19,11 @@ import eu.exeris.kernel.spi.persistence.EventStore;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.UUID;
 
 /**
@@ -89,6 +93,31 @@ public final class OrderSagaOrchestrator {
     private record SagaOrder(long orderId, String apiOrderId) {}
     private final ConcurrentHashMap<SagaKey, SagaOrder> orderIdCache = new ConcurrentHashMap<>();
 
+    /**
+     * CONTRACT-v2 section 3 request-response support: one future per in-flight saga,
+     * completed by the flow's terminal step with the terminal outcome.
+     *
+     * <p>Why a future and not a poll: {@code FlowScheduler} (exeris-kernel-spi, identical
+     * in 0.8.1 and 0.10.2) exposes only {@code schedule/park/wake/lookupParked} — there is
+     * no synchronous execute and no completion handle, so the terminal outcome cannot be
+     * awaited through the SPI. The alternative, polling {@link #getSagaStatus}, would issue
+     * a FlowSnapshotStore load per iteration; this target persists flow state to the v5
+     * tables, so a tight poll is a DB SELECT per iteration — measurable extra load applied
+     * to THIS stack only, which would bias exactly the comparison the scenario exists to
+     * make. Signalling in-process from the terminal step costs nothing and biases nothing.
+     */
+    private final ConcurrentHashMap<SagaKey, CompletableFuture<String>> terminalOutcome =
+        new ConcurrentHashMap<>();
+
+    /** Completes the waiting {@link #placeOrderAwaitTerminal} caller, if any. */
+    private void signalTerminal(FlowContext ctx, String outcome) {
+        CompletableFuture<String> future =
+            terminalOutcome.get(new SagaKey(ctx.instanceIdMost(), ctx.instanceIdLeast()));
+        if (future != null) {
+            future.complete(outcome);
+        }
+    }
+
     public OrderSagaOrchestrator(FlowEngine flowEngine,
                                   OrderRepository orderRepository,
                                   DomainEventPublisher eventPublisher,
@@ -133,6 +162,10 @@ public final class OrderSagaOrchestrator {
                 }
                 updateStatus(conn, orderId, "CANCELLED");
             });
+            // Terminal point of the backward path: compensations unwind LIFO
+            // (refund-payment -> restore-inventory), so reserve-inventory's compensation
+            // is always the last to run and the saga is COMPENSATED once it returns.
+            signalTerminal(ctx, "COMPENSATED");
             return FlowOutcome.CONTINUE;
         };
 
@@ -211,6 +244,8 @@ public final class OrderSagaOrchestrator {
                 long orderId = order.orderId();
                 executor.executeManaged(conn -> updateStatus(conn, orderId, "COMPLETED"));
             }
+            // Terminal point of the forward path (last step, FlowOutcome.COMPLETE).
+            signalTerminal(ctx, "COMPLETED");
             return FlowOutcome.COMPLETE;
         };
 
@@ -253,7 +288,11 @@ public final class OrderSagaOrchestrator {
         long least = uuid.getLeastSignificantBits();
 
         orderRepository.updateSagaId(orderId, uuid.toString());
-        orderIdCache.put(new SagaKey(most, least), new SagaOrder(orderId, apiOrderId));
+        SagaKey sagaKey = new SagaKey(most, least);
+        orderIdCache.put(sagaKey, new SagaOrder(orderId, apiOrderId));
+        // Registered BEFORE schedule() so a saga that completes immediately cannot
+        // signal into a missing entry and strand the caller until its timeout.
+        terminalOutcome.put(sagaKey, new CompletableFuture<>());
 
         FlowContext ctx = new FlowContext() {
             @Override public long instanceIdMost()   { return most; }
@@ -266,6 +305,46 @@ public final class OrderSagaOrchestrator {
 
         flowEngine.scheduler().schedule(plan, ctx);
         return uuid.toString();
+    }
+
+    /**
+     * CONTRACT-v2 section 3: block until the saga reaches a terminal outcome and return it
+     * ({@code COMPLETED} | {@code COMPENSATED}), so the HTTP response can carry the final
+     * outcome instead of the client discovering it by polling.
+     *
+     * <p>Returns {@link Optional#empty()} if the saga has not settled within
+     * {@code timeoutMillis}; the caller then falls back to the pre-v2 async response and the
+     * client resolves by polling, so a slow saga degrades rather than fails.
+     *
+     * <p>Measurement note: this deliberately holds the request thread for the saga's
+     * duration. That matches what quarkus-hibernate already does (its command handler runs
+     * the whole saga on the request thread) and is what makes order-create latency mean the
+     * same thing on both stacks — the prerequisite for comparing them at all.
+     */
+    public Optional<String> awaitTerminalOutcome(String sagaId, long timeoutMillis) {
+        if (sagaId == null || sagaId.isBlank()) {
+            return Optional.empty();
+        }
+        UUID uuid = UUID.fromString(sagaId);
+        SagaKey key = new SagaKey(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+        CompletableFuture<String> future = terminalOutcome.get(key);
+        if (future == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.ofNullable(future.get(timeoutMillis, TimeUnit.MILLISECONDS));
+        } catch (TimeoutException timeout) {
+            return Optional.empty();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException failure) {
+            return Optional.empty();
+        } finally {
+            // Always drop the entry: on timeout too, otherwise a saga that never settles
+            // leaks its future for the lifetime of the process.
+            terminalOutcome.remove(key);
+        }
     }
 
     public String getSagaStatus(long orderId) {

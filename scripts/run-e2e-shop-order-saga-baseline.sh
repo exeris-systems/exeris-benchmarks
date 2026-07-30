@@ -796,6 +796,31 @@ if [[ "$_BASE_URL_EXPLICIT" == "false" ]]; then
       '.targets[] | select(.target_id == $id) | .health_url' \
       "$_asset_matrix" 2>/dev/null || true)"
     if [[ -n "$_derived_health_url" && "$_derived_health_url" != "null" ]]; then
+      # Fail closed when the asset matrix and the target's own env file disagree
+      # about where the target listens. The matrix drives BASE_URL and the
+      # readiness poll; the env file drives the actual bind port. A stale matrix
+      # entry does not merely time out — if another target of the same family is
+      # up on the matrix port (spring-hibernate 9001 vs spring-on-exeris 9004,
+      # which share a port range by design), readiness passes against the WRONG
+      # APPLICATION and k6 silently benchmarks it under this target's label.
+      # That is a mislabeled result, which is worse than a failed run.
+      _env_file_ref="$(jq -r --arg id "$TARGET_APP" \
+        '.targets[] | select(.target_id == $id) | .env_file // empty' \
+        "$_asset_matrix" 2>/dev/null || true)"
+      if [[ -n "$_env_file_ref" && -f "$REPO_ROOT/$_env_file_ref" ]]; then
+        _env_health_url="$(sed -n 's/^[[:space:]]*HEALTH_URL=//p' "$REPO_ROOT/$_env_file_ref" | tail -1 | tr -d '"'"'"'' | tr -d '\r')"
+        # Only compare literals — an env value carrying a shell expansion is
+        # resolved at launch time and cannot be checked here.
+        if [[ -n "$_env_health_url" && "$_env_health_url" != *'$'* \
+              && "$_env_health_url" != "$_derived_health_url" ]]; then
+          echo "ERROR: health-endpoint disagreement for target '${TARGET_APP}'." >&2
+          echo "ERROR:   runtime/drivers/target-asset-matrix.json : ${_derived_health_url}" >&2
+          echo "ERROR:   ${_env_file_ref} : ${_env_health_url}" >&2
+          echo "ERROR: the matrix drives BASE_URL and the readiness poll while the env file drives the actual bind port." >&2
+          echo "ERROR: proceeding risks benchmarking a DIFFERENT target that happens to hold the matrix port, and labelling the result '${TARGET_APP}'. Reconcile the two before running." >&2
+          exit 78
+        fi
+      fi
       BASE_URL="${_derived_health_url%/health}"
       echo "BASE_URL derived from asset matrix for target '${TARGET_APP}': ${BASE_URL}"
     fi

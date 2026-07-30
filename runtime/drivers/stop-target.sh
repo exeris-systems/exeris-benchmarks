@@ -95,4 +95,61 @@ case "${START_MODE}" in
     ;;
 esac
 
+# --- Post-stop verification -------------------------------------------------
+#
+# EXTERNAL_STOP_CMD kills the PID recorded by `echo $!` at start, swallows the
+# result with `|| true`, and removes the pid file. When `$!` captured a wrapper
+# or a since-dead retry rather than the JVM (observed: the recorded pid was
+# dead while the real JVM was still serving), the stop is a silent no-op and
+# the target keeps running. A leaked JVM then co-resides with every subsequent
+# rep — memory pressure and CPU contention that silently contaminates the
+# results rather than failing them. So do not trust the stop command: verify
+# the target's declared port is actually released, escalate if not, and fail
+# closed if it survives.
+#
+# The port comes from the target's OWN env file (HEALTH_URL), not from the
+# asset matrix, so a stale matrix entry cannot misdirect the check. Override
+# with BENCH_STOP_VERIFY_URL when the runner reassigned the port.
+_stop_verify_url="${BENCH_STOP_VERIFY_URL:-${HEALTH_URL:-}}"
+_stop_verify_port=""
+if [[ "$_stop_verify_url" =~ :([0-9]+)(/|$) ]]; then
+  _stop_verify_port="${BASH_REMATCH[1]}"
+fi
+
+_port_holder_pid() {
+  local port="$1"
+  command -v ss >/dev/null 2>&1 || return 0
+  ss -ltnp 2>/dev/null | grep ":${port} " | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2
+}
+
+if [[ "$START_MODE" == "external" || "$START_MODE" == "jar" ]] && [[ -n "$_stop_verify_port" ]]; then
+  for _ in $(seq 1 10); do
+    [[ -z "$(_port_holder_pid "$_stop_verify_port")" ]] && break
+    sleep 1
+  done
+
+  _leaked_pid="$(_port_holder_pid "$_stop_verify_port")"
+  if [[ -n "$_leaked_pid" ]]; then
+    echo "WARN: port ${_stop_verify_port} still held by pid ${_leaked_pid} after the stop command; the recorded pid did not match the live process. Escalating." >&2
+    kill "$_leaked_pid" 2>/dev/null || true
+    for _ in $(seq 1 10); do
+      [[ -z "$(_port_holder_pid "$_stop_verify_port")" ]] && break
+      sleep 1
+    done
+    _leaked_pid="$(_port_holder_pid "$_stop_verify_port")"
+    if [[ -n "$_leaked_pid" ]]; then
+      echo "WARN: pid ${_leaked_pid} ignored SIGTERM on port ${_stop_verify_port}; sending SIGKILL." >&2
+      kill -9 "$_leaked_pid" 2>/dev/null || true
+      sleep 3
+    fi
+  fi
+
+  _leaked_pid="$(_port_holder_pid "$_stop_verify_port")"
+  if [[ -n "$_leaked_pid" ]]; then
+    echo "ERROR: target port ${_stop_verify_port} is STILL held by pid ${_leaked_pid} after SIGTERM and SIGKILL." >&2
+    echo "ERROR: refusing to report a clean stop — a surviving target JVM co-resides with every subsequent run and contaminates its resource and latency measurements." >&2
+    exit 65
+  fi
+fi
+
 echo "Target stopped."

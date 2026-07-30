@@ -1,6 +1,6 @@
 # e2e-shop-order-saga — v2 comparison-set campaign, 50 sessions/s
 
-First campaign under the corrected v2 contracts. Three comparison-eligible
+First campaign under the corrected v2 contracts. Three
 stacks × 3 repeats, full contract windows (120 s warmup / 180 s measurement /
 30 s cooldown), perf-box-amd64.
 
@@ -22,7 +22,25 @@ the exact expected compensation count of 497.
 Whole-deployment CPU per saga (target JVM + Postgres + Neo4j + Axon Server):
 quarkus 6.85 ms, exeris 11.7 ms, spring 14.8 ms.
 
-## READ THIS BEFORE CITING ANY OF IT
+## NOT A VALID CROSS-STACK COMPARISON — read before citing anything
+
+**These numbers are descriptive per stack only.** The three stacks do not execute
+the same work in this shape (CONTRACT-v2 §2.1 shape A0): quarkus-hibernate runs
+the whole saga synchronously on the request thread, spring-hibernate runs it
+asynchronously through Axon Server, exeris-community through the flow scheduler.
+All three return the terminal outcome inline, so they share an observable
+contract — but that is not equivalent execution, and the table above must NOT be
+read as "exeris is faster than quarkus".
+
+This was briefly mislabelled comparison-eligible while these runs were taken. The
+label was lifted on the grounds that the resolution model had been made uniform;
+resolution uniformity does not imply execution equivalence. Reverted.
+
+Superseded by shape A (minimal park), in which every stack must implement
+dispatch -> park -> external event -> wake and therefore does the same shape of
+work.
+
+## Further caveats
 
 **1. This workload is not really a saga.** Every step returns
 `CONTINUE`/`COMPLETE`/`FAIL`; nothing awaits an external system, so nothing

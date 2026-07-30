@@ -110,18 +110,46 @@ is why its approach looked competitive. A saga engine earns its keep when a step
 must wait, possibly for a long time, and when the process may die while it
 waits. Shapes B and C exist to measure that.
 
-### Shape A — straight-through (`…-inline-r50-v2`)
+### Shape A0 — straight-through (`…-inline-r50-v2`) — SUPERSEDED, NOT comparison-eligible
 
-Every step completes inline; the saga finishes in tens of milliseconds. This is
-the shape all results before 2026-07-30 were taken under.
+Every step completes inline; nothing parks. All results before 2026-07-30 were
+taken under this shape.
 
-- **Answers:** what does the request path cost when the whole saga completes
-  within one request?
+**A0 is not a valid cross-stack comparison and is retained only as historical
+record.** The stacks do not execute the same work in it: quarkus-hibernate runs
+the entire saga synchronously on the request thread (a transaction script with
+compensation), spring-hibernate runs it asynchronously through Axon Server, and
+exeris-community runs it through the flow scheduler. All three return the
+terminal outcome inline, so they share an observable contract — but a shared
+observable contract is not equivalent execution.
+
+This was briefly mislabelled: on 2026-07-30 `order_create_latency_ms` was lifted
+to `comparison_eligible` on the grounds that the *resolution model* had been made
+uniform. Resolution uniformity does not imply execution equivalence, and lifting
+it discarded the original `coverage_limited_saga_engine_not_equivalent` label
+that existed for exactly this reason. Corrected: A0 results are **descriptive per
+stack**, and no cross-stack row may be built from them.
+
+Superseded by shape A.
+
+### Shape A — minimal park (`…-park1-v3`)
+
+`S_pay` dispatches to the external payment gateway and parks; the gateway answers
+as fast as it can (~1 ms configured; loopback round-trip dominates).
+
+The point is **structural**, not temporal: every stack must implement
+dispatch → park → external event → wake. No stack can satisfy this shape with a
+synchronous transaction script, so for the first time all stacks execute the same
+shape of work and the comparison is about the machinery rather than about three
+different machines wearing the same interface.
+
+- **Answers:** what does the orchestration machinery itself cost — one park/wake
+  cycle plus the request path — when the external wait is negligible?
 - **Meaningful:** end-to-end latency, CPU per saga, RSS, throughput. This is the
-  ONLY shape in which saga latency is a legitimate headline metric.
-- **Does NOT answer:** anything about orchestration, durability or recovery. No
-  step parks, so no engine's saga machinery is exercised. Claims about saga
-  orchestration MUST NOT cite shape A.
+  only shape in which saga latency is a legitimate headline, because it is the
+  only one where the external wait does not dominate it.
+- **Note:** parked concurrency is ~0 by construction (rate × ~2 ms), so this
+  shape says nothing about parked capacity. That is shape C's job.
 
 ### Shape B — short park (`…-park100-v3`)
 

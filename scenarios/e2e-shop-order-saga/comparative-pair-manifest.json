@@ -31,7 +31,7 @@
         "quarkus_axon_neo4j_h1_v2",
         "spring_boot_axon_neo4j_h1_v2"
       ],
-      "status": "comparison_eligible"
+      "status": "descriptive_only_pending_shape_A"
     },
     {
       "track_id": "track_b_pgq",
@@ -379,8 +379,9 @@
     "status": "still-open",
     "finding": "scripts/run-comparative.sh claim_scope_for_target() recognises only the literal strings comparison_eligible and descriptive_only, so it cannot express the per-step scope above. It will happily pass a recommend_latency_ms comparison that the contracts qualify as platform-natural-only.",
     "consequence": "A strict-gate PASS attests protocol/payload/concurrency fairness. It does NOT attest that every per-step metric is comparable. recommend_latency_ms must carry the graph-SPI caveat in any row that includes it.",
-    "resolved_since_last_revision": "order_create_latency_ms and order_poll_latency_ms are no longer restricted - the section 3 target changes removed the resolution-model asymmetry that made them incomparable."
+    "resolved_since_last_revision": "order_create_latency_ms and order_poll_latency_ms are no longer restricted - the section 3 target changes removed the resolution-model asymmetry that made them incomparable.",
+    "shape_A0_correction": "order_create_latency_ms reverted from comparison_eligible to descriptive_per_stack_only. It was lifted on the grounds that the resolution model had been made uniform; that does not imply the stacks execute equivalent work, and they do not. Shape A (minimal park) is the first shape in which they do."
   },
-  "workload_shape": "A-straight-through",
+  "workload_shape": "A0-straight-through-superseded",
   "workload_shape_note": "CONTRACT-v2 §2.1. This manifest governs shape A only. Shapes B and C have their own contract ids and workload_profile_keys; results MUST NEVER be aggregated or compared across shapes."
 }

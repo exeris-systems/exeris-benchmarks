@@ -666,8 +666,8 @@
         "ci_level": 0.95,
         "relative_error_pct_max": 15
       },
-      "maturity": "comparison_eligible",
-      "claim_scope": "comparison_eligible",
+      "maturity": "descriptive_only",
+      "claim_scope": "descriptive_per_stack_only",
       "supersedes_note": "Supersedes the h2c-named v1 contract for this target. Runs under the two MUST NEVER be aggregated: protocol label, terminal-outcome resolution model and arrival rate all changed.",
       "target_app": "exeris-community",
       "framework": "exeris-community",
@@ -680,13 +680,13 @@
         "cart_add_latency_ms": "comparison_eligible",
         "cart_get_latency_ms": "comparison_eligible",
         "recommend_latency_ms": "comparison_eligible_platform_natural_only",
-        "order_create_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
         "order_poll_latency_ms": "not_applicable_inline_resolution"
       },
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
       "superseded_contract": "exeris_community_h2c_v1",
-      "workload_shape": "A-straight-through",
-      "workload_shape_note": "CONTRACT-v2 §2.1 shape A: every step completes inline, nothing parks. Measures the REQUEST PATH. End-to-end saga latency is a legitimate headline here and only here. This shape does NOT exercise saga orchestration, durability or recovery — no engine parks — so results under it MUST NOT support a saga-orchestration claim. Shapes B (short park) and C (long park, N-tier capacity) answer that."
+      "workload_shape": "A0-straight-through-superseded",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work."
     },
     "quarkus_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -725,8 +725,8 @@
         "ci_level": 0.95,
         "relative_error_pct_max": 15
       },
-      "maturity": "comparison_eligible",
-      "claim_scope": "comparison_eligible",
+      "maturity": "descriptive_only",
+      "claim_scope": "descriptive_per_stack_only",
       "supersedes_note": "Supersedes the h2c-named v1 contract for this target. Runs under the two MUST NEVER be aggregated: protocol label, terminal-outcome resolution model and arrival rate all changed.",
       "target_app": "quarkus-hibernate",
       "framework": "quarkus",
@@ -739,13 +739,13 @@
         "cart_add_latency_ms": "comparison_eligible",
         "cart_get_latency_ms": "comparison_eligible",
         "recommend_latency_ms": "comparison_eligible_platform_natural_only",
-        "order_create_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
         "order_poll_latency_ms": "not_applicable_inline_resolution"
       },
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
       "superseded_contract": "quarkus_axon_neo4j_v1",
-      "workload_shape": "A-straight-through",
-      "workload_shape_note": "CONTRACT-v2 §2.1 shape A: every step completes inline, nothing parks. Measures the REQUEST PATH. End-to-end saga latency is a legitimate headline here and only here. This shape does NOT exercise saga orchestration, durability or recovery — no engine parks — so results under it MUST NOT support a saga-orchestration claim. Shapes B (short park) and C (long park, N-tier capacity) answer that."
+      "workload_shape": "A0-straight-through-superseded",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work."
     },
     "spring_boot_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -784,8 +784,8 @@
         "ci_level": 0.95,
         "relative_error_pct_max": 15
       },
-      "maturity": "comparison_eligible",
-      "claim_scope": "comparison_eligible",
+      "maturity": "descriptive_only",
+      "claim_scope": "descriptive_per_stack_only",
       "supersedes_note": "Supersedes the h2c-named v1 contract for this target. Runs under the two MUST NEVER be aggregated: protocol label, terminal-outcome resolution model and arrival rate all changed.",
       "target_app": "spring-hibernate",
       "framework": "spring-boot",
@@ -799,13 +799,13 @@
         "cart_add_latency_ms": "comparison_eligible",
         "cart_get_latency_ms": "comparison_eligible",
         "recommend_latency_ms": "comparison_eligible_platform_natural_only",
-        "order_create_latency_ms": "comparison_eligible",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
         "order_poll_latency_ms": "not_applicable_inline_resolution"
       },
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
       "superseded_contract": "spring_boot_axon_neo4j_v1",
-      "workload_shape": "A-straight-through",
-      "workload_shape_note": "CONTRACT-v2 §2.1 shape A: every step completes inline, nothing parks. Measures the REQUEST PATH. End-to-end saga latency is a legitimate headline here and only here. This shape does NOT exercise saga orchestration, durability or recovery — no engine parks — so results under it MUST NOT support a saga-orchestration claim. Shapes B (short park) and C (long park, N-tier capacity) answer that."
+      "workload_shape": "A0-straight-through-superseded",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work."
     }
   },
   "baseline_only_contracts": {

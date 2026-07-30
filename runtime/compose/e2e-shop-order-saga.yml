@@ -41,7 +41,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ../db/seed/v1_core.sql:/docker-entrypoint-initdb.d/01-v1-core.sql:ro
       - ../db/seed/v2_shop.sql:/docker-entrypoint-initdb.d/02-v2-shop.sql:ro
@@ -102,8 +102,8 @@ services:
       NEO4J_server_bolt_thread__pool__max__size: 200
       NEO4J_dbms_security_procedures_unrestricted: apoc.*
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     volumes:
       - e2e-saga-neo4jdata:/data
     healthcheck:
@@ -121,8 +121,8 @@ services:
       AXONIQ_AXONSERVER_DEVMODE_ENABLED: "true"
       JAVA_TOOL_OPTIONS: "-Daxoniq.axonserver.devmode.enabled=true"
     ports:
-      - "8024:8024"
-      - "8124:8124"
+      - "127.0.0.1:8024:8024"
+      - "127.0.0.1:8124:8124"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8024/actuator/health"]
       interval: 5s
@@ -150,9 +150,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8080:8080"   # HTTP ingress
-      - "9070:9070"   # Admin API + web UI
-      - "9071:9071"
+      - "127.0.0.1:8080:8080"   # HTTP ingress
+      - "127.0.0.1:9070:9070"   # Admin API + web UI
+      - "127.0.0.1:9071:9071"
     volumes:
       # Anonymous volume ON PURPOSE: the baseline force-recreates this service
       # with `rm -sf --volumes` per run so stale invocation journals from a

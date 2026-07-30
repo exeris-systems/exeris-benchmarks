@@ -147,6 +147,43 @@ that requires a separate promotion step (as was done for `entity-read-by-id`).
 `campaign-gate-summary.json` is a §4.1 count rollup and must never be cited as
 comparative eligibility.
 
+## Open finding — exeris-community drops established connections under load
+
+Surfaced by the 2026-07-30 arrival-rate sweep (single target, exeris-community,
+perf-box, h1, 20/30/10 s windows). Recorded because it is unfavourable to
+Exeris and must not be lost; it does **not** affect the chosen operating point.
+
+| arrival rate | peak concurrency | req/s | saga med | err rate | cores (of 16) |
+|---|---|---|---|---|---|
+| 3 | 22 | 13.4 | 20 ms | 0 | 0.113 |
+| 25 | 176 | 110.6 | 20 ms | 0 | 0.323 |
+| 50 | 342 | 222.5 | 23 ms | 0 | 0.505 |
+| 100 | 675 | 261.8 | 26 ms | 0.166 | 0.525 |
+| 200 | 986 | 340.4 | 24 ms | 0.393 | 0.517 |
+
+CPU plateaus at ~0.52 of 16 cores from 50/s onward and never rises, while the
+error rate climbs to 39 %. Latency does *not* degrade (median stays 20–26 ms),
+so this is not queueing — served requests stay fast and the rest are dropped.
+
+**What the failures are:** every failure is on `POST /api/v1/auth/register`, the
+first request of a session, and k6 reports
+`read: connection reset by peer` or bare `EOF`. The TCP connection was already
+established when it died, so this is neither listen-backlog overflow
+(`net.core.somaxconn` is 4096) nor client-side exhaustion (fd limit 262144,
+~55 k ephemeral ports) — the server accepts and then drops. Nothing is logged
+in the target's runtime log.
+
+**What it is NOT (retracted):** an earlier note in this session attributed it to
+ADR-035 admission control. That does not survive arithmetic — the pool is 256
+and the default `queueDepthAllowanceRatio` is 8, giving an allowance of 2048,
+far above the ~675 concurrent connections where shedding starts. Mechanism
+inside the target is **undetermined** and is product-side investigation
+(transport/connection/thread limits), not benchmark work.
+
+**Consequence for the campaign:** the operating point must sit below every
+stack's drop threshold, or the comparison measures connection handling rather
+than saga execution. 50 sessions/s (342 concurrent) is clean on this target.
+
 ## Claim guardrails implied by this matrix
 
 Until the corresponding rows move to `implemented-now`:
@@ -222,9 +259,23 @@ per stack; these stubs do not satisfy that requirement by themselves.
 
 ### exeris-community (`targets/exeris-community-app`)
 
-- (a) Idiom deviations from contract wording: TODO — not audited. Candidate to
-  document: kernel-level flow compensation (engine-native unwind) vs the
-  contract's step/compensation wording.
+- (a) Idiom deviations from contract wording (code-verified 2026-07-30):
+  **the request thread blocks for the saga's duration.** §3 requires the HTTP
+  response to carry the final outcome; `FlowScheduler` (exeris-kernel-spi,
+  identical in 0.8.1 and 0.10.2) exposes only
+  `schedule`/`park`/`wake`/`lookupParked` — no synchronous execute and no
+  completion handle — so the outcome is not awaitable through the SPI.
+  `OrderSagaOrchestrator` therefore registers a `CompletableFuture` per saga
+  and completes it from the flow's terminal steps (`send-email` forward;
+  `reserve-inventory`'s compensation backward, always last under LIFO unwind),
+  and `placeOrder` awaits it. Rejected alternative: polling `getSagaStatus`,
+  which loads the `FlowSnapshotStore` — this target persists flow state to the
+  v5 tables, so a tight poll is a DB `SELECT` per iteration, i.e. load added to
+  this stack alone, biasing the comparison. Falls back to the pre-v2 async
+  response after `EXERIS_SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS` (default 25 s,
+  matched to the client's 25 × 1 s poll budget). Still to document: kernel-level
+  flow compensation (engine-native unwind) vs the contract's step/compensation
+  wording.
 - (b) Administrative-termination semantics (G3 asterisk): TODO — hard-abort
   path not documented or audited.
 - (c) §5 retry configuration (code-verified): `OrderSagaOrchestrator` flow
@@ -235,8 +286,27 @@ per stack; these stubs do not satisfy that requirement by themselves.
 
 ### spring-axon (`targets/spring-benchmark-app`)
 
-- (a) TODO. Candidate: decline explicitly modeled as `PaymentDeclinedEvent`
-  routed to saga compensation (the §4.1 per-stack mapping requirement).
+- (a) Idiom deviations from contract wording (code-verified 2026-07-30):
+  **the request thread blocks until the saga settles, which is NOT idiomatic
+  Axon.** A production Axon service returns 202 and lets the client subscribe
+  or poll; `sendAndWait` returns once `OrderAggregate` has handled
+  `CreateOrderCommand`, long before the saga completes. §3 nonetheless requires
+  the response to carry the final outcome, so `AxonOrderSagaProjection` — the
+  first component that observes a terminal status — completes a per-`orderId`
+  future from its existing terminal transition, and `AxonOrderSagaService`
+  awaits it (registering *before* dispatch, since a fast saga can settle while
+  `sendAndWait` is still returning). Maintainer-approved on 2026-07-30 in
+  preference to leaving the stack comparison-ineligible.
+  **Why the deviation is the lesser distortion:** under the previous polled
+  model this stack's measured `saga_completed_duration` was flat at ~1007 ms —
+  one client poll sleep, not saga time — against ~28 ms for the inline stacks,
+  an artifact large enough to reverse the apparent ordering between stacks.
+  Note also that quarkus-hibernate already runs its entire saga on the request
+  thread, so this brings the two Axon stacks into the same shape. Falls back to
+  the pre-v2 async `ACCEPTED` after
+  `EXERIS_SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS` (default 25 s). Still to
+  document: decline explicitly modeled as `PaymentDeclinedEvent` routed to saga
+  compensation (the §4.1 per-stack mapping requirement).
 - (b) TODO.
 - (c) §5 retry configuration (code-verified): `AxonBusConfig` registers an
   `ExponentialBackOffIntervalRetryScheduler` (initial 50 ms, factor 2,
@@ -246,7 +316,22 @@ per stack; these stubs do not satisfy that requirement by themselves.
 
 ### quarkus (`targets/quarkus-benchmark-app`)
 
-- (a) TODO.
+- (a) Idiom deviations from contract wording (code-verified 2026-07-30):
+  **the entire saga runs synchronously on the request thread.**
+  `AxonOrderSagaCommandHandler.handle(CreateOrderCommand)` executes
+  insert-order → reserve-inventory → charge-payment → confirm-order — or the
+  LIFO compensation pair — and returns the terminal outcome
+  (`COMPLETED`/`COMPENSATED`) in the POST body, so this stack already satisfied
+  §3 before the 2026-07-30 change to its two peers. Like them, this is not
+  idiomatic Axon (no async event-driven saga progression).
+  **This invalidates the shared `claim_scope_note`** carried by both Axon
+  contracts, which asserts "no synchronous DB writes in HTTP request path" and
+  that "inventory reservation, multi-step saga state transitions, and
+  compensation are not executed in the request path under Axon". That is true
+  of spring-hibernate as it was, and flatly false of this stack — every domain
+  write happens in the request path here. The note is the stated justification
+  for excluding `order_create_latency_ms` from comparison, so it must be
+  corrected per-stack rather than shared.
 - (b) TODO.
 - (c) §5 retry configuration (code-verified): deliberately NO Axon
   RetryScheduler (`AxonBusConfig`); retries are in-service via

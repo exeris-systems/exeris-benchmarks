@@ -1,0 +1,8 @@
+914903:
+No available recordings.
+
+Use jcmd 914903 JFR.start to start a recording.
+914903:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 914903 JFR.dump name=exeris_community_20260730T161923Z filename=FILEPATH to copy recording data to file.

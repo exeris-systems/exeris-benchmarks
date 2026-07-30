@@ -30,7 +30,8 @@ Thumbs.db
 # Raw large result files — keep normalized/ and history/ only
 # Uncomment if results/raw/ grows too large:
 # results/raw/*.txt
-# results/raw/k6-*.json
+results/**/k6-output.json
+results/**/k6-timeseries.csv
 
 # Raw JFR recordings are not committed.
 #  - Enterprise track: HARD confidentiality rule — public mode default-denies .jfr

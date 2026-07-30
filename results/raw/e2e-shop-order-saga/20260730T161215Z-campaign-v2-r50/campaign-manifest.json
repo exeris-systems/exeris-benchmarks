@@ -1,0 +1,22 @@
+{
+  "schema_version":         "1",
+  "scenario_id":            "e2e-shop-order-saga",
+  "campaign_ts":            "20260730T161215Z",
+  "generated_at_utc":       "2026-07-30T17:11:19Z",
+  "commit_sha":             "30b677f38d8efe39ba31fca76a3f6365e20fa1b0",
+  "targets":                "exeris-community,quarkus-hibernate,spring-hibernate",
+  "graph_track":            "neo4j",
+  "fault_mode":             "terminal",
+  "repeats":                3,
+  "hardware_profile":       "perf-box-amd64",
+  "contract_id_mode":       "auto-derived-per-target",
+  "contract_id_fallback":   "exeris_community_h1_v2",
+  "jfr_max_size_mb":        256,
+  "db_pool_max":            32,
+  "seed_verification_skipped": false,
+  "server_cpu_affinity":    "",
+  "cgroup_memory_limit_mb": null,
+  "cgroup_cpu_quota_pct":   null,
+  "output_dir":             "/home/bench/exeris-bench-saga/results/raw/e2e-shop-order-saga/20260730T161215Z-campaign-v2-r50",
+  "status_csv":             "/home/bench/exeris-bench-saga/results/raw/e2e-shop-order-saga/20260730T161215Z-campaign-v2-r50/status.csv"
+}

@@ -1,0 +1,122 @@
+{
+  "schema_version": "1",
+  "gate_id": "contract_v2_s4_1_exact_compensation_campaign_rollup",
+  "gate_name": "every rep: observed_compensations == expected_declines",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
+  "scope_note": "Count-granularity O2 rollup only. NOT a comparative strict-gate verdict and NOT evidence of O1/O3 or LIFO ordering; see CONTRACT-v2-IMPLEMENTATION.md s7.",
+  "scenario_id": "e2e-shop-order-saga",
+  "campaign_ts": "20260730T161215Z",
+  "fault_mode": "terminal",
+  "graph_track": "neo4j",
+  "reps_total": 9,
+  "baseline_only_targets": [],
+  "comparison_eligible_targets_note": "Presence here means only that a target has a fixed_contracts row for this graph track. Comparative eligibility additionally requires the strict-gate artifacts, which this campaign does NOT emit.",
+  "verdict_counts": {
+    "absent": 1,
+    "pass": 8
+  },
+  "durability_tiers": [
+    "T2-fsync-node-durable-postgres",
+    "unknown"
+  ],
+  "durability_tier_classes": [
+    "T2",
+    "unknown"
+  ],
+  "durability_tier_uniform": false,
+  "durability_labels_uniform": false,
+  "campaign_gate_status": "not_evaluated",
+  "reps": [
+    {
+      "rep": 1,
+      "target_app": "exeris-community",
+      "contract_id": "exeris_community_h1_v2",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 2,
+      "target_app": "exeris-community",
+      "contract_id": "exeris_community_h1_v2",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 3,
+      "target_app": "exeris-community",
+      "contract_id": "exeris_community_h1_v2",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 1,
+      "target_app": "quarkus-hibernate",
+      "contract_id": "quarkus_axon_neo4j_h1_v2",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 2,
+      "target_app": "quarkus-hibernate",
+      "contract_id": "quarkus_axon_neo4j_h1_v2",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 3,
+      "target_app": "quarkus-hibernate",
+      "contract_id": "quarkus_axon_neo4j_h1_v2",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 1,
+      "target_app": "spring-hibernate",
+      "contract_id": "spring_boot_axon_neo4j_h1_v2",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 2,
+      "target_app": "spring-hibernate",
+      "contract_id": "spring_boot_axon_neo4j_h1_v2",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 3,
+      "target_app": "spring-hibernate",
+      "contract_id": "spring_boot_axon_neo4j_h1_v2",
+      "baseline_only": false,
+      "runner_status": "failed",
+      "baseline_exit_code": 1,
+      "durability_tier": "unknown",
+      "correctness_gate": "absent"
+    }
+  ],
+  "generated_at_utc": "2026-07-30T17:11:19Z"
+}

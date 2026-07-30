@@ -1,0 +1,2290 @@
+{
+  "schema_version": "1",
+  "run_id": "e2e-shop-order-saga-20260730T161923Z",
+  "timestamp": "2026-07-30T16:19:23Z",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "exeris_community_h1_v2",
+  "target_app": "exeris-community",
+  "graph_track": "neo4j",
+  "fault_mode": "terminal",
+  "durability_tier": "T2-fsync-node-durable-postgres",
+  "durability_tier_source": "default:postgres-synchronous-commit-on",
+  "tier": "community",
+  "benchmark_family": "runtime",
+  "run_timestamp_utc": "20260730T161923Z",
+  "commit_sha": "30b677f38d8efe39ba31fca76a3f6365e20fa1b0",
+  "protocol_mode": "h1",
+  "transport_mode": "loopback-h1",
+  "claim_scope": "exploratory",
+  "tool": "k6",
+  "k6_exit_code": 0,
+  "runner_status": "clean",
+  "final_reason": "ok",
+  "reproducibility_status": "complete",
+  "correctness_gate": {
+    "schema_version": "1",
+    "gate_id": "contract_v2_s4_1_exact_compensation",
+    "gate_name": "observed_compensations == expected_declines",
+    "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
+    "decline_rule": "fnv1a64(orderId) mod 1000 < 30 (unsigned, FNV-1a 64 over UTF-8 bytes)",
+    "fault_mode": "terminal",
+    "durability_tier": "T2-fsync-node-durable-postgres",
+    "durability_tier_source": "default:postgres-synchronous-commit-on",
+    "status": "pass",
+    "pass_fail": "pass",
+    "expected": 497,
+    "observed": 497,
+    "issued_orders": 16371,
+    "order_seed": "exeris-saga-v2",
+    "order_id_format": "{seed}-{scenario}-i{index}",
+    "issued_by_scenario": {
+      "cooldown": 1461,
+      "measurement": 8955,
+      "warmup": 5955
+    },
+    "density_note": null,
+    "population_source": "ids_file",
+    "population_assumption": "none: the oracle ran over the exactly-issued orderId list reconstructed from the oidx-tagged saga_issued_total samples in the k6 NDJSON stream (fnv1a64.py --ids-file). Iterations that aborted before order creation contribute no sample and are correctly absent from the population.",
+    "helper_ref": "tools/bench/lib/fnv1a64.py",
+    "reason": "observed_compensations == expected_declines (497); issued=16371 (cooldown=1461,measurement=8955,warmup=5955) seed=exeris-saga-v2 fault=terminal",
+    "generated_at_utc": "2026-07-30T16:26:21Z"
+  },
+  "output_dir": "/home/bench/exeris-bench-saga/results/raw/e2e-shop-order-saga/20260730T161215Z-campaign-v2-r50/exeris-community-rep-2",
+  "metrics": {
+    "tool": "k6",
+    "orders_initiated": 16371,
+    "saga_success_rate": 0.9696414391301692,
+    "saga_compensated_rate": 0.030358560869830797,
+    "saga_issued_total": 16371,
+    "saga_completed_total": 15874,
+    "saga_compensated_total": 497,
+    "saga_failed_unrecovered_total": null,
+    "http_reqs_total": 81856,
+    "http_reqs_rate": 241.3199406634327,
+    "http_req_duration_avg_ms": 10.026950138181682,
+    "http_req_duration_p90_ms": 22.853042000000002,
+    "http_req_duration_p95_ms": 25.87004125,
+    "iteration_duration_avg_ms": 6652.680200766079,
+    "iteration_duration_p90_ms": 7942.549421,
+    "iteration_duration_p95_ms": 8259.219994,
+    "error_rate_pct": 0.0012216575449569976,
+    "latency_by_outcome": {
+      "note": "CONTRACT-v2 s8: COMPLETED and COMPENSATED are separate populations (structurally different code paths); never mix or average across them",
+      "completed": {
+        "count": 15874,
+        "p50_ms": 23,
+        "p99_ms": 41
+      },
+      "compensated": {
+        "count": 497,
+        "p50_ms": 23,
+        "p99_ms": 42.320000000000164
+      }
+    },
+    "cores_effective": 16,
+    "cores_source": "resource_metrics_host_logical_cpus",
+    "steady_state_throughput_rps": 248.765,
+    "steady_state_throughput_rps_per_core": 15.5478125,
+    "http_reqs_rate_per_core": 15.082496291464544,
+    "orders_initiated_rate": 48.26339851203402,
+    "orders_initiated_rate_per_core": 3.0164624070021264,
+    "time_to_peak_s": 8,
+    "throughput_series": [
+      {
+        "t_s": 0,
+        "rps": 32.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 1,
+        "rps": 58.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 2,
+        "rps": 100.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 3,
+        "rps": 110.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 4,
+        "rps": 160.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 5,
+        "rps": 183.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 6,
+        "rps": 196.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 7,
+        "rps": 217.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 8,
+        "rps": 244.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 9,
+        "rps": 227.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 10,
+        "rps": 237.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 11,
+        "rps": 252.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 12,
+        "rps": 224.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 13,
+        "rps": 247.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 14,
+        "rps": 242.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 15,
+        "rps": 235.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 16,
+        "rps": 241.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 17,
+        "rps": 244.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 18,
+        "rps": 235.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 19,
+        "rps": 243.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 20,
+        "rps": 251.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 21,
+        "rps": 240.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 22,
+        "rps": 249.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 23,
+        "rps": 235.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 24,
+        "rps": 244.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 25,
+        "rps": 255.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 26,
+        "rps": 253.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 27,
+        "rps": 247.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 28,
+        "rps": 233.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 29,
+        "rps": 262.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 30,
+        "rps": 250.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 31,
+        "rps": 239.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 32,
+        "rps": 246.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 33,
+        "rps": 264.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 34,
+        "rps": 245.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 35,
+        "rps": 262.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 36,
+        "rps": 253.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 37,
+        "rps": 229.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 38,
+        "rps": 264.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 39,
+        "rps": 238.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 40,
+        "rps": 257.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 41,
+        "rps": 237.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 42,
+        "rps": 254.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 43,
+        "rps": 258.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 44,
+        "rps": 238.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 45,
+        "rps": 256.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 46,
+        "rps": 249.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 47,
+        "rps": 243.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 48,
+        "rps": 253.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 49,
+        "rps": 246.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 50,
+        "rps": 248.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 51,
+        "rps": 252.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 52,
+        "rps": 237.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 53,
+        "rps": 264.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 54,
+        "rps": 249.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 55,
+        "rps": 260.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 56,
+        "rps": 232.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 57,
+        "rps": 257.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 58,
+        "rps": 240.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 59,
+        "rps": 247.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 60,
+        "rps": 251.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 61,
+        "rps": 264.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 62,
+        "rps": 246.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 63,
+        "rps": 241.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 64,
+        "rps": 262.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 65,
+        "rps": 254.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 66,
+        "rps": 243.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 67,
+        "rps": 239.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 68,
+        "rps": 260.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 69,
+        "rps": 244.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 70,
+        "rps": 248.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 71,
+        "rps": 248.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 72,
+        "rps": 250.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 73,
+        "rps": 242.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 74,
+        "rps": 245.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 75,
+        "rps": 262.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 76,
+        "rps": 252.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 77,
+        "rps": 243.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 78,
+        "rps": 244.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 79,
+        "rps": 247.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 80,
+        "rps": 255.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 81,
+        "rps": 252.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 82,
+        "rps": 236.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 83,
+        "rps": 263.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 84,
+        "rps": 249.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 85,
+        "rps": 249.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 86,
+        "rps": 250.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 87,
+        "rps": 255.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 88,
+        "rps": 267.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 89,
+        "rps": 231.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 90,
+        "rps": 255.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 91,
+        "rps": 260.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 92,
+        "rps": 247.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 93,
+        "rps": 247.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 94,
+        "rps": 245.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 95,
+        "rps": 255.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 96,
+        "rps": 243.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 97,
+        "rps": 262.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 98,
+        "rps": 229.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 99,
+        "rps": 268.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 100,
+        "rps": 248.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 101,
+        "rps": 253.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 102,
+        "rps": 233.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 103,
+        "rps": 268.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 104,
+        "rps": 244.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 105,
+        "rps": 237.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 106,
+        "rps": 243.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 107,
+        "rps": 260.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 108,
+        "rps": 249.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 109,
+        "rps": 239.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 110,
+        "rps": 244.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 111,
+        "rps": 249.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 112,
+        "rps": 260.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 113,
+        "rps": 251.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 114,
+        "rps": 259.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 115,
+        "rps": 249.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 116,
+        "rps": 245.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 117,
+        "rps": 250.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 118,
+        "rps": 253.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 119,
+        "rps": 243.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 120,
+        "rps": 265.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 121,
+        "rps": 256.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 122,
+        "rps": 244.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 123,
+        "rps": 255.0,
+        "phase": "warmup"
+      },
+      {
+        "t_s": 124,
+        "rps": 233.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 125,
+        "rps": 257.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 126,
+        "rps": 243.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 127,
+        "rps": 236.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 128,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 129,
+        "rps": 239.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 130,
+        "rps": 235.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 131,
+        "rps": 251.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 132,
+        "rps": 227.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 133,
+        "rps": 240.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 134,
+        "rps": 237.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 135,
+        "rps": 240.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 136,
+        "rps": 248.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 137,
+        "rps": 233.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 138,
+        "rps": 246.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 139,
+        "rps": 237.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 140,
+        "rps": 256.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 141,
+        "rps": 237.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 142,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 143,
+        "rps": 235.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 144,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 145,
+        "rps": 236.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 146,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 147,
+        "rps": 245.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 148,
+        "rps": 241.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 149,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 150,
+        "rps": 233.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 151,
+        "rps": 259.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 152,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 153,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 154,
+        "rps": 247.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 155,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 156,
+        "rps": 243.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 157,
+        "rps": 261.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 158,
+        "rps": 246.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 159,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 160,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 161,
+        "rps": 237.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 162,
+        "rps": 247.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 163,
+        "rps": 263.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 164,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 165,
+        "rps": 240.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 166,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 167,
+        "rps": 239.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 168,
+        "rps": 255.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 169,
+        "rps": 261.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 170,
+        "rps": 248.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 171,
+        "rps": 265.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 172,
+        "rps": 229.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 173,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 174,
+        "rps": 256.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 175,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 176,
+        "rps": 258.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 177,
+        "rps": 238.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 178,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 179,
+        "rps": 225.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 180,
+        "rps": 267.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 181,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 182,
+        "rps": 229.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 183,
+        "rps": 275.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 184,
+        "rps": 244.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 185,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 186,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 187,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 188,
+        "rps": 247.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 189,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 190,
+        "rps": 247.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 191,
+        "rps": 244.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 192,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 193,
+        "rps": 244.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 194,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 195,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 196,
+        "rps": 257.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 197,
+        "rps": 246.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 198,
+        "rps": 258.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 199,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 200,
+        "rps": 254.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 201,
+        "rps": 242.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 202,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 203,
+        "rps": 245.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 204,
+        "rps": 254.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 205,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 206,
+        "rps": 255.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 207,
+        "rps": 251.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 208,
+        "rps": 246.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 209,
+        "rps": 244.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 210,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 211,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 212,
+        "rps": 263.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 213,
+        "rps": 229.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 214,
+        "rps": 262.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 215,
+        "rps": 247.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 216,
+        "rps": 254.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 217,
+        "rps": 247.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 218,
+        "rps": 268.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 219,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 220,
+        "rps": 242.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 221,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 222,
+        "rps": 229.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 223,
+        "rps": 256.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 224,
+        "rps": 260.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 225,
+        "rps": 248.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 226,
+        "rps": 245.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 227,
+        "rps": 276.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 228,
+        "rps": 232.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 229,
+        "rps": 243.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 230,
+        "rps": 247.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 231,
+        "rps": 246.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 232,
+        "rps": 268.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 233,
+        "rps": 247.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 234,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 235,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 236,
+        "rps": 243.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 237,
+        "rps": 247.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 238,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 239,
+        "rps": 260.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 240,
+        "rps": 228.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 241,
+        "rps": 254.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 242,
+        "rps": 263.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 243,
+        "rps": 262.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 244,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 245,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 246,
+        "rps": 242.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 247,
+        "rps": 245.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 248,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 249,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 250,
+        "rps": 245.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 251,
+        "rps": 244.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 252,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 253,
+        "rps": 255.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 254,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 255,
+        "rps": 237.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 256,
+        "rps": 255.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 257,
+        "rps": 260.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 258,
+        "rps": 242.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 259,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 260,
+        "rps": 251.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 261,
+        "rps": 239.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 262,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 263,
+        "rps": 243.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 264,
+        "rps": 251.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 265,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 266,
+        "rps": 260.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 267,
+        "rps": 226.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 268,
+        "rps": 268.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 269,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 270,
+        "rps": 257.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 271,
+        "rps": 260.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 272,
+        "rps": 232.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 273,
+        "rps": 267.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 274,
+        "rps": 257.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 275,
+        "rps": 235.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 276,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 277,
+        "rps": 256.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 278,
+        "rps": 243.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 279,
+        "rps": 248.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 280,
+        "rps": 265.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 281,
+        "rps": 255.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 282,
+        "rps": 241.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 283,
+        "rps": 253.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 284,
+        "rps": 241.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 285,
+        "rps": 259.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 286,
+        "rps": 246.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 287,
+        "rps": 258.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 288,
+        "rps": 241.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 289,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 290,
+        "rps": 241.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 291,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 292,
+        "rps": 246.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 293,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 294,
+        "rps": 242.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 295,
+        "rps": 257.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 296,
+        "rps": 257.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 297,
+        "rps": 249.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 298,
+        "rps": 251.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 299,
+        "rps": 250.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 300,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 301,
+        "rps": 258.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 302,
+        "rps": 257.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 303,
+        "rps": 252.0,
+        "phase": "measurement"
+      },
+      {
+        "t_s": 304,
+        "rps": 231.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 305,
+        "rps": 249.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 306,
+        "rps": 261.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 307,
+        "rps": 232.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 308,
+        "rps": 244.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 309,
+        "rps": 236.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 310,
+        "rps": 241.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 311,
+        "rps": 235.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 312,
+        "rps": 232.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 313,
+        "rps": 242.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 314,
+        "rps": 217.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 315,
+        "rps": 252.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 316,
+        "rps": 257.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 317,
+        "rps": 243.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 318,
+        "rps": 236.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 319,
+        "rps": 248.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 320,
+        "rps": 248.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 321,
+        "rps": 252.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 322,
+        "rps": 236.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 323,
+        "rps": 235.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 324,
+        "rps": 254.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 325,
+        "rps": 248.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 326,
+        "rps": 240.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 327,
+        "rps": 251.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 328,
+        "rps": 240.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 329,
+        "rps": 246.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 330,
+        "rps": 214.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 331,
+        "rps": 196.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 332,
+        "rps": 156.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 333,
+        "rps": 134.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 334,
+        "rps": 92.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 335,
+        "rps": 66.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 336,
+        "rps": 33.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 337,
+        "rps": 11.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 338,
+        "rps": 2.0,
+        "phase": "cooldown"
+      },
+      {
+        "t_s": 339,
+        "rps": 2.0,
+        "phase": "cooldown"
+      }
+    ]
+  },
+  "run_config": {
+    "warmup_window_s": 120,
+    "measurement_window_s": 180,
+    "cooldown_window_s": 30
+  },
+  "run_metadata": {
+    "scenario_id": "e2e-shop-order-saga",
+    "contract_id": "exeris_community_h1_v2",
+    "target_app": "exeris-community",
+    "graph_track": "neo4j",
+    "fault_mode": "terminal",
+    "durability_tier": "T2-fsync-node-durable-postgres",
+    "durability_tier_source": "default:postgres-synchronous-commit-on",
+    "hardware_profile": "perf-box-amd64",
+    "tier": "community",
+    "benchmark_family": "runtime",
+    "protocol_mode": "h1",
+    "transport_mode": "loopback-h1",
+    "protocol_mode_declared": "h1",
+    "protocol_mode_observed": "h1",
+    "protocol_mode_observed_k6": "h1",
+    "protocol_tags_observed_k6": "HTTP/1.1",
+    "transport_mode_declared": "loopback-h1",
+    "transport_mode_observed": "loopback-h1",
+    "protocol_probe_non_blocking": true,
+    "protocol_probe_endpoint": "http://localhost:9000/health",
+    "comparison_axis": "within-tier-protocol",
+    "claim_scope": "exploratory",
+    "commit_sha": "30b677f38d8efe39ba31fca76a3f6365e20fa1b0",
+    "run_timestamp_utc": "20260730T161923Z",
+    "base_url": "http://localhost:9000",
+    "output_dir": "/home/bench/exeris-bench-saga/results/raw/e2e-shop-order-saga/20260730T161215Z-campaign-v2-r50/exeris-community-rep-2",
+    "env_file": "env.json",
+    "tool": "k6",
+    "jfr_enabled": true,
+    "jfr_settings": "profile",
+    "jfr_file": "/home/bench/exeris-bench-saga/results/raw/e2e-shop-order-saga/20260730T161215Z-campaign-v2-r50/exeris-community-rep-2/target-exeris-community-20260730T161923Z.jfr",
+    "perf_stat_enabled": false,
+    "k6_exit_code": 0,
+    "runner_status": "clean",
+    "correctness_gate_status": "pass",
+    "logs_dir": "/home/bench/exeris-bench-saga/results/raw/e2e-shop-order-saga/20260730T161215Z-campaign-v2-r50/exeris-community-rep-2/logs",
+    "backend_network_mode": "bridge",
+    "fault_injection": {
+      "fault_mode": "terminal",
+      "selection": "per-orderId, deterministic, business-terminal (CONTRACT-v2 s4.1)",
+      "decline_rule": "fnv1a64(orderId) mod 1000 < 30 (unsigned)",
+      "nominal_decline_fraction": 0.03,
+      "transient_retry_policy": {
+        "max_attempts": 3,
+        "initial_backoff_ms": 50,
+        "backoff_factor": 2,
+        "jitter": false
+      }
+    },
+    "infra_contract": {
+      "compose_ref": "runtime/compose/e2e-shop-order-saga.yml",
+      "compose_sha256": "6de291f8a6ce3ecd31c44031fe7399a665d27aadce6c29a757ef5048f42e612a",
+      "backend_network_mode": "bridge",
+      "seed_baseline": {
+        "apply_script_ref": "runtime/db/seed/seed-apply.sh",
+        "apply_script_sha256": "77d0ccffa51ff726881cb9d8301af6b178f712c5b42fee9c8e16941c4219203d"
+      },
+      "seed_overlay": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "manifest_id": "e2e-shop-order-saga-seed-v1",
+        "manifest_sha256": "a2e238747d478cbcba69547f463d04874ec5899dd84ca391a37d2fe8ad7515cd",
+        "verification_script_ref": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh",
+        "verification_script_sha256": "de6ce8c28b6a9d5fba90fd6707e0039fa01a4dc2741a5b6754a081985a6db171",
+        "verification_skipped": false
+      }
+    },
+    "metadata": {
+      "jdk_vendor": "Eclipse Adoptium",
+      "jdk_version": "26",
+      "benchmark_tool_version": "k6 v2.0.0 (commit/8c3be52cc1, go1.26.3, linux/amd64)",
+      "jvm_flags": [],
+      "hardware_profile": "perf-box-amd64",
+      "scenario_id": "e2e-shop-order-saga",
+      "target_classification": "runtime-exploratory"
+    },
+    "pinned_versions": {
+      "jdk_version": "26",
+      "benchmark_tool_version": "k6 v2.0.0 (commit/8c3be52cc1, go1.26.3, linux/amd64)",
+      "target_commit_sha": "30b677f38d8efe39ba31fca76a3f6365e20fa1b0"
+    },
+    "actual_versions": {
+      "jdk_version": "26",
+      "benchmark_tool_version": "k6 v2.0.0 (commit/8c3be52cc1, go1.26.3, linux/amd64)",
+      "target_commit_sha": "30b677f38d8efe39ba31fca76a3f6365e20fa1b0"
+    },
+    "runtime_log": {
+      "launcher_mode": "standalone-jar",
+      "env_file": "/home/bench/exeris-bench-saga/results/raw/e2e-shop-order-saga/20260730T161215Z-campaign-v2-r50/exeris-community-rep-2/env.json",
+      "jar_path": "targets/exeris-community-app/target/exeris-community-app-1.0.0-SNAPSHOT.jar",
+      "jar_exists": true,
+      "jar_sha256": "3e3419447c8a817777c03dc1c417e733ebb4b907663da2eb89bb66586d930ff5",
+      "jar_size_bytes": 20570313,
+      "jar_mtime_utc": "2026-07-30T13:27:34Z",
+      "detection_method": "proc_cmdline"
+    },
+    "jfr_capture": {
+      "pid": "914903",
+      "jcmd_available": true,
+      "check_ok": true,
+      "recording_detected": true,
+      "dump_attempted": true,
+      "dump_success": true,
+      "stop_attempted": true,
+      "stop_success": true,
+      "stop_recording_name": "exeris_community_20260730T161923Z",
+      "jfr_file": "/home/bench/exeris-bench-saga/results/raw/e2e-shop-order-saga/20260730T161215Z-campaign-v2-r50/exeris-community-rep-2/target-exeris-community-20260730T161923Z.jfr",
+      "note": ""
+    },
+    "jfr_start": {
+      "pid": "914903",
+      "jcmd_available": true,
+      "start_attempted": true,
+      "start_success": true,
+      "recording_already_present": false,
+      "recording_name": "exeris_community_20260730T161923Z",
+      "note": "replaced existing recording; recording started"
+    }
+  },
+  "k6_summary": {
+    "metrics": {
+      "http_req_sending": {
+        "max": 1.218141,
+        "p(90)": 0.012012,
+        "p(95)": 0.013585,
+        "p(99)": 0.02242649999999997,
+        "avg": 0.009998008368353913,
+        "min": 0.004419,
+        "med": 0.009498
+      },
+      "http_req_blocked": {
+        "avg": 0.004570250109949336,
+        "min": 0.001413,
+        "med": 0.003056,
+        "max": 10.354932,
+        "p(90)": 0.003777,
+        "p(95)": 0.004157,
+        "p(99)": 0.020190999999999595
+      },
+      "http_req_connecting": {
+        "p(99)": 0,
+        "avg": 0.0011167531274433144,
+        "min": 0,
+        "med": 0,
+        "max": 10.324454,
+        "p(90)": 0,
+        "p(95)": 0
+      },
+      "saga_compensated_total": {
+        "count": 497,
+        "rate": 1.4652073215124861
+      },
+      "http_req_duration{expected_response:true}": {
+        "min": 1.904717,
+        "med": 5.99671,
+        "max": 94.02358,
+        "p(90)": 22.8530672,
+        "p(95)": 25.870282700000015,
+        "p(99)": 31.504355820000022,
+        "avg": 10.0270163617983
+      },
+      "admission_rejected": {
+        "passes": 0,
+        "fails": 0,
+        "thresholds": {
+          "rate<0.05": false
+        },
+        "value": 0
+      },
+      "http_req_failed": {
+        "passes": 1,
+        "fails": 81855,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0.000012216575449569976
+      },
+      "auth_latency_ms": {
+        "min": 3.367777,
+        "med": 4.391815,
+        "max": 43.025874,
+        "p(90)": 6.515372,
+        "p(95)": 8.18854,
+        "p(99)": 11.056747,
+        "avg": 4.78659306389346
+      },
+      "data_sent": {
+        "count": 54076081,
+        "rate": 159421.870824753
+      },
+      "saga_success": {
+        "fails": 497,
+        "passes": 15874,
+        "thresholds": {
+          "rate>0.96": false
+        },
+        "value": 0.9696414391301692
+      },
+      "http_req_receiving": {
+        "p(95)": 0.030628,
+        "p(99)": 0.03732899999999994,
+        "avg": 0.022863492706704232,
+        "min": 0.007173,
+        "med": 0.022332,
+        "max": 0.308257,
+        "p(90)": 0.028263
+      },
+      "checks": {
+        "fails": 0,
+        "passes": 81855,
+        "value": 1
+      },
+      "http2_rate": {
+        "passes": 0,
+        "fails": 81856,
+        "value": 0
+      },
+      "saga_completed_duration": {
+        "med": 23,
+        "max": 94,
+        "p(90)": 29,
+        "p(95)": 31,
+        "p(99)": 41,
+        "avg": 23.493070429633363,
+        "min": 14
+      },
+      "dropped_iterations": {
+        "count": 131,
+        "rate": 0.38620152740067537
+      },
+      "http_req_duration": {
+        "med": 5.996695,
+        "max": 94.02358,
+        "p(90)": 22.853042000000002,
+        "p(95)": 25.87004125,
+        "p(99)": 31.504320149999987,
+        "avg": 10.026950138181682,
+        "min": 1.904717,
+        "thresholds": {
+          "p(99)<5000": false
+        }
+      },
+      "data_received": {
+        "count": 34203423,
+        "rate": 100835.22293840756
+      },
+      "http_req_waiting": {
+        "p(95)": 25.83215275,
+        "p(99)": 31.469859299999996,
+        "avg": 9.994088637106687,
+        "min": 1.872527,
+        "med": 5.963998500000001,
+        "max": 93.991129,
+        "p(90)": 22.8171655
+      },
+      "saga_compensated": {
+        "passes": 497,
+        "fails": 15874,
+        "thresholds": {
+          "rate<0.08": false
+        },
+        "value": 0.030358560869830797
+      },
+      "cart_get_latency_ms": {
+        "min": 1.904717,
+        "med": 4.637736,
+        "max": 15.501089,
+        "p(90)": 7.233006,
+        "p(95)": 7.563214,
+        "p(99)": 8.495286199999995,
+        "avg": 4.7618369522326
+      },
+      "errors": {
+        "passes": 0,
+        "fails": 16371,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0
+      },
+      "saga_status_resolved": {
+        "passes": 16371,
+        "fails": 0,
+        "thresholds": {
+          "rate>0.98": false
+        },
+        "value": 1
+      },
+      "saga_compensated_duration": {
+        "avg": 24.0523138832998,
+        "min": 14,
+        "med": 23,
+        "max": 68,
+        "p(90)": 29,
+        "p(95)": 33.19999999999999,
+        "p(99)": 42.320000000000164
+      },
+      "recommend_latency_ms": {
+        "p(90)": 5.846408,
+        "p(95)": 6.4171225,
+        "p(99)": 7.990003199999998,
+        "avg": 4.153796099321974,
+        "min": 1.936016,
+        "med": 4.028905,
+        "max": 16.768603
+      },
+      "vus_max": {
+        "value": 731,
+        "min": 600,
+        "max": 731
+      },
+      "saga_issued_total": {
+        "count": 16371,
+        "rate": 48.26339851203402
+      },
+      "saga_completed_total": {
+        "count": 15874,
+        "rate": 46.798191190521536
+      },
+      "req_timed_out": {
+        "passes": 0,
+        "fails": 0,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0
+      },
+      "saga_failed": {
+        "passes": 0,
+        "fails": 16371,
+        "value": 0
+      },
+      "saga_poll_404_exhausted": {
+        "passes": 0,
+        "fails": 16371,
+        "thresholds": {
+          "rate<0.01": false
+        },
+        "value": 0
+      },
+      "http_req_tls_handshaking": {
+        "p(95)": 0,
+        "p(99)": 0,
+        "avg": 0,
+        "min": 0,
+        "med": 0,
+        "max": 0,
+        "p(90)": 0
+      },
+      "saga_unresolved": {
+        "passes": 0,
+        "fails": 16371,
+        "thresholds": {
+          "rate<0.01": false
+        },
+        "value": 0
+      },
+      "req_failed_other": {
+        "passes": 0,
+        "fails": 0,
+        "thresholds": {
+          "rate<0.02": false
+        },
+        "value": 0
+      },
+      "http_reqs": {
+        "count": 81856,
+        "rate": 241.3199406634327
+      },
+      "vus": {
+        "value": 1,
+        "min": 1,
+        "max": 344
+      },
+      "orders_initiated": {
+        "count": 16371,
+        "rate": 48.26339851203402
+      },
+      "order_create_latency_ms": {
+        "p(90)": 28.859896,
+        "p(95)": 31.2676405,
+        "p(99)": 40.57014239999998,
+        "avg": 23.386415678700185,
+        "min": 14.104254,
+        "med": 22.741668,
+        "max": 94.02358
+      },
+      "cart_add_latency_ms": {
+        "max": 61.930587,
+        "p(90)": 17.528134,
+        "p(95)": 19.1812905,
+        "p(99)": 24.231893099999997,
+        "avg": 13.04672137920706,
+        "min": 7.41133,
+        "med": 12.200999
+      },
+      "iteration_duration": {
+        "max": 9796.414289,
+        "p(90)": 7942.549421,
+        "p(95)": 8259.219994,
+        "p(99)": 8834.6825732,
+        "avg": 6652.680200766079,
+        "min": 3518.450932,
+        "med": 6652.779651
+      },
+      "iterations": {
+        "count": 16371,
+        "rate": 48.26339851203402
+      }
+    },
+    "root_group": {
+      "groups": {},
+      "checks": {
+        "register: 201 Created": {
+          "id": "14d9f28b3e841d34777d55712eb14fef",
+          "passes": 16371,
+          "fails": 0,
+          "name": "register: 201 Created",
+          "path": "::register: 201 Created"
+        },
+        "recommend: 200 OK": {
+          "passes": 16371,
+          "fails": 0,
+          "name": "recommend: 200 OK",
+          "path": "::recommend: 200 OK",
+          "id": "4c60a158f427f563c0a415da917ed47d"
+        },
+        "cart add: 201 Created": {
+          "name": "cart add: 201 Created",
+          "path": "::cart add: 201 Created",
+          "id": "85c944a623cdac58db4c3a5df0297746",
+          "passes": 16371,
+          "fails": 0
+        },
+        "cart get: 200 OK": {
+          "fails": 0,
+          "name": "cart get: 200 OK",
+          "path": "::cart get: 200 OK",
+          "id": "78c7a764d13a28c3fd6f58f37c8ef700",
+          "passes": 16371
+        },
+        "order create: 200/201/202": {
+          "passes": 16371,
+          "fails": 0,
+          "name": "order create: 200/201/202",
+          "path": "::order create: 200/201/202",
+          "id": "90ebe1f76a4d834bb8c07ea7f74808c9"
+        }
+      },
+      "name": "",
+      "path": "",
+      "id": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  },
+  "resource_metrics": {
+    "sample_count": 338,
+    "cpu_time_seconds": 117.530000,
+    "host_logical_cpus": 16,
+    "cpu_util_percent_of_one_core": 34.2215,
+    "avg_cores_used": 0.3422,
+    "cpu_util_percent_of_host_total": 2.1387,
+    "rss_kb_min": 221664,
+    "rss_kb_avg": 443933,
+    "peak_rss_kb": 487400,
+    "vmsize_kb_min": 22364472,
+    "vmsize_kb_avg": 23812531,
+    "peak_vmsize_kb": 24049708,
+    "threads_min": 60,
+    "threads_avg": 81,
+    "peak_threads": 88,
+    "vmhwm_kb_max": 488840,
+    "smaps_rss_kb_avg": 445252,
+    "smaps_rss_kb_max": 488840,
+    "cgroup_memory_current_kb_avg": 1557854,
+    "cgroup_memory_current_kb_max": 1921024,
+    "jvm": {
+      "pid": 914903,
+      "heap_used_kb": 68743,
+      "heap_committed_kb": 98304,
+      "heap_reserved_kb": 16261120,
+      "nmt_total_reserved_kb": 18199809,
+      "nmt_total_committed_kb": 303601,
+      "nmt_java_heap_reserved_kb": 16261120,
+      "nmt_java_heap_committed_kb": 98304,
+      "offheap_kb_estimate": 205297,
+      "offheap_estimate_source": "nmt_minus_java_heap",
+      "nmt_enabled": true
+    }
+  }
+}

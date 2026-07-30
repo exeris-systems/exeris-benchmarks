@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "note": "Completion record for a campaign whose runner-emitted rollup predates the completion of one rep. The runner artifact (campaign-gate-summary.json) is deliberately NOT overwritten: it is the authentic output of the run that produced it, and rewriting it to say pass would erase that a rep failed.",
+  "runner_emitted_verdict": "not_evaluated",
+  "runner_emitted_counts": {
+    "absent": 1,
+    "pass": 8
+  },
+  "final_state_on_disk": {
+    "reps_total": 9,
+    "all_gates": "pass",
+    "per_rep_compensations": "497/497 in every rep"
+  },
+  "sequence": [
+    "Campaign ran 9 reps. 8 passed. spring-hibernate-rep-3 failed at the DB seed (exit 70, the seed fail-closed added the same day) and produced no gate, so the rollup correctly refused to certify the campaign: campaign_gate_status=not_evaluated, exit 1.",
+    "Root cause of that seed failure was NOT flaky infrastructure: the box Postgres was internet-exposed and had been accessed; the postgres role password had been altered. Remediated in commit 56e3e95.",
+    "spring-hibernate-rep-3 was then re-run standalone. That first re-run overlapped a Maven build on the same box, so although its numbers matched the clean reps exactly it was discarded as uncontrolled and re-run again with the box idle.",
+    "The rep-3 artifacts in this directory are from the second, clean re-run."
+  ],
+  "caveat": "durability_tier_uniform in the runner artifact reads false only because the absent rep reported an unknown tier. All nine reps are T2-fsync-node-durable-postgres.",
+  "generated_at_utc": "2026-07-30T19:29:16Z"
+}

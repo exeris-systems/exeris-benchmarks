@@ -1,0 +1,8 @@
+1021344:
+No available recordings.
+
+Use jcmd 1021344 JFR.start to start a recording.
+1021344:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 1021344 JFR.dump name=quarkus_hibernate_20260730T164051Z filename=FILEPATH to copy recording data to file.

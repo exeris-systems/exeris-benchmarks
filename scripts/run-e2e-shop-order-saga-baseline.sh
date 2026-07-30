@@ -1035,6 +1035,15 @@ NEO4J_STATS_CSV="$LOGS_DIR/neo4j-docker-stats.csv"
 NEO4J_STATS_PID=""
 BACKEND_IDLE_BASELINE_JSON="$LOGS_DIR/backend-idle-baseline.json"
 DEPLOYMENT_FOOTPRINT_JSON="$OUTPUT_DIR/deployment-footprint.json"
+# Actual Postgres backend count per run. Every stack is CONFIGURED with the same
+# pool ceiling (EXERIS_DB_POOL_MAX_SIZE, default 256 -> Hikari max / Quarkus jdbc
+# max / kernel pool), but configuration parity is not runtime parity: pools open
+# connections on demand, so a stack may simply never reach the ceiling, and one
+# that plateaus exactly AT it was capped. Without this sample the difference is
+# indistinguishable, and DB config has already been the hidden variable in this
+# repo more than once.
+PG_CONNECTIONS_CSV="$LOGS_DIR/postgres-connections.csv"
+PG_CONNECTIONS_PID=""
 # OS-level sidecars (opt-in via BENCH_OS_SIDECARS=1, default OFF). pidstat gives
 # per-thread %wait (C2 starvation) + context switches; mpstat gives per-CPU
 # %usr/%sys/%soft/%idle (network/softirq burn). See tools/bench/lib/os-sampler.sh.
@@ -1288,6 +1297,24 @@ _capture_backend_idle_baseline() {
 }
 _capture_backend_idle_baseline
 
+# Postgres backend-count sampler (answers "did this stack actually get its pool?").
+printf 'epoch_s,total_backends,active,idle,idle_in_txn,max_connections\n' > "$PG_CONNECTIONS_CSV"
+(
+  while true; do
+    _pgrow="$(docker exec exeris-e2e-saga-postgres psql -U postgres -tAF, -c \
+      "select count(*),
+              count(*) filter (where state='active'),
+              count(*) filter (where state='idle'),
+              count(*) filter (where state='idle in transaction'),
+              current_setting('max_connections')
+       from pg_stat_activity
+       where backend_type='client backend' and pid<>pg_backend_pid()" 2>/dev/null || true)"
+    [[ -n "$_pgrow" ]] && printf '%s,%s\n' "$(date +%s)" "$_pgrow" >> "$PG_CONNECTIONS_CSV"
+    sleep 1
+  done
+) &
+PG_CONNECTIONS_PID="$!"
+
 for _shared in "exeris-e2e-saga-postgres:$POSTGRES_STATS_CSV:POSTGRES" \
                "exeris-e2e-saga-neo4j:$NEO4J_STATS_CSV:NEO4J"; do
   _sc="${_shared%%:*}"; _rest_s="${_shared#*:}"; _scsv="${_rest_s%%:*}"; _svar="${_rest_s##*:}"
@@ -1385,6 +1412,13 @@ if [[ -n "$RESTATE_STATS_PID" ]]; then
   RESTATE_STATS_PID=""
 fi
 
+# Stop the Postgres backend-count sampler
+if [[ -n "$PG_CONNECTIONS_PID" ]]; then
+  kill "$PG_CONNECTIONS_PID" >/dev/null 2>&1 || true
+  wait "$PG_CONNECTIONS_PID" 2>/dev/null || true
+  PG_CONNECTIONS_PID=""
+fi
+
 # Stop shared-backend samplers
 for _p in POSTGRES NEO4J; do
   _pid="${!_p:+}"; eval "_pid=\${${_p}_STATS_PID:-}"
@@ -1460,12 +1494,19 @@ _write_deployment_footprint() {
   # and the sweep already showed throughput varying run to run. Convert to
   # core-seconds and divide by completed iterations so the figure is per saga.
   _iters="$(jq -r '.metrics.iterations.count // 0' "$K6_SUMMARY_JSON" 2>/dev/null || echo 0)"
+  _pg_peak="$(_csv_stat "$PG_CONNECTIONS_CSV" 2 max)"
+  _pg_peak_active="$(_csv_stat "$PG_CONNECTIONS_CSV" 3 max)"
+  _pg_server_max="$(awk -F, 'NR>1 && $6 ~ /^[0-9]+$/ {print $6; exit}' "$PG_CONNECTIONS_CSV" 2>/dev/null)"
 
   jq -n \
     --arg contract "$CONTRACT_ID" --arg target "$TARGET_APP" \
     --argjson target_comp "$_comp_target" \
     --argjson components "$_comps" \
     --argjson iterations "${_iters:-0}" \
+    --argjson pool_max "${EXERIS_DB_POOL_MAX_SIZE:-0}" \
+    --argjson pg_peak "${_pg_peak:-null}" \
+    --argjson pg_peak_active "${_pg_peak_active:-null}" \
+    --argjson pg_server_max "${_pg_server_max:-null}" \
     --slurpfile idle "$BACKEND_IDLE_BASELINE_JSON" \
     --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '{
@@ -1476,6 +1517,19 @@ _write_deployment_footprint() {
       target: $target_comp,
       components: $components,
       iterations: $iterations,
+      # Fairness evidence, not a performance metric: every stack is configured
+      # with the same pool ceiling, but "configured" != "obtained". peak == the
+      # configured max means the stack was pool-CAPPED and its numbers reflect
+      # the pool, not the runtime; peak well below means the pool was not the
+      # limiter. Without this the two are indistinguishable.
+      postgres_connections: {
+        pool_max_configured: $pool_max,
+        peak_backends: $pg_peak,
+        peak_active: $pg_peak_active,
+        server_max_connections: $pg_server_max,
+        pool_capped: (if ($pool_max > 0 and $pg_peak >= $pool_max) then true else false end),
+        note: "backend_type='client backend' only, sampled at 1 Hz for the whole run (includes warmup and cooldown)."
+      },
       sum_container_cpu_pct_avg: ([$components[].cpu_pct_avg // 0] | add),
       sum_container_rss_mb_max:  ([$components[].rss_mb_max  // 0] | add),
       sum_container_cpu_core_seconds: ([$components[].cpu_core_seconds // 0] | add),

@@ -147,7 +147,7 @@ that requires a separate promotion step (as was done for `entity-read-by-id`).
 `campaign-gate-summary.json` is a §4.1 count rollup and must never be cited as
 comparative eligibility.
 
-## Open finding — measurement-phase request failures at high arrival rate (harness artifact)
+## Open finding — exeris-community loses the whole measurement phase at rate 100 (TARGET-side)
 
 Surfaced by the 2026-07-30 arrival-rate sweep (single target, exeris-community,
 perf-box, h1, 20/30/10 s windows). Recorded because it is unfavourable to
@@ -165,8 +165,45 @@ CPU plateaus at ~0.52 of 16 cores from 50/s onward and never rises, while the
 error rate climbs to 39 %. Latency does *not* degrade (median stays 20–26 ms),
 so this is not queueing — served requests stay fast and the rest are dropped.
 
-**This is a HARNESS artifact, not target behaviour.** Attribution resolved by
-experiment; two earlier hypotheses in this session are retracted.
+**ATTRIBUTION (final): target-side and exeris-specific.** Established by a
+cross-stack control at rate 100 — identical harness config, phases, rates and VU
+pools, run back to back:
+
+| | `status=0` | register 201 by phase | err_rate |
+|---|---|---|---|
+| exeris-community | 3001, **all** in measurement | warmup 2001, cooldown 1001, measurement **0** | 0.167 |
+| quarkus-hibernate | **none** | warmup 2001, measurement 3001, cooldown 1001 | 0.000033 |
+
+quarkus-hibernate is clean; exeris-community loses the entire measurement phase
+and then recovers in cooldown. A k6 phase artifact would hit both stacks
+identically, so it is not one.
+
+**Correction history — this row was wrong twice before.** Recorded because the
+sequence is the point: (1) attributed to ADR-035 admission control — refuted by
+arithmetic (pool 256 x default ratio 8 = 2048 allowance >> ~675 concurrent);
+(2) attributed to the §3 blocking await — refuted by A/B on the same binary
+(`EXERIS_SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS` 25000 vs 0 gave `status=0` 3001 in
+BOTH arms); (3) attributed to a k6 phase artifact on the strength of the
+measurement-only confinement — refuted by the cross-stack control above, which
+should have been run before that claim was written. Duplicate usernames were
+also ruled out (a duplicate registration returns a clean 409; the run recorded
+exactly one real 409 against 3001 `status=0`).
+
+**What is established.** Every failure is on the session's first request
+(`POST /api/v1/auth/register`) with `connection reset by peer` or bare `EOF`, so
+the TCP connection was accepted and then dropped. Nothing is logged by the
+target. `net.core.somaxconn` is 4096 and the client has 262144 fds, so neither
+backlog overflow nor client exhaustion. Peak Postgres backends were 37
+(exeris) vs 24 (quarkus) against a 256 pool, so the DB pool is not involved.
+The failure is confined to the measurement phase — the phase that begins while
+warmup is still draining (`MEASURE_START` equals the warmup duration, but warmup
+carries `gracefulStop: '10s'`), which transiently doubles offered load and open
+connections. Warmup and cooldown, either side, are clean.
+
+**What is NOT established.** The mechanism inside the target. This needs
+product-side investigation of exeris-community's HTTP/transport connection
+handling; it is not benchmark work and no further benchmark-side hypothesis
+should be recorded here without a controlled experiment behind it.
 
 Phase breakdown at rate 100 (`k6-output.json`, tagged by scenario):
 

@@ -1545,16 +1545,25 @@ _component_json() { # <name> <csv> <role> <sample-seconds>
     --argjson cpu_max "$(_csv_stat "$csv" 2 max)" \
     --argjson rss_avg "$(_csv_stat "$csv" 3 mean)" \
     --argjson rss_max "$(_csv_stat "$csv" 3 max)" \
-    '{component:$n, role:$role, sample_seconds:$secs,
+    '{component:$n, role:$role, sample_span_seconds:$secs,
       cpu_pct_avg:$cpu_avg, cpu_pct_max:$cpu_max,
       rss_mb_avg:$rss_avg, rss_mb_max:$rss_max,
       cpu_core_seconds: (if $cpu_avg == null then null else (($cpu_avg/100)*$secs) end)}'
 }
 
-_csv_rows() { # sample count == seconds, sampler ticks at 1 Hz
+# Wall-clock span of a stats CSV, from the epoch_ms column.
+#
+# NOT the row count. An earlier version used row count as seconds on the
+# assumption that the sampler ticks at 1 Hz because the loop says `sleep 1` —
+# but `docker stats --no-stream` takes ~2 s itself (it samples twice to compute
+# a CPU delta), so the real interval is ~3 s. Measured on a campaign CSV: 113
+# rows spanning 335.7 s, i.e. 2.97 s per sample. Every container's
+# cpu_core_seconds was therefore understated by ~3x, and so was the
+# whole-deployment CPU per saga.
+_csv_span_seconds() {
   local f="$1"
   [[ -s "$f" ]] || { printf '0\n'; return 0; }
-  awk 'END{print (NR>1 ? NR-1 : 0)}' "$f"
+  awk -F, 'NR==2{first=$1} END{ if (NR>2 && first>0) printf "%.1f\n", ($1-first)/1000; else print 0 }' "$f"
 }
 
 # Defined here next to its helpers, but CALLED after resource-metrics.json is
@@ -1568,11 +1577,11 @@ _write_deployment_footprint() {
     '{component:"target-jvm", role:"target", cores_used_avg:$cores, rss_mb_max:$rssmax}')"
 
   _comps="$(printf '%s\n' \
-    "$(_component_json exeris-e2e-saga-postgres "$POSTGRES_STATS_CSV" shared-backend "$(_csv_rows "$POSTGRES_STATS_CSV")")" \
-    "$(_component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend "$(_csv_rows "$NEO4J_STATS_CSV")")" \
-    "$(_component_json exeris-e2e-saga-axonserver "$AXON_STATS_CSV" stack-specific "$(_csv_rows "$AXON_STATS_CSV")")" \
-    "$(_component_json exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV" stack-specific "$(_csv_rows "$RESTATE_STATS_CSV")")" \
-    "$(_component_json exeris-e2e-saga-payment-gateway "$PAYMENT_GATEWAY_STATS_CSV" shared-external "$(_csv_rows "$PAYMENT_GATEWAY_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-postgres "$POSTGRES_STATS_CSV" shared-backend "$(_csv_span_seconds "$POSTGRES_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend "$(_csv_span_seconds "$NEO4J_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-axonserver "$AXON_STATS_CSV" stack-specific "$(_csv_span_seconds "$AXON_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV" stack-specific "$(_csv_span_seconds "$RESTATE_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-payment-gateway "$PAYMENT_GATEWAY_STATS_CSV" shared-external "$(_csv_span_seconds "$PAYMENT_GATEWAY_STATS_CSV")")" \
     | jq -s '.')"
 
   # Throughput normalization. Raw cpu_pct is an average over the sampling

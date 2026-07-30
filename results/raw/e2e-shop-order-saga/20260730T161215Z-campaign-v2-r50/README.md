@@ -20,7 +20,16 @@ Medians identical across repeats; every rep issued ~16 370 orders and matched
 the exact expected compensation count of 497.
 
 Whole-deployment CPU per saga (target JVM + Postgres + Neo4j + Axon Server):
-quarkus 6.85 ms, exeris 11.7 ms, spring 14.8 ms.
+**quarkus 10.5 ms, exeris 20.6 ms, spring 20.9 ms.**
+
+> **Superseded figures.** This file previously reported 6.85 / 11.7 / 14.8 ms.
+> Those were wrong: the footprint rollup derived each container's CPU-seconds
+> from the stats-CSV *row count*, assuming the sampler ticked at 1 Hz because its
+> loop says `sleep 1`. `docker stats --no-stream` takes ~2 s itself, so the real
+> interval is ~3 s — measured, 113 rows spanning 335.7 s = 2.97 s per sample.
+> Every container's CPU was understated ~3×. Fixed to use the recorded epoch
+> timestamps. The correction changes the ordering: spring is not the most
+> expensive, it is level with exeris.
 
 ## NOT A VALID CROSS-STACK COMPARISON — read before citing anything
 

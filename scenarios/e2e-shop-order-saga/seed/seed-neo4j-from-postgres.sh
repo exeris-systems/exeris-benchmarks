@@ -183,6 +183,59 @@ echo "[neo4j-seed] Graph cleared."
 neo4j_exec "CREATE CONSTRAINT product_id_unique IF NOT EXISTS FOR (p:Product) REQUIRE p.id IS UNIQUE;" >/dev/null
 neo4j_exec "CREATE CONSTRAINT user_id_unique IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE;" >/dev/null
 
+# ---------------------------------------------------------------------------
+# Node identity: UUID, not the Postgres integer.  (changed 2026-07-31)
+#
+# WHY, because this looks like gratuitous churn and is not:
+#
+# The Exeris graph SPI is UUID-typed end to end — GraphTraversal.startNodeId()
+# and GraphSession.upsertEdge() take java.util.UUID, and the community Neo4j
+# dialect binds the parameter as startNodeId().toString() and parses every
+# returned id back with UUID.fromString(). A node keyed by an integer is
+# therefore not merely un-addressable from that SPI: reading one throws
+# GraphQueryException. Keying the graph by integers meant exeris-community's
+# recommendation traversal could never match anything, which is exactly what
+# happened for the whole 20260730 campaign — silently, because the empty result
+# fell through to a Postgres fallback.
+#
+# So the fixture changes rather than the adapter. That is fixture-bending to
+# accommodate ONE stack's constraint, it must never be silent, and it is
+# recorded in CONTRACT-v2 §2 and the §9 register.
+#
+# The key is Java's UUID.nameUUIDFromBytes(("user-"|"product-") + pgId), i.e. an
+# MD5 name-based (version 3) UUID with NO namespace prefix, reproduced here in
+# SQL so the seed never has to shell out per row. Verified byte-identical to the
+# Java implementation on the vectors asserted in verify_uuid_derivation below —
+# if this expression ever drifts, every stack silently misses every node, so it
+# is asserted at seed time rather than trusted.
+_uuid_sql() { # $1 = SQL text expression yielding the name, e.g. "'user-' || id"
+  cat <<SQL
+substr(md5($1),1,8) || '-' || substr(md5($1),9,4) || '-3' || substr(md5($1),14,3) || '-' ||
+to_hex(( ('x' || substr(md5($1),17,1))::bit(4)::int & 3) | 8) || substr(md5($1),18,3) || '-' ||
+substr(md5($1),21,12)
+SQL
+}
+
+verify_uuid_derivation() {
+  # Known-answer vectors produced by java.util.UUID.nameUUIDFromBytes.
+  local expected_user_1="d6d77053-92bc-3af6-b332-8bea8c4c6904"
+  local expected_product_500="e7b15ede-9b55-3442-9a98-255f26cde590"
+  local got_user_1 got_product_500
+  got_user_1="$(pg_query_stream "SELECT $(_uuid_sql "'user-' || 1");" | tr -d '[:space:]')"
+  got_product_500="$(pg_query_stream "SELECT $(_uuid_sql "'product-' || 500");" | tr -d '[:space:]')"
+  if [[ "$got_user_1" != "$expected_user_1" || "$got_product_500" != "$expected_product_500" ]]; then
+    echo "ERROR: node-id derivation does not match java.util.UUID.nameUUIDFromBytes." >&2
+    echo "ERROR:   user-1     expected ${expected_user_1} got ${got_user_1}" >&2
+    echo "ERROR:   product-500 expected ${expected_product_500} got ${got_product_500}" >&2
+    echo "ERROR: every stack would key the graph differently from every other and" >&2
+    echo "ERROR: every traversal would silently return nothing. Refusing to seed." >&2
+    exit 91
+  fi
+  echo "[neo4j-seed] Node-id derivation verified against the Java known-answer vectors."
+}
+
+verify_uuid_derivation
+
 product_rows=0
 product_batch_rows=0
 product_batch_number=0
@@ -191,7 +244,7 @@ echo "Seeding Product nodes from PostgreSQL..."
 while IFS=$'\t' read -r product_id product_name product_category product_price; do
   [[ -z "${product_id//[[:space:]]/}" ]] && continue
 
-  product_item="{id: ${product_id}, name: $(cypher_quote "$product_name"), category: $(cypher_quote "$product_category"), price: ${product_price}}"
+  product_item="{id: $(cypher_quote "$product_uuid"), pg_id: ${product_id}, name: $(cypher_quote "$product_name"), category: $(cypher_quote "$product_category"), price: ${product_price}}"
   if [[ -z "$product_batch_items" ]]; then
     product_batch_items="$product_item"
   else
@@ -202,7 +255,7 @@ while IFS=$'\t' read -r product_id product_name product_category product_price; 
   product_rows=$((product_rows + 1))
   if (( product_batch_rows >= SEED_BATCH_SIZE )); then
     product_batch_number=$((product_batch_number + 1))
-    neo4j_exec "UNWIND [${product_batch_items}] AS row MERGE (p:Product {id: toInteger(row.id)}) SET p.name = row.name, p.category = row.category, p.price = toFloat(row.price);" >/dev/null
+    neo4j_exec "UNWIND [${product_batch_items}] AS row MERGE (p:Product {id: row.id}) SET p.pg_id = toInteger(row.pg_id), p.name = row.name, p.category = row.category, p.price = toFloat(row.price);" >/dev/null
     echo "  Product batch ${product_batch_number}: ${product_batch_rows} rows written (total ${product_rows})"
     product_batch_items=""
     product_batch_rows=0
@@ -210,11 +263,11 @@ while IFS=$'\t' read -r product_id product_name product_category product_price; 
   if (( product_rows % SEED_PROGRESS_EVERY == 0 )); then
     echo "  Product progress: ${product_rows} rows processed"
   fi
-done < <(pg_query_stream "SELECT id, name, category, COALESCE(price, 0)::text FROM products ORDER BY id")
+done < <(pg_query_stream "SELECT id, $(_uuid_sql "'product-' || id"), name, category, COALESCE(price, 0)::text FROM products ORDER BY id")
 
 if (( product_batch_rows > 0 )); then
   product_batch_number=$((product_batch_number + 1))
-  neo4j_exec "UNWIND [${product_batch_items}] AS row MERGE (p:Product {id: toInteger(row.id)}) SET p.name = row.name, p.category = row.category, p.price = toFloat(row.price);" >/dev/null
+  neo4j_exec "UNWIND [${product_batch_items}] AS row MERGE (p:Product {id: row.id}) SET p.pg_id = toInteger(row.pg_id), p.name = row.name, p.category = row.category, p.price = toFloat(row.price);" >/dev/null
   echo "  Product batch ${product_batch_number}: ${product_batch_rows} rows written (final, total ${product_rows})"
 fi
 
@@ -226,7 +279,7 @@ echo "Seeding User nodes from PostgreSQL purchase history..."
 while IFS=$'\t' read -r user_id; do
   [[ -z "${user_id//[[:space:]]/}" ]] && continue
 
-  user_item="{id: ${user_id}}"
+  user_item="{id: $(cypher_quote "$user_uuid"), pg_id: ${user_id}}"
   if [[ -z "$user_batch_items" ]]; then
     user_batch_items="$user_item"
   else
@@ -237,7 +290,7 @@ while IFS=$'\t' read -r user_id; do
   user_rows=$((user_rows + 1))
   if (( user_batch_rows >= SEED_BATCH_SIZE )); then
     user_batch_number=$((user_batch_number + 1))
-    neo4j_exec "UNWIND [${user_batch_items}] AS row MERGE (u:User {id: toInteger(row.id)});" >/dev/null
+    neo4j_exec "UNWIND [${user_batch_items}] AS row MERGE (u:User {id: row.id}) SET u.pg_id = toInteger(row.pg_id);" >/dev/null
     echo "  User batch ${user_batch_number}: ${user_batch_rows} rows written (total ${user_rows})"
     user_batch_items=""
     user_batch_rows=0
@@ -245,11 +298,11 @@ while IFS=$'\t' read -r user_id; do
   if (( user_rows % SEED_PROGRESS_EVERY == 0 )); then
     echo "  User progress: ${user_rows} rows processed"
   fi
-done < <(pg_query_stream "SELECT DISTINCT user_id FROM user_purchase_history ORDER BY user_id")
+done < <(pg_query_stream "SELECT DISTINCT user_id, $(_uuid_sql "'user-' || user_id") FROM user_purchase_history ORDER BY user_id")
 
 if (( user_batch_rows > 0 )); then
   user_batch_number=$((user_batch_number + 1))
-  neo4j_exec "UNWIND [${user_batch_items}] AS row MERGE (u:User {id: toInteger(row.id)});" >/dev/null
+  neo4j_exec "UNWIND [${user_batch_items}] AS row MERGE (u:User {id: row.id}) SET u.pg_id = toInteger(row.pg_id);" >/dev/null
   echo "  User batch ${user_batch_number}: ${user_batch_rows} rows written (final, total ${user_rows})"
 fi
 
@@ -262,7 +315,7 @@ while IFS=$'\t' read -r source_product_id target_product_id similarity_score; do
   [[ -z "${source_product_id//[[:space:]]/}" ]] && continue
   [[ -z "${target_product_id//[[:space:]]/}" ]] && continue
 
-  similar_item="{source_product_id: ${source_product_id}, target_product_id: ${target_product_id}, similarity_score: ${similarity_score}}"
+  similar_item="{source_product_id: $(cypher_quote "$source_product_uuid"), target_product_id: $(cypher_quote "$target_product_uuid"), similarity_score: ${similarity_score}}"
   if [[ -z "$similar_batch_items" ]]; then
     similar_batch_items="$similar_item"
   else
@@ -273,7 +326,7 @@ while IFS=$'\t' read -r source_product_id target_product_id similarity_score; do
   similar_rows=$((similar_rows + 1))
   if (( similar_batch_rows >= SEED_BATCH_SIZE )); then
     similar_batch_number=$((similar_batch_number + 1))
-    neo4j_exec "UNWIND [${similar_batch_items}] AS row MERGE (source:Product {id: toInteger(row.source_product_id)}) MERGE (target:Product {id: toInteger(row.target_product_id)}) MERGE (source)-[r:SIMILAR_TO]->(target) SET r.similarity_score = toFloat(row.similarity_score);" >/dev/null
+    neo4j_exec "UNWIND [${similar_batch_items}] AS row MERGE (source:Product {id: row.source_product_id}) MERGE (target:Product {id: row.target_product_id}) MERGE (source)-[r:SIMILAR_TO]->(target) SET r.similarity_score = toFloat(row.similarity_score);" >/dev/null
     echo "  SIMILAR_TO batch ${similar_batch_number}: ${similar_batch_rows} rows written (total ${similar_rows})"
     similar_batch_items=""
     similar_batch_rows=0
@@ -281,11 +334,11 @@ while IFS=$'\t' read -r source_product_id target_product_id similarity_score; do
   if (( similar_rows % SEED_PROGRESS_EVERY == 0 )); then
     echo "  SIMILAR_TO progress: ${similar_rows} rows processed"
   fi
-done < <(pg_query_stream "SELECT source_product_id, target_product_id, COALESCE(similarity_score, 0)::text FROM product_relationships ORDER BY source_product_id, target_product_id")
+done < <(pg_query_stream "SELECT $(_uuid_sql "'product-' || source_product_id"), $(_uuid_sql "'product-' || target_product_id"), COALESCE(similarity_score, 0)::text FROM product_relationships ORDER BY source_product_id, target_product_id")
 
 if (( similar_batch_rows > 0 )); then
   similar_batch_number=$((similar_batch_number + 1))
-  neo4j_exec "UNWIND [${similar_batch_items}] AS row MERGE (source:Product {id: toInteger(row.source_product_id)}) MERGE (target:Product {id: toInteger(row.target_product_id)}) MERGE (source)-[r:SIMILAR_TO]->(target) SET r.similarity_score = toFloat(row.similarity_score);" >/dev/null
+  neo4j_exec "UNWIND [${similar_batch_items}] AS row MERGE (source:Product {id: row.source_product_id}) MERGE (target:Product {id: row.target_product_id}) MERGE (source)-[r:SIMILAR_TO]->(target) SET r.similarity_score = toFloat(row.similarity_score);" >/dev/null
   echo "  SIMILAR_TO batch ${similar_batch_number}: ${similar_batch_rows} rows written (final, total ${similar_rows})"
 fi
 
@@ -293,12 +346,12 @@ purchased_rows=0
 purchased_batch_rows=0
 purchased_batch_number=0
 purchased_batch_items=""
-echo "Seeding PURCHASED_BY relationships..."
+echo "Seeding BOUGHT relationships (User -> Product)..."
 while IFS=$'\t' read -r history_user_id history_product_id purchased_at; do
-  [[ -z "${history_user_id//[[:space:]]/}" ]] && continue
-  [[ -z "${history_product_id//[[:space:]]/}" ]] && continue
+  [[ -z "${history_user_uuid//[[:space:]]/}" ]] && continue
+  [[ -z "${history_product_uuid//[[:space:]]/}" ]] && continue
 
-  purchased_item="{user_id: ${history_user_id}, product_id: ${history_product_id}, purchase_date: $(cypher_quote "$purchased_at")}"
+  purchased_item="{user_id: $(cypher_quote "$history_user_uuid"), product_id: $(cypher_quote "$history_product_uuid"), purchase_date: $(cypher_quote "$purchased_at")}"
   if [[ -z "$purchased_batch_items" ]]; then
     purchased_batch_items="$purchased_item"
   else
@@ -309,37 +362,74 @@ while IFS=$'\t' read -r history_user_id history_product_id purchased_at; do
   purchased_rows=$((purchased_rows + 1))
   if (( purchased_batch_rows >= SEED_BATCH_SIZE )); then
     purchased_batch_number=$((purchased_batch_number + 1))
-    neo4j_exec "UNWIND [${purchased_batch_items}] AS row MERGE (p:Product {id: toInteger(row.product_id)}) MERGE (u:User {id: toInteger(row.user_id)}) MERGE (p)-[r:PURCHASED_BY]->(u) SET r.purchase_date = row.purchase_date;" >/dev/null
-    echo "  PURCHASED_BY batch ${purchased_batch_number}: ${purchased_batch_rows} rows written (total ${purchased_rows})"
+    neo4j_exec "UNWIND [${purchased_batch_items}] AS row MERGE (p:Product {id: row.product_id}) MERGE (u:User {id: row.user_id}) MERGE (u)-[r:BOUGHT]->(p) SET r.purchase_date = row.purchase_date;" >/dev/null
+    echo "  BOUGHT batch ${purchased_batch_number}: ${purchased_batch_rows} rows written (total ${purchased_rows})"
     purchased_batch_items=""
     purchased_batch_rows=0
   fi
   if (( purchased_rows % SEED_PROGRESS_EVERY == 0 )); then
-    echo "  PURCHASED_BY progress: ${purchased_rows} rows processed"
+    echo "  BOUGHT progress: ${purchased_rows} rows processed"
   fi
-done < <(pg_query_stream "SELECT user_id, product_id, purchased_at::text FROM user_purchase_history ORDER BY user_id, product_id")
+done < <(pg_query_stream "SELECT $(_uuid_sql "'user-' || user_id"), $(_uuid_sql "'product-' || product_id"), purchased_at::text FROM user_purchase_history ORDER BY user_id, product_id")
 
 if (( purchased_batch_rows > 0 )); then
   purchased_batch_number=$((purchased_batch_number + 1))
-  neo4j_exec "UNWIND [${purchased_batch_items}] AS row MERGE (p:Product {id: toInteger(row.product_id)}) MERGE (u:User {id: toInteger(row.user_id)}) MERGE (p)-[r:PURCHASED_BY]->(u) SET r.purchase_date = row.purchase_date;" >/dev/null
-  echo "  PURCHASED_BY batch ${purchased_batch_number}: ${purchased_batch_rows} rows written (final, total ${purchased_rows})"
+  neo4j_exec "UNWIND [${purchased_batch_items}] AS row MERGE (p:Product {id: row.product_id}) MERGE (u:User {id: row.user_id}) MERGE (u)-[r:BOUGHT]->(p) SET r.purchase_date = row.purchase_date;" >/dev/null
+  echo "  BOUGHT batch ${purchased_batch_number}: ${purchased_batch_rows} rows written (final, total ${purchased_rows})"
 fi
 
 neo4j_product_count="$(neo4j_exec "MATCH (p:Product) RETURN count(p);" | tail -n 1 | tr -d '[:space:]')"
 neo4j_user_count="$(neo4j_exec "MATCH (u:User) RETURN count(u);" | tail -n 1 | tr -d '[:space:]')"
 neo4j_similar_count="$(neo4j_exec "MATCH (:Product)-[r:SIMILAR_TO]->(:Product) RETURN count(r);" | tail -n 1 | tr -d '[:space:]')"
-neo4j_purchased_count="$(neo4j_exec "MATCH (:Product)-[r:PURCHASED_BY]->(:User) RETURN count(r);" | tail -n 1 | tr -d '[:space:]')"
+neo4j_purchased_count="$(neo4j_exec "MATCH (:User)-[r:BOUGHT]->(:Product) RETURN count(r);" | tail -n 1 | tr -d '[:space:]')"
 
 echo "Seeded from PostgreSQL rows:"
 echo "  products: ${product_rows}"
 echo "  users(from purchase history): ${user_rows}"
 echo "  SIMILAR_TO relationships: ${similar_rows}"
-echo "  PURCHASED_BY relationships: ${purchased_rows}"
+echo "  BOUGHT relationships: ${purchased_rows}"
 echo ""
 echo "Neo4j graph summary after seeding:"
 echo "  Product nodes: ${neo4j_product_count}"
 echo "  User nodes: ${neo4j_user_count}"
 echo "  SIMILAR_TO edges: ${neo4j_similar_count}"
-echo "  PURCHASED_BY edges: ${neo4j_purchased_count}"
+echo "  BOUGHT edges: ${neo4j_purchased_count}"
+
+# ---------------------------------------------------------------------------
+# Fail-closed post-seed assertions.  (added 2026-07-31)
+#
+# The 20260730 campaign ran to completion, passed every gate, and published a
+# cross-stack cost comparison in which one stack's recommendation traversal
+# matched NOTHING and was served from a Postgres fallback instead. Nothing
+# caught it, because an empty graph result is indistinguishable from a graph
+# result at every layer above it. Counting rows is not enough: the seed must
+# assert that the query the workload actually issues returns something.
+echo "[neo4j-seed] Verifying the seeded graph answers the workload's queries..."
+
+_non_uuid_ids="$(neo4j_exec "MATCH (n) WHERE NOT toString(n.id) CONTAINS '-' RETURN count(n);" | tail -n 1 | tr -d '[:space:]')"
+if [[ "$_non_uuid_ids" != "0" ]]; then
+  echo "ERROR: ${_non_uuid_ids} node(s) have a non-UUID id." >&2
+  echo "ERROR: the Exeris dialect parses every returned id with UUID.fromString, so those" >&2
+  echo "ERROR: nodes are unreadable from that stack and would throw or silently miss." >&2
+  exit 92
+fi
+
+# The exact two-hop join the recommendation step performs, and the single-hop
+# first leg the Exeris SPI is restricted to. Both must be non-empty, or the
+# recommendation step is measuring a fallback rather than the graph.
+_bought_reachable="$(neo4j_exec "MATCH (:User)-[:BOUGHT]->(:Product) RETURN count(*);" | tail -n 1 | tr -d '[:space:]')"
+_recommendable="$(neo4j_exec "MATCH (:User)-[:BOUGHT]->(:Product)-[:SIMILAR_TO]->(rec:Product) RETURN count(DISTINCT rec);" | tail -n 1 | tr -d '[:space:]')"
+if [[ "${_bought_reachable:-0}" == "0" ]]; then
+  echo "ERROR: no (:User)-[:BOUGHT]->(:Product) edge is traversable." >&2
+  echo "ERROR: every stack's recommendation hop 1 would return empty." >&2
+  exit 93
+fi
+if [[ "${_recommendable:-0}" == "0" ]]; then
+  echo "ERROR: the two-hop recommendation join returns no products." >&2
+  echo "ERROR: BOUGHT edges exist but none reach a SIMILAR_TO neighbour, so every" >&2
+  echo "ERROR: recommendation would be empty and served from the Postgres fallback." >&2
+  exit 94
+fi
+echo "[neo4j-seed] Recommendation path verified: ${_bought_reachable} BOUGHT edges, ${_recommendable} reachable recommendations."
 
 echo "Neo4j seeding completed successfully."

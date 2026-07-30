@@ -18,8 +18,8 @@ import java.util.UUID;
  * Graph-backed operations for the e2e-shop-order-saga scenario.
  *
  * Neo4j path (driver != null): Cypher queries against the seeded Neo4j instance.
- *   (:User {id: Long})  (:Product {id: Long})
- *   (:Product)-[:PURCHASED_BY]->(:User)
+ *   (:User {id: UUID string, pg_id: Long})  (:Product {id: UUID string, pg_id: Long})
+ *   (:User)-[:BOUGHT]->(:Product)
  *   (:Product)-[:SIMILAR_TO]->(:Product)
  *   (:User)-[:IN_CART {quantity}]->(:Product)
  *
@@ -46,12 +46,32 @@ import java.util.UUID;
 @Component
 public class GraphShopService {
 
+    // CONTRACT-v2 §2 graph identity, changed 2026-07-31.
+    //
+    // Node key is the UUID nameUUIDFromBytes("user-"/"product-" + pgId), not the
+    // Postgres integer, because the Exeris graph SPI is UUID-typed and its Neo4j
+    // dialect parses every returned id with UUID.fromString — an integer-keyed graph
+    // is literally unreadable from that stack. The PGQ track already used exactly
+    // this identity (see the PGQ SQL below); it was only the Neo4j seed that had
+    // diverged, so this converges two fixtures rather than bending one.
+    //
+    // The purchase edge is (:User)-[:BOUGHT]->(:Product) rather than the reverse
+    // (:User)-[:BOUGHT]->(:Product) for the same reason: the dialect emits
+    // "->" unconditionally and ignores GraphEdgeDescriptor.direction() entirely, so
+    // an incoming traversal is not expressible there. BOUGHT is also the name the
+    // PGQ track already uses (bought_edges).
+    //
+    // rec.pg_id, not rec.id: this stack can read the domain key straight out of the
+    // graph. exeris-community cannot — its SPI hands back only the node UUID, so it
+    // pays an extra Postgres resolve per recommendation. That difference is a real
+    // consequence of the SPI's identity model and is deliberately left visible
+    // rather than equalised away.
     private static final String RECOMMEND_CYPHER =
-            "MATCH (u:User {id: $uid})<-[:PURCHASED_BY]-(bought:Product)-[:SIMILAR_TO]->(rec:Product) " +
-            "RETURN DISTINCT rec.id AS productId LIMIT $limit";
+            "MATCH (u:User {id: $uid})-[:BOUGHT]->(bought:Product)-[:SIMILAR_TO]->(rec:Product) " +
+            "RETURN DISTINCT rec.pg_id AS productId LIMIT $limit";
 
     private static final String CART_READ_CYPHER =
-            "MATCH (u:User {id: $uid})-[:IN_CART]->(p:Product) RETURN p.id AS productId";
+            "MATCH (u:User {id: $uid})-[:IN_CART]->(p:Product) RETURN p.pg_id AS productId";
 
     private static final String CART_UPSERT_CYPHER =
             "MERGE (u:User {id: $uid}) " +
@@ -87,7 +107,7 @@ public class GraphShopService {
         if (driver != null) {
             try (var session = driver.session()) {
                 return session.run(RECOMMEND_CYPHER,
-                                Map.<String, Object>of("uid", userId, "limit", limit))
+                                Map.<String, Object>of("uid", userNodeId(userId).toString(), "limit", limit))
                         .list(r -> r.get("productId").asLong());
             } catch (Exception ignored) {
                 return List.of();
@@ -111,7 +131,7 @@ public class GraphShopService {
     public List<Long> cartProductIds(long userId) {
         if (driver != null) {
             try (var session = driver.session()) {
-                return session.run(CART_READ_CYPHER, Map.<String, Object>of("uid", userId))
+                return session.run(CART_READ_CYPHER, Map.<String, Object>of("uid", userNodeId(userId).toString()))
                         .list(r -> r.get("productId").asLong());
             } catch (Exception ignored) {
                 return List.of();
@@ -137,7 +157,7 @@ public class GraphShopService {
         if (driver != null) {
             try (var session = driver.session()) {
                 session.run(CART_UPSERT_CYPHER,
-                        Map.<String, Object>of("uid", userId, "pid", productId, "qty", quantity));
+                        Map.<String, Object>of("uid", userNodeId(userId).toString(), "pid", productNodeId(productId).toString(), "qty", quantity));
             } catch (Exception ignored) {
             }
             return;

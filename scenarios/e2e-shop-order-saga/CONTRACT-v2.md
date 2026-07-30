@@ -84,11 +84,65 @@ Structural requirements (normative in v2):
   (exeris-kernel-spi) carries exactly one `GraphEdgeDescriptor` and no
   `GraphSession` method accepts a heterogeneous edge path — a two-edge-type
   path is not expressible in a single call, so the N+1 is forced by the SPI
-  rather than chosen by the adapter. Measured throughput-matched: 2.6× the
-  Neo4j CPU per iteration and 2.5× the recommendation latency for
-  exeris-community. Consequently `recommend_latency_ms` is comparable only in
-  the platform-natural sense (each stack's own idiomatic access) and MUST NOT
-  be read as a runtime-speed comparison.
+  rather than chosen by the adapter. Consequently `recommend_latency_ms` is
+  comparable only in the platform-natural sense (each stack's own idiomatic
+  access) and MUST NOT be read as a runtime-speed comparison.
+
+  **CORRECTED AGAIN 2026-07-31 — the N+1 above never executed, and the 2.6× /
+  2.5× figures this paragraph used to quote are withdrawn.** Evidence:
+  `results/raw/e2e-shop-order-saga/20260730T161215Z-campaign-v2-r50/graph-path-defect-probe.json`.
+  Three independent defects, each sufficient on its own to make
+  exeris-community's hop 1 return empty:
+
+  1. **Edge type.** The adapter traverses `BOUGHT`; the Neo4j seed created
+     `SIMILAR_TO`, `PURCHASED_BY`, `IN_CART` and zero `BOUGHT` edges.
+  2. **Direction.** The seed wrote `Product-[:PURCHASED_BY]->User`; the adapter
+     asks User→Product. `GraphEdgeDescriptor` carries a `Direction`, but
+     `CommunityGraphDialect` **ignores it entirely** — every Cypher template
+     hardcodes `->`. An incoming traversal is not expressible.
+  3. **Node identity.** The adapter keys nodes by
+     `UUID.nameUUIDFromBytes("user-"/"product-" + id)`; the seed keyed by the
+     Postgres integer. The dialect parses every returned id with
+     `UUID.fromString`, so an integer-keyed graph is not merely unmatched, it is
+     unreadable.
+
+  An empty hop 1 returned `List.of()`, which the use-case service absorbed
+  (`catch (RuntimeException ignored)` plus an empty-ids fall-through) and served
+  the recommendation from Postgres. So `recommend_latency_ms` for
+  exeris-community measured one fruitless Neo4j lookup plus a Postgres query —
+  **not comparable in any sense, platform-natural included** — and part of its
+  Postgres CPU was a fallback query neither Axon stack issues.
+
+  The measured mechanism behind exeris's Neo4j cost is also not the N+1: it is an
+  **unlabelled traversal anchor**. `CommunityGraphDialect` emits
+  `MATCH p = (source)-[:TYPE*1..n]->(target) WHERE source.id = $sourceId` with no
+  label on `source`, and Neo4j indexes — including the seed's own
+  `user_id_unique` / `product_id_unique` constraints — are label-scoped. The plan
+  degrades to a scan: **35 742 db hits versus 6** for the label-scoped
+  equivalent, with the redundant `MATCH p=` binding accounting for none of it.
+  The descriptor already carries `sourceNode()`/`targetNode()`; the dialect uses
+  them only for the SQL/PGQ table name.
+
+  **Fixture change, 2026-07-31 — declared because it accommodates one stack.**
+  The Neo4j seed now keys nodes by the UUID (`id`) and carries the domain key
+  alongside (`pg_id`), and the purchase edge is `(:User)-[:BOUGHT]->(:Product)`.
+  Defects 1 and 3 could only be repaired on the fixture side, because defect 2
+  makes the reverse direction inexpressible from the SPI. Mitigating context: the
+  PGQ graph track *already* used this exact identity and the `bought_edges` name,
+  so this converges two fixtures that should never have diverged rather than
+  inventing one for Exeris. The Cypher stacks read `rec.pg_id` directly;
+  exeris-community cannot — its SPI returns only the node UUID, so it pays an
+  extra Postgres resolve per recommendation, and that cost is deliberately left
+  visible rather than equalised away.
+
+  **Still product-side and NOT fixed here** (they belong in `exeris-kernel`, per
+  the repository boundary rule) and therefore expected to appear in shape-A
+  numbers as genuine Exeris properties: the ignored `Direction`, the unlabelled
+  anchor, and the one-descriptor-per-traversal N+1.
+
+  The seed now **fails closed** if the workload's own queries return nothing
+  (exits 91–94), because an empty graph result is indistinguishable from a graph
+  result at every layer above it — which is how this survived a full campaign.
 - **Graph driver pinned:** all cross-stack comparison runs use the Neo4j
   driver for the read-side recommendation path. The Exeris graph
   capability's driver swap (pgq ↔ neo4j) is explicitly OUT OF SCOPE for

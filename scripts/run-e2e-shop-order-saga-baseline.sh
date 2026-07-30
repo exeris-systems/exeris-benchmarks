@@ -1418,35 +1418,54 @@ _csv_stat() { # <csv> <col-index-1based> <mean|max>
     }' "$f"
 }
 
-_component_json() { # <name> <csv> <role>
-  local name="$1" csv="$2" role="$3"
+_component_json() { # <name> <csv> <role> <sample-seconds>
+  local name="$1" csv="$2" role="$3" secs="${4:-0}"
   [[ -s "$csv" ]] || return 0
-  jq -n --arg n "$name" --arg role "$role" \
+  jq -n --arg n "$name" --arg role "$role" --argjson secs "${secs:-0}" \
     --argjson cpu_avg "$(_csv_stat "$csv" 2 mean)" \
     --argjson cpu_max "$(_csv_stat "$csv" 2 max)" \
     --argjson rss_avg "$(_csv_stat "$csv" 3 mean)" \
     --argjson rss_max "$(_csv_stat "$csv" 3 max)" \
-    '{component:$n, role:$role, cpu_pct_avg:$cpu_avg, cpu_pct_max:$cpu_max,
-      rss_mb_avg:$rss_avg, rss_mb_max:$rss_max}'
+    '{component:$n, role:$role, sample_seconds:$secs,
+      cpu_pct_avg:$cpu_avg, cpu_pct_max:$cpu_max,
+      rss_mb_avg:$rss_avg, rss_mb_max:$rss_max,
+      cpu_core_seconds: (if $cpu_avg == null then null else (($cpu_avg/100)*$secs) end)}'
 }
 
-{
+_csv_rows() { # sample count == seconds, sampler ticks at 1 Hz
+  local f="$1"
+  [[ -s "$f" ]] || { printf '0\n'; return 0; }
+  awk 'END{print (NR>1 ? NR-1 : 0)}' "$f"
+}
+
+# Defined here next to its helpers, but CALLED after resource-metrics.json is
+# finalized — it reads the target JVM's figures from that file, and an earlier
+# call silently produced a rollup whose target component was null, i.e. a
+# whole-deployment sum with the target missing from it.
+_write_deployment_footprint() {
   _comp_target="$(jq -n \
     --argjson cores "$(jq -r '.avg_cores_used // null' "$RESOURCE_METRICS_JSON" 2>/dev/null || echo null)" \
     --argjson rssmax "$(jq -r 'if .peak_rss_kb then ((.peak_rss_kb/1024)*10|floor/10) else null end' "$RESOURCE_METRICS_JSON" 2>/dev/null || echo null)" \
     '{component:"target-jvm", role:"target", cores_used_avg:$cores, rss_mb_max:$rssmax}')"
 
   _comps="$(printf '%s\n' \
-    "$(_component_json exeris-e2e-saga-postgres "$POSTGRES_STATS_CSV" shared-backend)" \
-    "$(_component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend)" \
-    "$(_component_json exeris-e2e-saga-axonserver "$AXON_STATS_CSV" stack-specific)" \
-    "$(_component_json exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV" stack-specific)" \
+    "$(_component_json exeris-e2e-saga-postgres "$POSTGRES_STATS_CSV" shared-backend "$(_csv_rows "$POSTGRES_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend "$(_csv_rows "$NEO4J_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-axonserver "$AXON_STATS_CSV" stack-specific "$(_csv_rows "$AXON_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV" stack-specific "$(_csv_rows "$RESTATE_STATS_CSV")")" \
     | jq -s '.')"
+
+  # Throughput normalization. Raw cpu_pct is an average over the sampling
+  # window, so it is NOT comparable between runs that served different volumes —
+  # and the sweep already showed throughput varying run to run. Convert to
+  # core-seconds and divide by completed iterations so the figure is per saga.
+  _iters="$(jq -r '.metrics.iterations.count // 0' "$K6_SUMMARY_JSON" 2>/dev/null || echo 0)"
 
   jq -n \
     --arg contract "$CONTRACT_ID" --arg target "$TARGET_APP" \
     --argjson target_comp "$_comp_target" \
     --argjson components "$_comps" \
+    --argjson iterations "${_iters:-0}" \
     --slurpfile idle "$BACKEND_IDLE_BASELINE_JSON" \
     --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '{
@@ -1456,8 +1475,16 @@ _component_json() { # <name> <csv> <role>
       target_app: $target,
       target: $target_comp,
       components: $components,
+      iterations: $iterations,
       sum_container_cpu_pct_avg: ([$components[].cpu_pct_avg // 0] | add),
       sum_container_rss_mb_max:  ([$components[].rss_mb_max  // 0] | add),
+      sum_container_cpu_core_seconds: ([$components[].cpu_core_seconds // 0] | add),
+      # The comparable figure: throughput-normalized, so runs that served
+      # different volumes can be put side by side.
+      container_cpu_core_seconds_per_iteration:
+        (if $iterations > 0
+         then (([$components[].cpu_core_seconds // 0] | add) / $iterations)
+         else null end),
       backend_idle_baseline: ($idle[0] // null),
       interpretation: {
         why: "CONTRACT-v2 §1 makes the unit of comparison the whole deployment. exeris-community runs the saga in-process and checkpoints flow state to Postgres; the Axon stacks run saga progression in a separate Axon Server container. Target-JVM-only figures measure where the work lives, not what it costs.",
@@ -1486,6 +1513,12 @@ else
   jq '. + {note: "target pid could not be detected"}' "$RESOURCE_METRICS_JSON" > "$RESOURCE_METRICS_JSON.tmp"
   mv "$RESOURCE_METRICS_JSON.tmp" "$RESOURCE_METRICS_JSON"
 fi
+
+# CONTRACT-v2 §1/§8 whole-deployment rollup. Must run HERE, after
+# resource-metrics.json is finalized and the k6 summary exists — it reads the
+# target JVM's figures from the former and the iteration count (for throughput
+# normalization) from the latter.
+_write_deployment_footprint
 
 bench_collect_target_runtime_log "$TARGET_PID" "$TARGET_APP" "$TARGET_RUNTIME_LOG" || true
 

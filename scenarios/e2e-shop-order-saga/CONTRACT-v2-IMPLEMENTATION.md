@@ -211,6 +211,49 @@ fail-safe working as intended, not a green light for the row.
 artifact is understood. 50 sessions/s (342 concurrent) is clean on all three
 comparison-eligible stacks and is the operating point.
 
+## Open finding — §2 "identical recommendation step" is FALSE (graph SPI expressiveness)
+
+§2 states Neo4j "serves the recommendation step identically on every stack".
+Code and measurement both say otherwise.
+
+**Measured**, throughput-matched (2026-07-30 footprint check, 50/s, same windows):
+
+| | iterations | Neo4j core-seconds | Neo4j core-s / iteration | recommend p50 |
+|---|---|---|---|---|
+| exeris-community | 2414 | 3.03 | **0.00126** | **2.215 ms** |
+| quarkus-hibernate | 2426 | 1.17 | 0.00048 | 0.888 ms |
+
+Volumes are within 0.5 % of each other, so this is not a throughput artifact:
+exeris drives **2.6x the Neo4j CPU** and **2.5x the recommendation latency**.
+
+**Cause — different work, forced by the SPI.** quarkus and spring issue ONE
+Cypher query that expresses the whole two-hop join server-side:
+
+    MATCH (u:User {id: $uid})<-[:PURCHASED_BY]-(bought:Product)-[:SIMILAR_TO]->(rec:Product)
+
+`GraphShopAdapter` (exeris-community) instead issues **1 + N traversals**: one
+`traverseBreadthFirst` for the user's purchased products, then one more per
+purchased product inside a loop. This is not an adapter oversight —
+`GraphTraversal` (exeris-kernel-spi 0.8.1) is
+`(startNodeId, edgeDescriptor, maxDepth, ...)` with exactly ONE
+`GraphEdgeDescriptor`, and `GraphSession` exposes only `traverseBreadthFirst`,
+`streamBfsJson` and `findShortestPath`. No API accepts a heterogeneous edge
+path, and the recommendation requires two distinct edge types
+(`PURCHASED_BY` then `SIMILAR_TO`), so the N+1 is unavoidable through this SPI.
+Same class of finding as the `FlowScheduler` gap recorded under §9(a).
+
+**Consequences.**
+
+1. §2's "identical recommendation step" claim must be corrected — the datastore
+   and dataset are shared, the *access pattern* is not.
+2. `recommend_latency_ms` is currently marked `comparison_eligible` in all three
+   contracts. That is defensible only under the platform-natural reading (each
+   stack's own idiomatic access); it must NOT be read as a runtime-speed
+   comparison, because the stacks issue a different number of round-trips by
+   construction. Label it, or demote it.
+3. Any whole-deployment footprint row must attribute this: a meaningful share of
+   exeris-community's Neo4j cost is API expressiveness, not runtime efficiency.
+
 ## Claim guardrails implied by this matrix
 
 Until the corresponding rows move to `implemented-now`:

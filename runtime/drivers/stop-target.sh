@@ -116,10 +116,18 @@ if [[ "$_stop_verify_url" =~ :([0-9]+)(/|$) ]]; then
   _stop_verify_port="${BASH_REMATCH[1]}"
 fi
 
+# Prints the pid holding <port>, or nothing. MUST always succeed: this script
+# runs under `set -euo pipefail`, and the happy path (port free) makes grep
+# exit 1, which pipefail propagates — a bare `pid="$(_port_holder_pid ...)"`
+# assignment would then abort the script on the SUCCESS path, before
+# "Target stopped." is ever printed and before any verification runs.
 _port_holder_pid() {
-  local port="$1"
-  command -v ss >/dev/null 2>&1 || return 0
-  ss -ltnp 2>/dev/null | grep ":${port} " | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2
+  local port="$1" out=""
+  if command -v ss >/dev/null 2>&1; then
+    out="$(ss -ltnp 2>/dev/null | grep ":${port} " | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2 || true)"
+  fi
+  printf '%s' "$out"
+  return 0
 }
 
 if [[ "$START_MODE" == "external" || "$START_MODE" == "jar" ]] && [[ -n "$_stop_verify_port" ]]; then

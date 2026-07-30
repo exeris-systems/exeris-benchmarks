@@ -159,6 +159,43 @@ services:
       # previous run can never replay into the next one.
       - /restate-data
 
+  # CONTRACT-v2 §4 (parking workload): external payment gateway.
+  #
+  # S_pay does not answer inline — the target dispatches here, gets 202, and the
+  # saga PARKS. This service answers asynchronously after PAYMENT_STUB_DELAY_MS,
+  # which is the parameter that sets parked concurrency (parked ≈ arrival rate ×
+  # delay): 100 ms for perf runs, 1000 ms for crash runs.
+  #
+  # Part of the §1 deployment unit and sampled by the whole-deployment footprint,
+  # same policy as Axon Server and restate-server.
+  #
+  # host.docker.internal mirrors the restate-server wiring above: the callback
+  # goes back to the target JVM running on the HOST, so "localhost" inside this
+  # container would be wrong.
+  #
+  # No image build: the stub is stdlib-only Python mounted read-only, so there is
+  # nothing to keep in sync between a Dockerfile and the source.
+  benchmark-payment-gateway:
+    image: python:3.12-alpine
+    container_name: exeris-e2e-saga-payment-gateway
+    command: ["python", "-u", "/app/payment_stub.py"]
+    environment:
+      PAYMENT_STUB_PORT: "9300"
+      PAYMENT_STUB_DELAY_MS: "${PAYMENT_STUB_DELAY_MS:-100}"
+      PAYMENT_STUB_DELAY_JITTER_MS: "${PAYMENT_STUB_DELAY_JITTER_MS:-0}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../../targets/payment-gateway-stub/payment_stub.py:/app/payment_stub.py:ro
+    ports:
+      - "127.0.0.1:9300:9300"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9300/health',timeout=2).status==200 else 1)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
 volumes:
   e2e-saga-pgdata:
     driver: local

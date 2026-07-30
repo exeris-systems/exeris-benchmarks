@@ -116,9 +116,13 @@ public final class OrderSagaOrchestrator {
 
     private static final String PAYMENT_GATEWAY_URL =
         System.getenv().getOrDefault("EXERIS_PAYMENT_GATEWAY_URL", "http://localhost:9300/payments");
+    // The gateway runs in a container and calls BACK to this JVM on the host, so
+    // the advertised callback host must be host.docker.internal, not localhost —
+    // same wiring reason as restate-server's RESTATE_SDK_ADVERTISED_URL. Override
+    // with EXERIS_PAYMENT_CALLBACK_URL when the gateway runs on the host.
     private static final String PAYMENT_CALLBACK_URL =
         System.getenv().getOrDefault("EXERIS_PAYMENT_CALLBACK_URL",
-            "http://localhost:" + System.getenv().getOrDefault("EXERIS_PORT", "9000")
+            "http://host.docker.internal:" + System.getenv().getOrDefault("EXERIS_PORT", "9000")
                 + "/api/v1/payments/callback");
 
     private static final java.net.http.HttpClient PAYMENT_HTTP =

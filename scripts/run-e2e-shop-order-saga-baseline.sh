@@ -1085,6 +1085,16 @@ RESTATE_STATS_PID=""
 # only the target JVM flatters whichever stack externalises the most work.
 POSTGRES_STATS_CSV="$LOGS_DIR/postgres-docker-stats.csv"
 POSTGRES_STATS_PID=""
+# CONTRACT-v2 §4 parking workload: the external payment gateway is part of the
+# deployment unit, so it is sampled like Axon Server and restate-server. Only
+# started when the workload actually parks (BENCH_PAYMENT_PARKING=1).
+PAYMENT_GATEWAY_STATS_CSV="$LOGS_DIR/payment-gateway-docker-stats.csv"
+PAYMENT_GATEWAY_STATS_PID=""
+BENCH_PAYMENT_PARKING="${BENCH_PAYMENT_PARKING:-0}"
+# Sets parked concurrency (parked ≈ arrival rate × delay). The contract pins
+# 100 ms for perf runs and 1000 ms for crash runs; it MUST be identical across
+# stacks within a run, so it is stamped into run metadata.
+PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-100}"
 NEO4J_STATS_CSV="$LOGS_DIR/neo4j-docker-stats.csv"
 NEO4J_STATS_PID=""
 BACKEND_IDLE_BASELINE_JSON="$LOGS_DIR/backend-idle-baseline.json"
@@ -1381,6 +1391,20 @@ for _shared in "exeris-e2e-saga-postgres:$POSTGRES_STATS_CSV:POSTGRES" \
   fi
 done
 
+# Payment gateway sampler (parking workload only).
+PAYMENT_GATEWAY_STATS_PID=""
+if [[ "$BENCH_PAYMENT_PARKING" == "1" ]]; then
+  if docker inspect --format '{{.Id}}' exeris-e2e-saga-payment-gateway >/dev/null 2>&1; then
+    _start_container_stats_sampler exeris-e2e-saga-payment-gateway "$PAYMENT_GATEWAY_STATS_CSV"
+    PAYMENT_GATEWAY_STATS_PID="$_CONTAINER_STATS_SAMPLER_PID"
+    echo "Payment-gateway docker stats sampler started."
+  else
+    echo "ERROR: BENCH_PAYMENT_PARKING=1 but exeris-e2e-saga-payment-gateway is not running." >&2
+    echo "ERROR: every saga would dispatch to a gateway that cannot answer and park forever." >&2
+    exit 73
+  fi
+fi
+
 # Start Axon Server docker stats sampler (if axon contract detected)
 AXON_STATS_PID=""
 if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
@@ -1466,6 +1490,13 @@ if [[ -n "$RESTATE_STATS_PID" ]]; then
   RESTATE_STATS_PID=""
 fi
 
+# Stop the payment-gateway sampler
+if [[ -n "$PAYMENT_GATEWAY_STATS_PID" ]]; then
+  kill "$PAYMENT_GATEWAY_STATS_PID" >/dev/null 2>&1 || true
+  wait "$PAYMENT_GATEWAY_STATS_PID" 2>/dev/null || true
+  PAYMENT_GATEWAY_STATS_PID=""
+fi
+
 # Stop the Postgres backend-count sampler
 if [[ -n "$PG_CONNECTIONS_PID" ]]; then
   kill "$PG_CONNECTIONS_PID" >/dev/null 2>&1 || true
@@ -1541,6 +1572,7 @@ _write_deployment_footprint() {
     "$(_component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend "$(_csv_rows "$NEO4J_STATS_CSV")")" \
     "$(_component_json exeris-e2e-saga-axonserver "$AXON_STATS_CSV" stack-specific "$(_csv_rows "$AXON_STATS_CSV")")" \
     "$(_component_json exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV" stack-specific "$(_csv_rows "$RESTATE_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-payment-gateway "$PAYMENT_GATEWAY_STATS_CSV" shared-external "$(_csv_rows "$PAYMENT_GATEWAY_STATS_CSV")")" \
     | jq -s '.')"
 
   # Throughput normalization. Raw cpu_pct is an average over the sampling

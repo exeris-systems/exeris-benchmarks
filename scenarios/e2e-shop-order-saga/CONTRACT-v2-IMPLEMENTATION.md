@@ -25,7 +25,7 @@ Stack labels used below map to targets as follows:
 |---|---|---|---|
 | §1 Unit of comparison | partial | Deployment units exercised for exeris-community, spring-axon, quarkus ×2, spring-on-exeris, restate (restate = target JVM + external `restate-server`, started by the baseline as compose service `benchmark-restate-server` with per-container docker-stats attribution, same policy as Axon Server) | Whole-deployment footprint *measurement* is a §8 gap, not a §1 gap |
 | §2 Scenario definition | partial | v1 carry-over workload unchanged (step sequence, payload, VU/think-time per `k6.env`); Neo4j pinned as graph track in the campaign runner | Cross-stack identical-domain-write parity is asserted by construction; it was not independently re-audited in this change set |
-| §3 Order identity / request model | implemented-now | k6 orderId derivation is seeded and deterministic: `${K6_ORDER_SEED}-${scenario}-i${iterationInTest}` with the fixed seed `exeris-saga-v2` pinned in `k6.env`, so a given (scenario, iteration index) maps to the same orderId in every run against every stack. orderId doubles as the idempotency key (`Idempotency-Key` header sent; Exeris flow key / Axon association value on the server side) | **Terminal-outcome resolution model is NOT uniform across stacks** (measurement-model asymmetry): restate and quarkus ×2 return the terminal outcome inline in the `POST /api/v1/orders` 200 body (v2 request-response model — k6 skips the poll loop), while spring-axon, exeris-community and spring-on-exeris resolve via `GET /api/v1/orders/:id/status` polling with a 1 s sleep between attempts, so their end-to-end saga durations include up-to-1 s poll quantization the inline stacks never pay. Any cross-stack latency comparison spanning the two models is FORBIDDEN unless it carries a caveat naming each stack's resolution model (inline vs polled); prefer same-model comparisons or per-row resolution-model labels — see the §8 caveat. Separately: the *issued* set equals the full deterministic set only when every VU session reaches order creation; sessions that abort earlier (register/cart failures) shrink the issued set run-to-run. Expected-count tooling must therefore work from the actually-issued population — see §7 (the gate now fails closed on non-dense populations) |
+| §3 Order identity / request model | implemented-now | k6 orderId derivation is seeded and deterministic: `${K6_ORDER_SEED}-${scenario}-i${iterationInTest}` with the fixed seed `exeris-saga-v2` pinned in `k6.env`, so a given (scenario, iteration index) maps to the same orderId in every run against every stack. orderId doubles as the idempotency key (`Idempotency-Key` header sent; Exeris flow key / Axon association value on the server side) | **RESOLVED 2026-07-30 for the three comparison-eligible stacks** (was: resolution-model asymmetry). exeris-community and spring-hibernate now return the terminal outcome in the `POST /api/v1/orders` body, as quarkus ×2 and restate already did, so every comparison-eligible stack is measured under one model and the poll loop is not exercised. Measured effect of the change, perf-box, same windows: exeris-community `saga_completed_duration` median 1010.5 ms → 21 ms and spring-hibernate 1007 ms → 37 ms, against quarkus 28 ms — i.e. the polled distributions were flat at one client poll sleep, an artifact large enough to REVERSE the apparent ordering between stacks. Implementation and the §9(a) idiom deviations it required are recorded below. **Still asymmetric: spring-on-exeris** remains polled and is exploratory-only, so any row including it must still name the per-stack resolution model. Separately: the *issued* set equals the full deterministic set only when every VU session reaches order creation; sessions that abort earlier (register/cart failures) shrink the issued set run-to-run. Expected-count tooling must therefore work from the actually-issued population — see §7 (the gate now fails closed on non-dense populations) |
 | §4.1 Business-terminal fault | implemented-now | `stableHash64` pinned normatively to FNV-1a 64-bit (§4.1 implementation note in the contract). Deterministic per-orderId decline predicate implemented server-side with bit-identical constants in exeris-community, spring-axon, quarkus (baseline + tuned), and spring-on-exeris; constants locked by `OrderSagaFaultModelTest` (exeris-community) and `fnv1a64.py --self-test` (canonical FNV vectors); pre-v2 probabilistic knobs are accepted-but-ignored with startup warnings. Restate mapping implemented: own bit-identical FNV-1a 64 decline rule, decline thrown as `TerminalException` (never retried at either Restate layer), constants + k6 population oracle locked by the target's unit tests (mirrors `PaymentDeclineRuleTest`, incl. `exeris-saga-v2-measurement-i0..9999 → 312 declines`) | Cross-stack bit-identity is enforced by unit tests in two stacks (exeris-community, restate); the other four rely on code review. "Never retried" is corroborated only by §5 configuration plus the interim §7 count gate, not by a per-attempt oracle |
 | §4.2 Transient infrastructure fault | deferred | Policy configuration only: the §5 retry settings a transient run would use, plus runner plumbing (`--fault-mode transient` labels the run and flips the §7 gate to the inverse assertion expected-compensations = 0) | No transient-fault injector exists in any stack; no `fault=transient` runs are meaningful yet; the inverse assertion (transient faults produce zero compensations) is plumbed but exercises nothing |
 | §5 Retry policy | partial (pinned as config where expressible) | Terminal decline = zero retries on all six targets: on five by construction — the decline is modeled as a value/event (`FlowOutcome.FAIL`, `PaymentDeclinedEvent`), never as an exception, so it cannot reach any retry machinery; on restate the decline IS an exception (`TerminalException`), which Restate by documented semantics never retries at either layer. restate transient retry pinned at BOTH layers: per-step `RetryPolicy.exponential(50 ms, 2).setMaxAttempts(3)` on every journaled `Restate.run` block (forward steps AND compensations) plus an SDK-declared service-level invocation retry policy (initial 50 ms, factor 2, maxAttempts 3, onMaxAttempts=KILL) so server defaults (max-attempts=70, on-max-attempts=pause) are never trusted; no jitter knob exists in Restate — deterministic exponential backoff is exactly the §5 no-jitter requirement. Transient-retry policy pinned explicitly per stack: spring-axon — Axon `ExponentialBackOffIntervalRetryScheduler` on the CommandGateway, 50 ms initial, factor 2, maxRetryCount 2 (`AxonBusConfig`); quarkus ×2 — deliberately NO Axon RetryScheduler; in-service `OrderSagaRetryPolicy` (3 attempts total, 50 ms initial, factor 2, no jitter), exhaustion routes to backward recovery / `FAILED_UNRECOVERED`; exeris-community and spring-on-exeris — retry *budget* pinned via `maxRetries(2)` in the flow definition | On the two Exeris-flow stacks the pinned backoff shape (exponential, 50 ms initial, factor 2, no jitter) is NOT expressible in exeris-kernel-spi 0.10.0 — the builder exposes only `maxRetries`/`timeoutDuration`, recorded as in-code TODOs — and no consumer of `FlowDefinition.maxRetries` was found in the kernel 0.10.0 flow runtime, so even budget *enforcement* is unverified there. Everything is config-level: no transient injector exists (§4.2), so retry behavior (budget, backoff timing, exhaustion routing) is unexercised on every stack |
@@ -147,7 +147,7 @@ that requires a separate promotion step (as was done for `entity-read-by-id`).
 `campaign-gate-summary.json` is a §4.1 count rollup and must never be cited as
 comparative eligibility.
 
-## Open finding — exeris-community drops established connections under load
+## Open finding — measurement-phase request failures at high arrival rate (harness artifact)
 
 Surfaced by the 2026-07-30 arrival-rate sweep (single target, exeris-community,
 perf-box, h1, 20/30/10 s windows). Recorded because it is unfavourable to
@@ -165,24 +165,51 @@ CPU plateaus at ~0.52 of 16 cores from 50/s onward and never rises, while the
 error rate climbs to 39 %. Latency does *not* degrade (median stays 20–26 ms),
 so this is not queueing — served requests stay fast and the rest are dropped.
 
-**What the failures are:** every failure is on `POST /api/v1/auth/register`, the
-first request of a session, and k6 reports
-`read: connection reset by peer` or bare `EOF`. The TCP connection was already
-established when it died, so this is neither listen-backlog overflow
-(`net.core.somaxconn` is 4096) nor client-side exhaustion (fd limit 262144,
-~55 k ephemeral ports) — the server accepts and then drops. Nothing is logged
-in the target's runtime log.
+**This is a HARNESS artifact, not target behaviour.** Attribution resolved by
+experiment; two earlier hypotheses in this session are retracted.
 
-**What it is NOT (retracted):** an earlier note in this session attributed it to
-ADR-035 admission control. That does not survive arithmetic — the pool is 256
-and the default `queueDepthAllowanceRatio` is 8, giving an allowance of 2048,
-far above the ~675 concurrent connections where shedding starts. Mechanism
-inside the target is **undetermined** and is product-side investigation
-(transport/connection/thread limits), not benchmark work.
+Phase breakdown at rate 100 (`k6-output.json`, tagged by scenario):
 
-**Consequence for the campaign:** the operating point must sit below every
-stack's drop threshold, or the comparison measures connection handling rather
-than saga execution. 50 sessions/s (342 concurrent) is clean on this target.
+| phase | successful registers | `status=0` |
+|---|---|---|
+| warmup | 2001 | 0 |
+| measurement | **0** | **3001** |
+| cooldown | 1001 | 0 |
+
+The failures are entirely confined to the `measurement` scenario: every
+measurement session fails at its first request and none succeed, while warmup
+and cooldown — same target process, same connection counts, same offered load,
+20 s either side — are perfectly clean. A server shedding under concurrency
+cannot switch off for exactly one scenario and back on for the next. Root cause
+is in the k6 scenario/phase configuration and is **still open**; the sweep used
+`preAllocatedVUs` per phase far above the concurrency actually required
+(`rate x 5 s`), which is the leading suspect.
+
+**Retracted hypothesis 1 — ADR-035 admission control.** Fails arithmetic: pool
+256 x default `queueDepthAllowanceRatio` 8 = 2048 allowance, far above the ~675
+concurrent connections at which failures appear.
+
+**Retracted hypothesis 2 — the §3 blocking await.** A/B on the same binary,
+`EXERIS_SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS` 25000 vs 0 (0 returns immediately
+and reproduces exact pre-§3 behaviour): `status=0` was **3001 in both arms**,
+with the non-blocking arm showing *higher* throughput (346.6 vs 259.2 req/s) and
+*higher* concurrency (779 vs 678). The blocking change is not implicated.
+
+Also ruled out: duplicate usernames. A duplicate registration returns a clean
+`409` (verified directly), and the rate-100 run recorded exactly **one** real
+409 against 3001 `status=0`.
+
+**Consequence for measurement validity:** at rate 100 the measurement window —
+the only window from which throughput and latency claims may be computed —
+contained **zero successful sessions**. The `saga med 26 ms` in the table above
+for that row therefore comes from warmup/cooldown only and must not be cited.
+The §4.1 gate still passed because the `ids-file` population reconstruction
+evaluated the oracle over exactly the ids actually issued; that is the
+fail-safe working as intended, not a green light for the row.
+
+**Consequence for the campaign:** rates >= 100 are unusable until the phase
+artifact is understood. 50 sessions/s (342 concurrent) is clean on all three
+comparison-eligible stacks and is the operating point.
 
 ## Claim guardrails implied by this matrix
 

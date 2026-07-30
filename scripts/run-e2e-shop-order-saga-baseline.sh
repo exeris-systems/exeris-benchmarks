@@ -518,6 +518,26 @@ ensure_benchmark_infra() {
     wait_for_compose_service_health "$BENCHMARK_COMPOSE_FILE" "benchmark-postgres" "true"
   fi
 
+  # Postgres TCP-auth preflight. Observed twice on 2026-07-30: TCP auth for the
+  # `postgres` role started failing mid-campaign with "password authentication
+  # failed" while local-socket auth (trust, per pg_hba) kept working, so the
+  # container looked healthy. No seed SQL touches roles and the cause is
+  # unexplained; `ALTER USER postgres WITH PASSWORD` restores it immediately.
+  # Repair, re-verify, and abort if it still fails — losing a rep to this is
+  # avoidable, and silently seeding half a database is not acceptable.
+  if ! docker exec exeris-e2e-saga-postgres env PGPASSWORD=postgres \
+        psql -h 127.0.0.1 -U postgres -tAc 'select 1' >/dev/null 2>&1; then
+    echo "WARN: Postgres TCP auth for role 'postgres' is failing; attempting to reset the role password." >&2
+    docker exec exeris-e2e-saga-postgres \
+      psql -U postgres -tAc "alter user postgres with password 'postgres'" >/dev/null 2>&1 || true
+    if ! docker exec exeris-e2e-saga-postgres env PGPASSWORD=postgres \
+          psql -h 127.0.0.1 -U postgres -tAc 'select 1' >/dev/null 2>&1; then
+      echo "ERROR: Postgres TCP auth still failing after password reset; the seed would fail and the run would be measured against an incomplete database." >&2
+      exit 72
+    fi
+    echo "Postgres TCP auth repaired."
+  fi
+
   echo "Running DB seed migrations (benchmark-db-seed)..."
   # `docker compose up` returns 0 even when the one-shot service container exits
   # non-zero, so the seed's own exit code has to be read back explicitly.

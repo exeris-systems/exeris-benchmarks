@@ -519,12 +519,35 @@ ensure_benchmark_infra() {
   fi
 
   echo "Running DB seed migrations (benchmark-db-seed)..."
-  docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up --force-recreate --no-deps benchmark-db-seed
-  echo "DB seed migrations complete."
+  # `docker compose up` returns 0 even when the one-shot service container exits
+  # non-zero, so the seed's own exit code has to be read back explicitly.
+  # Observed 2026-07-30: psql failed with "password authentication failed", the
+  # container exited 2, and the harness printed "DB seed migrations complete."
+  # and carried on toward measuring against an EMPTY database.
+  docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up --force-recreate --no-deps benchmark-db-seed || true
+  _seed_rc="$(docker inspect exeris-e2e-saga-db-seed --format '{{.State.ExitCode}}' 2>/dev/null || echo "unknown")"
+  if [[ "$_seed_rc" != "0" ]]; then
+    echo "ERROR: DB seed container exited ${_seed_rc}; the database is not in a known state." >&2
+    echo "ERROR: refusing to continue — a run against a partially seeded or empty database produces" >&2
+    echo "ERROR: results that look valid and are not. See logs above for the psql error." >&2
+    exit 70
+  fi
+  echo "DB seed migrations complete (exit 0)."
 
   if [[ "$GRAPH_TRACK" == "neo4j" ]]; then
     echo "[seed] Seeding Neo4j from PostgreSQL..."
+    # pipefail makes the script's status survive the tee, but the seed script is
+    # itself fail-open (it printed "completed successfully" after loading 0
+    # nodes from 4 failed psql calls), so the row counts are checked below too.
     "$SEED_NEO4J_SCRIPT" 2>&1 | tee "$NEO4J_SEED_LOG"
+    _neo4j_products="$(grep -oE '^[[:space:]]*Product nodes:[[:space:]]*[0-9]+' "$NEO4J_SEED_LOG" 2>/dev/null | tail -1 | grep -oE '[0-9]+$' || echo 0)"
+    if [[ "${_neo4j_products:-0}" -lt 1 ]]; then
+      echo "ERROR: Neo4j seed loaded ${_neo4j_products:-0} Product nodes — the recommendation graph is empty." >&2
+      echo "ERROR: the seed script reports success regardless of psql failures, so this is checked here." >&2
+      echo "ERROR: refusing to continue; every recommendation request would hit an empty graph." >&2
+      exit 71
+    fi
+    echo "[seed] Neo4j seed verified: ${_neo4j_products} Product nodes."
   fi
 
   # Name of the anonymous volume currently backing the Axon Server event store,
@@ -1665,8 +1688,16 @@ else
     # s4.2 inverse assertion: transient faults must NOT produce compensations.
     GATE_EXPECTED="0"
   elif [[ "$GATE_ISSUED" == "0" ]]; then
-    # No orders issued → no declined subset → zero compensations expected.
-    GATE_EXPECTED="0"
+    # VACUOUS-PASS GUARD. Arithmetically, zero issued orders means zero expected
+    # declines, so observed(0) == expected(0) and the gate would report PASS —
+    # certifying a run in which nothing happened. That is not hypothetical: on
+    # 2026-07-30 a failed DB seed left the database empty, every session died
+    # before order creation, and only the seed fail-closed checks (added in the
+    # same change) stopped an empty run reaching this branch.
+    #
+    # A run that issues nothing is broken, not correct. Fail closed.
+    GATE_STATUS="error"
+    GATE_REASON="zero orders issued — the gate cannot certify a run in which no saga ran. Arithmetically 0 == 0 would PASS; that would certify an empty run. Check the seed, the target readiness and the k6 error taxonomy."
   elif ! command -v python3 >/dev/null 2>&1; then
     GATE_STATUS="error"
     GATE_REASON="python3 unavailable; expected declines not computable — failing closed on a v2-capable run"

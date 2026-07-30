@@ -419,7 +419,7 @@ Per-stack park mechanism:
 | exeris-community | `FlowOutcome.PARK`, woken via `scheduler().wake(lookupParked(..))` | kernel flow instance + `FlowSnapshotStore` (v5 tables) |
 | spring-axon | publishes no event; the Axon saga has nothing to advance on | Axon saga store (persisted saga instance) |
 | spring-on-exeris | `FlowOutcome.PARK`, woken via `ExerisFlowTemplate.wake(lookupParked(..))` | same kernel flow instance as exeris-community |
-| quarkus-hibernate | handler split in two halves that share no heap state | **the `orders` row only — no saga engine** |
+| quarkus-hibernate | handler split in two halves that share no heap state | **the `orders` row only — no saga engine is wired** |
 | restate | `Restate.awakeable(..)` + `await()`; the gateway resolves it directly at the Restate ingress | Restate journal (invocation suspended) |
 
 **quarkus-hibernate was restructured** (PROPOSAL decision 4). It was a
@@ -429,10 +429,32 @@ split at the pivot: the forward half commits through the payment-requested write
 dispatches, and returns `PARKED`; the callback drives the continuation. The two
 halves are joined by the `orders` row alone — the callback's compare-and-set
 returns the db order id — so nothing about an in-flight saga is held in heap.
-**It still has no saga engine**: no persisted saga instance, no scheduler, no
+**It still has no saga engine wired**: no persisted saga instance, no scheduler, no
 resumption after restart. A park here is "a row in `PAYMENT_PROCESSING` that some
 future callback may complete". That is a real architectural difference and shape C
 is where it should become visible, not something to paper over.
+
+**Precision this table originally got wrong.** "No saga engine" was first written
+as if it were a platform limitation. It is not: `axon-modelling:4.10.3` — `@Saga`,
+`SagaStore`, `AnnotatedSagaManager` — *is* on this target's classpath. It is
+simply never instantiated, because `AxonBusConfig` produces only
+`CommandBus`/`CommandGateway`/`Serializer` and deliberately no `EventBus`, and
+Quarkus has no equivalent of `axon-spring-boot-starter`'s autoconfiguration. So
+this is a wiring gap, not a capability gap, and PROPOSAL decision 4 is therefore
+only **half** satisfied: the handler is now genuinely asynchronous, but it is
+still Axon-as-command-bus with a hand-rolled saga.
+
+Consequence for labelling, which must be fixed before any shape-A report: this
+target is not "Quarkus + Axon". It is **Quarkus + a hand-rolled async saga, with
+Axon used as a command bus**, and §9(a) must say so.
+
+The obvious candidate for closing the gap the Quarkus-native way — MicroProfile
+LRA, directly or through Camel — was investigated and **rejected**: the LRA
+specification guarantees no compensation ordering, which conflicts with §2's LIFO
+requirement on exactly the axis §4.1/§7 measure. See `LRA-SPIKE.md`. The remaining
+route is wiring Axon's own saga engine through the `Configurer` API; it is worth
+doing before shape C (where the current target has nothing to recover) and is not
+a blocker for shape A.
 
 **Idempotent settlement, all four callback-driven stacks.** Every settle is a
 compare-and-set on `status = 'PAYMENT_PROCESSING'`, so a duplicate callback

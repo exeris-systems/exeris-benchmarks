@@ -16,6 +16,7 @@ import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.AddToCartRequest
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.CartItemView;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.CartView;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.OrderResponse;
+import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.PaymentCallbackRequest;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.OrderStatusResponse;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.PlaceOrderRequest;
 import eu.exeris.benchmarks.targets.exeriscommunity.domain.shop.ProductView;
@@ -214,6 +215,37 @@ public final class CommunityBenchmarkRouteHandler {
             CartView cart = useCaseService.getCart(userId);
             exchange.respond(HttpStatus.OK, toCartResponse(cart));
         });
+    }
+
+    /**
+     * CONTRACT-v2 section 4 (parking workload): settle a PARKED saga from the
+     * external payment gateway's asynchronous callback.
+     *
+     * <p>Answers 200 even when no parked flow was found. The gateway does not
+     * retry, and a non-2xx here would only make it look like a delivery failure;
+     * a saga that could not be woken shows up as a stranded order, which is the
+     * signal we actually want to keep.
+     */
+    public void handlePaymentCallback(HttpExchange exchange,
+                                      eu.exeris.benchmarks.targets.exeriscommunity.saga.OrderSagaOrchestrator orchestrator) {
+        if (orchestrator == null) {
+            exchange.respond(HttpStatus.SERVICE_UNAVAILABLE);
+            return;
+        }
+        PaymentCallbackRequest request;
+        try {
+            request = parseBody(exchange, PaymentCallbackRequest.class);
+        } catch (IllegalArgumentException exception) {
+            exchange.respond(HttpStatus.BAD_REQUEST);
+            return;
+        }
+        if (request == null || request.orderId() == null || request.orderId().isBlank()) {
+            exchange.respond(HttpStatus.BAD_REQUEST);
+            return;
+        }
+        boolean authorized = "AUTHORIZED".equalsIgnoreCase(request.outcome());
+        orchestrator.settlePayment(request.orderId().trim(), authorized);
+        exchange.respond(HttpStatus.OK);
     }
 
     public void handlePlaceOrder(HttpExchange exchange) {

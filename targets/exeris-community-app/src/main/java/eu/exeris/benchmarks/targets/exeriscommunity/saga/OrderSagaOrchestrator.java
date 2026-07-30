@@ -109,6 +109,97 @@ public final class OrderSagaOrchestrator {
     private final ConcurrentHashMap<SagaKey, CompletableFuture<String>> terminalOutcome =
         new ConcurrentHashMap<>();
 
+    // --- Parking payment step (CONTRACT-v2 section 4, parking workload) --------
+
+    static final String PAYMENT_AUTHORIZED = "PAYMENT_AUTHORIZED";
+    static final String PAYMENT_DECLINED   = "PAYMENT_DECLINED";
+
+    private static final String PAYMENT_GATEWAY_URL =
+        System.getenv().getOrDefault("EXERIS_PAYMENT_GATEWAY_URL", "http://localhost:9300/payments");
+    private static final String PAYMENT_CALLBACK_URL =
+        System.getenv().getOrDefault("EXERIS_PAYMENT_CALLBACK_URL",
+            "http://localhost:" + System.getenv().getOrDefault("EXERIS_PORT", "9000")
+                + "/api/v1/payments/callback");
+
+    private static final java.net.http.HttpClient PAYMENT_HTTP =
+        java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(5))
+            .build();
+
+    /**
+     * Reads the settled payment outcome for an order, or null when it has not
+     * settled yet. Deliberately a DB read: the flow step re-enters on resume and
+     * must see an outcome that survived the crash.
+     */
+    private String readPaymentOutcome(long orderId) {
+        String status = orderRepository.getOrderStatus(orderId);
+        if (PAYMENT_AUTHORIZED.equals(status) || PAYMENT_DECLINED.equals(status)) {
+            return status;
+        }
+        return null;
+    }
+
+    /**
+     * Fire-and-forget dispatch to the external gateway. The gateway answers 202
+     * and calls back later; the saga parks in the meantime.
+     *
+     * <p>A dispatch failure is NOT swallowed into a decline — that would corrupt
+     * the section 4.1 population, whose expected compensation count is an exact
+     * integer derived from the orderId alone. The flow parks regardless and the
+     * order simply never settles, which is visible as a stranded saga rather than
+     * as a fake decline.
+     */
+    private void dispatchPaymentRequest(SagaOrder order) {
+        String body = "{\"order_id\":\"" + order.apiOrderId()
+            + "\",\"saga_id\":\"" + orderRepository.getSagaId(order.orderId())
+            + "\",\"callback_url\":\"" + PAYMENT_CALLBACK_URL + "\"}";
+        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+            .uri(java.net.URI.create(PAYMENT_GATEWAY_URL))
+            .header("Content-Type", "application/json")
+            .timeout(java.time.Duration.ofSeconds(10))
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        PAYMENT_HTTP.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.discarding());
+    }
+
+    /**
+     * Settles a parked payment: persists the outcome, then wakes the flow so the
+     * engine re-enters the payment step and reads it.
+     *
+     * <p>Persist BEFORE waking. The reverse order races: a woken step could read
+     * the row before the outcome landed and park again, this time with no
+     * callback left to arrive.
+     *
+     * @return true when a parked flow was found and woken
+     */
+    public boolean settlePayment(String apiOrderId, boolean authorized) {
+        Long dbOrderId = dbOrderIdByApiOrderId.get(apiOrderId);
+        if (dbOrderId == null) {
+            return false;
+        }
+        String outcome = authorized ? PAYMENT_AUTHORIZED : PAYMENT_DECLINED;
+        executor.executeManaged(conn -> updateStatus(conn, dbOrderId, outcome));
+
+        String sagaId = orderRepository.getSagaId(dbOrderId);
+        if (sagaId == null || sagaId.isBlank()) {
+            return false;
+        }
+        UUID uuid = UUID.fromString(sagaId);
+        Optional<FlowContext> parked = flowEngine.scheduler()
+            .lookupParked(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+        if (parked.isEmpty()) {
+            return false;
+        }
+        flowEngine.scheduler().wake(parked.get());
+        return true;
+    }
+
+    /**
+     * api orderId -> DB order id, so a gateway callback can find the row. Populated
+     * in {@link #scheduleSaga}, which already receives both.
+     */
+    private final ConcurrentHashMap<String, Long> dbOrderIdByApiOrderId = new ConcurrentHashMap<>();
+
     /** Completes the waiting {@link #placeOrderAwaitTerminal} caller, if any. */
     private void signalTerminal(FlowContext ctx, String outcome) {
         CompletableFuture<String> future =
@@ -169,12 +260,38 @@ public final class OrderSagaOrchestrator {
             return FlowOutcome.CONTINUE;
         };
 
+        // CONTRACT-v2 section 4 (parking workload): S_pay does not answer inline.
+        // It dispatches to the external payment gateway and PARKS; the gateway's
+        // asynchronous callback wakes it. This is what makes the workload a saga
+        // rather than a transaction script, and it is the only shape that
+        // exercises the kernel's actual recovery guarantee — AbstractSagaRecoveryTck
+        // scopes resumption to PARKED flows, and FlowSnapshotStore.save() fires on
+        // the PARK transition.
+        //
+        // The step is IDEMPOTENT and outcome-driven, because the engine re-enters it
+        // on resume: it reads the persisted outcome first and only dispatches when
+        // there is none. That is also why the outcome is written to the orders row
+        // rather than held in a map — an in-memory outcome would be lost on crash,
+        // and the resumed step would re-dispatch to a gateway that has already
+        // answered, parking forever.
         FlowStepAction paymentAction = ctx -> {
             SagaOrder order = resolveOrder(ctx);
             if (order == null) {
                 return FlowOutcome.FAIL;
             }
             long orderId = order.orderId();
+
+            String settled = readPaymentOutcome(orderId);
+            if (PAYMENT_AUTHORIZED.equals(settled)) {
+                return FlowOutcome.CONTINUE;
+            }
+            if (PAYMENT_DECLINED.equals(settled)) {
+                // CONTRACT-v2 section 4.1: business-terminal decline. FlowOutcome.FAIL
+                // routes to kernel-driven LIFO compensation and is never retried
+                // (section 5: zero retries on decline).
+                return FlowOutcome.FAIL;
+            }
+
             byte[] payloadBytes = paymentRequestedPayload(orderId).getBytes(StandardCharsets.UTF_8);
             executor.executeManaged(conn -> {
                 new JdbcOutboxEventStore(conn).append(new EventStore.OutboxEvent(
@@ -187,13 +304,8 @@ public final class OrderSagaOrchestrator {
                 ));
                 updateStatus(conn, orderId, "PAYMENT_PROCESSING");
             });
-            // CONTRACT-v2 section 4.1: deterministic business-terminal decline, selected
-            // per-orderId (never per-attempt). FlowOutcome.FAIL routes to kernel-driven
-            // LIFO compensation; a decline is never retried (section 5: zero retries).
-            if (shouldDeclinePayment(order.apiOrderId())) {
-                return FlowOutcome.FAIL;
-            }
-            return FlowOutcome.CONTINUE;
+            dispatchPaymentRequest(order);
+            return FlowOutcome.PARK;
         };
 
         FlowStepAction paymentCompensation = ctx -> {
@@ -290,6 +402,10 @@ public final class OrderSagaOrchestrator {
         orderRepository.updateSagaId(orderId, uuid.toString());
         SagaKey sagaKey = new SagaKey(most, least);
         orderIdCache.put(sagaKey, new SagaOrder(orderId, apiOrderId));
+        // Reverse mapping for the payment gateway callback, which knows only the
+        // api orderId. Registered BEFORE schedule(): the gateway can call back
+        // before schedule() returns when the configured delay is small.
+        dbOrderIdByApiOrderId.putIfAbsent(apiOrderId, orderId);
         // Registered BEFORE schedule() so a saga that completes immediately cannot
         // signal into a missing entry and strand the caller until its timeout.
         terminalOutcome.put(sagaKey, new CompletableFuture<>());

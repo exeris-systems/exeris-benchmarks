@@ -125,6 +125,12 @@ public final class CommunityBenchmarkRuntimeLifecycle {
                 .route(HttpMethod.POST, "/api/v1/cart/add", routeHandler::handleAddToCart)
                 .route(HttpMethod.GET, "/api/v1/cart", routeHandler::handleGetCart)
                 .route(HttpMethod.POST, "/api/v1/orders", routeHandler::handlePlaceOrder)
+                // CONTRACT-v2 section 4 (parking workload): the external payment
+                // gateway calls back here to settle a PARKED saga. Unauthenticated
+                // by design — it is a machine-to-machine callback from a component
+                // of the deployment unit, not a user-facing route.
+                .route(HttpMethod.POST, "/api/v1/payments/callback",
+                    exchange -> routeHandler.handlePaymentCallback(exchange, orderSagaOrchestrator))
                 .build();
 
         HttpHandler appHandler = exchange -> {

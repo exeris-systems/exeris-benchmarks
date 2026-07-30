@@ -1528,7 +1528,7 @@ _write_deployment_footprint() {
         peak_active: $pg_peak_active,
         server_max_connections: $pg_server_max,
         pool_capped: (if ($pool_max > 0 and $pg_peak >= $pool_max) then true else false end),
-        note: "backend_type='client backend' only, sampled at 1 Hz for the whole run (includes warmup and cooldown)."
+        note: "client backends only, sampled at 1 Hz for the whole run (includes warmup and cooldown). NOTE: keep this string free of single quotes — the jq program is bash single-quoted, and an apostrophe here silently broke the whole rollup once."
       },
       sum_container_cpu_pct_avg: ([$components[].cpu_pct_avg // 0] | add),
       sum_container_rss_mb_max:  ([$components[].rss_mb_max  // 0] | add),

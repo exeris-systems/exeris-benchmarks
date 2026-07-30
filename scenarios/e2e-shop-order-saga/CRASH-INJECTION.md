@@ -91,6 +91,43 @@ stack-specific instrumentation:
 - W3a says nothing about store durability, and W3b says nothing about
   application-level resumption. Do not let one stand in for the other.
 
+## RESULTS — W3a, first run, 2026-07-30
+
+| stack | in-flight stranded after recovery | duplicate payment steps | verdict |
+|---|---|---|---|
+| exeris-community | 3 | 0 | stranded |
+| quarkus-hibernate | 1 | 0 | stranded |
+| spring-hibernate | 1 | 0 | stranded |
+
+**No stack resumed its in-flight sagas.** Nothing was re-executed either
+(duplicate payment steps = 0 everywhere), so the sagas did not redo work — they
+simply stopped.
+
+**Both predictions below were falsified.** quarkus was expected to fail and did;
+exeris was expected to PASS and did not. The prediction that mattered was wrong.
+
+**Why exeris did not pass, and the sub-finding that explains it:**
+`exeris_saga_state` grew by only **21 rows** across an entire run issuing
+thousands of sagas (2640 → 2661). Flow state is therefore NOT checkpointed per
+saga on the fast path — so a crash mid-saga has essentially nothing to resume
+from. The durable flow store exists, but it is not what makes a normal in-flight
+saga recoverable. Any claim that exeris offers crash-durable sagas needs to
+state what actually triggers a snapshot; on this evidence it is not "every
+saga".
+
+**This run is UNDER-POWERED and must not be used to rank the stacks.** At 50
+sessions/s with ~25 ms sagas, Little's law puts ~1.2 sagas in flight at any
+instant, so a single crash can only strand a handful — which is exactly what
+happened (3 / 1 / 1). The difference between 3 and 1 here is noise, not a
+durability ordering. A higher arrival rate does not fix this: these sagas are
+fast, so even 500/s yields only ~12 in flight. The fix is **many crash
+repetitions aggregated** (10+ per stack ≈ 30 in-flight sagas each), or a
+workload variant with deliberately slower steps.
+
+What IS supported by this run: **no stack demonstrated G1 saga resumption after
+an application-process crash.** That is a negative result about all three, and
+it is the first time G1 has been exercised at all.
+
 ## Expected outcomes, stated in advance
 
 Recording predictions before running, so the result can falsify them rather than

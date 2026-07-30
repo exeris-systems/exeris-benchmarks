@@ -28,6 +28,14 @@ Config (env):
                                Keep 0 unless the contract says otherwise —
                                jitter changes the parked-concurrency
                                distribution and must be identical across stacks.
+  PAYMENT_STUB_FAULT_MODE      terminal (default) applies the §4.1 decline rule;
+                               off authorizes everything. This is the parking-shape
+                               home of EXERIS_SAGA_FAULT_MODE: once the decline
+                               moved out of the targets, the per-target env var
+                               stopped being able to switch faults off, and a knob
+                               that silently no-ops is worse than no knob. The
+                               baseline passes EXERIS_SAGA_FAULT_MODE through to
+                               this variable.
 """
 import json
 import os
@@ -46,6 +54,13 @@ PORT = int(os.environ.get("PAYMENT_STUB_PORT", "9300"))
 DELAY_MS = int(os.environ.get("PAYMENT_STUB_DELAY_MS", "100"))
 JITTER_MS = int(os.environ.get("PAYMENT_STUB_DELAY_JITTER_MS", "0"))
 
+_RAW_FAULT_MODE = os.environ.get("PAYMENT_STUB_FAULT_MODE", "terminal").strip().lower()
+if _RAW_FAULT_MODE not in ("terminal", "off"):
+    print(f"payment-gateway-stub WARN: PAYMENT_STUB_FAULT_MODE='{_RAW_FAULT_MODE}' "
+          f"(expected terminal|off); defaulting to terminal", flush=True)
+    _RAW_FAULT_MODE = "terminal"
+FAULT_MODE = _RAW_FAULT_MODE
+
 
 def fnv1a64(value: str) -> int:
     h = FNV_OFFSET_BASIS
@@ -56,7 +71,14 @@ def fnv1a64(value: str) -> int:
 
 
 def declined(order_id: str) -> bool:
-    """CONTRACT-v2 §4.1 — same constants as fnv1a64.py and every target."""
+    """CONTRACT-v2 §4.1 — same constants as fnv1a64.py and every target.
+
+    Gated on FAULT_MODE so `off` really disables business-fault injection. The
+    §7 compensation oracle must be told the same thing: under `off` the expected
+    compensation count is 0, not the FNV-derived integer.
+    """
+    if FAULT_MODE == "off":
+        return False
     return (fnv1a64(order_id) % DECLINE_MODULUS) < DECLINE_THRESHOLD
 
 
@@ -96,10 +118,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith("/health"):
-            self._json(200, {"status": "UP", "delay_ms": DELAY_MS})
+            # fault_mode is advertised here so the baseline can assert what the
+            # run actually injected instead of trusting the env it thinks it set.
+            self._json(200, {"status": "UP", "delay_ms": DELAY_MS,
+                             "fault_mode": FAULT_MODE})
         elif self.path.startswith("/stats"):
             with _stats_lock:
-                self._json(200, dict(_stats, delay_ms=DELAY_MS, jitter_ms=JITTER_MS))
+                self._json(200, dict(_stats, delay_ms=DELAY_MS, jitter_ms=JITTER_MS,
+                                     fault_mode=FAULT_MODE))
         else:
             self._json(404, {"error": "not_found"})
 
@@ -155,7 +181,7 @@ def main():
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     server.daemon_threads = True
     print(f"payment-gateway-stub listening on {PORT} "
-          f"(delay={DELAY_MS}ms jitter={JITTER_MS}ms)", flush=True)
+          f"(delay={DELAY_MS}ms jitter={JITTER_MS}ms fault_mode={FAULT_MODE})", flush=True)
     server.serve_forever()
 
 

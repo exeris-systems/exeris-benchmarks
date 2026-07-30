@@ -384,6 +384,85 @@ The adjacent "Graph driver pinned" bullet remains valid as written (it governs
 the read-side graph track), but its scope should be understood as the
 recommendation read path, not domain writes.
 
+## Shape A (minimal park) implemented across all five targets — 2026-07-30
+
+CONTRACT-v2 §2.1 shape A requires every stack to implement
+**dispatch → park → external event → wake**. Before this change only
+`exeris-community` did; the other four still decided the payment inline, which is
+exactly why shape A0 was not comparison-eligible. Code, not run evidence — no
+shape-A campaign has been executed yet.
+
+**The §4.1 decline rule now lives in exactly one place.** It moved out of every
+target and into `targets/payment-gateway-stub/payment_stub.py`, bit-identical
+(same FNV-1a constants, modulus 1000, threshold 30, orderId key), so the
+deterministic declined subset and the §7 exact-compensation oracle are unchanged.
+The former in-process implementations are retained **only** as reference
+oracles — their unit tests pin the normative constants the gateway must agree
+with — and each is now marked in-source as off the saga path. No target evaluates
+the rule at runtime.
+
+**Consequence that had to be repaired: `EXERIS_SAGA_FAULT_MODE` stopped working.**
+With the decline decided externally, that per-target env var could no longer
+switch faults off, while still looking wired — the exact failure mode this
+scenario has hit repeatedly. Fixed on both sides: the stub gained
+`PAYMENT_STUB_FAULT_MODE=terminal|off` and advertises it on `/health`, and every
+target logs a WARN when `EXERIS_SAGA_FAULT_MODE=off` is set under a parking shape.
+The baseline reads `/health` back before load and **fails closed (exit 74)** when
+the gateway's live `delay_ms` or `fault_mode` disagrees with what the run declares,
+because both are workload parameters that get stamped into metadata: the delay sets
+parked concurrency, the fault mode sets the expected compensation count.
+
+Per-stack park mechanism:
+
+| stack | how it parks | what holds the saga while parked |
+|---|---|---|
+| exeris-community | `FlowOutcome.PARK`, woken via `scheduler().wake(lookupParked(..))` | kernel flow instance + `FlowSnapshotStore` (v5 tables) |
+| spring-axon | publishes no event; the Axon saga has nothing to advance on | Axon saga store (persisted saga instance) |
+| spring-on-exeris | `FlowOutcome.PARK`, woken via `ExerisFlowTemplate.wake(lookupParked(..))` | same kernel flow instance as exeris-community |
+| quarkus-hibernate | handler split in two halves that share no heap state | **the `orders` row only — no saga engine** |
+| restate | `Restate.awakeable(..)` + `await()`; the gateway resolves it directly at the Restate ingress | Restate journal (invocation suspended) |
+
+**quarkus-hibernate was restructured** (PROPOSAL decision 4). It was a
+transaction script with compensation running the whole saga inline on the request
+thread; that shape cannot satisfy shape A. `AxonOrderSagaCommandHandler` is now
+split at the pivot: the forward half commits through the payment-requested writes,
+dispatches, and returns `PARKED`; the callback drives the continuation. The two
+halves are joined by the `orders` row alone — the callback's compare-and-set
+returns the db order id — so nothing about an in-flight saga is held in heap.
+**It still has no saga engine**: no persisted saga instance, no scheduler, no
+resumption after restart. A park here is "a row in `PAYMENT_PROCESSING` that some
+future callback may complete". That is a real architectural difference and shape C
+is where it should become visible, not something to paper over.
+
+**Idempotent settlement, all four callback-driven stacks.** Every settle is a
+compare-and-set on `status = 'PAYMENT_PROCESSING'`, so a duplicate callback
+updates no row and can never wake a saga twice. exeris-community previously wrote
+the outcome unconditionally; that is now a CAS too.
+
+**Ordering that is load-bearing:** the payment-requested writes commit *before*
+the gateway dispatch in every stack. They establish the `PAYMENT_PROCESSING` state
+the CAS matches on, and at shape A's ~1 ms delay a callback arriving before them
+is not hypothetical — it would find no parked row and be dropped as a duplicate,
+stranding the saga.
+
+**Corrected while implementing this: spring-on-exeris reported terminal states
+early.** Its status mapping sent `CONFIRMED → COMPLETED` and
+`PAYMENT_REFUNDED → COMPENSATED`. Both are mid-path states (complete-order and
+restore-inventory respectively still pending), so a poller could observe a
+terminal outcome that later regresses to the opposite one — and the §7 oracles
+count terminal observations. quarkus-hibernate already mapped them to the
+non-terminal `COMPLETING`/`COMPENSATING` for this reason; the stacks now agree.
+This target was never in a campaign, so no published number is affected.
+
+**Also brought to §3 compliance: spring-on-exeris** now awaits the terminal
+outcome instead of returning `202 ACCEPTED`, matching the other four. Its saga id
+is now derived from the flow instance id (`saga-<instance-uuid>`), which is what
+lets a callback carrying only the saga id find the parked flow through
+`lookupParked` — the same coupling `exeris-community` already had.
+
+Not yet done: shape-A contract ids and `workload_profile_key`s
+(`…-park1-v3`), the scenario.json entries, and any shape-A run.
+
 ## Appendix A — §9 per-stack deviation register (stubs)
 
 Pre-report scaffolding for contract §9. Every entry marked TODO is

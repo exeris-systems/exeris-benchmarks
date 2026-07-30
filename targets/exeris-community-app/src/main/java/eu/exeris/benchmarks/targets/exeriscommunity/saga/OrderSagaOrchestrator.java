@@ -76,6 +76,15 @@ public final class OrderSagaOrchestrator {
     private static final String UPDATE_ORDER_STATUS_SQL =
         "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
 
+    /**
+     * Claims a parked payment. The {@code status} predicate is the compare-and-set:
+     * only a row still sitting in PAYMENT_PROCESSING can be settled, so a duplicate
+     * gateway callback updates nothing and is dropped before it can wake the flow.
+     */
+    private static final String SETTLE_PARKED_PAYMENT_SQL =
+        "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP "
+        + "WHERE id = ? AND status = 'PAYMENT_PROCESSING'";
+
     private final FlowEngine flowEngine;
     private final OrderRepository orderRepository;
     private final DomainEventPublisher eventPublisher;
@@ -182,7 +191,17 @@ public final class OrderSagaOrchestrator {
             return false;
         }
         String outcome = authorized ? PAYMENT_AUTHORIZED : PAYMENT_DECLINED;
-        executor.executeManaged(conn -> updateStatus(conn, dbOrderId, outcome));
+        // Compare-and-set on the parked state rather than a blind write: a duplicate
+        // callback then updates no row, so it can never wake the flow a second time.
+        java.util.concurrent.atomic.AtomicLong claimed = new java.util.concurrent.atomic.AtomicLong();
+        executor.executeManaged(conn -> {
+            try (PersistenceStatement stmt = conn.prepare(SETTLE_PARKED_PAYMENT_SQL)) {
+                claimed.set(stmt.bindString(0, outcome).bindLong(1, dbOrderId).executeUpdate());
+            }
+        });
+        if (claimed.get() == 0L) {
+            return false;
+        }
 
         String sagaId = orderRepository.getSagaId(dbOrderId);
         if (sagaId == null || sagaId.isBlank()) {
@@ -222,6 +241,14 @@ public final class OrderSagaOrchestrator {
         this.eventPublisher = eventPublisher;
         this.executor = executor;
         this.faultMode = parseFaultMode(System.getenv(FAULT_MODE_ENV));
+        if (faultMode == FaultMode.OFF) {
+            // Parsed only so a stale setting is not read as authoritative: under the
+            // section 4 parking workload the effective switch is the gateway's
+            // PAYMENT_STUB_FAULT_MODE. A knob that silently no-ops is worse than none.
+            System.err.println("[saga-fault] WARN: " + FAULT_MODE_ENV + "=off has no effect in the"
+                + " parking workload: the CONTRACT-v2 section 4.1 decline is decided by the"
+                + " external payment gateway. Set PAYMENT_STUB_FAULT_MODE=off instead.");
+        }
         warnIfLegacyFaultEnvSet();
     }
 
@@ -511,16 +538,17 @@ public final class OrderSagaOrchestrator {
         return new SagaOrder(orderId, Long.toString(orderId));
     }
 
-    private boolean shouldDeclinePayment(String apiOrderId) {
-        // The decline key is the API-level orderId: the CONTRACT-v2 section 3
-        // client-generated seeded orderId adopted verbatim at order creation — the same
-        // string the client receives in the order_id response field and polls status
-        // with (decimal DB id only for pre-v2 clients that supply none).
-        return faultMode == FaultMode.TERMINAL && isDeclined(apiOrderId);
-    }
-
     /**
-     * CONTRACT-v2 section 4.1 normative decline rule:
+     * <strong>Reference implementation, no longer on the saga path.</strong> Under the
+     * CONTRACT-v2 section 4 parking workload the decline is decided by the external
+     * payment gateway ({@code targets/payment-gateway-stub/payment_stub.py}), so no
+     * target evaluates the rule in-process any more. This method and {@link #fnv1a64}
+     * are retained solely because {@code OrderSagaFaultModelTest} pins the normative
+     * constants and known-answer vectors the gateway must agree with. Do not re-wire
+     * either into a step without removing the gateway's copy first: two implementations
+     * of a rule that must be identical everywhere is a drift waiting to happen.
+     *
+     * <p>CONTRACT-v2 section 4.1 normative decline rule:
      * {@code decline(orderId) := Long.remainderUnsigned(fnv1a64(orderId), 1000) < 30}
      * — exactly 3.0% of the deterministic orderId population, identical in every stack.
      * The modulo is taken on the UNSIGNED interpretation of the 64-bit hash.

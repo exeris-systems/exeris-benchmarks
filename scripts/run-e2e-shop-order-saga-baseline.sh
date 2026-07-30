@@ -436,6 +436,47 @@ configure_target_runtime_overrides() {
       export EXERIS_HTTP_PORT="$_base_port"
     fi
   fi
+
+  # CONTRACT-v2 §4 (parking workload): where the target dispatches a payment, and
+  # where the gateway calls back to settle it.
+  #
+  # Exported explicitly rather than left to each target's compiled-in default. The
+  # defaults necessarily differ per stack (different ports, and restate's callback
+  # goes to the Restate ingress rather than to the target at all), and a wrong
+  # default fails INVISIBLY: the saga dispatches, parks, and simply never settles.
+  # That reads as "slow stack", not as "misconfigured callback".
+  if [[ "$BENCH_PAYMENT_PARKING" == "1" ]]; then
+    export EXERIS_PAYMENT_GATEWAY_URL="${EXERIS_PAYMENT_GATEWAY_URL:-http://localhost:9300/payments}"
+    local _callback_port="${EXERIS_HTTP_PORT:-${_base_port:-}}"
+    if [[ -z "${EXERIS_PAYMENT_CALLBACK_URL:-}" && ! "$_callback_port" =~ ^[0-9]+$ ]]; then
+      # Without a port the URL would be built as ".../host.docker.internal:/api/..." —
+      # syntactically plausible, uniformly unreachable, and the only symptom would be
+      # every saga stranding. Refuse instead.
+      echo "ERROR: BENCH_PAYMENT_PARKING=1 but no target port could be derived from BASE_URL='${BASE_URL}'." >&2
+      echo "ERROR: the gateway callback URL cannot be built; every saga would park forever." >&2
+      echo "ERROR: Set EXERIS_PAYMENT_CALLBACK_URL explicitly to override." >&2
+      exit 75
+    fi
+    # host.docker.internal, not localhost: the gateway runs in a container and calls
+    # back to the target JVM on the HOST. Same wiring reason as restate-server's
+    # advertised SDK URL.
+    export EXERIS_PAYMENT_CALLBACK_URL="${EXERIS_PAYMENT_CALLBACK_URL:-http://host.docker.internal:${_callback_port}/api/v1/payments/callback}"
+    export EXERIS_RESTATE_INGRESS_CALLBACK_URL="${EXERIS_RESTATE_INGRESS_CALLBACK_URL:-http://host.docker.internal:8080}"
+    # The stub speaks plaintext HTTP/1.1 only. Under a TLS protocol mode the callback
+    # would be dispatched to a port that answers TLS, every settle would fail, and
+    # every saga would strand — so refuse the run instead of producing a directory
+    # full of unresolved sagas that looks like a target problem.
+    case "${declared_protocol_mode:-h1}" in
+      h1|h2c) ;;
+      *)
+        echo "ERROR: BENCH_PAYMENT_PARKING=1 with protocol mode '${declared_protocol_mode}'." >&2
+        echo "ERROR: the payment gateway stub speaks plaintext HTTP/1.1 only; every callback" >&2
+        echo "ERROR: would fail against a TLS port and every saga would park forever." >&2
+        echo "ERROR: Set EXERIS_PAYMENT_CALLBACK_URL to a reachable plaintext endpoint to override." >&2
+        exit 75
+        ;;
+    esac
+  fi
   echo "Runtime overrides: graph_backend=${EXERIS_GRAPH_BACKEND_TYPE} protocol=${declared_protocol_mode} http_max=${EXERIS_HTTP_MAX_VERSION} h2c_upgrade=${EXERIS_HTTP_H2C_UPGRADE_ENABLED} http2=${EXERIS_HTTP2_ENABLED} ssl=${EXERIS_SSL_ENABLED} fault_mode=${FAULT_MODE}"
 }
 
@@ -913,6 +954,17 @@ if [[ "$_BASE_URL_EXPLICIT" == "false" ]]; then
   fi
 fi
 
+# CONTRACT-v2 §4 parking-workload knobs. Defaulted HERE, before
+# configure_target_runtime_overrides, because that function exports the targets'
+# payment gateway and callback URLs and needs both. (The gateway's docker-stats
+# sampler further down consumes them too.)
+BENCH_PAYMENT_PARKING="${BENCH_PAYMENT_PARKING:-0}"
+# Sets parked concurrency (parked ≈ arrival rate × delay). CONTRACT-v2 §2.1 pins
+# it per workload shape — ~1 ms for shape A, 100 ms for shape B, harness-controlled
+# for shape C — and it MUST be identical across stacks within a run, so it is both
+# stamped into run metadata and verified against the running gateway before load.
+PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-100}"
+
 configure_target_runtime_overrides
 # Pick a free port if the configured target port is busy.
 _configured_port="$(bench_extract_port_from_url "$BASE_URL")"
@@ -1090,11 +1142,10 @@ POSTGRES_STATS_PID=""
 # started when the workload actually parks (BENCH_PAYMENT_PARKING=1).
 PAYMENT_GATEWAY_STATS_CSV="$LOGS_DIR/payment-gateway-docker-stats.csv"
 PAYMENT_GATEWAY_STATS_PID=""
-BENCH_PAYMENT_PARKING="${BENCH_PAYMENT_PARKING:-0}"
-# Sets parked concurrency (parked ≈ arrival rate × delay). The contract pins
-# 100 ms for perf runs and 1000 ms for crash runs; it MUST be identical across
-# stacks within a run, so it is stamped into run metadata.
-PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-100}"
+# BENCH_PAYMENT_PARKING and PAYMENT_STUB_DELAY_MS are defaulted far earlier, before
+# configure_target_runtime_overrides, because that function needs them to export the
+# targets' gateway/callback URLs. Defaulting them here would have left the function
+# reading an unset variable — and skipping the export silently.
 NEO4J_STATS_CSV="$LOGS_DIR/neo4j-docker-stats.csv"
 NEO4J_STATS_PID=""
 BACKEND_IDLE_BASELINE_JSON="$LOGS_DIR/backend-idle-baseline.json"
@@ -1403,6 +1454,39 @@ if [[ "$BENCH_PAYMENT_PARKING" == "1" ]]; then
     echo "ERROR: every saga would dispatch to a gateway that cannot answer and park forever." >&2
     exit 73
   fi
+
+  # The gateway's delay and fault mode are set when compose brings it up, NOT by this
+  # script — so what the run STAMPS and what the gateway actually INJECTS can disagree
+  # silently, and both are workload parameters. The delay sets parked concurrency; the
+  # fault mode sets the §7 expected compensation count. Read them back from the running
+  # process and fail closed on disagreement rather than publish metadata that describes
+  # a run that did not happen.
+  _gw_health="$(curl -sf --max-time 5 "${PAYMENT_GATEWAY_HEALTH_URL:-http://localhost:9300/health}" || true)"
+  if [[ -z "$_gw_health" ]]; then
+    echo "ERROR: payment gateway is running but /health did not answer." >&2
+    exit 74
+  fi
+  _gw_delay="$(printf '%s' "$_gw_health" | jq -r '.delay_ms // empty')"
+  _gw_fault="$(printf '%s' "$_gw_health" | jq -r '.fault_mode // empty')"
+  if [[ "$_gw_delay" != "$PAYMENT_STUB_DELAY_MS" ]]; then
+    echo "ERROR: gateway callback delay is ${_gw_delay} ms but the run declares ${PAYMENT_STUB_DELAY_MS} ms." >&2
+    echo "ERROR: the delay sets parked concurrency (parked ~= rate x delay) and is stamped into" >&2
+    echo "ERROR: run metadata. Recreate the gateway with PAYMENT_STUB_DELAY_MS=${PAYMENT_STUB_DELAY_MS}." >&2
+    exit 74
+  fi
+  if [[ -z "$_gw_fault" ]]; then
+    echo "ERROR: gateway /health reports no fault_mode — it predates PAYMENT_STUB_FAULT_MODE." >&2
+    echo "ERROR: recreate the gateway container so the injected fault class is verifiable." >&2
+    exit 74
+  fi
+  if [[ "$_gw_fault" != "$FAULT_MODE" ]]; then
+    echo "ERROR: gateway fault mode is '${_gw_fault}' but the run declares '${FAULT_MODE}'." >&2
+    echo "ERROR: the §4.1 decline is decided in the gateway, so its mode — not the targets'" >&2
+    echo "ERROR: EXERIS_SAGA_FAULT_MODE — determines the expected compensation count (§7 O2)." >&2
+    echo "ERROR: Recreate the gateway with PAYMENT_STUB_FAULT_MODE=${FAULT_MODE}." >&2
+    exit 74
+  fi
+  echo "Payment gateway verified: delay=${_gw_delay}ms fault_mode=${_gw_fault}."
 fi
 
 # Start Axon Server docker stats sampler (if axon contract detected)

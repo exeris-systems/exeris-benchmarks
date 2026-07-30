@@ -63,6 +63,12 @@ public class SecurityConfig {
                         // entity-read-by-id readiness gate is apples-to-apples and Spring is not the
                         // only runtime forcing an auth filter on an infra probe.
                         .requestMatchers("/api/v1/auth/register", "/health", "/actuator/**", "/db/ping").permitAll()
+                        // CONTRACT-v2 §4 (parking workload): the external payment gateway settles a
+                        // PARKED saga through this route. Machine-to-machine within the §1 deployment
+                        // unit, and unauthenticated in every target for the same reason — putting the
+                        // JWT filter on it would make this stack pay a per-callback cost no other
+                        // stack pays. The route only exists when exeris.axon.enabled=true.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/callback").permitAll()
                         // GET /api/v1/users is unauthenticated in the reference exeris-community-app
                         // (CommunityBenchmarkRouteHandler.handleUsers — no SecurityInterceptor) and in
                         // quarkus-benchmark-app; permit it here so the entity-read-by-id read benchmark

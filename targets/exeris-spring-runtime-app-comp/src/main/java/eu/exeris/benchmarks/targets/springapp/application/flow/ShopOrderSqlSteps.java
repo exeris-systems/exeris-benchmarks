@@ -56,12 +56,22 @@ public class ShopOrderSqlSteps {
     private static final String UPDATE_ORDER_SQL =
             "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
 
-    private final DataSource dataSource;
-    private final PaymentFailureSimulator paymentFailureSimulator;
+    private static final String SELECT_ORDER_STATUS_SQL =
+            "SELECT status FROM orders WHERE id = ?";
 
-    public ShopOrderSqlSteps(DataSource dataSource, PaymentFailureSimulator paymentFailureSimulator) {
+    private static final String SETTLE_PARKED_PAYMENT_SQL =
+            "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP "
+            + "WHERE saga_id = ? AND status = 'PAYMENT_PROCESSING' "
+            + "RETURNING id";
+
+    /** Terminal outcomes of the external payment gateway, persisted on the order row. */
+    public static final String PAYMENT_AUTHORIZED = "PAYMENT_AUTHORIZED";
+    public static final String PAYMENT_DECLINED = "PAYMENT_DECLINED";
+
+    private final DataSource dataSource;
+
+    public ShopOrderSqlSteps(DataSource dataSource) {
         this.dataSource = dataSource;
-        this.paymentFailureSimulator = paymentFailureSimulator;
     }
 
     /**
@@ -118,21 +128,18 @@ public class ShopOrderSqlSteps {
     }
 
     /**
-     * Flow step 1 forward: charge payment. Returns {@code true} on success
-     * (status set to {@code PAYMENT_PROCESSING}) or {@code false} on a
-     * CONTRACT-v2 section 4.1 deterministic decline (status stays
-     * {@code PAYMENT_PROCESSING} but the lambda will return
-     * {@code FlowOutcome.FAIL} to trigger reverse compensation). The decline is
-     * selected per-{@code orderId} — the client-visible orderId string, hashed
-     * by {@link PaymentFailureSimulator#shouldDecline} — never per-attempt, and
-     * is business-terminal: zero retries (section 5).
+     * Flow step 1 forward, first half: commit the payment-requested writes and
+     * transition the order to {@code PAYMENT_PROCESSING}. The outcome is NOT
+     * decided here — under the CONTRACT-v2 §4 parking workload the step dispatches
+     * to the external payment gateway and returns {@code FlowOutcome.PARK}; the
+     * gateway's callback settles it.
      *
-     * <p>The on-disk vocabulary ({@code PAYMENT_PROCESSING} on both success and
-     * failure) matches the pre-migration projection — the kernel-side
-     * compensation tracks the in-memory flow state independently of the
-     * persisted {@code orders.status} column.
+     * <p>{@code PAYMENT_PROCESSING} is precisely the state
+     * {@link #settleParkedPayment} compare-and-sets on, so these writes must
+     * commit before the dispatch — at ~1 ms of configured gateway delay a callback
+     * racing ahead of them is not hypothetical.
      */
-    public boolean chargePayment(long dbOrderId, String orderId, String sagaId) {
+    public void requestPayment(long dbOrderId, String sagaId) {
         try (Connection conn = dataSource.getConnection()) {
             conn.setAutoCommit(false);
             String payload = "{\"order_id\":" + dbOrderId + ",\"event\":\"PAYMENT_REQUESTED\"}";
@@ -151,9 +158,60 @@ public class ShopOrderSqlSteps {
             }
             conn.commit();
         } catch (Exception e) {
-            throw new RuntimeException("chargePayment failed for saga " + sagaId, e);
+            throw new RuntimeException("requestPayment failed for saga " + sagaId, e);
         }
-        return !paymentFailureSimulator.shouldDecline(orderId);
+    }
+
+    /**
+     * Reads the settled payment outcome for an order, or {@code null} when it has
+     * not settled yet.
+     *
+     * <p>Deliberately a DB read rather than a memory lookup: the flow step
+     * re-enters on wake (and on cross-restart resumption from the snapshot store),
+     * and it must see an outcome that survived the crash. An in-memory outcome
+     * would be lost, and the resumed step would re-dispatch to a gateway that has
+     * already answered — parking forever.
+     */
+    public String readPaymentOutcome(long dbOrderId) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_ORDER_STATUS_SQL)) {
+            ps.setLong(1, dbOrderId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String status = rs.getString(1);
+                    if (PAYMENT_AUTHORIZED.equals(status) || PAYMENT_DECLINED.equals(status)) {
+                        return status;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("readPaymentOutcome failed for order " + dbOrderId, e);
+        }
+        return null;
+    }
+
+    /**
+     * Claims a parked payment and resolves the saga's order row in one statement.
+     *
+     * <p>Compare-and-set rather than SELECT-then-UPDATE: a duplicate callback
+     * matches no row and returns empty, so it can never wake the same flow twice.
+     *
+     * @return the db order id when this call claimed the settlement, empty when no
+     *         saga was parked on payment under {@code sagaId}
+     */
+    public java.util.OptionalLong settleParkedPayment(String sagaId, boolean authorized) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SETTLE_PARKED_PAYMENT_SQL)) {
+            ps.setString(1, authorized ? PAYMENT_AUTHORIZED : PAYMENT_DECLINED);
+            ps.setString(2, sagaId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next()
+                        ? java.util.OptionalLong.of(rs.getLong(1))
+                        : java.util.OptionalLong.empty();
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("settleParkedPayment failed for saga " + sagaId, e);
+        }
     }
 
     /**

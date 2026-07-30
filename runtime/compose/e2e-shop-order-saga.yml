@@ -183,6 +183,11 @@ services:
       PAYMENT_STUB_PORT: "9300"
       PAYMENT_STUB_DELAY_MS: "${PAYMENT_STUB_DELAY_MS:-100}"
       PAYMENT_STUB_DELAY_JITTER_MS: "${PAYMENT_STUB_DELAY_JITTER_MS:-0}"
+      # The §4.1 decline rule lives in the stub now, so this — not the targets'
+      # EXERIS_SAGA_FAULT_MODE — is what actually switches business faults off
+      # for any parking shape. Defaults to terminal, matching every target's
+      # default. The §7 oracle's expected compensation count must agree with it.
+      PAYMENT_STUB_FAULT_MODE: "${PAYMENT_STUB_FAULT_MODE:-terminal}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

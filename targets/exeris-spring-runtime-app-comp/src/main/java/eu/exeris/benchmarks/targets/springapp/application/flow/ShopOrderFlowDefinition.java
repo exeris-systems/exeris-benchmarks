@@ -30,13 +30,18 @@ import org.springframework.stereotype.Component;
  *   <li>Success path: each step returns {@link FlowOutcome#CONTINUE} except the
  *       terminal {@code complete-order}, which returns {@link FlowOutcome#COMPLETE}
  *       to short-circuit the engine to {@code FlowState.COMPLETED}.</li>
- *   <li>Failure path: {@code charge-payment} returns {@link FlowOutcome#FAIL}
- *       when the orderId is in the CONTRACT-v2 section 4.1 deterministic
- *       declined subset ({@link PaymentFailureSimulator#shouldDecline}). A
- *       decline is business-terminal — never retried (section 5) — and the
- *       kernel transitions to {@code COMPENSATING} and executes the
- *       compensations in reverse (LIFO) order — {@code refund-payment} for
- *       step 1, then {@code restore-inventory} for step 0.</li>
+ *   <li>Parking path: {@code charge-payment} dispatches to the external payment
+ *       gateway and returns {@link FlowOutcome#PARK} (CONTRACT-v2 section 4). The
+ *       gateway's asynchronous callback wakes the flow, the step re-enters, reads
+ *       the persisted outcome, and continues or fails from there.</li>
+ *   <li>Failure path: on wake, {@code charge-payment} returns {@link FlowOutcome#FAIL}
+ *       when the gateway declined — the CONTRACT-v2 section 4.1 deterministic
+ *       declined subset, evaluated in the gateway rather than here so a single
+ *       implementation of the rule serves every stack. A decline is
+ *       business-terminal — never retried (section 5) — and the kernel transitions
+ *       to {@code COMPENSATING} and executes the compensations in reverse (LIFO)
+ *       order — {@code refund-payment} for step 1, then {@code restore-inventory}
+ *       for step 0.</li>
  * </ul>
  *
  * <h2>Lambda discipline</h2>
@@ -57,10 +62,14 @@ public class ShopOrderFlowDefinition implements ExerisFlowDefinition {
 
     private final ShopOrderSqlSteps sqlSteps;
     private final ShopOrderFlowInputRegistry inputRegistry;
+    private final PaymentGatewayClient paymentGateway;
 
-    public ShopOrderFlowDefinition(ShopOrderSqlSteps sqlSteps, ShopOrderFlowInputRegistry inputRegistry) {
+    public ShopOrderFlowDefinition(ShopOrderSqlSteps sqlSteps,
+                                   ShopOrderFlowInputRegistry inputRegistry,
+                                   PaymentGatewayClient paymentGateway) {
         this.sqlSteps = sqlSteps;
         this.inputRegistry = inputRegistry;
+        this.paymentGateway = paymentGateway;
     }
 
     @Override
@@ -89,16 +98,36 @@ public class ShopOrderFlowDefinition implements ExerisFlowDefinition {
                             inputRegistry.drop(ShopOrderFlowInputRegistry.InstanceKey.of(ctx));
                             return FlowOutcome.CONTINUE;
                         })
+                // CONTRACT-v2 section 4 (parking workload): charge-payment does not answer
+                // inline. It dispatches to the external payment gateway and PARKS; the
+                // gateway's asynchronous callback wakes it (PaymentCallbackController).
+                //
+                // The step is IDEMPOTENT and outcome-driven because the engine re-enters it
+                // on wake: it reads the persisted outcome first and only dispatches when
+                // there is none. That is also why the outcome lives on the orders row rather
+                // than in memory — an in-memory outcome would be lost on crash, and the
+                // resumed step would re-dispatch to a gateway that has already answered.
                 .step(
                         "charge-payment",
                         ctx -> {
                             ShopOrderFlowInputRegistry.Input in = inputRegistry.require(ctx);
-                            boolean ok = sqlSteps.chargePayment(in.dbOrderId(), in.orderId(), in.sagaId());
+                            String settled = sqlSteps.readPaymentOutcome(in.dbOrderId());
+                            if (ShopOrderSqlSteps.PAYMENT_AUTHORIZED.equals(settled)) {
+                                return FlowOutcome.CONTINUE;
+                            }
+                            if (ShopOrderSqlSteps.PAYMENT_DECLINED.equals(settled)) {
+                                // CONTRACT-v2 section 4.1: business-terminal decline. FAIL routes
+                                // straight to kernel-driven LIFO compensation, never retried
+                                // (section 5: zero retries on decline).
+                                return FlowOutcome.FAIL;
+                            }
+                            sqlSteps.requestPayment(in.dbOrderId(), in.sagaId());
                             // Pre-migration projection wrote PAYMENT_PROCESSING for both
                             // PaymentProcessedEvent and PaymentFailedEvent. We preserve that
                             // surface; the compensation step transitions to PAYMENT_REFUNDED.
                             inputRegistry.recordStatus(in.orderId(), in.userId(), "PAYMENT_PROCESSING", in.sagaId());
-                            return ok ? FlowOutcome.CONTINUE : FlowOutcome.FAIL;
+                            paymentGateway.dispatch(in.orderId(), in.sagaId());
+                            return FlowOutcome.PARK;
                         },
                         ctx -> {
                             ShopOrderFlowInputRegistry.Input in = inputRegistry.require(ctx);

@@ -108,6 +108,33 @@ export BENCH_PAIR_WARM_THROUGH_SECONDS="${BENCH_PAIR_WARM_THROUGH_SECONDS:-60}"
 # The quarkus-focused triad measured by the 2026-07-21 report.
 export BENCH_TRIAD_PAIRS="${BENCH_TRIAD_PAIRS:-1-exeris-vs-quarkus-tuned:exeris-community:quarkus-tuned:1:9000:9003;2-exeris-vs-quarkus-hibernate:exeris-community:quarkus-hibernate:2:9000:9002;3-quarkus-hibernate-vs-tuned:quarkus-hibernate:quarkus-tuned:3:9002:9003}"
 
+# ---------------------------------------------------------------------------
+# DB CLIENT CONFIGURATION — the caller's job, and historically the caller's bug.
+#
+# run-full-triad-ab-ba.sh exports NO database credentials, and the per-target env files
+# (runtime/drivers/env/*.env) fall back to a legacy postgres/postgres/…/postgres default
+# that does not exist in the benchmark database (role "benchmark", db "benchmark_db").
+# Every campaign therefore has to set these itself — which is exactly triad bug 5: "The
+# configuration lives in whichever caller launched the campaign, so each caller had to be
+# fixed separately (9f2b182 for the sweep/matrix path, d1032c8 for the promotion path,
+# five lines, months apart, same root cause)." This is the third caller; it is fixed here
+# explicitly rather than inherited from whatever happens to be in the operator's shell.
+#
+# BENCH_DB_FETCH_MODE selects the pgjdbc fetch configuration, which is NOT cosmetic: on the
+# heavy aggregate it inverts the ranking (report conclusion 2 vs its "does not support"
+# counterpart). The light single-read is fetch-insensitive.
+#   equalized — the §8 promotion URL; the report's "fair, DB-normalized comparison"
+#   default   — prepareThreshold only; each arm on the driver's own fetch behavior
+BENCH_DB_FETCH_MODE="${BENCH_DB_FETCH_MODE:-equalized}"
+case "$BENCH_DB_FETCH_MODE" in
+  equalized) _DB_QUERY_PARAMS="prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false&preferQueryMode=extended" ;;
+  default)   _DB_QUERY_PARAMS="prepareThreshold=1" ;;
+  *) echo "ERROR: BENCH_DB_FETCH_MODE must be 'equalized' or 'default' (got '${BENCH_DB_FETCH_MODE}')" >&2; exit 64 ;;
+esac
+export EXERIS_DB_JDBC_URL="${EXERIS_DB_JDBC_URL:-jdbc:postgresql://localhost:5432/benchmark_db?${_DB_QUERY_PARAMS}}"
+export EXERIS_DB_USERNAME="${EXERIS_DB_USERNAME:-benchmark}"
+export EXERIS_DB_PASSWORD="${EXERIS_DB_PASSWORD:-benchmark}"
+
 # Reproducibility metadata requires the commit the measured code came from. The perf box
 # runs an rsync MIRROR, not a git checkout, so `git rev-parse` there yields nothing and the
 # manifest would silently record "unknown" — defeating the point of committing before the
@@ -185,6 +212,19 @@ preflight() {
     fail "scripts/run-comparative.sh predates the DB-config fairness gate (518b23c). Sync the current code before running."
   fi
   log "  DB-config fairness gate: present"
+
+  # Catch the bug-5 shape before it costs a measurement window: an unset credential makes
+  # the target env files fall back to the legacy postgres/postgres default, and the app
+  # dies at pool init with 'role "postgres" does not exist' AFTER the harness has already
+  # provisioned and seeded the database.
+  local u="${EXERIS_DB_USERNAME:-}" url="${EXERIS_DB_JDBC_URL:-}"
+  [[ -n "$u" && -n "$url" && -n "${EXERIS_DB_PASSWORD:-}" ]] \
+    || fail "DB credentials incomplete — targets would fall back to the legacy postgres/postgres default and fail at pool init."
+  if [[ "$u" == "postgres" || "$url" == *"/postgres?"* ]]; then
+    warn "DB client points at role/db 'postgres' — the benchmark database uses role 'benchmark' / db 'benchmark_db'. This is the bug-5 default; verify deliberately."
+  fi
+  log "  DB fetch mode: ${BENCH_DB_FETCH_MODE}"
+  log "  DB client: ${u}@${url}"
 
   log "Preflight OK"
 }
@@ -289,13 +329,18 @@ main() {
     --arg retain "$RETAIN_JFR_REPEATS" --arg pairs "$BENCH_TRIAD_PAIRS" \
     --arg warm "$BENCH_PAIR_WARM_THROUGH_SECONDS" --arg profile "$HARDWARE_PROFILE" \
     --arg sha "$CAMPAIGN_COMMIT_SHA" \
+    --arg fetchmode "$BENCH_DB_FETCH_MODE" --arg dburl "$EXERIS_DB_JDBC_URL" \
+    --arg dbuser "$EXERIS_DB_USERNAME" \
     '{campaign: "entity-read-by-id-triad-n3", campaign_ts: $ts, commit_sha: $sha,
       hardware_profile: $profile, repeats: $repeats, contracts: $contracts,
       repeat_loop_position: "outer",
       jfr_raw_retention_repeats: $retain,
       jfr_config: "identical on every leaf (settings=profile, non-rotating ceiling)",
       pair_warm_through_seconds: $warm, triad_pairs: $pairs,
+      db_client: { fetch_mode: $fetchmode, jdbc_url: $dburl, username: $dbuser,
+                   note: "Set explicitly by this caller. run-full-triad-ab-ba.sh exports no DB credentials and the target env files default to a legacy postgres/postgres that does not exist in this database — triad bug 5. fetch_mode inverts the heavy-contract ranking and is therefore a first-class axis label, not a detail." },
       corrections_applied: ["#5 db-config fingerprint gate (inherited)",
+                            "#5b db client pinned by the caller + recorded",
                             "#6 n=3", "#7 pair warm-through", "#8 repeat-as-outer-loop"]}' \
     > "${OUTPUT_ROOT}/campaign-manifest.json"
 

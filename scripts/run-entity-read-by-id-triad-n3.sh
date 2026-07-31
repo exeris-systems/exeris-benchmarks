@@ -108,6 +108,12 @@ export BENCH_PAIR_WARM_THROUGH_SECONDS="${BENCH_PAIR_WARM_THROUGH_SECONDS:-60}"
 # The quarkus-focused triad measured by the 2026-07-21 report.
 export BENCH_TRIAD_PAIRS="${BENCH_TRIAD_PAIRS:-1-exeris-vs-quarkus-tuned:exeris-community:quarkus-tuned:1:9000:9003;2-exeris-vs-quarkus-hibernate:exeris-community:quarkus-hibernate:2:9000:9002;3-quarkus-hibernate-vs-tuned:quarkus-hibernate:quarkus-tuned:3:9002:9003}"
 
+# Reproducibility metadata requires the commit the measured code came from. The perf box
+# runs an rsync MIRROR, not a git checkout, so `git rev-parse` there yields nothing and the
+# manifest would silently record "unknown" — defeating the point of committing before the
+# sync. The syncing side therefore passes the SHA in explicitly.
+CAMPAIGN_COMMIT_SHA="${BENCH_CAMPAIGN_COMMIT_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
+
 log()  { echo -e "\033[0;36m[triad-n3]\033[0m $*"; }
 warn() { echo -e "\033[1;33m[triad-n3] WARN\033[0m $*" >&2; }
 fail() { echo -e "\033[0;31m[triad-n3] ERROR\033[0m $*" >&2; exit 1; }
@@ -166,6 +172,19 @@ preflight() {
   if [[ "$BENCH_DB_TUNED" != "1" ]]; then
     warn "BENCH_DB_TUNED != 1 — Postgres will NOT be host-networked/cpuset-isolated; this diverges from the 2026-07-21 setup"
   fi
+
+  if [[ "$CAMPAIGN_COMMIT_SHA" == "unknown" ]]; then
+    fail "commit SHA unresolved — this host is not a git checkout and BENCH_CAMPAIGN_COMMIT_SHA was not passed. Reproducibility metadata would be incomplete; pass the SHA of the synced code."
+  fi
+  log "  commit: ${CAMPAIGN_COMMIT_SHA}"
+
+  # The DB-config fingerprint gate (triad bug 5, 518b23c) is the correction this campaign
+  # is meant to be the first to run under. A mirror that predates it would produce results
+  # indistinguishable from the ungated ones — fail rather than measure for 30h without it.
+  if ! grep -q 'DB_CONFIG_ASYMMETRIC' scripts/run-comparative.sh 2>/dev/null; then
+    fail "scripts/run-comparative.sh predates the DB-config fairness gate (518b23c). Sync the current code before running."
+  fi
+  log "  DB-config fairness gate: present"
 
   log "Preflight OK"
 }
@@ -269,7 +288,7 @@ main() {
     --arg ts "$CAMPAIGN_TS" --arg repeats "$REPEATS" --arg contracts "$CONTRACTS" \
     --arg retain "$RETAIN_JFR_REPEATS" --arg pairs "$BENCH_TRIAD_PAIRS" \
     --arg warm "$BENCH_PAIR_WARM_THROUGH_SECONDS" --arg profile "$HARDWARE_PROFILE" \
-    --arg sha "$(git rev-parse HEAD 2>/dev/null || echo unknown)" \
+    --arg sha "$CAMPAIGN_COMMIT_SHA" \
     '{campaign: "entity-read-by-id-triad-n3", campaign_ts: $ts, commit_sha: $sha,
       hardware_profile: $profile, repeats: $repeats, contracts: $contracts,
       repeat_loop_position: "outer",

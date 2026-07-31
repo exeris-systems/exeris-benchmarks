@@ -822,7 +822,19 @@ run_benchmark() {
   local run_num=$6
   local scenario_diagnostics_dir=$7
   local output_subdir="${CAMPAIGN_OUTPUT_DIR}/${pair_name}/run$(printf '%02d' "$run_num")/${order}"
+  # BENCH_REPEAT_ID disambiguates track_id when the repeat dimension lives OUTSIDE this
+  # script — i.e. when a caller spreads repeats in time by invoking the campaign N times
+  # with BENCH_RUNS_PER_PAIR=1 (repeat-as-outer-loop, per the 2026-07-22 sweep's
+  # methodology) instead of looping run_num internally. Without it every such invocation
+  # would mint the same track-<order>-01 id and the repeats would be indistinguishable in
+  # the artifacts — a silent pooling hazard, since track_id is an isolation boundary.
+  # Unset (default) reproduces the previous id byte-for-byte, so existing callers
+  # (run-entity-read-promotion-ab-ba.sh, run-entity-read-by-id-latency-curve-triad.sh)
+  # are unaffected.
   local track_id="track-${order}-$(printf '%02d' "$run_num")"
+  if [[ -n "${BENCH_REPEAT_ID:-}" ]]; then
+    track_id="track-${order}-r${BENCH_REPEAT_ID}-$(printf '%02d' "$run_num")"
+  fi
   local -a comparative_args=(
     --target-a "$target_a"
     --target-b "$target_b"
@@ -858,6 +870,54 @@ run_benchmark() {
     return 1
   fi
   return 0
+}
+
+# Correction #7 (2026-07-21 triad report, Limitations): "the first heavy leaf shows a ~8%
+# cold-cache penalty for the stack that happened to run first (Exeris) — a pair-level
+# warm-through of the DB before leaf 1 would remove that asymmetry."
+#
+# Each pair block re-provisions Postgres, so leaf 1 starts against a cold buffer cache and
+# the whole penalty lands on whichever arm is measured first. This drives a short, fully
+# discarded pass against BOTH arms — equal treatment, so no arm gains a JIT advantage — to
+# pull the working set into shared_buffers before any measured window opens. Output goes to
+# a warm-through/ sibling directory, never into a leaf's artifact dir, so nothing the strict
+# gate or the aggregator reads is touched.
+#
+# Opt-in: BENCH_PAIR_WARM_THROUGH_SECONDS unset/0 (default) is a no-op and preserves the
+# previous behavior exactly.
+pair_db_warm_through() {
+  local target_a=$1 port_a=$2 target_b=$3 port_b=$4 outdir=$5
+  local secs="${BENCH_PAIR_WARM_THROUGH_SECONDS:-0}"
+
+  [[ -n "$secs" && "$secs" != "0" ]] || return 0
+
+  if ! command -v wrk >/dev/null 2>&1; then
+    echo "WARNING: wrk not found on PATH; skipping pair warm-through (cold-cache asymmetry NOT controlled)"
+    return 0
+  fi
+
+  local scenario_json="scenarios/${SCENARIO_ID}/scenario.json"
+  local lua_script="scenarios/${SCENARIO_ID}/wrk.lua"
+  local path=""
+  if [[ -f "$scenario_json" ]]; then
+    # fixed_contracts[<id>].endpoint is "GET /api/v1/user?id=1" — take the path field.
+    path="$(jq -r --arg c "${BENCH_CONTRACT_ID}" \
+      '.fixed_contracts[$c].endpoint // empty' "$scenario_json" 2>/dev/null | awk 'NF{print $NF}')"
+  fi
+  [[ -n "$path" ]] || path="$SCENARIO_ENDPOINT_PATH"
+
+  mkdir -p "$outdir"
+  echo "  Pair warm-through: ${secs}s per arm against ${path} (discarded, both arms)"
+
+  local entry tid tport
+  for entry in "${target_a}:${port_a}" "${target_b}:${port_b}"; do
+    tid="${entry%%:*}"
+    tport="${entry##*:}"
+    WRK_REQUEST_PATH="$path" wrk -t2 -c16 -d"${secs}s" -s "$lua_script" \
+      "http://localhost:${tport}${path}" \
+      > "${outdir}/warm-through-${tid}.log" 2>&1 \
+      || echo "  WARNING: warm-through pass for ${tid} exited non-zero (see ${outdir}/warm-through-${tid}.log)"
+  done
 }
 
 run_pair_block() {
@@ -905,6 +965,9 @@ run_pair_block() {
 
     capture_runtime_jvm_diagnostics "$target_a" "$target_a_port" "$startup_sequence_dir" || true
     capture_runtime_jvm_diagnostics "$target_b" "$target_b_port" "$startup_sequence_dir" || true
+
+    pair_db_warm_through "$target_a" "$target_a_port" "$target_b" "$target_b_port" \
+      "${run_base_dir}/warm-through" || true
 
     STEP_COUNTER=$((STEP_COUNTER + 1))
     if ! ensure_target_healthy_or_recover "$target_a" "$target_a_port" "$target_a_artifact" || ! ensure_target_healthy_or_recover "$target_b" "$target_b_port" "$target_b_artifact"; then

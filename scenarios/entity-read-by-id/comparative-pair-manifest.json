@@ -187,7 +187,7 @@
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
-      "axis_note": "COMPATIBILITY-COST pair (Pure-vs-Compat axis): the same Spring MVC + JPA app, same iso-2048 heap, differing ONLY in the HTTP ingress — native Tomcat (spring-hibernate, pure) vs Exeris compatibility ingress (spring-on-exeris, compat). Quantifies the Exeris compat-seam overhead. Internal-only publication: spring-on-exeris is excluded from the public docs path; never frame as a pure-mode number."
+      "axis_note": "COMPATIBILITY-COST pair (Pure-vs-Compat axis): the same Spring MVC + JPA app, same iso-2048 heap, hosted on native Tomcat (spring-hibernate, pure) vs the Exeris compatibility ingress (spring-on-exeris, compat). Quantifies the Exeris compat-seam overhead. AXIS CAVEAT: the arms are NOT ingress-only. The compat arm cannot declare a servlet SecurityFilterChain — under spring.main.web-application-type=none its mere presence suppresses ExerisSecurityContextFilter — so the pure arm runs a filter-chain authorization decision per request while the compat arm runs the kernel's context filter instead. That difference is forced by the ingress choice, so it belongs inside the measured seam cost, but the seam number is NOT decomposable into transport-only from this pair alone. Both arms serve the benchmark read endpoints (/api/v1/users heavy, /api/v1/user light) unauthenticated. Internal-only publication: spring-on-exeris is excluded from the public docs path; never frame as a pure-mode number."
     },
     {
       "pair_id": "exeris-community__exeris-blackbird",

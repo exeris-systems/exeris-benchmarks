@@ -68,7 +68,20 @@ public class SecurityConfig {
                         // quarkus-benchmark-app; permit it here so the entity-read-by-id read benchmark
                         // is apples-to-apples across runtimes. Per-user / cart / order routes stay authenticated.
                         .requestMatchers(HttpMethod.GET, "/api/v1/users").permitAll()
+                        // GET /api/v1/user (singular, light single-read contract) for the same reason:
+                        // unauthenticated in exeris-community-app and quarkus-benchmark-app. Note the
+                        // matcher above does NOT cover it — "/api/v1/users" is an exact path, so without
+                        // this line the light contract would measure a 401 from the auth filter instead
+                        // of the read path.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/user").permitAll()
                         .anyRequest().authenticated())
+                // NOTE (smoke-verified 2026-08-01): "/error" is not permitted here, so any request
+                // that raises an exception is forwarded to /error and re-authorized, surfacing as
+                // 401 rather than its true status — e.g. ?id=abc and a missing id both return 401
+                // instead of 400. Measured traffic always sends a valid ?id=N and never hits this,
+                // and the behaviour predates the light contract, so it is left as-is rather than
+                // changed mid-campaign-series. But do not read a 401 during a run as an auth
+                // problem: check the app log for the underlying exception first.
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt
                                 .decoder(jwtDecoder)

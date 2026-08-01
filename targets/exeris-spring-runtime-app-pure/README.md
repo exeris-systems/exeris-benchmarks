@@ -74,9 +74,33 @@ Cause, from `exeris-spring-runtime-web` 0.5.0-SNAPSHOT:
 So the kernel router and the Spring-side `ExerisRouteRegistry` disagree about what a path is.
 Any query-bearing route is unreachable in pure mode.
 
+### Independently confirmed: BudgetHQ DEC-046
+
+This is not a benchmark-only artefact. BudgetHQ — a production application on the same
+`exeris-spring-runtime` 0.5.0-SNAPSHOT in Pure Mode — hit it three times and codified it as
+**DEC-046 "Pure Mode HTTP query-string routing"** (Accepted, 2026-05-21). It names the same
+mechanism and, usefully, the fix site:
+
+> Upstream `exeris-spring-runtime-web` Pure Mode HTTP dispatcher passes the FULL
+> request-target (including query string) to `ExerisRouteRegistry.resolve`, which does
+> exact-match `HashMap.get(path)`. […] **Compatibility-mode dispatcher already strips query at
+> `ExerisHandlerMethodRegistry.java:149`; Pure-Mode dispatcher missed the same strip. This is a
+> behaviour gap between Compat and Pure modes, NOT a documented intentional divergence.**
+
+BudgetHQ's workaround is POST-with-body for anything that needs parameters. **That workaround is
+not available to this target**: the light contract is `GET /api/v1/user?id=1`, served in exactly
+that shape by every other arm. Changing this one arm to POST-with-body would change the method,
+the parsing path and the driver script — a different workload, not a comparable one.
+
+Worth noting for the upstream fix: DEC-046 flags its own surviving GET-with-query handlers as
+"empirically-untested today" and has a probe sprint queued. The smoke result above is that
+missing evidence — `/api/v1/user` reaches the handler (400) while `/api/v1/user?id=1` does not
+(404) isolates the failure to route resolution, with nothing else varying.
+
 This is a host-runtime gap, not a benchmark-harness one: per the repository boundary rule the
 fix belongs in `exeris-spring-runtime`, not here. Nothing in this repo can work around it — route
-resolution happens before application code runs.
+resolution happens before application code runs. Once the query-strip patch lands, this arm
+serves the light contract with no change to the code committed here.
 
 Minimal reproduction: build this target, launch it, then
 

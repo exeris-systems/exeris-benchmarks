@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.exeris.benchmarks</groupId>
+  <artifactId>spring-benchmark-app-pure</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+  <name>Spring Benchmark App — Spring-on-Exeris (Pure Mode)</name>
+
+  <properties>
+    <java.version>26</java.version>
+    <maven.compiler.release>${java.version}</maven.compiler.release>
+    <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
+    <!--
+      Pinned to the same lines as targets/exeris-spring-runtime-app-comp so the two arms of
+      the Pure-vs-Compat axis differ in the web layer alone. Bump both together or the axis
+      silently acquires a second variable.
+    -->
+    <spring-boot.version>3.5.14</spring-boot.version>
+    <exeris-spring-runtime.version>0.5.0-SNAPSHOT</exeris-spring-runtime.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!--
+        Pin neo4j-bolt-connection to the version paired with neo4j-java-driver:5.28.8
+        (bolt 6.0.2 API) — identical to the compat arm. The driver arrives transitively and
+        Spring Boot's Neo4jAutoConfiguration instantiates it at startup; without this pin the
+        context fails with NoSuchMethodError on Config$ConfigBuilder.withoutDriverMetrics.
+        Keeping the same pins as the compat arm also keeps the bean graph matched.
+      -->
+      <dependency>
+        <groupId>org.neo4j.bolt</groupId>
+        <artifactId>neo4j-bolt-connection-bom</artifactId>
+        <version>6.0.2</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>eu.exeris</groupId>
+        <artifactId>exeris-spring-runtime-bom</artifactId>
+        <version>${exeris-spring-runtime.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!--
+      Host runtime. NOTE: exeris-spring-runtime-web is present but this target does NOT set
+      exeris.runtime.web.mode=compatibility, so ExerisCompatAutoConfiguration stays off and
+      ExerisWebAutoConfiguration's native ExerisHttpDispatcher serves every request.
+    -->
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-boot-autoconfigure</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-tx</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-data</artifactId>
+    </dependency>
+
+    <!-- Persistence: identical to both other arms (Spring Data JPA + Hibernate + HikariCP + pgjdbc). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+    </dependency>
+    <!-- Same version as the compat arm; see the bolt BOM note above. -->
+    <dependency>
+      <groupId>org.neo4j.driver</groupId>
+      <artifactId>neo4j-java-driver</artifactId>
+      <version>5.28.8</version>
+    </dependency>
+
+    <!-- Response encoding. Same Jackson line as the compat arm so serialisation is not a variable. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${maven.compiler.plugin.version}</version>
+      </plugin>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <version>${spring-boot.version}</version>
+        <configuration>
+          <mainClass>eu.exeris.benchmarks.targets.springapp.SpringBenchmarkApplication</mainClass>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

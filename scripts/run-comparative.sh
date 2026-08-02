@@ -2003,6 +2003,38 @@ for target in "$TARGET_A_CANONICAL" "$TARGET_B_CANONICAL"; do
   fi
 done
 
+# Per-target contract scoping. A compatible_targets entry MAY carry an
+# `eligible_contracts` array; when present, that target participates only in
+# runs whose --contract-id appears in it. Absent means unrestricted, so every
+# target declared before this check existed is unaffected.
+#
+# This exists because eligibility is not always uniform across a scenario's
+# contract family. spring-on-exeris-pure serves the heavy aggregate endpoint but
+# cannot serve the light single-read one: its path carries a query string, and
+# the Exeris pure-mode dispatcher resolves routes by exact match on the full
+# request target (BudgetHQ DEC-046). Listing the target against every entry in
+# required_contracts would assert a capability it does not have, and the run
+# would fail later and less legibly at endpoint preflight.
+TARGET_CONTRACT_SCOPE_PASS=true
+TARGET_CONTRACT_SCOPE_REASON="no per-target contract restriction applies"
+for target in "$TARGET_A_CANONICAL" "$TARGET_B_CANONICAL"; do
+  if ! jq -e --arg t "$target" \
+      '([.compatible_targets[]? | select(.target_id == $t)][0].eligible_contracts // null) | type == "array"' \
+      "$PAIR_MANIFEST" >/dev/null 2>&1; then
+    continue
+  fi
+  if ! jq -e --arg t "$target" --arg c "$CONTRACT_ID" \
+      '[.compatible_targets[]? | select(.target_id == $t)][0].eligible_contracts | index($c) != null' \
+      "$PAIR_MANIFEST" >/dev/null 2>&1; then
+    TARGET_CONTRACT_SCOPE_ALLOWED="$(jq -r --arg t "$target" \
+      '[.compatible_targets[]? | select(.target_id == $t)][0].eligible_contracts | join(", ")' \
+      "$PAIR_MANIFEST")"
+    TARGET_CONTRACT_SCOPE_PASS=false
+    TARGET_CONTRACT_SCOPE_REASON="target '${target}' is declared eligible only for contracts [${TARGET_CONTRACT_SCOPE_ALLOWED}] but --contract-id=${CONTRACT_ID}"
+    break
+  fi
+done
+
 ALLOWED_PAIR_PASS=true
 ALLOWED_PAIR_REASON="pair declared in allowed_pairs"
 ALLOWED_PAIR_ID=""
@@ -2156,6 +2188,10 @@ if [[ "$RUNNABLE_PASS" != true ]]; then
   PAIR_ELIGIBLE=false
   PAIR_FAILURE_REASONS+=("runnable: ${RUNNABLE_REASON}")
 fi
+if [[ "$TARGET_CONTRACT_SCOPE_PASS" != true ]]; then
+  PAIR_ELIGIBLE=false
+  PAIR_FAILURE_REASONS+=("target_contract_scope: ${TARGET_CONTRACT_SCOPE_REASON}")
+fi
 if [[ "$ALLOWED_PAIR_PASS" != true ]]; then
   PAIR_ELIGIBLE=false
   PAIR_FAILURE_REASONS+=("allowed_pairs: ${ALLOWED_PAIR_REASON}")
@@ -2188,6 +2224,8 @@ jq -n \
   --arg same_protocol_reason "$SAME_PROTOCOL_REASON" \
   --argjson runnable_pass "$RUNNABLE_PASS" \
   --arg runnable_reason "$RUNNABLE_REASON" \
+  --argjson target_contract_scope_pass "$TARGET_CONTRACT_SCOPE_PASS" \
+  --arg target_contract_scope_reason "$TARGET_CONTRACT_SCOPE_REASON" \
   --argjson allowed_pair_pass "$ALLOWED_PAIR_PASS" \
   --arg allowed_pair_reason "$ALLOWED_PAIR_REASON" \
   --arg allowed_pair_id "$ALLOWED_PAIR_ID" \
@@ -2221,6 +2259,10 @@ jq -n \
     same_protocol_mode: {
       pass: $same_protocol_pass,
       reason: $same_protocol_reason
+    },
+    target_contract_scope: {
+      pass: $target_contract_scope_pass,
+      reason: $target_contract_scope_reason
     },
     runnable_targets: {
       pass: $runnable_pass,

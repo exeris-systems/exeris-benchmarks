@@ -175,6 +175,26 @@
       "mode": "compat"
     },
     {
+      "target_id": "spring-on-exeris-pure",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/spring-runtime-on-exeris-pure.env",
+      "profile_id": "spring-on-exeris-pure",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9005/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Spring on Exeris (pure mode, native ExerisRequestHandler)",
+      "app_dir": "targets/exeris-spring-runtime-app-pure",
+      "eligibility_note": "HEAVY-CONTRACT ONLY. mode=pure here means the Exeris side of the Pure-vs-Compat axis (no ExerisCompatDispatcher), which is NOT the same sense as spring-hibernate's mode=pure (plain Spring MVC on Tomcat, never routed through Exeris at all); both sit on the pure side of the axis but only this one is hosted by Exeris. Eligible for the heavy aggregate contracts only: the light single-read endpoint /api/v1/user?id=N carries a query string, and the Exeris pure-mode dispatcher resolves routes by exact match on the full request target, so the request 404s before reaching the handler (BudgetHQ DEC-046; fix belongs in exeris-spring-runtime). Enforced by eligible_contracts in scenarios/entity-read-by-id/comparative-pair-manifest.json, not by convention. FOOTPRINT: carries no exeris-spring-runtime-flow dependency and implements no saga or /graph/ping, so RSS is NOT comparable with spring-on-exeris; throughput and latency are. CONFIDENTIALITY: excluded from the public docs path, as with spring-on-exeris. See targets/exeris-spring-runtime-app-pure/README.md.",
+      "legacy_target_ids": [],
+      "mode": "pure"
+    },
+    {
       "target_id": "quarkus-hibernate",
       "tier": "community",
       "protocol_mode": "h1",

@@ -126,12 +126,27 @@ without the query string.
 
 ## Harness wiring status
 
-Deliberately **not yet** registered in `runtime/drivers/target-asset-matrix.json` or
-`scenarios/entity-read-by-id/comparative-pair-manifest.json`. That manifest's
-`required_contracts` includes the light contract, and the asset-matrix verifier requires every
-runnable target to be referenced by a scenario's `compatible_targets` — wiring this target in
-now would assert an eligibility it does not have. Wire it once the query-string blocker is
-fixed, or wire it explicitly heavy-only.
+Wired **heavy-only**, and that restriction is enforced by the harness rather than left to
+convention.
+
+- `runtime/drivers/target-asset-matrix.json` — registered as `spring-on-exeris-pure`,
+  `asset_state: runnable`, `mode: pure`, health on :9005.
+- `scenarios/entity-read-by-id/comparative-pair-manifest.json` — listed in
+  `compatible_targets` with an `eligible_contracts` array, and paired against both other arms
+  (`spring-hibernate__spring-on-exeris-pure`, `spring-on-exeris__spring-on-exeris-pure`).
+- `scripts/run-comparative.sh` — the `target_contract_scope` check rejects any run whose
+  `--contract-id` is outside a target's `eligible_contracts`, before the targets are launched.
+  The pair is marked non-eligible with the reason recorded in the readiness artefact.
+
+`eligible_contracts` lists the nine heavy contracts and omits the three single-read ones. The
+split is derived from the contract endpoints, not chosen by hand: every heavy contract targets
+`GET /api/v1/users`, every omitted one targets `GET /api/v1/user?id=1`. When the upstream
+query-strip patch lands, the three move up into the list and nothing in this target changes.
+
+Note the two senses of `mode: pure` on this axis. `spring-hibernate` is pure because it never
+touches Exeris at all (Tomcat + Spring MVC); this target is pure because it bypasses Exeris's
+*compatibility layer* while still being hosted by Exeris. Both sit on the pure side of the
+Pure-vs-Compat axis, and neither may be blended with the compat row without the caveat.
 
 ## Build and run
 

@@ -74,6 +74,27 @@
       "notes": "COMPATIBILITY-mode target: the same Spring MVC + JPA app hosted on the Exeris ingress (ExerisCompatDispatcher, ADR-011) instead of Tomcat. Request-path endpoints only (the compat request-scope bug is fixed; saga is NOT eligible). PURE-vs-COMPAT is a mandatory separation axis: this is compat, never blend with pure-mode rows (native Exeris / Tomcat Spring / Quarkus) without the explicit compat caveat. CONFIDENTIALITY: excluded from the public docs path (CLAUDE.md); measurements are Community + Compatibility + H1, internal-only publication. Comparison-eligible within-tier H1 for the spring-hibernate__spring-on-exeris pair, which isolates the Exeris compat-ingress cost vs native Tomcat for one identical Spring app."
     },
     {
+      "target_id": "spring-on-exeris-pure",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "eligible_contracts": [
+        "fixed_contract_cross_runtime_h1_v1",
+        "fixed_contract_cross_runtime_h1_v2",
+        "fixed_contract_cross_runtime_v1",
+        "fixed_contract_cross_runtime_v2",
+        "fixed_contract_cross_runtime_h1_iso_budget_sweep_v1",
+        "fixed_contract_cross_runtime_h1_iso_budget_sweep_t8_v1",
+        "fixed_contract_cross_runtime_h1_franz_like_v1",
+        "fixed_contract_cross_runtime_h1_debug",
+        "fixed_contract_p99_stable_h1_wrk2_v1"
+      ],
+      "eligible_contracts_note": "HEAVY-ONLY, and the list is derived from the endpoints rather than chosen: every contract here targets GET /api/v1/users, which carries no query string. The three required_contracts omitted — fixed_contract_cross_runtime_h1_single_read_v1, fixed_contract_cross_runtime_h1_single_read_debug and fixed_contract_p99_stable_h1_wrk2_single_read_v1 — all target GET /api/v1/user?id=1, and the Exeris pure-mode dispatcher resolves routes by exact match on the FULL request target, so a query-bearing path 404s before reaching the handler. Verified on this target: /api/v1/user returns its own 400 (handler reached) while /api/v1/user?id=1 returns 404 (route unresolved). Independently codified outside this repo as BudgetHQ DEC-046; the fix belongs in exeris-spring-runtime, and when it lands these three move up into the list with no change to the target's code.",
+      "notes": "PURE-mode target: the same Spring + JPA application as spring-hibernate and spring-on-exeris, hosted on Exeris with the NATIVE web layer (@ExerisRoute + ExerisRequestHandler, no ExerisCompatDispatcher, no Spring MVC on the request path). Third arm of the Spring hosting comparison. Note the two senses of 'pure' on this axis: spring-hibernate is pure because it never touches Exeris (Tomcat + Spring MVC), this target is pure because it bypasses Exeris's COMPATIBILITY layer while still being hosted by Exeris. Both are on the pure side, and neither may be blended with the compat row without the caveat. FOOTPRINT CAVEAT: no exeris-spring-runtime-flow dependency, no saga and no /graph/ping, so RSS is NOT comparable with spring-on-exeris — throughput and latency are. CONFIDENTIALITY: excluded from the public docs path, as with spring-on-exeris; measurements are Community + H1, internal-only publication."
+    },
+    {
       "target_id": "exeris-blackbird",
       "tier": "community",
       "protocol_mode": "h1",
@@ -188,6 +209,30 @@
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
       "axis_note": "COMPATIBILITY-COST pair (Pure-vs-Compat axis): the same Spring MVC + JPA app, same iso-2048 heap, hosted on native Tomcat (spring-hibernate, pure) vs the Exeris compatibility ingress (spring-on-exeris, compat). Quantifies the Exeris compat-seam overhead. AXIS CAVEAT: the arms are NOT ingress-only. The compat arm cannot declare a servlet SecurityFilterChain — under spring.main.web-application-type=none its mere presence suppresses ExerisSecurityContextFilter — so the pure arm runs a filter-chain authorization decision per request while the compat arm runs the kernel's context filter instead. That difference is forced by the ingress choice, so it belongs inside the measured seam cost, but the seam number is NOT decomposable into transport-only from this pair alone. Both arms serve the benchmark read endpoints (/api/v1/users heavy, /api/v1/user light) unauthenticated. Internal-only publication: spring-on-exeris is excluded from the public docs path; never frame as a pure-mode number."
+    },
+    {
+      "pair_id": "spring-hibernate__spring-on-exeris-pure",
+      "targets": [
+        "spring-hibernate",
+        "spring-on-exeris-pure"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "HOSTING-SWAP pair, third arm vs first: one Spring + JPA application served by Tomcat + Spring MVC (spring-hibernate) versus the Exeris native web layer (spring-on-exeris-pure). This is the best case for hosting the application on Exeris, because it bypasses the compatibility seam that spring-hibernate__spring-on-exeris measures. AXIS CAVEAT: the arms differ on more than the socket — ingress, web layer, request-decoding path and serialisation entry point all change together, and the pure arm has no servlet filter chain, so this is a whole-hosting delta and is NOT decomposable into transport cost. Serialisation is held constant deliberately (both encode via the same autoconfigured Jackson ObjectMapper), as is everything below the web layer. HEAVY CONTRACTS ONLY — see eligible_contracts on spring-on-exeris-pure. Internal-only publication."
+    },
+    {
+      "pair_id": "spring-on-exeris__spring-on-exeris-pure",
+      "targets": [
+        "spring-on-exeris",
+        "spring-on-exeris-pure"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "axis_note": "COMPAT-SEAM pair (Pure-vs-Compat axis in its cleanest form): the same application on the SAME host runtime, differing only in whether requests traverse the Exeris compatibility layer (ExerisCompatDispatcher + ExerisSpringMvcBridge + MVC argument resolution) or the native ExerisRequestHandler path. Unlike spring-hibernate__spring-on-exeris, the transport, kernel and carrier are identical on both sides, so the delta attributes to the compat dispatcher rather than to hosting as a whole. AXIS CAVEAT: RSS is NOT comparable across this pair — spring-on-exeris-pure carries no exeris-spring-runtime-flow dependency and implements no saga or /graph/ping, so its footprint is smaller for reasons unrelated to the seam. Throughput and latency are comparable. HEAVY CONTRACTS ONLY — see eligible_contracts on spring-on-exeris-pure. Internal-only publication: both arms are excluded from the public docs path."
     },
     {
       "pair_id": "exeris-community__exeris-blackbird",

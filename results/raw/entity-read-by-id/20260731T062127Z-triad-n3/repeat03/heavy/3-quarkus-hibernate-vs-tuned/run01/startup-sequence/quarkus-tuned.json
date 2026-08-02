@@ -1,0 +1,14 @@
+{
+  "target_id": "quarkus-tuned",
+  "port": 9003,
+  "scenario_endpoint_path": "/api/v1/users",
+  "startup_init_utc": "2026-08-01T09:53:34Z",
+  "health_ready_utc": "2026-08-01T09:53:36Z",
+  "first_request_utc": "2026-08-01T09:53:36Z",
+  "startup_to_health_ms": 2133,
+  "startup_to_first_request_ms": 2239,
+  "health_to_first_request_ms": 106,
+  "health_attempts": 1,
+  "first_request_attempts": 1,
+  "generated_at_utc": "2026-08-01T09:53:36Z"
+}

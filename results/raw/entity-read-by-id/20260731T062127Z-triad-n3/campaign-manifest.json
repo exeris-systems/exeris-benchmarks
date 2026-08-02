@@ -1,0 +1,26 @@
+{
+  "campaign": "entity-read-by-id-triad-n3",
+  "campaign_ts": "20260731T062127Z",
+  "commit_sha": "555ce9c1807687f764e2895b9e0db53a9d032968",
+  "hardware_profile": "perf-box-amd64",
+  "repeats": "01,02,03",
+  "contracts": "light,heavy",
+  "repeat_loop_position": "outer",
+  "jfr_raw_retention_repeats": "01",
+  "jfr_config": "identical on every leaf (settings=profile, non-rotating ceiling)",
+  "pair_warm_through_seconds": "60",
+  "triad_pairs": "1-exeris-vs-quarkus-tuned:exeris-community:quarkus-tuned:1:9000:9003;2-exeris-vs-quarkus-hibernate:exeris-community:quarkus-hibernate:2:9000:9002;3-quarkus-hibernate-vs-tuned:quarkus-hibernate:quarkus-tuned:3:9002:9003",
+  "db_client": {
+    "fetch_mode": "equalized",
+    "jdbc_url": "jdbc:postgresql://localhost:5432/benchmark_db?prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false&preferQueryMode=extended",
+    "username": "benchmark",
+    "note": "Set explicitly by this caller. run-full-triad-ab-ba.sh exports no DB credentials and the target env files default to a legacy postgres/postgres that does not exist in this database — triad bug 5. fetch_mode inverts the heavy-contract ranking and is therefore a first-class axis label, not a detail."
+  },
+  "corrections_applied": [
+    "#5 db-config fingerprint gate (inherited)",
+    "#5b db client pinned by the caller + recorded",
+    "#6 n=3",
+    "#7 pair warm-through",
+    "#8 repeat-as-outer-loop"
+  ]
+}

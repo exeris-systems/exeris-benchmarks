@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "source": "jfr",
+  "collection_scope": "jfr_sampled",
+  "cpu": {
+    "jvm_user_percent_max": 11.32,
+    "jvm_system_percent_max": 17.22,
+    "machine_total_percent_max": 57.63,
+    "cpu_percent_max": 28.54
+  },
+  "memory": {
+    "max_rss_bytes": 449097728,
+    "max_rss_kb": 438572,
+    "max_rss_mb": 428,
+    "heap_used_max_bytes": 203222824,
+    "rss_source": "jdk.ResidentSetSize"
+  },
+  "gc": {
+    "gc_count": 1120,
+    "gc_pause_max_ms": 1.25,
+    "gc_pause_total_ms": 870.14,
+    "heap_used_bytes_max": 203222824,
+    "heap_committed_bytes_max": 268435456
+  },
+  "events": {
+    "jdk.CPULoad": 440,
+    "jdk.ResidentSetSize": 440,
+    "jdk.GarbageCollection": 1120,
+    "jdk.GCHeapSummary": 2240
+  },
+  "metadata": {
+    "jfr_tool_version": "26.0.1",
+    "window_source": "whole_recording",
+    "window_start": null,
+    "window_end": null,
+    "events_filtered_at_source": true
+  },
+  "warnings": [
+    "no measurement window supplied and no PhaseMarkerEvent found; maxima span the whole recording and include warmup/startup"
+  ]
+}

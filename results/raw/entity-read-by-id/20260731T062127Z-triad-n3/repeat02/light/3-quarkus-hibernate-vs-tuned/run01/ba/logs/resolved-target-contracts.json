@@ -1,0 +1,26 @@
+{
+  "target_a_input": "quarkus-hibernate",
+  "target_b_input": "quarkus-tuned",
+  "target_a_contract": {
+    "target_id": "quarkus-hibernate",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/quarkus-runtime.env",
+    "profile_id": "quarkus-hibernate",
+    "compose_file": "",
+    "jar_path": "",
+    "health_url": "http://localhost:9002/health"
+  },
+  "target_b_contract": {
+    "target_id": "quarkus-tuned",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/quarkus-tuned.env",
+    "profile_id": "quarkus-tuned",
+    "compose_file": "",
+    "jar_path": "",
+    "health_url": "http://localhost:9003/health"
+  }
+}

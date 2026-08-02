@@ -1,0 +1,14 @@
+{
+  "jdbc_base_url": "jdbc:postgresql://localhost:5432/benchmark_db",
+  "fairness_params": {
+    "preferQueryMode": "extended",
+    "prepareThreshold": "1",
+    "defaultRowFetchSize": "0",
+    "adaptiveFetch": "false"
+  },
+  "fairness_params_missing": [],
+  "fairness_params_complete": true,
+  "env_digest": "sha256:3097ca7eab00cb9cb4868fe1e17e0f782b935ba88a3dcbfedc3cbd6cc35da064",
+  "captured_at": "2026-07-31T14:41:38Z",
+  "note": "Fingerprint of the EXERIS_DB_* environment this harness passes down to both arms (secrets excluded). Both arms inherit one environment, so equality alone proves nothing — fairness_params_complete is the check that catches an un-normalized URL."
+}

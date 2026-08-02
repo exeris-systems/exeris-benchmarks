@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "source": "jfr",
+  "collection_scope": "jfr_measurement_window",
+  "cpu": {
+    "jvm_user_percent_max": 11.32,
+    "jvm_system_percent_max": 17.22,
+    "machine_total_percent_max": 57.63,
+    "cpu_percent_max": 28.54
+  },
+  "memory": {
+    "max_rss_bytes": 448626688,
+    "max_rss_kb": 438112,
+    "max_rss_mb": 427,
+    "heap_used_max_bytes": 203222824,
+    "rss_source": "jdk.ResidentSetSize"
+  },
+  "gc": {
+    "gc_count": 1120,
+    "gc_pause_max_ms": 1.25,
+    "gc_pause_total_ms": 870.14,
+    "heap_used_bytes_max": 203222824,
+    "heap_committed_bytes_max": 268435456
+  },
+  "events": {
+    "jdk.CPULoad": 431,
+    "jdk.ResidentSetSize": 431,
+    "jdk.GarbageCollection": 1120,
+    "jdk.GCHeapSummary": 2240
+  },
+  "metadata": {
+    "jfr_tool_version": "26.0.1",
+    "window_source": "explicit_window",
+    "window_start": "2026-07-31T08:53:06Z",
+    "window_end": "2026-07-31T09:08:08Z",
+    "events_filtered_at_source": true
+  },
+  "warnings": []
+}

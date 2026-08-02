@@ -1,0 +1,6 @@
+1885410:
+VM Arguments:
+jvm_args: -Xms1280m -Xmx1280m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Xlog:safepoint=debug:file=results/raw/entity-read-by-id/20260731T062127Z-triad-n3/repeat01/light/diagnostics/quarkus-hibernate.safepoint.log:time,level,tags -XX:StartFlightRecording=filename=results/raw/entity-read-by-id/20260731T062127Z-triad-n3/repeat01/light/diagnostics/quarkus-hibernate.jfr,settings=profile,maxsize=6144m,dumponexit=true 
+java_command: targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar
+java_class_path (initial): targets/quarkus-benchmark-app/target/quarkus-benchmark-app-1.0.0-SNAPSHOT-runner.jar
+Launcher Type: SUN_STANDARD

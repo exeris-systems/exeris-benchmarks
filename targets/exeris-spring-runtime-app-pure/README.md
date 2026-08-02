@@ -39,27 +39,60 @@ Serialisation is held constant the same way: pure mode has no MVC message conver
 `JsonEncoder` encodes explicitly — but through the same autoconfigured Jackson `ObjectMapper`
 the compat arm's converter uses.
 
-## Verified behaviour (local smoke, 2026-08-01)
+## Verified behaviour (local smoke, 2026-08-02)
 
-Against the scenario seed (1000 users) on `postgres:16.2`:
+Against the scenario seed (1000 users) on `postgres:16.2`, built on
+exeris-spring-runtime-web 0.5.0-SNAPSHOT with kernel 0.10.2:
 
 | Endpoint | Result |
 |---|---|
-| `GET /api/v1/users` (heavy) | 200 — **byte-identical** to both other arms (sha256 match, 10205 B) |
+| `GET /api/v1/users` (heavy) | 200 — **byte-identical** to both other arms (`11744c70…`, 10205 B) |
+| `GET /api/v1/user?id=1` (light) | 200 — **byte-identical** to both other arms (`4bee4801…`, 40 B) |
+| `GET /api/v1/user` (no `id`) | 400 |
+| `GET /api/v1/user?id=abc` | 400 |
+| `GET /api/v1/user?id=999999` | 404 — no such row |
 | `GET /db/ping` | 200 `{"status":"ok"}` |
 | `GET /health` | 200 |
-| `GET /api/v1/user?id=1` (light) | **404 — blocked, see below** |
+
+The two 404s are worth keeping distinct. `?id=999999` is a *semantic* 404 from the handler;
+before runtime #50 the same status came from route resolution and the handler never ran. Both
+read "404" in a driver log, so a light result from this target is only meaningful once the
+runtime version is known — see the build requirement below.
 
 Heavy issues the same 3-query aggregate as the other arms, and the process shows no Tomcat and
 no compat-dispatcher class: ingress is `NativeTcpCarrier` (`mode=auto`, `active=posix-hybrid`).
 
-## Blocker: pure mode cannot route a request that carries a query string
+## Resolved: pure mode could not route a request carrying a query string
 
-`GET /api/v1/user?id=1` returns 404 with an empty body. The route is registered and the handler
-is reachable — `GET /api/v1/user` with no query string reaches it and returns this target's own
-400 for the missing `id`. Only the query-bearing form fails, and it fails before the handler.
+**Fixed upstream by `exeris-spring-runtime` #50** ("strip query string before pure-mode route
+lookup"), verified here on 2026-08-02. `ExerisRouteRegistry.resolve` now normalises the request
+target before the map lookup, so the fix covers every caller of the registry rather than the
+dispatcher alone. The section below is kept because it explains what to check if a light result
+from this target ever looks wrong again.
 
-Cause, from `exeris-spring-runtime-web` 0.5.0-SNAPSHOT:
+### Build requirement (this is the part that can still bite)
+
+Light eligibility is a property of the **runtime build**, not of this target's source. A jar
+built against a pre-#50 runtime passes every heavy contract and fails only the light ones — and
+it fails as a 404, which is also a legitimate response for a missing row. Nothing in this
+repository can detect that from the outside. Before trusting a light result here, confirm the
+bundled runtime has the fix:
+
+```bash
+unzip -p target/spring-benchmark-app-pure-1.0.0-SNAPSHOT.jar \
+  'BOOT-INF/lib/exeris-spring-runtime-web-*.jar' > /tmp/w.jar && \
+unzip -p /tmp/w.jar 'eu/exeris/spring/runtime/web/ExerisRouteRegistry.class' > /tmp/r.class && \
+javap -p /tmp/r.class | grep stripQueryString    # present => fix included
+```
+
+`#50` also raised the kernel from 0.8.1 to 0.10.2 (this target's jars moved 0.9.0 → 0.10.2).
+**Rebuild `exeris-spring-runtime-app-comp` together with this target**: the two are the arms of
+the compat-seam pair, and rebuilding one alone puts a kernel-version difference inside a
+measurement whose whole purpose is to isolate the compat dispatcher.
+
+### What the defect was
+
+Cause, from `exeris-spring-runtime-web` 0.5.0-SNAPSHOT before #50:
 
 - `ExerisHttpDispatcher.dispatchWithScope` calls
   `routeRegistry.resolve(request.method(), request.path())` and responds `NOT_FOUND` on null.
@@ -87,26 +120,26 @@ mechanism and, usefully, the fix site:
 > `ExerisHandlerMethodRegistry.java:149`; Pure-Mode dispatcher missed the same strip. This is a
 > behaviour gap between Compat and Pure modes, NOT a documented intentional divergence.**
 
-BudgetHQ's workaround is POST-with-body for anything that needs parameters. **That workaround is
-not available to this target**: the light contract is `GET /api/v1/user?id=1`, served in exactly
-that shape by every other arm. Changing this one arm to POST-with-body would change the method,
-the parsing path and the driver script — a different workload, not a comparable one.
+BudgetHQ's workaround was POST-with-body for anything that needed parameters. **That workaround
+was never available to this target**: the light contract is `GET /api/v1/user?id=1`, served in
+exactly that shape by every other arm, so switching one arm to POST-with-body would have changed
+the method, the parsing path and the driver script — a different workload, not a comparable one.
+Waiting for the upstream fix was therefore the only correct option, and it was the right call.
 
-Worth noting for the upstream fix: DEC-046 flags its own surviving GET-with-query handlers as
-"empirically-untested today" and has a probe sprint queued. The smoke result above is that
-missing evidence — `/api/v1/user` reaches the handler (400) while `/api/v1/user?id=1` does not
-(404) isolates the failure to route resolution, with nothing else varying.
+DEC-046 also flagged its own surviving GET-with-query handlers as "empirically-untested today".
+The smoke on this target supplied that missing evidence in both directions: before #50,
+`/api/v1/user` reached the handler (400) while `/api/v1/user?id=1` did not (404), isolating the
+failure to route resolution with nothing else varying; after #50, the same two requests return
+400 and 200. DEC-046 and its POST-with-body workaround can now be revisited upstream.
 
-This is a host-runtime gap, not a benchmark-harness one: per the repository boundary rule the
-fix belongs in `exeris-spring-runtime`, not here. Nothing in this repo can work around it — route
-resolution happens before application code runs. Once the query-strip patch lands, this arm
-serves the light contract with no change to the code committed here.
+The fix landed where the boundary rule said it belonged — in `exeris-spring-runtime`, not here —
+and this arm serves the light contract with **no change to the code committed in this repo**.
 
-Minimal reproduction: build this target, launch it, then
+Regression check (pre-#50 behaviour on the left, current on the right):
 
 ```bash
-curl -i 'http://localhost:9005/api/v1/user'        # 400 — handler reached
-curl -i 'http://localhost:9005/api/v1/user?id=1'   # 404 — route not resolved
+curl -i 'http://localhost:9005/api/v1/user'        # 400 both before and after — handler reached
+curl -i 'http://localhost:9005/api/v1/user?id=1'   # was 404 (route unresolved), now 200
 ```
 
 **Consequence for the campaign**: the heavy contract
@@ -126,22 +159,17 @@ without the query string.
 
 ## Harness wiring status
 
-Wired **heavy-only**, and that restriction is enforced by the harness rather than left to
-convention.
+Wired for the **full contract family**, heavy and light.
 
 - `runtime/drivers/target-asset-matrix.json` — registered as `spring-on-exeris-pure`,
   `asset_state: runnable`, `mode: pure`, health on :9005.
 - `scenarios/entity-read-by-id/comparative-pair-manifest.json` — listed in
-  `compatible_targets` with an `eligible_contracts` array, and paired against both other arms
+  `compatible_targets` and paired against both other arms
   (`spring-hibernate__spring-on-exeris-pure`, `spring-on-exeris__spring-on-exeris-pure`).
-- `scripts/run-comparative.sh` — the `target_contract_scope` check rejects any run whose
-  `--contract-id` is outside a target's `eligible_contracts`, before the targets are launched.
-  The pair is marked non-eligible with the reason recorded in the readiness artefact.
-
-`eligible_contracts` lists the nine heavy contracts and omits the three single-read ones. The
-split is derived from the contract endpoints, not chosen by hand: every heavy contract targets
-`GET /api/v1/users`, every omitted one targets `GET /api/v1/user?id=1`. When the upstream
-query-strip patch lands, the three move up into the list and nothing in this target changes.
+- `scripts/run-comparative.sh` — the `target_contract_scope` check remains available: a
+  `compatible_targets` entry carrying `eligible_contracts` restricts that target to the listed
+  contracts, rejected before launch with the reason recorded in the readiness artefact. No
+  target currently declares it; this one did while the query-string blocker was open.
 
 Note the two senses of `mode: pure` on this axis. `spring-hibernate` is pure because it never
 touches Exeris at all (Tomcat + Spring MVC); this target is pure because it bypasses Exeris's

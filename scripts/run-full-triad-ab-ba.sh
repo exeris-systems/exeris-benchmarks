@@ -735,6 +735,14 @@ build_target_artifact() {
     spring-on-exeris)
       module_path="targets/exeris-spring-runtime-app-comp"
       ;;
+    spring-on-exeris-pure)
+      # Third arm of the Spring hosting comparison: same app, Exeris NATIVE web layer
+      # (@ExerisRoute) instead of the compatibility dispatcher. Must be rebuilt whenever
+      # spring-on-exeris is — the two are the arms of the compat-seam pair and share a
+      # runtime (and therefore a kernel) version; building one alone puts a kernel-version
+      # difference inside a measurement meant to isolate the dispatcher.
+      module_path="targets/exeris-spring-runtime-app-pure"
+      ;;
     *)
       echo "ERROR: No Maven module mapping defined for target ${target_id}"
       return 1

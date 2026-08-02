@@ -142,20 +142,48 @@ curl -i 'http://localhost:9005/api/v1/user'        # 400 both before and after �
 curl -i 'http://localhost:9005/api/v1/user?id=1'   # was 404 (route unresolved), now 200
 ```
 
-**Consequence for the campaign**: the heavy contract
-(`fixed_contract_cross_runtime_h1_v2`) is runnable on this arm today. The light contract
-(`fixed_contract_cross_runtime_h1_single_read_v1`) is not, until the runtime resolves paths
-without the query string.
+**Consequence for the campaign**: both the heavy and the light contract families are runnable
+on this arm.
 
 ## Not implemented
 
 - `GET /graph/ping` — the entity-read-by-id harness never probes it (only `/health`,
   `/db/ping`, `/api/v1/users`). Required, along with a graph probe service, before this
   target is used for any graph-backed scenario.
-- The shop-order saga endpoints. This target is scoped to `entity-read-by-id`; it carries no
-  `exeris-spring-runtime-flow` dependency, so its footprint is **not** comparable to the
-  compat arm's for RSS purposes. Do not publish an RSS delta between arms 2 and 3 without
-  either adding the flow/saga beans here or stating this difference.
+- The shop-order saga endpoints. This target is scoped to `entity-read-by-id` and carries no
+  `exeris-spring-runtime-flow` dependency.
+
+### Footprint: RSS *is* comparable with the compat arm
+
+An earlier version of this README said the opposite, reasoning that the missing flow
+dependency left subsystems unstarted. That reasoning was wrong, and the boot log says so
+directly — **both arms** run:
+
+```
+8 subsystem(s) in registry: [memory, crypto, persistence, events, graph, transport, http, flow]
+Selector resolved 8 subsystem(s): memory, crypto, persistence, events, graph, transport, http, flow
+```
+
+`Selector=ALL`. The kernel's `flow` and `events` subsystems are not the Spring
+`exeris-spring-runtime-flow` module; dropping the Maven dependency removes Spring beans, not
+subsystems. This matches `exeris-community-app`, which starts the same eight while serving the
+same read-only endpoints.
+
+What actually differs is the Spring-side saga/graph surface — 45 source files against this
+target's 24. Measured locally (n=1, identical flags `-Xms256m -Xmx1280m`, identical read-only
+warmup of 3000 heavy + 3000 light, two forced full GCs before reading):
+
+| | compat | pure | delta |
+|---|---|---|---|
+| RSS | 483 MB | 485 MB | +2 MB (pure higher) |
+| Heap used | 28 MB | 27 MB | −1 MB |
+| Metaspace | 77.34 MB | 74.75 MB | −2.59 MB |
+| Loaded classes | 16 094 | 15 543 | −551 |
+
+The whole structural difference is ~2.6 MB of metaspace, about 0.5 % of RSS — and the RSS
+reading came out marginally *higher* on this arm, i.e. below run-to-run noise and opposite in
+direction to what the retired caveat predicted. Publish per-arm campaign RSS as usual; what is
+retired is the claim that the two arms' footprints cannot be compared.
 
 ## Harness wiring status
 

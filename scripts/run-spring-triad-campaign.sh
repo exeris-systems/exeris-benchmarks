@@ -44,6 +44,18 @@ export EXERIS_DB_PASSWORD="${EXERIS_DB_PASSWORD:-benchmark}"
 
 # All three arms consume $SPRING_JAVA_OPTS (see runtime/drivers/env/spring-runtime*.env),
 # so one heap setting gives iso-heap across the whole triad by construction.
+# ONE run per pair per direction. run-full-triad-ab-ba.sh defaults
+# BENCH_RUNS_PER_PAIR to 20, which is not the repetition axis this campaign uses:
+# repetition comes from the OUTER repeat loop below (repeat01..03), exactly as the
+# C1 triad did — its committed tree contains run01 and nothing else.
+#
+# Leaving it unset multiplies the campaign by 20: 3 pairs x 20 runs x 2 directions
+# = 120 leaves per iteration instead of 6, and 720 instead of 36 across the whole
+# campaign — roughly twelve days instead of about thirty hours. That is what
+# TOTAL_STEPS=120 in the runner is reporting, and it is easy to miss because
+# nothing fails; the campaign simply runs for far too long.
+export BENCH_RUNS_PER_PAIR=1
+
 export BENCH_TOTAL_MEMORY_MB=2048
 export BENCH_SPRING_HEAP_MB=1280
 
@@ -111,6 +123,8 @@ cat > "${ROOT}/campaign-manifest.json" <<JSON
   "repeats": "01,02,03",
   "contracts": "heavy,light",
   "repeat_loop_position": "outer",
+  "runs_per_pair": ${BENCH_RUNS_PER_PAIR},
+  "runs_per_pair_note": "1, not the runner's default of 20 — repetition is the outer repeat loop, matching C1. Expected leaf count = pairs x runs x directions x repeats x contracts = 3x1x2x3x2 = 36.",
   "triad_pairs": "${BENCH_TRIAD_PAIRS}",
   "iso_heap_mb": ${BENCH_SPRING_HEAP_MB},
   "iso_heap_note": "All three arms read SPRING_JAVA_OPTS, so one setting binds the whole triad by construction.",

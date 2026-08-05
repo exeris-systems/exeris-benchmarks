@@ -46,6 +46,22 @@ export EXERIS_DB_PASSWORD="${EXERIS_DB_PASSWORD:-benchmark}"
 # so one heap setting gives iso-heap across the whole triad by construction.
 export BENCH_TOTAL_MEMORY_MB=2048
 export BENCH_SPRING_HEAP_MB=1280
+
+# CPU isolation onto disjoint sets, identical to the C1 triad. Not optional:
+# unpinned, the load generator and the target under test share all 16 threads
+# (observed load average 42), which risks measuring the generator instead of the
+# server and compresses the differences this triad exists to resolve. Leaving it
+# unset would also make these numbers incomparable with C1, which pinned.
+#
+# NOTE the interaction with pool sizing: the kernel derives a default max pool
+# from Runtime.availableProcessors(), which under this pinning is 4. Before the
+# spring-runtime max-pool fix that produced a derived max of 8, below the
+# min of 16 below, and every Exeris-hosted arm failed to boot. Verified fixed on
+# runtime-web snapshot 0.5.0-20260805.065719-25: boots and serves 200 under
+# exactly this pinning with min=16.
+export BENCH_SERVER_CPU_AFFINITY=0-1,8-9
+export BENCH_LOADGEN_CPU_AFFINITY=2-3,10-11
+
 export BENCH_DB_POOL_MIN_SIZE=16
 export BENCH_DB_POOL_MAX_SIZE=256
 export BENCH_ENABLE_NATIVE_MEMORY_TRACKING=1
@@ -98,6 +114,11 @@ cat > "${ROOT}/campaign-manifest.json" <<JSON
   "triad_pairs": "${BENCH_TRIAD_PAIRS}",
   "iso_heap_mb": ${BENCH_SPRING_HEAP_MB},
   "iso_heap_note": "All three arms read SPRING_JAVA_OPTS, so one setting binds the whole triad by construction.",
+  "server_cpu_affinity": "${BENCH_SERVER_CPU_AFFINITY}",
+  "loadgen_cpu_affinity": "${BENCH_LOADGEN_CPU_AFFINITY}",
+  "runtime_web_build": "$(ls -t "${HOME}/.m2/repository/eu/exeris/exeris-spring-runtime-web/0.5.0-SNAPSHOT/"*.jar 2>/dev/null | head -1 | xargs -r basename)",
+  "runtime_build_note": "The Exeris-hosted arms' behaviour depends on this build, not only on this repo. It carries the pure-mode query-strip fix (#50) that makes the light contract routable at all, and the max-pool fix without which no Exeris arm boots under 4-CPU pinning. Record it: a light-contract result from a pre-#50 build fails as a 404 that is indistinguishable from 'no such row'.",
+  "auth_axis": "Measured traffic is unauthenticated. The compat security filter's per-request cost was bounded at +0.14% against 1.48% run-to-run spread (tools/measure-auth-filter-confound.sh, 2026-08-05), so it does not materially flatter the pure arm. The Tomcat arm's servlet SecurityFilterChain is a heavier, UNMEASURED mechanism — do not borrow that bound for pairs involving spring-hibernate.",
   "campaign_level_jfr": "disabled — three 'spring' arms share SPRING_JAVA_OPTS and would collide on one diagnostics filename; per-leaf recordings come from run-comparative.sh via jcmd JFR.start",
   "db_client": {
     "fetch_mode": "equalized",

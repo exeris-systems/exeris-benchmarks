@@ -147,13 +147,34 @@ for repeat in 01 02 03; do
     # with nothing in it. Bound that loss to one iteration instead of all six.
     if [[ "$first_iteration" == "1" ]]; then
       produced=$(find "$out" -name claim-status.json 2>/dev/null | wc -l)
+      eligible=$(find "$out" -name claim-status.json -exec jq -r '.claim_status // empty' {} \; 2>/dev/null | grep -c '^comparison_eligible$' || true)
+
       if [[ "$produced" -eq 0 ]]; then
         echo "ABORT: first iteration produced no comparative leaves (0 claim-status.json)." >&2
         echo "Not continuing — the remaining five iterations would fail identically." >&2
         echo "Check ${out}/campaign.log and the target logs under /tmp." >&2
         exit 1
       fi
-      echo "[fail-fast] first iteration produced ${produced} leaf/leaves — continuing"
+
+      # Counting files is not enough. The first version of this check passed an
+      # iteration in which every leaf was non_eligible, because it only asked
+      # whether claim-status.json existed. Two of this triad's three pairs are
+      # cross-mode and are EXPECTED to come back non_eligible (see claim_track
+      # in the pair manifest — they feed compat/, not the comparative track), so
+      # the right assertion is that the ELIGIBLE pair still produced an eligible
+      # leaf. Zero eligible leaves in a full iteration means the one pair that
+      # should pass did not, and the remaining five iterations would repeat it.
+      if [[ "$eligible" -eq 0 ]]; then
+        echo "ABORT: first iteration produced ${produced} leaf/leaves but NONE comparison_eligible." >&2
+        echo "Expected at least one from the within-mode pair (2-tomcat-vs-pure)." >&2
+        echo "The cross-mode pairs 1 and 3 are expected non_eligible; this is about the third." >&2
+        find "$out" -name claim-status.json -exec sh -c \
+          'echo "  $(jq -r "(.pair_id // \"?\") + \" -> \" + (.claim_status // \"?\") + \" \" + ((.rejection_codes // []) | join(\",\"))" "$1")"' _ {} \; >&2
+        exit 1
+      fi
+
+      echo "[fail-fast] first iteration: ${produced} leaf/leaves, ${eligible} comparison_eligible — continuing"
+      echo "[fail-fast] cross-mode pairs reporting non_eligible is expected; they route to compat/"
       first_iteration=0
     fi
   done

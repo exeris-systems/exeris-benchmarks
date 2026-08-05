@@ -243,7 +243,36 @@ while IFS= read -r target_id; do
       fi
       ;;
     external)
-      pass "runnable external target has required launcher fields: ${target_id}"
+      # This branch used to assert the fields without reading them. It is now an
+      # actual check, because the omission it missed is expensive and silent:
+      # start-target.sh runs EXTERNAL_START_CMD through `bash -lc`, and every
+      # external env file ends that command with `echo $! > "$EXTERNAL_PID_FILE"`.
+      # With the variable undeclared the redirect targets an empty path, bash
+      # reports `line 1: : No such file or directory`, and start-target.sh calls
+      # the target failed — but the JVM has ALREADY launched, so an orphan keeps
+      # holding the port and the next attempt reports "port NNNN is occupied".
+      # Nothing in the campaign fails outright; the affected pairs are simply
+      # skipped and the run completes with fewer leaves than it should have.
+      # (Regression: spring-on-exeris-pure shipped without it and cost a
+      # four-hour campaign in which two of three pairs never ran.)
+      if [[ -n "${env_file}" && -f "${env_abs}" ]]; then
+        missing_launcher_fields=()
+        grep -qE '^[[:space:]]*EXTERNAL_START_CMD=' "${env_abs}" \
+          || missing_launcher_fields+=("EXTERNAL_START_CMD")
+        if grep -q 'EXTERNAL_PID_FILE' "${env_abs}"; then
+          grep -qE '^[[:space:]]*EXTERNAL_PID_FILE=' "${env_abs}" \
+            || missing_launcher_fields+=("EXTERNAL_PID_FILE (referenced but never assigned)")
+        else
+          missing_launcher_fields+=("EXTERNAL_PID_FILE")
+        fi
+        if [[ ${#missing_launcher_fields[@]} -eq 0 ]]; then
+          pass "runnable external target has required launcher fields: ${target_id}"
+        else
+          fail "runnable external target env_file is missing launcher fields: ${target_id} -> ${missing_launcher_fields[*]}"
+        fi
+      else
+        pass "runnable external target has required launcher fields: ${target_id}"
+      fi
       ;;
     *)
       fail "runnable target has unsupported launcher_mode: ${target_id} (${launcher_mode})"

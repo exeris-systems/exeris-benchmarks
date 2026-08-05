@@ -195,6 +195,26 @@
       "mode": "pure"
     },
     {
+      "target_id": "spring-on-exeris-pure-native",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/spring-runtime-on-exeris-pure-native.env",
+      "profile_id": "spring-on-exeris-pure-native",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9006/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Spring on Exeris (pure mode, native ExerisRequestHandler + kernel-native persistence)",
+      "app_dir": "targets/exeris-spring-runtime-app-pure-native",
+      "eligibility_note": "The only arm that is pure on BOTH axes. spring-on-exeris-pure is pure on the web axis only: it still runs Spring Data JPA + Hibernate over exeris-spring-runtime-data's ExerisDataSource (the compatibility DataSource), with exeris.runtime.data.compat-datasource.enabled=true. This target drops that module entirely — no JPA, no Hibernate, no Spring DataSource, no JdbcTemplate — and its repositories call eu.exeris.kernel.spi.persistence.TransactionalExecutor directly, executed by kernel-core TransactionOrchestrator over a per-request-scoped PersistenceEngine adapter (see ExerisPersistenceConfiguration). PRIMARY PAIR: spring-on-exeris-pure__spring-on-exeris-pure-native isolates the persistence axis — same web layer, same runtime, same kernel line, same pool config, same SQL result shapes. Against spring-hibernate or spring-on-exeris BOTH axes move at once; label such a leaf accordingly and do not attribute the delta to persistence alone. SQL PROVENANCE: every statement is copied verbatim from targets/exeris-community-app's UserRepository, so this arm and exeris-community issue byte-identical SQL. Change one, change both, or a runtime comparison silently becomes a query-plan comparison. TX BOUNDARY: no @Transactional on UserService — the read boundary is TransactionalExecutor's own (inReadSession for heavy, query for light). Layering Spring's transaction manager on top would acquire a second connection per request. This differs from the ORM arm by necessity and is part of what 'native persistence' means on this axis. \"NATIVE\" SCOPE: native repository API, NOT a native wire protocol. Community persistence is JDBC+HikariCP; the off-heap PgWire engine is Enterprise-only, so pgjdbc and Hikari are still on this classpath and in the measured path. Never label a run here 'Exeris native persistence' without that qualifier. BUILD PARITY: kernel is pinned INLINE on the dependencies (0.10.2), not via the kernel BOM — exeris-spring-runtime-bom inherits a dependencyManagement section from its parent that pins exeris-kernel-* to a newer line and wins over a later BOM import. Verify with `unzip -l <jar> | grep exeris-kernel` against the sibling arms after every build. The other three arms carry NO kernel pin and will drift to whatever the runtime BOM's parent resolves on their next rebuild. STATUS: built and jar-verified 2026-08-05; NOT yet boot-verified against a database. Run the Stage-4 preflight (/health, /db/ping, /api/v1/users) before using any leaf from this target. CONFIDENTIALITY: excluded from the public docs path, as with the other spring-on-exeris arms.",
+      "legacy_target_ids": [],
+      "mode": "pure"
+    },
+    {
       "target_id": "quarkus-hibernate",
       "tier": "community",
       "protocol_mode": "h1",

@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.exeris.benchmarks</groupId>
+  <artifactId>spring-benchmark-app-pure-native</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+  <name>Spring Benchmark App — Spring-on-Exeris (Pure Mode, Native Persistence)</name>
+
+  <properties>
+    <java.version>26</java.version>
+    <maven.compiler.release>${java.version}</maven.compiler.release>
+    <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
+    <!--
+      Pinned to the same lines as targets/exeris-spring-runtime-app-comp and
+      targets/exeris-spring-runtime-app-pure so that runtime version is not a variable on
+      either axis. Bump all three together or an axis silently acquires a second variable.
+    -->
+    <spring-boot.version>3.5.14</spring-boot.version>
+    <exeris-spring-runtime.version>0.5.0-SNAPSHOT</exeris-spring-runtime.version>
+    <!--
+      MUST equal the kernel line that exeris-spring-runtime ${exeris-spring-runtime.version}
+      pulls transitively — verify with
+        unzip -l target/spring-benchmark-app-pure-native-1.0.0-SNAPSHOT.jar | grep exeris-kernel
+      against the same command on the pure and compat arms. This target declares kernel-spi and
+      kernel-core directly (the other two arms only get them transitively), so a mismatch here
+      would put two kernel lines on one classpath and silently break the persistence axis.
+    -->
+    <exeris-kernel.version>0.10.2</exeris-kernel.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!--
+        Pin neo4j-bolt-connection to the version paired with neo4j-java-driver:5.28.8
+        (bolt 6.0.2 API) — identical to the compat arm. The driver arrives transitively and
+        Spring Boot's Neo4jAutoConfiguration instantiates it at startup; without this pin the
+        context fails with NoSuchMethodError on Config$ConfigBuilder.withoutDriverMetrics.
+        Keeping the same pins as the compat arm also keeps the bean graph matched.
+      -->
+      <dependency>
+        <groupId>org.neo4j.bolt</groupId>
+        <artifactId>neo4j-bolt-connection-bom</artifactId>
+        <version>6.0.2</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>eu.exeris</groupId>
+        <artifactId>exeris-spring-runtime-bom</artifactId>
+        <version>${exeris-spring-runtime.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <!--
+        The spring-runtime BOM does not manage eu.exeris:exeris-kernel-*, so the kernel line is
+        pinned here explicitly. Imported AFTER the spring-runtime BOM so the runtime keeps
+        precedence over anything it also declares.
+      -->
+      <dependency>
+        <groupId>eu.exeris</groupId>
+        <artifactId>exeris-kernel-bom</artifactId>
+        <version>${exeris-kernel.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!--
+      Host runtime. NOTE: exeris-spring-runtime-web is present but this target does NOT set
+      exeris.runtime.web.mode=compatibility, so ExerisCompatAutoConfiguration stays off and
+      ExerisWebAutoConfiguration's native ExerisHttpDispatcher serves every request.
+    -->
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-boot-autoconfigure</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-spring-runtime-tx</artifactId>
+    </dependency>
+    <!--
+      exeris-spring-runtime-data is deliberately ABSENT. It contributes
+      ExerisDataAutoConfiguration#exerisDataSource, i.e. the compatibility DataSource bridge
+      that targets/exeris-spring-runtime-app-pure still uses. Declaring it here would put a
+      javax-style DataSource back on the classpath and defeat the purpose of this target.
+      exeris-spring-runtime-tx is kept: it supplies PersistenceEngineProvider, the supported
+      Spring-side accessor for the kernel PersistenceEngine.
+    -->
+
+    <!--
+      Persistence: kernel-native. No spring-boot-starter-data-jpa and no
+      spring-boot-starter-jdbc — there is no EntityManagerFactory, no Hibernate and no
+      JdbcTemplate in this target. Repositories use TransactionalExecutor from
+      exeris-kernel-spi, executed by TransactionOrchestrator from exeris-kernel-core, which is
+      the same pair targets/exeris-community-app uses. HikariCP and pgjdbc stay because the
+      Community persistence provider is itself JDBC+HikariCP (see
+      docs/result-interpretation.md): "native" here means native repository API, not a native
+      wire protocol — the off-heap PgWire engine is Enterprise-only.
+    -->
+    <!--
+      Versions are declared INLINE, not left to the imported kernel BOM. exeris-spring-runtime-bom
+      inherits a dependencyManagement section from its own parent that pins eu.exeris:exeris-kernel-*
+      to a newer line, and because it is imported first it wins over a later kernel-BOM import.
+      A version on the dependency itself outranks any dependencyManagement entry, so this is the
+      only placement that actually holds. Verify after every build:
+        unzip -l target/spring-benchmark-app-pure-native-1.0.0-SNAPSHOT.jar | grep exeris-kernel
+    -->
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-spi</artifactId>
+      <version>${exeris-kernel.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-core</artifactId>
+      <version>${exeris-kernel.version}</version>
+    </dependency>
+    <!--
+      Edition driver. The other two arms get this transitively via exeris-spring-runtime-data;
+      dropping that module dropped the edition with it, and without a SubsystemProvider on the
+      classpath the kernel starts with no persistence subsystem at all. Runtime scope, never
+      compile: application code must not import community.*/enterprise.* — the edition is
+      resolved by ServiceLoader, which is what keeps this target edition-swappable.
+    -->
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-community</artifactId>
+      <version>${exeris-kernel.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+    </dependency>
+    <!-- Same version as the compat arm; see the bolt BOM note above. -->
+    <dependency>
+      <groupId>org.neo4j.driver</groupId>
+      <artifactId>neo4j-java-driver</artifactId>
+      <version>5.28.8</version>
+    </dependency>
+
+    <!-- Response encoding. Same Jackson line as the compat arm so serialisation is not a variable. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${maven.compiler.plugin.version}</version>
+      </plugin>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <version>${spring-boot.version}</version>
+        <configuration>
+          <mainClass>eu.exeris.benchmarks.targets.springapp.SpringBenchmarkApplication</mainClass>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

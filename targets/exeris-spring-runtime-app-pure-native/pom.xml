@@ -20,21 +20,13 @@
       either axis. Bump all three together or an axis silently acquires a second variable.
     -->
     <!--
-      Kept at 3.5.14 because this property CANNOT currently raise it. Setting it to 4.0.4 builds
-      cleanly and silently produces a Boot 3 jar: exeris-spring-runtime-bom inherits its
-      dependencyManagement from exeris-spring-runtime-parent 0.5.0-SNAPSHOT, which pins Spring
-      Boot 3.5.x, and because that BOM is imported first it beats a later
-      spring-boot-dependencies:4.0.4 import. Verified 2026-08-06 — the resulting jar carried
-      spring-boot-3.5.14 / spring-core-6.2.18 while the property read 4.0.4. Same precedence
-      trap as the kernel pin above; the difference is that a Spring Boot line cannot be forced
-      with inline versions the way three kernel artifacts can.
-
-      Equalising the Spring version against targets/spring-benchmark-app (Boot 4.0.4 /
-      Hibernate 7.2.7) therefore needs a spring-runtime build whose parent targets Boot 4 — not
-      a change here. Until then the version gap remains an unquantified confound on every
-      Tomcat-relative number, and the pins across the Exeris arms must move together.
+      Must equal targets/spring-benchmark-app and exeris-spring-runtime's spring.boot.sb4.version
+      (ADR-028 dual matrix). This property alone is NOT sufficient — it only takes effect because
+      spring-boot-dependencies is imported ahead of the Exeris BOM below; see the note there.
+      Requires the runtime to have been installed with -Pmatrix-sb4, or the eu.exeris jars are
+      Boot-3-compiled and this pairing is unsupported.
     -->
-    <spring-boot.version>3.5.14</spring-boot.version>
+    <spring-boot.version>4.1.0</spring-boot.version>
     <exeris-spring-runtime.version>0.5.0-SNAPSHOT</exeris-spring-runtime.version>
     <!--
       MUST equal the kernel line that exeris-spring-runtime ${exeris-spring-runtime.version}
@@ -57,6 +49,28 @@
         context fails with NoSuchMethodError on Config$ConfigBuilder.withoutDriverMetrics.
         Keeping the same pins as the compat arm also keeps the bean graph matched.
       -->
+      <!--
+        FIRST, deliberately. exeris-spring-runtime-bom leaves ${spring.boot.version} to its
+        parent, whose matrix-sb3 profile is activeByDefault — and `mvn install` writes the POM
+        UNINTERPOLATED, so that placeholder resolves in the CONSUMING build, not in the runtime
+        build. Installing the runtime with -Pmatrix-sb4 therefore does NOT change what this
+        project sees: the profile does not travel with the artifact, and the arm still resolved
+        Boot 3.5.14 (verified 2026-08-06, twice).
+
+        Since the first-imported BOM wins, importing spring-boot-dependencies ahead of the
+        Exeris BOM is what actually fixes the Boot line. This is safe only because the installed
+        eu.exeris jars were themselves compiled under -Pmatrix-sb4, i.e. against this same Boot
+        line — pairing Boot-3-compiled runtime jars with Boot 4 here would be a different and
+        unsupported thing. Re-verify with `unzip -l <jar> | grep spring-boot-` after every build;
+        the pom is not evidence.
+      -->
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
       <dependency>
         <groupId>org.neo4j.bolt</groupId>
         <artifactId>neo4j-bolt-connection-bom</artifactId>
@@ -80,13 +94,6 @@
         <groupId>eu.exeris</groupId>
         <artifactId>exeris-kernel-bom</artifactId>
         <version>${exeris-kernel.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-      <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-dependencies</artifactId>
-        <version>${spring-boot.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -193,13 +200,22 @@
     </dependency>
 
     <!-- Response encoding. Same Jackson line as the compat arm so serialisation is not a variable. -->
+    <!--
+      Jackson 3 (tools.jackson), not Jackson 2 (com.fasterxml.jackson). Spring Boot 4 moved the
+      JSON stack and no longer autoconfigures a com.fasterxml.jackson ObjectMapper, so the
+      Jackson 2 coordinates left the context unable to start. Matching what the rest of the
+      ladder does: exeris-community-app already encodes with Jackson 3, and the Tomcat arm gets
+      it from Boot 4.1.0 — so all four arms now share one serialisation line instead of the
+      Spring arms differing from community in the response path of every request.
+
+      No jackson-datatype-jsr310 counterpart: java.time support is in Jackson 3 core.
+
+      FENCE: serialisation library sits in the per-request path and weighs most on the light
+      contract. Numbers measured before this change do not transfer across it.
+    -->
     <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
+      <groupId>tools.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.datatype</groupId>
-      <artifactId>jackson-datatype-jsr310</artifactId>
     </dependency>
   </dependencies>
 

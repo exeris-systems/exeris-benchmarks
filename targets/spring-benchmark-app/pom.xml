@@ -16,7 +16,18 @@
     <java.version>26</java.version>
     <maven.compiler.release>${java.version}</maven.compiler.release>
     <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
-    <spring-boot.version>4.0.4</spring-boot.version>
+    <!--
+      MUST equal spring.boot.sb4.version in exeris-spring-runtime's parent POM (ADR-028 dual
+      matrix). That is what the Exeris-hosted arms resolve to when their runtime is built with
+      -Pmatrix-sb4, and equality on this line is the whole point: until 2026-08-06 this arm ran
+      Boot 4.0.4 / Hibernate 7.2.7 against the Exeris arms' Boot 3.5.14 / Hibernate 6.6.49, the
+      largest unquantified confound on every Tomcat-relative number in the claims registry.
+
+      Raised 4.0.4 -> 4.1.0 rather than pinning the runtime's sb4 line down to 4.0.4, so the
+      comparison sits on the newest line both sides can reach. If sb4 moves in the runtime, move
+      this with it and rebuild all four arms together.
+    -->
+    <spring-boot.version>4.1.0</spring-boot.version>
     <graalvm.buildtools.native.version>0.10.4</graalvm.buildtools.native.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>

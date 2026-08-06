@@ -73,6 +73,17 @@ export BENCH_SPRING_HEAP_MB=1280
 # exactly this pinning with min=16.
 export BENCH_SERVER_CPU_AFFINITY=0-1,8-9
 export BENCH_LOADGEN_CPU_AFFINITY=2-3,10-11
+# Completes the core partition on the 16-thread box: 0-1,8-9 server | 2-3,10-11 loadgen |
+# 4-7,12-15 database, no overlap. Consumed twice — docker compose pins the container with it,
+# and resolve_db_cpuset() reads it as its highest-priority probe, so the DB-CPU sampler watches
+# exactly the cores the DB was confined to.
+#
+# FENCE. Every campaign before 2026-08-06 ran with Postgres UNPINNED across all 16 threads
+# (verified: postmaster Cpus_allowed_list=0-15 while the target was pinned to 0-1,8-9), so the
+# DB contended for the measured arm's own cores and DB CPU was unattributable. Absolute levels
+# from pinned and unpinned runs are not mixable. Confining PG to 4 physical cores may also lower
+# the DB ceiling — say so with any heavy-contract number, since heavy is DB-bound.
+export BENCH_DB_CPUSET=4-7,12-15
 
 export BENCH_DB_POOL_MIN_SIZE=16
 export BENCH_DB_POOL_MAX_SIZE=256
@@ -130,6 +141,8 @@ cat > "${ROOT}/campaign-manifest.json" <<JSON
   "iso_heap_note": "All three arms read SPRING_JAVA_OPTS, so one setting binds the whole triad by construction.",
   "server_cpu_affinity": "${BENCH_SERVER_CPU_AFFINITY}",
   "loadgen_cpu_affinity": "${BENCH_LOADGEN_CPU_AFFINITY}",
+  "db_cpuset": "${BENCH_DB_CPUSET}",
+  "db_cpuset_note": "Disjoint from the server and loadgen pins. FENCE: campaigns before 2026-08-06 ran Postgres unpinned on all 16 threads, contending with the measured arm; absolute levels do not cross that boundary.",
   "runtime_web_build": "$(ls -t "${HOME}/.m2/repository/eu/exeris/exeris-spring-runtime-web/0.5.0-SNAPSHOT/"*.jar 2>/dev/null | head -1 | xargs -r basename)",
   "runtime_build_note": "The Exeris-hosted arms' behaviour depends on this build, not only on this repo. It carries the pure-mode query-strip fix (#50) that makes the light contract routable at all, and the max-pool fix without which no Exeris arm boots under 4-CPU pinning. Record it: a light-contract result from a pre-#50 build fails as a 404 that is indistinguishable from 'no such row'.",
   "auth_axis": "Measured traffic is unauthenticated. The compat security filter's per-request cost was bounded at +0.14% against 1.48% run-to-run spread (tools/measure-auth-filter-confound.sh, 2026-08-05), so it does not materially flatter the pure arm. The Tomcat arm's servlet SecurityFilterChain is a heavier, UNMEASURED mechanism — do not borrow that bound for pairs involving spring-hibernate.",

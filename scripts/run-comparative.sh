@@ -2893,27 +2893,77 @@ AB_BA_ORDERS_COMPLETED_JSON="$(printf '%s' "$AB_BA_ORDERS_COMPLETED_RAW" | tr ',
 # --- DB measurement-window diagnostics (BUG 1 pg_stat delta + BUG 3 DB-CPU sampler) --------
 # The Postgres cpuset is discoverable via BENCH_DB_CPUSET, else docker-inspect of the
 # benchmark-db container, else empty (mpstat then falls back to -P ALL). Echoes the core list.
+# Set as a side effect of resolve_db_cpuset so the label reports which probe actually answered.
+DB_CPUSET_SOURCE="unresolved"
+
 resolve_db_cpuset() {
+  local db_container="${DB_CONTAINER_NAME:-exeris-benchmark-db}"
+  local resolved=""
+
   if [[ -n "${BENCH_DB_CPUSET:-}" ]]; then
+    DB_CPUSET_SOURCE="env:BENCH_DB_CPUSET"
     printf '%s' "$BENCH_DB_CPUSET"
     return 0
   fi
-  local inspected=""
+
   if command -v docker >/dev/null 2>&1; then
-    inspected="$(docker inspect -f '{{.HostConfig.CpusetCpus}}' "${DB_CONTAINER_NAME:-exeris-benchmark-db}" 2>/dev/null || true)"
+    # HostConfig.CpusetCpus is populated only when the container was started with an explicit
+    # --cpuset-cpus. The compose stack does not set one, so this probe returned empty on every
+    # run to date and the sampler silently fell back to -P ALL — producing an all-core mpstat
+    # capture filed under the name db-cpuset-mpstat.csv. Campaign
+    # 20260805T140104Z-spring-triad-n3 recorded 'all-cores-fallback' in 58 of 58 meta files,
+    # i.e. it has no DB-CPU measurement at all despite carrying a well-formed artifact.
+    resolved="$(docker inspect -f '{{.HostConfig.CpusetCpus}}' "$db_container" 2>/dev/null || true)"
+    if [[ -n "$resolved" ]]; then
+      DB_CPUSET_SOURCE="docker-hostconfig"
+      printf '%s' "$resolved"
+      return 0
+    fi
+
+    # The cgroup the container actually runs under. Answers even when no explicit cpuset was
+    # requested — in that case it reports every online CPU, which is the honest answer and is
+    # distinguished downstream by cpuset_is_restricted rather than by pretending to be narrower.
+    resolved="$(docker exec "$db_container" cat /sys/fs/cgroup/cpuset.cpus.effective 2>/dev/null | tr -d '[:space:]' || true)"
+    if [[ -n "$resolved" ]]; then
+      DB_CPUSET_SOURCE="cgroup-effective"
+      printf '%s' "$resolved"
+      return 0
+    fi
+
+    # Last resort: the postmaster's own allowed-CPU mask, read from the host.
+    local dbpid
+    dbpid="$(docker inspect -f '{{.State.Pid}}' "$db_container" 2>/dev/null || true)"
+    if [[ -n "$dbpid" && "$dbpid" != "0" && -r "/proc/${dbpid}/status" ]]; then
+      resolved="$(awk '/^Cpus_allowed_list:/{print $2}' "/proc/${dbpid}/status" 2>/dev/null || true)"
+      if [[ -n "$resolved" ]]; then
+        DB_CPUSET_SOURCE="proc-cpus-allowed"
+        printf '%s' "$resolved"
+        return 0
+      fi
+    fi
   fi
-  printf '%s' "$inspected"
+
+  DB_CPUSET_SOURCE="all-cores-fallback"
+  printf ''
 }
 
 # Records how the cpuset was resolved (for reproducibility of the DB-CPU attribution).
 db_cpuset_source_label() {
+  printf '%s' "${DB_CPUSET_SOURCE:-unresolved}"
+}
+
+# Whether the resolved set is actually narrower than the host's online CPUs. A resolved-but-
+# unrestricted cpuset still yields no DB-CPU attribution: the sampler measures every core and
+# the DB's share is not separable. Reported so a reader cannot mistake "resolved" for "usable".
+db_cpuset_is_restricted() {
   local resolved="$1"
-  if [[ -n "${BENCH_DB_CPUSET:-}" ]]; then
-    printf 'env:BENCH_DB_CPUSET'
-  elif [[ -n "$resolved" ]]; then
-    printf 'docker-inspect'
+  [[ -n "$resolved" ]] || { printf 'false'; return 0; }
+  local online
+  online="$(cat /sys/devices/system/cpu/online 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ -n "$online" && "$resolved" == "$online" ]]; then
+    printf 'false'
   else
-    printf 'all-cores-fallback'
+    printf 'true'
   fi
 }
 
@@ -2936,6 +2986,9 @@ pgss_compute_delta_best_effort() {
     ($b[0].queries // []) as $bq
     | ($f[0].queries // []) as $fq
     | ($bq | map({ (.queryid): {calls: (.calls // 0), total_time_ms: (.total_time_ms // 0)} }) | add // {}) as $bmap
+    | ([ $fq[]
+         | select($bmap[.queryid] != null)
+         | select((.calls // 0) < ($bmap[.queryid].calls // 0)) ] | length > 0) as $reset_detected
     | {
         timestamp: ($f[0].timestamp // null),
         phase: "measurement-delta",
@@ -2943,6 +2996,10 @@ pgss_compute_delta_best_effort() {
         column_profile: ($f[0].column_profile // null),
         baseline_timestamp: ($b[0].timestamp // null),
         final_timestamp: ($f[0].timestamp // null),
+        reset_detected: $reset_detected,
+        warning: (if $reset_detected then
+            "pg_stat_statements was RESET inside this measurement window (final call counts fall below baseline for at least one queryid). The delta below is NOT window-scoped and MUST NOT be used for query-shape equivalence or query-cost comparison. Without this flag the artifact is an empty-but-well-formed queries:[] and reads as a valid measurement of nothing."
+          else null end),
         note: "Per-target delta over this target'"'"'s measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
         queries: [
           $fq[]
@@ -2987,6 +3044,13 @@ run_wrk_target() {
   # BUG 3: fine-grained DB-CPU sampler (Postgres cpuset) bracketed to the measurement window.
   local db_cpu_mpstat_pid="" db_cpu_mpstat_csv="${outdir}/db-cpuset-mpstat.csv"
   local db_cpuset_resolved=""
+  # Idle co-resident neighbour. Both targets are launched and stay resident while only one is
+  # driven, but sampling covered the measured arm alone — so the cost of the idle JVM beside it
+  # was never recorded. That is the missing evidence for two open findings: the heavy-10k
+  # co-residence contamination, and the Spring ladder's 2.3-3.9 % between-leaf penalty that
+  # appears whenever the resident neighbour is the other Exeris arm.
+  local neighbour_sampler_pid="" neighbour_pid="" neighbour_port=""
+  local neighbour_csv="${outdir}/neighbour-resource-samples.csv"
   # BUG 1: per-target pg_stat_statements measurement-window delta artifacts.
   local pgss_baseline="${outdir}/pg_stat_statements-measurement-baseline.json"
   local pgss_final="${outdir}/pg_stat_statements-measurement-final.json"
@@ -3033,6 +3097,22 @@ run_wrk_target() {
     sampler_pid=$!
   fi
 
+  # Sample the idle neighbour over the SAME window, so its CPU and RSS are directly comparable
+  # with the measured arm's. Best-effort: absent when the pair shares a port or the neighbour is
+  # not up, in which case no artifact is written rather than an empty one.
+  if [[ "$port" == "$TARGET_A_PORT" ]]; then
+    neighbour_port="$TARGET_B_PORT"
+  elif [[ "$port" == "$TARGET_B_PORT" ]]; then
+    neighbour_port="$TARGET_A_PORT"
+  fi
+  if [[ -n "$neighbour_port" && "$neighbour_port" != "$port" ]]; then
+    neighbour_pid="$(detect_pid_for_port "$neighbour_port" 2>/dev/null || true)"
+    if [[ -n "$neighbour_pid" && -d "/proc/$neighbour_pid" ]]; then
+      start_resource_sampler "$neighbour_pid" "$neighbour_csv" 1 &
+      neighbour_sampler_pid=$!
+    fi
+  fi
+
   # BUG 3: start a fine-grained (1s) DB-CPU sampler over the Postgres cpuset, bracketed to
   # THIS target's measurement window (after warmup, stopped right after measurement). This
   # replaces reliance on the system sar cron (10-min cadence, uselessly coarse for a
@@ -3046,13 +3126,23 @@ run_wrk_target() {
     --arg source "$(db_cpuset_source_label "$db_cpuset_resolved")" \
     --arg target_id "$target_id" \
     --arg started "$([[ -n "$db_cpu_mpstat_pid" ]] && echo true || echo false)" \
-    '{resolved_cpuset: $cpuset, source: $source, interval_seconds: 1, window: "measurement", target_id: $target_id, sampler_started: ($started == "true")}' \
+    --arg restricted "$(db_cpuset_is_restricted "$db_cpuset_resolved")" \
+    '{resolved_cpuset: $cpuset, source: $source, cpuset_is_restricted: ($restricted == "true"), db_cpu_attributable: ($restricted == "true"), interval_seconds: 1, window: "measurement", target_id: $target_id, sampler_started: ($started == "true")}' \
     > "${outdir}/db-cpuset-mpstat.meta.json" 2>/dev/null || true
 
   # BUG 1: pg_stat_statements baseline at measurement-start (after warmup). The matching
   # final+delta are taken at measurement-end below, both strictly inside this run-comparative
   # invocation — so the delta reflects only THIS target's measurement window and cannot be
   # clobbered by the next leaf's reset (robust for both ab and ba order).
+  #
+  # Being inside this invocation is necessary but not sufficient. The defect that emptied 34 of
+  # 58 arm-windows in campaign 20260805T140104Z-spring-triad-n3 was the DB container's own
+  # healthcheck resetting pg_stat_statements every 5 s (fixed in the compose file) — a caller
+  # no ordering here could reach. The exported inhibit flag closes the remaining shell-side
+  # hole: this script nests copies of itself, so a nested invocation can reach the scenario
+  # diagnostics hook mid-window. Every descendant inherits the flag; it is released only after
+  # the final snapshot.
+  export BENCH_PGSS_RESET_INHIBIT=1
   pgss_snapshot_best_effort "$pgss_baseline" "measurement-baseline"
 
   if [[ "$PERF_STAT_REQUIRED" == "1" || "$PERF_STAT_CAPTURE_REQUESTED" == "1" ]]; then
@@ -3121,13 +3211,30 @@ run_wrk_target() {
     wait "$sampler_pid" 2>/dev/null || true
   fi
 
+  if [[ -n "$neighbour_sampler_pid" ]]; then
+    kill "$neighbour_sampler_pid" 2>/dev/null || true
+    wait "$neighbour_sampler_pid" 2>/dev/null || true
+  fi
+  if [[ -f "$neighbour_csv" ]]; then
+    summarize_resource_samples "$neighbour_csv" "${outdir}/neighbour-resource-metrics.json" "$MEASUREMENT_SECONDS"
+    jq -n \
+      --arg measured "$target_id" \
+      --arg neighbour_port "$neighbour_port" \
+      --arg neighbour_pid "$neighbour_pid" \
+      '{measured_target_id: $measured, neighbour_port: $neighbour_port, neighbour_pid: $neighbour_pid, window: "measurement", role: "resident-idle", note: "Resource samples for the co-resident target that was launched but NOT driven during this window. Its CPU and RSS are the cost of co-residence, not of serving traffic."}' \
+      > "${outdir}/neighbour-resource-metrics.meta.json" 2>/dev/null || true
+  fi
+
   # BUG 3: stop the DB-CPU sampler at measurement-end (converts its raw capture to CSV).
   if [[ -n "$db_cpu_mpstat_pid" ]] && command -v bench_stop_mpstat_sampler >/dev/null 2>&1; then
     bench_stop_mpstat_sampler "$db_cpu_mpstat_pid" "$db_cpu_mpstat_csv" || true
   fi
 
   # BUG 1: pg_stat_statements final at measurement-end, then emit the per-target window delta.
+  # The inhibit flag is released only after the final snapshot — a reset between the two would
+  # reproduce exactly the defect it guards against.
   pgss_snapshot_best_effort "$pgss_final" "measurement-final"
+  unset BENCH_PGSS_RESET_INHIBIT
   pgss_compute_delta_best_effort "$pgss_baseline" "$pgss_final" "$pgss_delta"
 
   if [[ -f "${outdir}/resource-samples.csv" ]]; then

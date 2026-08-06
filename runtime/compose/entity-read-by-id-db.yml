@@ -12,6 +12,17 @@ services:
       - -c
       - shared_preload_libraries=pg_stat_statements
     container_name: exeris-benchmark-db
+    # Pin Postgres off the server and loadgen cores. Empty = unpinned (previous behaviour);
+    # the campaign scripts set it next to BENCH_SERVER_CPU_AFFINITY / BENCH_LOADGEN_CPU_AFFINITY
+    # so the whole core partition is declared in one place. The same variable is the
+    # highest-priority probe in resolve_db_cpuset(), so pinning the DB and telling the DB-CPU
+    # sampler which cores to watch are one act, not two that can drift apart.
+    #
+    # FENCE: runs with and without a DB cpuset are NOT mixable. Unpinned, Postgres shares all
+    # 16 cores with the measured target (verified 2026-08-06: postmaster Cpus_allowed_list=0-15
+    # against a target pinned to 0-1,8-9), so it both contends with the arm under measurement
+    # and makes DB CPU unattributable.
+    cpuset: "${BENCH_DB_CPUSET:-}"
     environment:
       POSTGRES_DB: benchmark_db
       POSTGRES_USER: benchmark
@@ -22,7 +33,17 @@ services:
       - ./entity-read-by-id-init.sql:/docker-entrypoint-initdb.d/01-pg-stat-statements-init.sql
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U benchmark -d benchmark_db && psql -U benchmark -d benchmark_db -c \"SELECT pg_stat_statements_reset(0::oid, 0::oid, 0::bigint);\" > /dev/null 2>&1"]
+      # MUST NOT mutate server state. This probe used to call pg_stat_statements_reset() and,
+      # at interval 5s, wiped the counters every five seconds for the entire run — including
+      # inside every measurement window. The per-target baseline→final delta then went
+      # negative, the `$dcalls > 0` filter dropped every row, and the artifact was written as
+      # a well-formed `queries: []`: valid-looking evidence of nothing. 34 of 58 arm-windows
+      # in campaign 20260805T140104Z-spring-triad-n3 came out that way, and every earlier
+      # campaign using this compose file has the same defect.
+      #
+      # The replacement still proves the extension is loaded and queryable — which is all the
+      # healthcheck ever needed — without touching the counters.
+      test: ["CMD-SHELL", "pg_isready -U benchmark -d benchmark_db && psql -U benchmark -d benchmark_db -c \"SELECT 1 FROM pg_stat_statements LIMIT 1;\" > /dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       retries: 10

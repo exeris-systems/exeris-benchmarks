@@ -21,7 +21,13 @@ ROOT="results/raw/entity-read-by-id/${CAMPAIGN_TS}-spring-triad-n3"
 mkdir -p "$ROOT"
 cp -- "$0" "$ROOT/driver.sh"
 
-export BENCH_TRIAD_PAIRS="1-tomcat-vs-compat:spring-hibernate:spring-on-exeris:1:9001:9004;2-tomcat-vs-pure:spring-hibernate:spring-on-exeris-pure:2:9001:9005;3-compat-vs-pure:spring-on-exeris:spring-on-exeris-pure:3:9004:9005"
+# Execution order matters and is currently a confound. Pair 3 is simultaneously the last pair
+# and the only pair whose two arms are both Exeris, and both Exeris arms lose 2.3-3.9 % there
+# versus the same arm measured beside Tomcat (reproduced in both contracts and all repeats of
+# the 2026-08-05 ladder). Slot-order and resident-neighbour-identity are indistinguishable in
+# that layout. Overriding this variable with the order 3;1;2 separates them: if the penalty
+# stays with pair 3 it is the neighbour, if it moves to whatever runs last it is the slot.
+export BENCH_TRIAD_PAIRS="${BENCH_TRIAD_PAIRS:-1-tomcat-vs-compat:spring-hibernate:spring-on-exeris:1:9001:9004;2-tomcat-vs-pure:spring-hibernate:spring-on-exeris-pure:2:9001:9005;3-compat-vs-pure:spring-on-exeris:spring-on-exeris-pure:3:9004:9005}"
 
 # ---------------------------------------------------------------------------
 # DB client — PINNED BY THIS CALLER. Not optional, and not a detail.

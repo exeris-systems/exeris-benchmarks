@@ -65,6 +65,17 @@ export BENCH_RUNS_PER_PAIR=1
 export BENCH_TOTAL_MEMORY_MB=2048
 export BENCH_SPRING_HEAP_MB=1280
 
+# The heap above binds the Spring arms only — they are the ones that read SPRING_JAVA_OPTS.
+# exeris-community reads EXERIS_JAVA_OPTS instead, and its env file's default carries
+# --add-opens flags and NO heap, so without the line below it would run on the JVM default
+# (a quarter of host RAM) while every Spring arm runs a fixed 1280m. That is a posture
+# mismatch, not a detail: budget-matched and matched-heap postures give RSS answers ~3x
+# apart, and it would land on exactly the pair that closes HLA gap G1.
+#
+# Safe to set from here because the env file APPENDS an externally-provided EXERIS_JAVA_OPTS
+# after its own flags, so these win. Keep it equal to BENCH_SPRING_HEAP_MB by construction.
+export EXERIS_JAVA_OPTS="-Xms${BENCH_SPRING_HEAP_MB}m -Xmx${BENCH_SPRING_HEAP_MB}m"
+
 # CPU isolation onto disjoint sets, identical to the C1 triad. Not optional:
 # unpinned, the load generator and the target under test share all 16 threads
 # (observed load average 42), which risks measuring the generator instead of the

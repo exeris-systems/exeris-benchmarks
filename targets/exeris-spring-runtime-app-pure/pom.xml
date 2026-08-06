@@ -19,7 +19,7 @@
       the Pure-vs-Compat axis differ in the web layer alone. Bump both together or the axis
       silently acquires a second variable.
     -->
-    <spring-boot.version>3.5.14</spring-boot.version>
+    <spring-boot.version>4.1.0</spring-boot.version>
     <exeris-spring-runtime.version>0.5.0-SNAPSHOT</exeris-spring-runtime.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -40,17 +40,24 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
-      <dependency>
-        <groupId>eu.exeris</groupId>
-        <artifactId>exeris-spring-runtime-bom</artifactId>
-        <version>${exeris-spring-runtime.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
+      <!--
+        FIRST, deliberately: the first-imported BOM wins, and exeris-spring-runtime-bom leaves
+        ${spring.boot.version} to its parent whose matrix-sb3 profile is activeByDefault. `mvn
+        install` writes that POM uninterpolated, so the placeholder resolves HERE, not in the
+        runtime build — installing the runtime with -Pmatrix-sb4 does not change what this
+        project sees. Verify with `unzip -l <jar> | grep spring-boot-`; the pom is not evidence.
+      -->
       <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-dependencies</artifactId>
         <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>eu.exeris</groupId>
+        <artifactId>exeris-spring-runtime-bom</artifactId>
+        <version>${exeris-spring-runtime.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -106,12 +113,8 @@
 
     <!-- Response encoding. Same Jackson line as the compat arm so serialisation is not a variable. -->
     <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
+      <groupId>tools.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.datatype</groupId>
-      <artifactId>jackson-datatype-jsr310</artifactId>
     </dependency>
   </dependencies>
 

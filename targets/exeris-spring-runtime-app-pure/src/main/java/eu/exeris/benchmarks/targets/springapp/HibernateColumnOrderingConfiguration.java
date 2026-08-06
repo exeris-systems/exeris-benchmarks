@@ -3,7 +3,7 @@ package eu.exeris.benchmarks.targets.springapp;
 import java.util.Map;
 
 import org.hibernate.boot.model.relational.ColumnOrderingStrategyLegacy;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernatePropertiesCustomizer;
+import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

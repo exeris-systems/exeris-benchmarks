@@ -1,6 +1,6 @@
 package eu.exeris.benchmarks.targets.springapp;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,7 +24,7 @@ public class JsonEncoder {
     public byte[] encode(Object value) {
         try {
             return objectMapper.writeValueAsBytes(value);
-        } catch (Exception exception) {
+        } catch (RuntimeException exception) {
             throw new IllegalStateException("Failed to encode response body", exception);
         }
     }

@@ -743,6 +743,18 @@ build_target_artifact() {
       # difference inside a measurement meant to isolate the dispatcher.
       module_path="targets/exeris-spring-runtime-app-pure"
       ;;
+    spring-on-exeris-pure-native)
+      # Pure on BOTH axes: native web layer AND kernel-native persistence (no JPA, no
+      # Hibernate, no Spring DataSource). Its pair with spring-on-exeris-pure is the only
+      # one in this manifest that moves the persistence layer alone.
+      #
+      # This module pins the kernel INLINE on its dependencies rather than via the kernel
+      # BOM, because exeris-spring-runtime-bom inherits a dependencyManagement section that
+      # wins over a later BOM import. The sibling arms carry no such pin and drift to
+      # whatever the runtime BOM's parent resolves, so after any rebuild verify all arms
+      # agree:  unzip -l <jar> | grep exeris-kernel
+      module_path="targets/exeris-spring-runtime-app-pure-native"
+      ;;
     *)
       echo "ERROR: No Maven module mapping defined for target ${target_id}"
       return 1

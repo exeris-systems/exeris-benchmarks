@@ -1,23 +1,37 @@
 #!/usr/bin/env bash
-# Spring hosting triad, n=3 — driver for run-full-triad-ab-ba.sh.
+# Spring-to-Exeris LADDER, n=3 — driver for run-full-triad-ab-ba.sh.
 #
-# Three arms of ONE Spring + JPA application, differing only in how requests
-# reach it:
-#   spring-hibernate       Tomcat + Spring MVC          (never touches Exeris)
-#   spring-on-exeris       Exeris compatibility ingress (Spring MVC over the compat dispatcher)
-#   spring-on-exeris-pure  Exeris native web layer      (@ExerisRoute, no compat dispatcher)
+# Four arms spanning the distance from a stock Spring application to a native Exeris one,
+# arranged so that consecutive rungs differ in ONE layer each:
+#   spring-hibernate              Tomcat + Spring MVC + Spring Data JPA   (never touches Exeris)
+#   spring-on-exeris-pure         Exeris native web layer (@ExerisRoute), still Spring Data JPA
+#   spring-on-exeris-pure-native  ...and JPA dropped: kernel TransactionalExecutor + SQL
+#   exeris-community              ...and Spring dropped: kernel HttpRouter + hand-written handlers
 #
-# Pair 3 (compat vs pure) is the cleanest form of the Pure-vs-Compat axis in this
-# scenario: transport, kernel and carrier are identical on both sides, so the
-# delta attributes to the compat dispatcher rather than to hosting as a whole.
+# This replaces the 2026-08-05 hosting triad, whose pure-vs-compat pair came back at ~0
+# because those two arms differ only in HTTP dispatch while the request is dominated by ORM
+# and JDBC. The compat arm is therefore not in the default pair set; the axis it measures is
+# already answered, and the layers that dominate the request are the ones moved here.
 #
-# Shape mirrors the C1 triad exactly so the two campaigns stay comparable:
-# repeat as the OUTER loop, 3 repeats x {heavy, light} x 3 pairs x {ab, ba} = 36 leaves.
+# ALL FOUR ARMS ARE VERSION-ALIGNED as of 2026-08-06: Spring Boot 4.1.0, Jackson 3, kernel
+# 0.10.2 (Hibernate 7.4.1 where present). Before that date the Tomcat arm ran Boot 4 while the
+# Exeris arms were pinned to Boot 3.5.14 — a confound on every Tomcat-relative number in the
+# claims registry. FENCE: no number measured before this alignment transfers across it.
+#
+# EXCLUSION: the two arms hosted by exeris-spring-runtime are excluded from the public docs
+# path, so leaves from pairs 1-3 are internal-only regardless of publication mode.
+#
+# Shape mirrors the C1 triad so the campaigns stay comparable, with one deliberate change:
+# repeat as the OUTER loop, 3 repeats x {heavy, light} x 4 pairs x {ab, ba} = 48 leaves.
+#
+# Repeat being OUTER is what makes this safe to start at ~40 min/leaf (~32 h): every repeat
+# is a complete, balanced dataset on its own, so stopping after repeat01 or repeat02 costs
+# precision, not the experiment. Never reorder the loops to put repeat inside contract.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 CAMPAIGN_TS="$(date -u +%Y%m%dT%H%M%SZ)"
-ROOT="results/raw/entity-read-by-id/${CAMPAIGN_TS}-spring-triad-n3"
+ROOT="results/raw/entity-read-by-id/${CAMPAIGN_TS}-spring-ladder-n3"
 mkdir -p "$ROOT"
 cp -- "$0" "$ROOT/driver.sh"
 
@@ -27,7 +41,22 @@ cp -- "$0" "$ROOT/driver.sh"
 # the 2026-08-05 ladder). Slot-order and resident-neighbour-identity are indistinguishable in
 # that layout. Overriding this variable with the order 3;1;2 separates them: if the penalty
 # stays with pair 3 it is the neighbour, if it moves to whatever runs last it is the slot.
-export BENCH_TRIAD_PAIRS="${BENCH_TRIAD_PAIRS:-1-tomcat-vs-compat:spring-hibernate:spring-on-exeris:1:9001:9004;2-tomcat-vs-pure:spring-hibernate:spring-on-exeris-pure:2:9001:9005;3-compat-vs-pure:spring-on-exeris:spring-on-exeris-pure:3:9004:9005}"
+#
+# LADDER (2026-08-06). The compat arm is gone from the default set: the 2026-08-05 campaign
+# measured pure-vs-compat at ~0 (+10.94 % vs +10.9 % against the same Tomcat baseline) because
+# those two arms differ only in HTTP dispatch while the request is dominated by ORM and JDBC.
+# Re-running it would buy nothing. What replaces it moves the layer that actually dominates:
+#
+#   1  hosting axis      Tomcat            -> Exeris pure (both still Spring Data JPA)
+#   2  persistence axis  Exeris pure       -> Exeris pure-native (JPA dropped, kernel API)
+#   3  framework axis    pure-native       -> exeris-community (Spring context dropped)
+#   4  end-to-end        Tomcat            -> exeris-community  (all three at once)
+#
+# Pair 4 is NOT redundant with 1+2+3. Summing rungs uses the between-leaf instrument, whose
+# measured error against a directly-measured delta was 1.5 pp on an 8.6 % effect (17 % of it).
+# Pair 4 measures that total within one leaf, so the ladder's sum can be checked against it —
+# agreement validates the decomposition, disagreement bounds how much the axes interact.
+export BENCH_TRIAD_PAIRS="${BENCH_TRIAD_PAIRS:-1-tomcat-vs-pure:spring-hibernate:spring-on-exeris-pure:1:9001:9005;2-pure-vs-purenative:spring-on-exeris-pure:spring-on-exeris-pure-native:2:9005:9006;3-purenative-vs-native:spring-on-exeris-pure-native:exeris-community:3:9006:9000;4-tomcat-vs-native:spring-hibernate:exeris-community:4:9001:9000}"
 
 # ---------------------------------------------------------------------------
 # DB client — PINNED BY THIS CALLER. Not optional, and not a detail.
@@ -48,8 +77,8 @@ export EXERIS_DB_JDBC_URL='jdbc:postgresql://localhost:5432/benchmark_db?prepare
 export EXERIS_DB_USERNAME="${EXERIS_DB_USERNAME:-benchmark}"
 export EXERIS_DB_PASSWORD="${EXERIS_DB_PASSWORD:-benchmark}"
 
-# All three arms consume $SPRING_JAVA_OPTS (see runtime/drivers/env/spring-runtime*.env),
-# so one heap setting gives iso-heap across the whole triad by construction.
+# The three Spring-family arms consume $SPRING_JAVA_OPTS (see runtime/drivers/env/
+# spring-runtime*.env); exeris-community does not — see the BENCH_EXERIS_HEAP_MB note below.
 # ONE run per pair per direction. run-full-triad-ab-ba.sh defaults
 # BENCH_RUNS_PER_PAIR to 20, which is not the repetition axis this campaign uses:
 # repetition comes from the OUTER repeat loop below (repeat01..03), exactly as the
@@ -66,15 +95,17 @@ export BENCH_TOTAL_MEMORY_MB=2048
 export BENCH_SPRING_HEAP_MB=1280
 
 # The heap above binds the Spring arms only — they are the ones that read SPRING_JAVA_OPTS.
-# exeris-community reads EXERIS_JAVA_OPTS instead, and its env file's default carries
-# --add-opens flags and NO heap, so without the line below it would run on the JVM default
-# (a quarter of host RAM) while every Spring arm runs a fixed 1280m. That is a posture
-# mismatch, not a detail: budget-matched and matched-heap postures give RSS answers ~3x
-# apart, and it would land on exactly the pair that closes HLA gap G1.
+# exeris-community reads EXERIS_JAVA_OPTS, which run-full-triad-ab-ba.sh composes from
+# BENCH_EXERIS_HEAP_MB — whose default is 256, not 1280. Left unset, the ladder would put a
+# 256m arm against three 1280m arms, on exactly the pair that closes HLA gap G1: matched-heap
+# and budget-matched postures give RSS answers about 3x apart, and the difference would be
+# silent (both postures boot, and no gate compares heap across arms).
 #
-# Safe to set from here because the env file APPENDS an externally-provided EXERIS_JAVA_OPTS
-# after its own flags, so these win. Keep it equal to BENCH_SPRING_HEAP_MB by construction.
-export EXERIS_JAVA_OPTS="-Xms${BENCH_SPRING_HEAP_MB}m -Xmx${BENCH_SPRING_HEAP_MB}m"
+# Set the BENCH_ variable, NOT EXERIS_JAVA_OPTS directly: the runner exports EXERIS_JAVA_OPTS
+# unconditionally at run-full-triad-ab-ba.sh:231, so anything exported here is overwritten
+# before a target launches. An earlier version of this file set EXERIS_JAVA_OPTS and had no
+# effect whatsoever. Keep equal to BENCH_SPRING_HEAP_MB by construction.
+export BENCH_EXERIS_HEAP_MB=${BENCH_SPRING_HEAP_MB}
 
 # CPU isolation onto disjoint sets, identical to the C1 triad. Not optional:
 # unpinned, the load generator and the target under test share all 16 threads
@@ -145,17 +176,17 @@ fi
 # Record what this caller pinned, alongside the results rather than in shell history.
 cat > "${ROOT}/campaign-manifest.json" <<JSON
 {
-  "campaign": "entity-read-by-id-spring-triad-n3",
+  "campaign": "entity-read-by-id-spring-ladder-n3",
   "campaign_ts": "${CAMPAIGN_TS}",
   "commit_sha": "$(git rev-parse HEAD 2>/dev/null || echo unknown)",
   "repeats": "01,02,03",
   "contracts": "heavy,light",
   "repeat_loop_position": "outer",
   "runs_per_pair": ${BENCH_RUNS_PER_PAIR},
-  "runs_per_pair_note": "1, not the runner's default of 20 — repetition is the outer repeat loop, matching C1. Expected leaf count = pairs x runs x directions x repeats x contracts = 3x1x2x3x2 = 36.",
+  "runs_per_pair_note": "1, not the runner's default of 20 — repetition is the outer repeat loop, matching C1. Expected leaf count = pairs x runs x directions x repeats x contracts = 4x1x2x3x2 = 48.",
   "triad_pairs": "${BENCH_TRIAD_PAIRS}",
   "iso_heap_mb": ${BENCH_SPRING_HEAP_MB},
-  "iso_heap_note": "All three arms read SPRING_JAVA_OPTS, so one setting binds the whole triad by construction.",
+  "iso_heap_note": "The three Spring-family arms read SPRING_JAVA_OPTS; exeris-community reads EXERIS_JAVA_OPTS, which the runner composes from BENCH_EXERIS_HEAP_MB (default 256). This caller sets BENCH_EXERIS_HEAP_MB = BENCH_SPRING_HEAP_MB so all four arms are iso-heap. Setting EXERIS_JAVA_OPTS directly does NOT work — run-full-triad-ab-ba.sh overwrites it unconditionally before launch.",
   "server_cpu_affinity": "${BENCH_SERVER_CPU_AFFINITY}",
   "loadgen_cpu_affinity": "${BENCH_LOADGEN_CPU_AFFINITY}",
   "db_cpuset": "${BENCH_DB_CPUSET}",
@@ -202,29 +233,38 @@ for repeat in 01 02 03; do
 
       # Counting files is not enough. The first version of this check passed an
       # iteration in which every leaf was non_eligible, because it only asked
-      # whether claim-status.json existed. Two of this triad's three pairs are
-      # cross-mode and are EXPECTED to come back non_eligible (see claim_track
-      # in the pair manifest — they feed compat/, not the comparative track), so
-      # the right assertion is that the ELIGIBLE pair still produced an eligible
-      # leaf. Zero eligible leaves in a full iteration means the one pair that
-      # should pass did not, and the remaining five iterations would repeat it.
+      # whether claim-status.json existed.
+      #
+      # The ladder raises this bar. The 2026-08-05 triad carried two cross-mode
+      # pairs that were EXPECTED to come back non_eligible on G3, so the only
+      # assertion available was "at least one". Every arm of the ladder is
+      # mode=pure (verified in target-asset-matrix.json), so G3 equivalence_strict
+      # passes everywhere and ALL leaves should be eligible. Zero is still fatal;
+      # partial is reported loudly but not fatal, because one leaf failing a gate
+      # for an unrelated reason should not discard the remaining ~27 hours.
       if [[ "$eligible" -eq 0 ]]; then
         echo "ABORT: first iteration produced ${produced} leaf/leaves but NONE comparison_eligible." >&2
-        echo "Expected at least one from the within-mode pair (2-tomcat-vs-pure)." >&2
-        echo "The cross-mode pairs 1 and 3 are expected non_eligible; this is about the third." >&2
+        echo "Every ladder arm is mode=pure, so every pair should clear G3. Zero eligible means" >&2
+        echo "the failure is common to all of them — the remaining five iterations would repeat it." >&2
         find "$out" -name claim-status.json -exec sh -c \
           'echo "  $(jq -r "(.pair_id // \"?\") + \" -> \" + (.claim_status // \"?\") + \" \" + ((.rejection_codes // []) | join(\",\"))" "$1")"' _ {} \; >&2
         exit 1
       fi
 
+      if [[ "$eligible" -lt "$produced" ]]; then
+        echo "[fail-fast] WARNING: ${eligible}/${produced} leaves comparison_eligible — expected all." >&2
+        echo "[fail-fast] Not aborting, but the non-eligible leaves below need a reason before use:" >&2
+        find "$out" -name claim-status.json -exec sh -c \
+          'jq -e ".claim_status == \"comparison_eligible\"" "$1" >/dev/null 2>&1 || echo "  $(jq -r "(.pair_id // \"?\") + \" -> \" + (.claim_status // \"?\") + \" \" + ((.rejection_codes // []) | join(\",\"))" "$1")"' _ {} \; >&2
+      fi
+
       echo "[fail-fast] first iteration: ${produced} leaf/leaves, ${eligible} comparison_eligible — continuing"
-      echo "[fail-fast] cross-mode pairs reporting non_eligible is expected; they route to compat/"
       first_iteration=0
     fi
   done
 done
 
 echo "=============================================================="
-echo "SPRING TRIAD CAMPAIGN COMPLETE  $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "SPRING LADDER CAMPAIGN COMPLETE  $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "root: ${ROOT}"
 echo "=============================================================="

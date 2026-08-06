@@ -97,6 +97,36 @@
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
+    <!--
+      Jackson 2, REQUIRED — and yes, this arm therefore carries two databind implementations.
+      That is not an oversight; removing them on 2026-08-06 was, and it broke the arm outright:
+
+        BeanInstantiationException: Failed to instantiate [org.axonframework.serialization.Serializer]
+        Caused by: NoClassDefFoundError: com/fasterxml/jackson/databind/ObjectMapper
+          at AxonAutoConfiguration.buildSerializer(AxonAutoConfiguration.java:194)
+
+      Axon 4.10.3 predates Jackson 3 and builds its serializer against com.fasterxml.jackson
+      unconditionally. Spring Boot 4 no longer manages that artifact, so nothing else puts it on
+      the classpath. Declared explicitly, versioned by the Boot BOM's remaining Jackson 2 entries.
+
+      WHICH ONE SERVES A REQUEST: Jackson 3 (tools.jackson) 3.1.4, via Boot 4's autoconfigured
+      message converters. Jackson 2 is reachable only from Axon's event serialisation, which the
+      entity-read scenario never exercises. So the measured response path matches the other three
+      arms; what differs is startup class-loading and footprint, which belongs to this arm having
+      an event-sourcing framework at all (the Exeris arms use Flow or nothing) and is a property
+      of the arms, not of this dependency.
+
+      FENCE: do not "clean this up" without booting the arm against the database afterwards.
+      The jar builds, the classpath looks tidier, and the application dies at startup.
+    -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
   </dependencies>
 
   <build>

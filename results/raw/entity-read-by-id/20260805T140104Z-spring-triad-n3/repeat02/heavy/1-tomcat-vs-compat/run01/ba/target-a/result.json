@@ -1,0 +1,199 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260805-224940-000000",
+  "timestamp": "2026-08-05T23:29:57Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-runtime.env",
+  "transport_mode": "loopback-h1",
+  "target": {
+    "tier": "community",
+    "repo": "spring-hibernate",
+    "protocol": "h1",
+    "mode": "pure",
+    "commit_sha": "be2330ffa80abd27c6da34df31bc6c19146aa6de",
+    "build_provenance": {
+      "artifact_path": "/home/bench/exeris-benchmarks/targets/spring-benchmark-app/target/spring-benchmark-app-1.0.0-SNAPSHOT.jar",
+      "artifact_sha256": "97d0bcf5b6c9ec134de563ddbdcce708de82605c5bb86b719bdf03463ab3c4be"
+    }
+  },
+  "run_config": {
+    "duration_seconds": 900,
+    "warmup_seconds": 300,
+    "threads": 4,
+    "connections": 128,
+    "contract_id": "fixed_contract_cross_runtime_h1_v2",
+    "protocol_mode": "h1",
+    "transport_mode": "loopback-h1",
+    "track_id": "track-ba-01",
+    "pair_id": "entity-read-by-id-fixed_contract_cross_runtime_h1_v2-spring-hibernate__spring-on-exeris",
+    "pair_order": "ba",
+    "ab_ba_orders_completed": [
+      "ab",
+      "ba"
+    ],
+    "pair_completion_evidence": {
+      "invocation_order": "ba",
+      "target_slot": "target-a",
+      "completion_marker_utc": "2026-08-05T23:29:57Z",
+      "completed_orders": [
+        "ab",
+        "ba"
+      ]
+    },
+    "jvm_class": "jvm",
+    "mode": "pure",
+    "driver": {
+      "mode": "closed",
+      "offered_rps": 0,
+      "rate_attainment_pct": 0,
+      "note": "closed = wrk at saturation: throughput and resource metrics valid, percentiles are queue-depth/throughput. open = wrk2 at a fixed arrival rate: percentiles are service time."
+    },
+    "payload_size_bytes": 1024,
+    "drift_snapshot": {
+      "required_metadata_present": true,
+      "max_latency_drift_pct": 0,
+      "observed_latency_drift_pct": 0,
+      "max_throughput_drift_pct": 0,
+      "observed_throughput_drift_pct": 0
+    },
+    "metadata": {
+      "jdk_vendor": "Eclipse Adoptium",
+      "jdk_version": "26.0.1",
+      "benchmark_tool_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+      "jvm_flags": [
+        "-Dspring.classformat.ignore=true"
+      ],
+      "hardware_profile": "perf-box-amd64",
+      "backend_network_mode": "bridge",
+      "scenario_id": "entity-read-by-id",
+      "target_classification": "runtime-comparative"
+    },
+    "pinned_versions": {
+      "jdk_version": "26.0.1",
+      "benchmark_tool_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+      "target_commit_sha": "be2330ffa80abd27c6da34df31bc6c19146aa6de"
+    },
+    "actual_versions": {
+      "jdk_version": "26.0.1",
+      "benchmark_tool_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+      "target_commit_sha": "be2330ffa80abd27c6da34df31bc6c19146aa6de"
+    },
+    "target_contract": {
+      "target_id": "spring-hibernate",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-runtime.env",
+      "profile_id": "spring-hibernate",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9001/health"
+    },
+    "resource_metrics": {
+      "sample_count": 847,
+      "cpu_time_seconds": 3534.78,
+      "cpu_util_percent_of_one_core": 392.75,
+      "avg_cores_used": 3.9275,
+      "host_logical_cpus": 16,
+      "cpu_util_percent_of_host_total": 24.55,
+      "vmrss_kb_min": 1700004,
+      "vmrss_kb_max": 1702400,
+      "vmrss_kb_avg": 1700828,
+      "vmsize_kb_min": 5866764,
+      "vmsize_kb_max": 5933324,
+      "vmsize_kb_avg": 5884445,
+      "vmhwm_kb_max": 1702400,
+      "threads_min": 43,
+      "threads_max": 44,
+      "threads_avg": 43.03,
+      "smaps_rss_kb_min": 1700004,
+      "smaps_rss_kb_max": 1702400,
+      "smaps_rss_kb_avg": 1700828,
+      "cgroup_memory_current_kb_min": 10192028,
+      "cgroup_memory_current_kb_max": 10368868,
+      "cgroup_memory_current_kb_avg": 10310744,
+      "rss_kb_min": 1700004,
+      "rss_kb_max": 1702400,
+      "rss_kb_avg": 1700828,
+      "jvm_memory_breakdown": {
+        "jcmd_available": true,
+        "jcmd_heap_info_succeeded": true,
+        "heap_metrics_present": false,
+        "breakdown_valid": true,
+        "breakdown_note": "NMT breakdown present; heap_committed_kb backfilled from NMT after partial GC.heap_info parse.",
+        "heap_used_kb": 0,
+        "heap_committed_kb": 1310720,
+        "heap_max_kb": 0,
+        "native_total_committed_kb": 1607633,
+        "native_total_reserved_kb": 2943789,
+        "native_java_heap_committed_kb": 1310720,
+        "offheap_kb_estimate": 296913,
+        "heap_plus_offheap_kb_estimate": 296913,
+        "offheap_estimate_source": "nmt_minus_java_heap",
+        "nmt_enabled": true
+      }
+    },
+    "jfr_capture": {
+      "pid": "3311753",
+      "jcmd_available": true,
+      "check_ok": true,
+      "recording_detected": true,
+      "dump_attempted": true,
+      "dump_success": true,
+      "stop_attempted": true,
+      "stop_success": true,
+      "stop_recording_name": "spring_hibernate_20260805_224940",
+      "jfr_file": "results/raw/entity-read-by-id/20260805T140104Z-spring-triad-n3/repeat02/heavy/1-tomcat-vs-compat/run01/ba/target-a/target-spring-hibernate-20260805-224940.jfr",
+      "note": ""
+    },
+    "runtime_log": {
+      "launcher_mode": "external",
+      "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-runtime.env",
+      "log_path": "/tmp/exeris-spring-9001.log",
+      "external_jar_path": "targets/spring-benchmark-app/target/spring-benchmark-app-1.0.0-SNAPSHOT.jar",
+      "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/spring-benchmark-app/target/spring-benchmark-app-1.0.0-SNAPSHOT.jar",
+      "jar_exists": true,
+      "jar_sha256": "97d0bcf5b6c9ec134de563ddbdcce708de82605c5bb86b719bdf03463ab3c4be",
+      "jar_size_bytes": 92530996,
+      "jar_mtime_utc": "2026-08-05T22:08:11Z",
+      "copied": true,
+      "output_file": "results/raw/entity-read-by-id/20260805T140104Z-spring-triad-n3/repeat02/heavy/1-tomcat-vs-compat/run01/ba/target-a/target-runtime.log",
+      "note": "runtime log copied"
+    },
+    "jfr_start": {
+      "pid": "3311753",
+      "jcmd_available": true,
+      "start_attempted": true,
+      "start_success": true,
+      "recording_already_present": false,
+      "recording_name": "spring_hibernate_20260805_224940",
+      "note": "recording started"
+    }
+  },
+  "metrics": {
+    "throughput_rps": 3560.64,
+    "latency_p50_us": 37590.000000,
+    "latency_p75_us": 42830.000000,
+    "latency_p90_us": 49380.000000,
+    "latency_p95_us": 54240.000000,
+    "latency_p99_us": 64140.000000,
+    "error_rate_pct": 0.0000,
+    "total_requests": 3204905,
+    "total_errors": 0,
+    "socket_errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "timeout": 0,
+      "total": 0
+    },
+    "failed_requests_total": 0,
+    "failed_request_rate_pct": 0.0000,
+    "latency_p999_us": 0
+  },
+  "claim_scope": "comparison_eligible",
+  "runner_status": "success",
+  "final_reason": "ok",
+  "reproducibility_status": "complete"
+}

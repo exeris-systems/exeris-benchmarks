@@ -1,0 +1,8 @@
+135900:
+No available recordings.
+
+Use jcmd 135900 JFR.start to start a recording.
+135900:
+Started recording 2. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 135900 JFR.dump name=spring_on_exeris_20260806_110039 filename=FILEPATH to copy recording data to file.

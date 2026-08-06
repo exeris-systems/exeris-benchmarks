@@ -1,0 +1,108 @@
+{
+  "scenario_id": "entity-read-by-id",
+  "contract_id": "fixed_contract_cross_runtime_h1_single_read_v1",
+  "target_a_id": "spring-hibernate",
+  "target_b_id": "spring-on-exeris",
+  "track_id": {
+    "target_a": "track-ba-01",
+    "target_b": "track-ba-01"
+  },
+  "pass_count": 9,
+  "fail_count": 1,
+  "all_passed": false,
+  "rejection_codes": [
+    "EQUIVALENCE_MISMATCH"
+  ],
+  "gates": [
+    {
+      "scope": "pair",
+      "gate_id": "G8",
+      "gate_name": "schema_validation",
+      "pass_fail": "PASS",
+      "rejection_code": "none",
+      "reason": "both artifacts validate against benchmark-result.schema.json",
+      "caveat": ""
+    },
+    {
+      "scope": "pair",
+      "gate_id": "G1",
+      "gate_name": "track_isolation",
+      "pass_fail": "PASS",
+      "rejection_code": "none",
+      "reason": "track_id=track-ba-01",
+      "caveat": ""
+    },
+    {
+      "scope": "pair",
+      "gate_id": "G2",
+      "gate_name": "eligibility_only",
+      "pass_fail": "PASS",
+      "rejection_code": "none",
+      "reason": "both artifacts are comparison_eligible/success/complete/ok",
+      "caveat": ""
+    },
+    {
+      "scope": "pair",
+      "gate_id": "G3",
+      "gate_name": "equivalence_strict",
+      "pass_fail": "FAIL",
+      "rejection_code": "EQUIVALENCE_MISMATCH",
+      "reason": "mode mismatch A=pure B=compat",
+      "caveat": ""
+    },
+    {
+      "scope": "pair",
+      "gate_id": "G4",
+      "gate_name": "ab_ba_required",
+      "pass_fail": "PASS",
+      "rejection_code": "none",
+      "reason": "pair_id=entity-read-by-id-fixed_contract_cross_runtime_h1_single_read_v1-spring-hibernate__spring-on-exeris; directional completion evidence present for order=ba",
+      "caveat": ""
+    },
+    {
+      "scope": "pair",
+      "gate_id": "G5",
+      "gate_name": "drift_placeholder",
+      "pass_fail": "PASS",
+      "rejection_code": "none",
+      "reason": "drift snapshot metadata present and within thresholds",
+      "caveat": ""
+    },
+    {
+      "scope": "pair",
+      "gate_id": "G6",
+      "gate_name": "metadata_completeness",
+      "pass_fail": "PASS",
+      "rejection_code": "none",
+      "reason": "required reproducibility metadata complete",
+      "caveat": ""
+    },
+    {
+      "scope": "pair",
+      "gate_id": "G7",
+      "gate_name": "pin_verification",
+      "pass_fail": "PASS",
+      "rejection_code": "none",
+      "reason": "all required pinned versions match actual versions",
+      "caveat": ""
+    },
+    {
+      "scope": "pair",
+      "gate_id": "G9",
+      "gate_name": "quarantine_transparency",
+      "pass_fail": "PASS",
+      "rejection_code": "none",
+      "reason": "machine-readable rejection output enabled",
+      "caveat": ""
+    },
+    {
+      "scope": "pair",
+      "gate_id": "G10",
+      "gate_name": "reporting_guard",
+      "pass_fail": "PASS",
+      "rejection_code": "none",
+      "reason": "reporting guard deferred (no --report-file provided)",
+      "caveat": ""
+    }
+  ]
+}

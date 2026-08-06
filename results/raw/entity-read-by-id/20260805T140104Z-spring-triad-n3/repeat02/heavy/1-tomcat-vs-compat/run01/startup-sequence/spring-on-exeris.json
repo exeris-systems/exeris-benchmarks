@@ -1,0 +1,14 @@
+{
+  "target_id": "spring-on-exeris",
+  "port": 9004,
+  "scenario_endpoint_path": "/api/v1/users",
+  "startup_init_utc": "2026-08-05T22:08:46Z",
+  "health_ready_utc": "2026-08-05T22:08:51Z",
+  "first_request_utc": "2026-08-05T22:08:51Z",
+  "startup_to_health_ms": 5151,
+  "startup_to_first_request_ms": 5293,
+  "health_to_first_request_ms": 142,
+  "health_attempts": 1,
+  "first_request_attempts": 1,
+  "generated_at_utc": "2026-08-05T22:08:51Z"
+}

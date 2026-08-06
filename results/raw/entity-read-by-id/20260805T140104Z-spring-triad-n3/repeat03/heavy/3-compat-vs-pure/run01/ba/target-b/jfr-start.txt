@@ -1,0 +1,8 @@
+22350:
+No available recordings.
+
+Use jcmd 22350 JFR.start to start a recording.
+22350:
+Started recording 2. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 22350 JFR.dump name=spring_on_exeris_pure_20260806_093942 filename=FILEPATH to copy recording data to file.

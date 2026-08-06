@@ -53,6 +53,12 @@ Thumbs.db
 results/**/target-pidstat.csv
 results/**/host-mpstat.csv
 results/**/resource-samples.csv
+# 1 MB per arm-window at 1 s cadence — 72 MB of the Spring ladder's 85 MB non-JFR bulk, and
+# until the DB is actually pinned they carry no attributable signal at all (an all-core capture
+# filed under a db-cpuset name). The meta file next to them states whether the window was
+# attributable; keep that, drop the stream.
+results/**/db-cpuset-mpstat.csv
+results/**/neighbour-resource-samples.csv
 
 # Environment files with real values — template is committed, actuals are not
 runtime/drivers/env/*.env

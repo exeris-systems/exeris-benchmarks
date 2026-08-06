@@ -161,6 +161,22 @@
       <version>5.28.8</version>
     </dependency>
 
+    <!--
+      Logging. The sibling arms get logback transitively through spring-boot-starter-data-jpa /
+      -jdbc; dropping those modules dropped the SLF4J provider with them, and the arm booted
+      with a NOP logger. That is worse than missing diagnostics: Spring Boot prints its banner
+      on System.out but reports startup failures through SLF4J, so the app died after the banner
+      with no error anywhere. Verified 2026-08-06 on the first boot attempt against the DB.
+
+      It is also the fair choice, not only the diagnosable one — the other three arms all carry
+      logback, and logging framework has already been a measured confound in this repo (pgjdbc
+      JUL). Declare it explicitly so it cannot vanish again with an unrelated dependency change.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-logging</artifactId>
+    </dependency>
+
     <!-- Response encoding. Same Jackson line as the compat arm so serialisation is not a variable. -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>

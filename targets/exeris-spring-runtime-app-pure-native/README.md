@@ -141,10 +141,28 @@ import `community.*` or `enterprise.*`, the edition is resolved by `ServiceLoade
 
 ## Status
 
-Built and jar-verified 2026-08-05. **Not yet boot-verified against a database** — no benchmark
-Postgres was available on the authoring host. Before using any leaf from this target, run the
-Stage-4 preflight and confirm all endpoints answer: `/health`, `/db/ping`, `/api/v1/users`
-(heavy) and `/api/v1/user?id=N` (light).
+**Boot-verified against the benchmark database on `perf-box-amd64`, 2026-08-06.** Ready at 3 s;
+`/health`, `/db/ping`, `/api/v1/users` (heavy, full nested aggregate) and `/api/v1/user?id=1`
+(light) all answer 200 with the expected bodies. Not yet measured under load.
+
+The first boot attempt failed, and both faults are worth keeping visible because neither was
+reachable from a jar inspection:
+
+1. **No SLF4J provider.** Dropping `spring-boot-starter-data-jpa` / `-jdbc` also dropped logback,
+   which they carried transitively. Spring Boot prints its banner on `System.out` but reports
+   startup failures through SLF4J, so the context failed *silently* — banner, then nothing.
+   `spring-boot-starter-logging` is now declared explicitly. This also restores parity: the other
+   three arms all carry logback, and logging framework has been a measured confound here before.
+
+2. **`exeris.runtime.tx.enabled=true` is required.** `ExerisTransactionAutoConfiguration` is gated
+   on that property with no `matchIfMissing`, so it never fires by default; the other arms never
+   notice because they reach the DB through the compat DataSource. This arm needs
+   `PersistenceEngineProvider` from it, and without the property the context fails with
+   *"Parameter 0 of method exerisTransactionalExecutor … required a bean of type
+   PersistenceEngineProvider"*.
+
+Re-run the Stage-4 preflight after any dependency change, and re-check the three log assertions
+below — a JPA path creeping back onto the classpath is exactly the failure a jar listing hides.
 
 Also confirm the boot log shows the eight kernel subsystems initialising and a single
 `exeris-community-shared` Hikari pool, and that **no** `HikariPool-1`, `EntityManagerFactory` or

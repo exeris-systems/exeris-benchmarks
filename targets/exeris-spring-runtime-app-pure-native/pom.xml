@@ -19,6 +19,21 @@
       targets/exeris-spring-runtime-app-pure so that runtime version is not a variable on
       either axis. Bump all three together or an axis silently acquires a second variable.
     -->
+    <!--
+      Kept at 3.5.14 because this property CANNOT currently raise it. Setting it to 4.0.4 builds
+      cleanly and silently produces a Boot 3 jar: exeris-spring-runtime-bom inherits its
+      dependencyManagement from exeris-spring-runtime-parent 0.5.0-SNAPSHOT, which pins Spring
+      Boot 3.5.x, and because that BOM is imported first it beats a later
+      spring-boot-dependencies:4.0.4 import. Verified 2026-08-06 — the resulting jar carried
+      spring-boot-3.5.14 / spring-core-6.2.18 while the property read 4.0.4. Same precedence
+      trap as the kernel pin above; the difference is that a Spring Boot line cannot be forced
+      with inline versions the way three kernel artifacts can.
+
+      Equalising the Spring version against targets/spring-benchmark-app (Boot 4.0.4 /
+      Hibernate 7.2.7) therefore needs a spring-runtime build whose parent targets Boot 4 — not
+      a change here. Until then the version gap remains an unquantified confound on every
+      Tomcat-relative number, and the pins across the Exeris arms must move together.
+    -->
     <spring-boot.version>3.5.14</spring-boot.version>
     <exeris-spring-runtime.version>0.5.0-SNAPSHOT</exeris-spring-runtime.version>
     <!--

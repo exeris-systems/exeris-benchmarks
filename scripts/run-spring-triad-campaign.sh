@@ -178,7 +178,8 @@ cat > "${ROOT}/campaign-manifest.json" <<JSON
 {
   "campaign": "entity-read-by-id-spring-ladder-n3",
   "campaign_ts": "${CAMPAIGN_TS}",
-  "commit_sha": "$(git rev-parse HEAD 2>/dev/null || echo unknown)",
+  "commit_sha": "${BENCH_COMMIT_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}",
+  "commit_sha_note": "The perf box holds an rsynced tree, NOT a git checkout, so \`git rev-parse\` there returns nothing and this field recorded \"unknown\" — a reproducibility requirement silently unmet. Pass BENCH_COMMIT_SHA from the machine that holds the checkout when launching remotely. If this reads \"unknown\", the run cannot be tied to a source revision and must not be used for a baseline.",
   "repeats": "01,02,03",
   "contracts": "heavy,light",
   "repeat_loop_position": "outer",

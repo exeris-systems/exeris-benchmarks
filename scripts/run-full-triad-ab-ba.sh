@@ -64,6 +64,12 @@ BENCH_REQUIRE_PERF_STAT=${BENCH_REQUIRE_PERF_STAT:-${BENCHMARK_REQUIRE_PERF_STAT
 export BENCHMARK_REQUIRE_PERF_STAT="$BENCH_REQUIRE_PERF_STAT"
 
 STEP_COUNTER=0
+# Placeholder only — recomputed from the effective pair set once TRIAD_PAIRS is known (see
+# below). It was hardcoded to 120 and stayed 120 regardless of configuration, which is worse
+# than merely cosmetic: 120 is exactly 3 pairs x 20 runs x 2 directions, i.e. the signature of
+# the runs-per-pair misconfiguration that run-spring-triad-campaign.sh warns about by that
+# number. A correctly configured 4-pair run therefore printed the very figure that means
+# "you forgot to set BENCH_RUNS_PER_PAIR", defeating the diagnostic it was supposed to serve.
 TOTAL_STEPS=120
 
 triad_constrained_execution_profile_id() {
@@ -987,6 +993,10 @@ else
     "2-spring-vs-quarkus:spring-hibernate:quarkus-hibernate:2:9001:9002"
   )
 fi
+
+# Now that the effective pair set is known, make the progress counter mean what it says.
+TOTAL_STEPS=$(( ${#TRIAD_PAIRS[@]} * ${BENCH_RUNS_PER_PAIR:-20} * 2 ))
+echo "Effective plan: ${#TRIAD_PAIRS[@]} pair(s) x ${BENCH_RUNS_PER_PAIR:-20} run(s) x 2 directions = ${TOTAL_STEPS} leaves"
 
 if ! prebuild_campaign_targets; then
   echo "ERROR: Campaign aborted due to prebuild failure"

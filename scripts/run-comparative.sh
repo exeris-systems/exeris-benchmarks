@@ -3055,6 +3055,19 @@ run_wrk_target() {
   # BUG 3: fine-grained DB-CPU sampler (Postgres cpuset) bracketed to the measurement window.
   local db_cpu_mpstat_pid="" db_cpu_mpstat_csv="${outdir}/db-cpuset-mpstat.csv"
   local db_cpuset_resolved=""
+  # Load generator CPU, on the same window and cadence as the DB sampler.
+  #
+  # This was the LAST unmeasured ceiling in the harness. A closed-loop result is only an
+  # application measurement while every resource other than the application has headroom, and
+  # until 2026-08-07 we sampled the measured arm, the idle neighbour and the DB cpuset — but
+  # never wrk itself. The ladder run of 2026-08-06 made that gap concrete: on light the fastest
+  # arm reached 74.6k rps on a 4-CPU loadgen pin, and nothing in the artefacts could confirm the
+  # generator was not the thing capping it. The spread across arms (26.7k/42k/56k/74.6k) proves
+  # there was no cap BELOW 74.6k, which is weaker than knowing the top arm had headroom.
+  #
+  # Cheap and symmetric with the DB sampler, so a leaf now carries all four consumers of the
+  # host: measured arm, neighbour, database, generator.
+  local loadgen_cpu_mpstat_pid="" loadgen_cpu_mpstat_csv="${outdir}/loadgen-cpuset-mpstat.csv"
   # Idle co-resident neighbour. Both targets are launched and stay resident while only one is
   # driven, but sampling covered the measured arm alone — so the cost of the idle JVM beside it
   # was never recorded. That is the missing evidence for two open findings: the heavy-10k
@@ -3143,6 +3156,23 @@ run_wrk_target() {
     --arg restricted "$(db_cpuset_is_restricted "$db_cpuset_resolved")" \
     '{resolved_cpuset: $cpuset, source: $source, cpuset_is_restricted: ($restricted == "true"), db_cpu_attributable: ($restricted == "true"), interval_seconds: 1, window: "measurement", target_id: $target_id, sampler_started: ($started == "true")}' \
     > "${outdir}/db-cpuset-mpstat.meta.json" 2>/dev/null || true
+
+  # Same window, same cadence, for the load generator's pin. Unlike the DB cpuset there is
+  # nothing to discover: LOADGEN_CPU_AFFINITY is what this script itself passes to taskset for
+  # wrk, so when it is set the attribution is exact. When it is UNSET the generator is not
+  # pinned at all, its CPU cannot be separated from everything else on the host, and no sampler
+  # is started — recorded honestly as loadgen_cpu_attributable:false rather than filed as an
+  # all-core capture under a name that implies the generator. That mislabelling is precisely
+  # what bit the DB sampler before its cpuset was resolved properly.
+  if [[ -n "$LOADGEN_CPU_AFFINITY" ]] && command -v bench_start_mpstat_sampler_for_cpus >/dev/null 2>&1; then
+    loadgen_cpu_mpstat_pid="$(bench_start_mpstat_sampler_for_cpus "$loadgen_cpu_mpstat_csv" "$LOADGEN_CPU_AFFINITY" 1 2>/dev/null || true)"
+  fi
+  jq -n \
+    --arg cpuset "${LOADGEN_CPU_AFFINITY:-}" \
+    --arg target_id "$target_id" \
+    --arg started "$([[ -n "$loadgen_cpu_mpstat_pid" ]] && echo true || echo false)" \
+    '{resolved_cpuset: $cpuset, source: (if ($cpuset | length) > 0 then "env:LOADGEN_CPU_AFFINITY" else "unpinned" end), cpuset_is_restricted: (($cpuset | length) > 0), loadgen_cpu_attributable: (($cpuset | length) > 0), interval_seconds: 1, window: "measurement", target_id: $target_id, sampler_started: ($started == "true"), note: "Load generator (wrk) CPU over the measurement window. Read it as a CEILING CHECK, not as a cost: a closed-loop throughput number is an application measurement only while the generator has headroom. If busy cores approach the pin width, the arm was generator-bound and the rps figure is a floor, not a result."}' \
+    > "${outdir}/loadgen-cpuset-mpstat.meta.json" 2>/dev/null || true
 
   # BUG 1: pg_stat_statements baseline at measurement-start (after warmup). The matching
   # final+delta are taken at measurement-end below, both strictly inside this run-comparative
@@ -3242,6 +3272,10 @@ run_wrk_target() {
   # BUG 3: stop the DB-CPU sampler at measurement-end (converts its raw capture to CSV).
   if [[ -n "$db_cpu_mpstat_pid" ]] && command -v bench_stop_mpstat_sampler >/dev/null 2>&1; then
     bench_stop_mpstat_sampler "$db_cpu_mpstat_pid" "$db_cpu_mpstat_csv" || true
+  fi
+  # Load generator sampler, stopped on the same boundary so both cover one identical window.
+  if [[ -n "$loadgen_cpu_mpstat_pid" ]] && command -v bench_stop_mpstat_sampler >/dev/null 2>&1; then
+    bench_stop_mpstat_sampler "$loadgen_cpu_mpstat_pid" "$loadgen_cpu_mpstat_csv" || true
   fi
 
   # BUG 1: pg_stat_statements final at measurement-end, then emit the per-target window delta.

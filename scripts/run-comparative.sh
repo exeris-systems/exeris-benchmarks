@@ -2894,15 +2894,25 @@ AB_BA_ORDERS_COMPLETED_JSON="$(printf '%s' "$AB_BA_ORDERS_COMPLETED_RAW" | tr ',
 # The Postgres cpuset is discoverable via BENCH_DB_CPUSET, else docker-inspect of the
 # benchmark-db container, else empty (mpstat then falls back to -P ALL). Echoes the core list.
 # Set as a side effect of resolve_db_cpuset so the label reports which probe actually answered.
+#
+# BOTH results are returned through globals, and the function prints NOTHING. It used to print
+# the cpuset and set the source as a side effect, which meant the only way to call it was
+# `x="$(resolve_db_cpuset)"` — a command substitution, i.e. a SUBSHELL. The assignment to
+# DB_CPUSET_SOURCE died with that subshell, so every meta file recorded source "unresolved"
+# while carrying a correctly resolved cpuset (observed on the first 15 leaves of the
+# 2026-08-06 ladder: resolved_cpuset "4-7,12-15", source "unresolved"). The measurement was
+# fine; only its provenance was lost, which is exactly the field that says whether to trust it.
 DB_CPUSET_SOURCE="unresolved"
+DB_CPUSET_RESOLVED=""
 
 resolve_db_cpuset() {
   local db_container="${DB_CONTAINER_NAME:-exeris-benchmark-db}"
   local resolved=""
+  DB_CPUSET_RESOLVED=""
 
   if [[ -n "${BENCH_DB_CPUSET:-}" ]]; then
     DB_CPUSET_SOURCE="env:BENCH_DB_CPUSET"
-    printf '%s' "$BENCH_DB_CPUSET"
+    DB_CPUSET_RESOLVED="$BENCH_DB_CPUSET"
     return 0
   fi
 
@@ -2916,7 +2926,7 @@ resolve_db_cpuset() {
     resolved="$(docker inspect -f '{{.HostConfig.CpusetCpus}}' "$db_container" 2>/dev/null || true)"
     if [[ -n "$resolved" ]]; then
       DB_CPUSET_SOURCE="docker-hostconfig"
-      printf '%s' "$resolved"
+      DB_CPUSET_RESOLVED="$resolved"
       return 0
     fi
 
@@ -2926,7 +2936,7 @@ resolve_db_cpuset() {
     resolved="$(docker exec "$db_container" cat /sys/fs/cgroup/cpuset.cpus.effective 2>/dev/null | tr -d '[:space:]' || true)"
     if [[ -n "$resolved" ]]; then
       DB_CPUSET_SOURCE="cgroup-effective"
-      printf '%s' "$resolved"
+      DB_CPUSET_RESOLVED="$resolved"
       return 0
     fi
 
@@ -2937,14 +2947,15 @@ resolve_db_cpuset() {
       resolved="$(awk '/^Cpus_allowed_list:/{print $2}' "/proc/${dbpid}/status" 2>/dev/null || true)"
       if [[ -n "$resolved" ]]; then
         DB_CPUSET_SOURCE="proc-cpus-allowed"
-        printf '%s' "$resolved"
+        DB_CPUSET_RESOLVED="$resolved"
         return 0
       fi
     fi
   fi
 
   DB_CPUSET_SOURCE="all-cores-fallback"
-  printf ''
+  DB_CPUSET_RESOLVED=""
+  return 0
 }
 
 # Records how the cpuset was resolved (for reproducibility of the DB-CPU attribution).
@@ -3117,7 +3128,10 @@ run_wrk_target() {
   # THIS target's measurement window (after warmup, stopped right after measurement). This
   # replaces reliance on the system sar cron (10-min cadence, uselessly coarse for a
   # 120/300/900s window). Falls back to all cores when the cpuset is not discoverable.
-  db_cpuset_resolved="$(resolve_db_cpuset)"
+  # No command substitution: resolve_db_cpuset returns through globals precisely so the
+  # source label survives. See the note on the function.
+  resolve_db_cpuset
+  db_cpuset_resolved="$DB_CPUSET_RESOLVED"
   if command -v bench_start_mpstat_sampler_for_cpus >/dev/null 2>&1; then
     db_cpu_mpstat_pid="$(bench_start_mpstat_sampler_for_cpus "$db_cpu_mpstat_csv" "$db_cpuset_resolved" 1 2>/dev/null || true)"
   fi

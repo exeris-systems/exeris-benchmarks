@@ -193,6 +193,19 @@
       "axis_note": "Both no-ORM: isolates runtime + transport efficiency (exeris native runtime vs Quarkus/Vert.x native-epoll + virtual threads), NOT ORM cost."
     },
     {
+      "pair_id": "quarkus-tuned__spring-on-exeris-pure-native",
+      "targets": [
+        "quarkus-tuned",
+        "spring-on-exeris-pure-native"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "expected_claim_status": "comparison_eligible",
+      "axis_note": "CROSS-STACK pair with ORM REMOVED ON BOTH SIDES — that is what makes it worth running and what distinguishes it from spring-hibernate__quarkus-hibernate. quarkus-tuned is pure JDBC over Agroal; spring-on-exeris-pure-native uses kernel-native TransactionalExecutor over the Community JDBC+HikariCP provider. Neither hydrates entities, and both issue the same SQL shapes, so the delta is runtime + transport + application framework, NOT ORM cost. Both arms are mode=pure, so strict gate G3 passes. SERIALISATION CONFOUND — DOMINANT, STATE IT IN EVERY CLAIM. The Exeris arm encodes with Jackson 3 (tools.jackson); quarkus-tuned encodes with Jackson 2 (com.fasterxml). This is not a footnote: profiling of the entity-read scenario attributed roughly a fifth of Exeris on-CPU time to Jackson 3's MethodHandle path (checkCustomized), and that finding is why the ladder arms were moved onto one Jackson line on 2026-08-06. This pair CANNOT be moved onto one line the same way — each framework ships its own — so the difference stays and it works against the Exeris arm. A raw throughput delta here is a stack+serialiser delta. Report cpu/req alongside, and do not attribute the gap to transport. LOGGING CONFOUND: pgjdbc's JUL logging was separately measured as a contributor on the Exeris side. It is in the measured path of this pair too. TRANSPORT, LABEL IT CORRECTLY: quarkus-tuned runs Netty native epoll (and native BoringSSL, unused on a cleartext H1 contract). The Exeris arm's NativeTcpCarrier under mode=auto resolves to posix-hybrid — NIO epoll plus FFM syscalls — NOT io_uring. Read the carrier off the target-app.log banner before labelling any run; 'io_uring' has been claimed here in error before. POOL: Agroal vs HikariCP, both JDBC, both driven from the same EXERIS_DB_* environment with the pgjdbc fetch-config normalisation applied. Sizes are equalised by the harness; the implementations are not, and that is inherent to the stacks rather than a free variable. CONTRACT REGIME: on heavy this scenario saturates the DB cpuset (99.8 % measured 2026-08-06 while the arms sat at 69-74 % of their own CPU pin), so a heavy throughput ratio reads the Postgres ceiling rather than either stack. Quote cpu/req on heavy. On light all arms are CPU-bound at 94-98 % of pin and rps is meaningful. CONFIDENTIALITY: spring-on-exeris-pure-native is excluded from the public docs path, so this pair is internal-only regardless of the quarkus side. PAYLOAD, MEASURED 2026-08-07 (do not assume byte-identity here as the ladder arms have it): both arms return exactly 9105 bytes on heavy and byte-identical 30 bytes on light, but the heavy bodies DIFFER — quarkus-tuned emits object keys alphabetically (friends,id,interests,username), the Exeris arm in declaration order (id,username,friends,interests). `diff <(jq -S .) <(jq -S .)` is empty, so the payloads are semantically identical and the wire cost is equal. Left unnormalised on purpose: forcing one arm onto the other's ordering would override a framework default for cosmetic parity, the same argument that keeps each stack on its own Jackson line. It is reported because it is direct evidence that the two serialisers are configured differently, which is the confound above."
+    },
+    {
       "pair_id": "quarkus-hibernate__quarkus-tuned",
       "targets": [
         "quarkus-hibernate",

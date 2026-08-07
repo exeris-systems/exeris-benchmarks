@@ -63,9 +63,19 @@ MATRIX="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
 export EXERIS_DB_JDBC_URL EXERIS_DB_USERNAME EXERIS_DB_PASSWORD
 export EXERIS_DB_POOL_MIN_SIZE EXERIS_DB_POOL_MAX_SIZE SERVER_CPU_AFFINITY
 
-# Both families, so one setting covers Spring-family and kernel-family arms alike.
+# ALL THREE families, so one setting covers every arm this repo can put in a pair.
+#
+# QUARKUS_JAVA_OPTS was missing until 2026-08-07, and its absence was not cosmetic: a Quarkus arm
+# launched with no heap flags at all, so the -Xmx assertion below could only ever FAIL for it —
+# the tool would refuse a perfectly good arm while reporting a heap mismatch. Worse in the other
+# direction: had the assertion been skipped for Quarkus, an arm would have entered a cross-stack
+# pair at the JVM default heap against Spring arms at 1280m, which is exactly the defect
+# (exeris-community at 256m vs 1280m) this tool was written to catch. Iso-heap matters MOST on
+# cross-stack pairs like quarkus-tuned__spring-on-exeris-pure-native, where footprint is one of
+# the reported axes.
 export SPRING_JAVA_OPTS="-Xms${PREFLIGHT_HEAP_MB}m -Xmx${PREFLIGHT_HEAP_MB}m"
 export EXERIS_JAVA_OPTS="-Xms${PREFLIGHT_HEAP_MB}m -Xmx${PREFLIGHT_HEAP_MB}m"
+export QUARKUS_JAVA_OPTS="-Xms${PREFLIGHT_HEAP_MB}m -Xmx${PREFLIGHT_HEAP_MB}m"
 export EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false
 export EXERIS_TELEMETRY_JFR_ENABLED=false
 
@@ -193,7 +203,8 @@ check_arm() {
     fi
   fi
 
-  # 3 + 4: does it serve BOTH contracts? A pre-#50 runtime passes heavy and 404s light.
+  # 3 + 4: does it serve BOTH contracts? Heavy-passes-light-404s has TWO distinct causes and the
+  # hint below must not collapse them — see the arm-family branch at the 404.
   local kind path code body
   for kind in heavy light; do
     [[ "$kind" == heavy ]] && path="$HEAVY_PATH" || path="$LIGHT_PATH"
@@ -202,8 +213,22 @@ check_arm() {
     body="$(printf '%s' "$body" | head -n -1)"
     if [[ "$code" != "200" ]]; then
       red "  FAIL  ${kind} ${path} -> HTTP ${code:-<none>}"
-      [[ "$kind" == light && "$code" == "404" ]] && \
-        echo "        404 on light is the pre-#50 signature: the query string is not stripped"
+      # The pre-#50 hint is Exeris-SPECIFIC and was previously printed for every arm. On
+      # quarkus-tuned (2026-08-07) that misattributed a 25-day-stale jar — the light endpoint had
+      # simply not been built yet — to a runtime bug in a runtime that arm does not even use. A
+      # preflight written to stop silent misattribution must not commit it in its own diagnostics.
+      if [[ "$kind" == light && "$code" == "404" ]]; then
+        case "$target_id" in
+          spring-on-exeris*|exeris-*)
+            echo "        404 on light is the pre-#50 signature: the query string is not stripped."
+            echo "        Check the runtime build in the env file before suspecting the app."
+            ;;
+          *)
+            echo "        This arm does not run exeris-spring-runtime, so #50 is NOT the explanation."
+            echo "        Most likely a stale build: compare the jar's mtime against src/."
+            ;;
+        esac
+      fi
       arm_failures=$((arm_failures + 1))
       continue
     fi

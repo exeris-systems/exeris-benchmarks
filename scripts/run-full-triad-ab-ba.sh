@@ -761,6 +761,22 @@ build_target_artifact() {
       # agree:  unzip -l <jar> | grep exeris-kernel
       module_path="targets/exeris-spring-runtime-app-pure-native"
       ;;
+    spring-on-exeris-comp-native)
+      # The grid's fourth cell: compat web layer (@RestController through
+      # ExerisCompatDispatcher) over kernel-native persistence. Built from the SAME POM as
+      # spring-on-exeris-pure-native — the two jars' BOOT-INF/lib listings diff empty — and
+      # separated by exactly one property, exeris.runtime.web.mode=compatibility.
+      #
+      # That is what makes their pair the only single-variable measurement of the
+      # Pure-vs-Compat web axis here, so the two MUST be rebuilt together. Building one alone
+      # would let a kernel or Boot line drift into a comparison that has nothing else in it.
+      # Verify after any rebuild:
+      #   diff <(unzip -l targets/exeris-spring-runtime-app-pure-native/target/*.jar \
+      #            | grep -oE 'BOOT-INF/lib/[^ ]*\.jar' | sort) \
+      #        <(unzip -l targets/exeris-spring-runtime-app-comp-native/target/*.jar \
+      #            | grep -oE 'BOOT-INF/lib/[^ ]*\.jar' | sort)
+      module_path="targets/exeris-spring-runtime-app-comp-native"
+      ;;
     *)
       echo "ERROR: No Maven module mapping defined for target ${target_id}"
       return 1

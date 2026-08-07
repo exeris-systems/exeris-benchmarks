@@ -135,6 +135,15 @@
       "maturity": "candidate",
       "claim_scope": "comparison_eligible",
       "notes": "Pure on BOTH axes: native Exeris web layer AND kernel-native persistence (TransactionalExecutor, no JPA/Hibernate, no compat DataSource). Comparison-eligible within-tier H1 (community, loopback-h1). \"Native\" means native repository API, not a native wire protocol — Community persistence is still JDBC+HikariCP, so pgjdbc remains in the measured path. SQL is byte-identical to exeris-community by construction."
+    },
+    {
+      "target_id": "spring-on-exeris-comp-native",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "COMPAT web layer over NATIVE persistence — the fourth cell of the two-axis grid, unmeasured until 2026-08-07. @RestController served through ExerisCompatDispatcher; repositories call kernel-native TransactionalExecutor with no JPA, no Hibernate and no compat DataSource. PURE-vs-COMPAT is a mandatory separation axis: this is compat, never blended with pure-mode rows without the explicit caveat. Boot-verified 2026-08-07 against a seeded Postgres — the axes are NOT coupled, and response bodies are byte-identical to every other arm. CONFIDENTIALITY: excluded from the public docs path, as with the other spring-on-exeris arms."
     }
   ],
   "allowed_pairs": [
@@ -254,6 +263,32 @@
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
       "axis_note": "PERSISTENCE-AXIS pair, and the reason spring-on-exeris-pure-native exists. Both arms are the same application on the same host runtime, same kernel line (0.10.2), same native web layer, same pool configuration and the same JDBC URL. The ONLY difference is how a row is fetched: Spring Data JPA + Hibernate 6.6 over exeris-spring-runtime-data's ExerisDataSource on one side, kernel-native TransactionalExecutor + prepared statements on the other. Both arms are mode=pure, so strict gate G3 passes and this is a normal comparative claim in the runtime track — unlike the two cross-mode pairs, which route to compat/. WHY IT MATTERS: the 2026-08-05 triad measured pure-vs-compat at ~0 (+10.94 % vs +10.9 % RPS against the same Tomcat baseline) because those two arms differ only in HTTP dispatch while the request is dominated by ORM and JDBC. This pair moves the layer that actually dominates. CONFOUND, STATE IT: the ORM arm demarcates its read with Spring's @Transactional(readOnly = true); the native arm demarcates inside TransactionalExecutor (inReadSession for heavy, query for light). That is not a free variable — it is part of what the persistence layer IS on each side — but it means the delta covers demarcation plus mapping plus statement handling, not entity hydration alone. AUTH AXIS: neither arm carries Spring Security, so unlike any pair involving spring-hibernate there is no per-request security asymmetry here."
+    },
+    {
+      "pair_id": "spring-on-exeris-comp-native__spring-on-exeris-pure-native",
+      "targets": [
+        "spring-on-exeris-comp-native",
+        "spring-on-exeris-pure-native"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "expected_claim_status": "non_eligible",
+      "axis_note": "WEB-AXIS pair, and the cleanest one in this manifest. Both arms are built from the SAME POM — a diff of the two jars' BOOT-INF/lib listings is empty — on the same Boot line (4.1.0), same kernel line (0.10.2), same Jackson line (3.1.4), same pool configuration, same repositories, same SQL, same bean graph. They are separated by exactly ONE property: exeris.runtime.web.mode=compatibility. Nothing else in this repo isolates the Pure-vs-Compat web axis with a single variable. EXPECTED non_eligible AND THAT IS CORRECT. Strict gate G3 rejects it on mode mismatch (pure vs compat) because Pure-vs-Compat is a mandatory separation axis. This pair is a COMPAT-FAMILY overhead measurement and belongs in compat/ with both modes stored separately and labelled — it is not a cross-target comparative claim in the runtime track. Do not 'fix' the classification. WHY IT SUPERSEDES THE OLDER COMPAT NUMBER: the 2026-08-05 spring-hibernate__spring-on-exeris pair measured the compat seam across a Tomcat-vs-Exeris ingress change, and the 3-compat-vs-pure pair measured it on an ORM-dominated request where dispatch is a small share of the cost (+2.3 % heavy, +7.7 % light). Here the request is ~3x cheaper because persistence is native, so the dispatcher's roughly fixed per-request cost is a LARGER fraction — expect a bigger compat overhead than 7.7 % on light, not a smaller one. CONTRACT REGIME, MANDATORY: on heavy this pair is measured against a SATURATED database (the ladder run of 2026-08-06 showed the DB cpuset at 99.8 % with the arms at 69-74 % of their own CPU pin), so a heavy throughput ratio there reads the Postgres ceiling, not the dispatcher. Quote cpu/req on heavy; quote both on light, where all arms are CPU-bound at 94-98 % of their pin. SERIALISATION, STATED: pure-native encodes through an explicit JsonConfiguration/JsonEncoder pair; comp-native through ExerisCompatAutoConfiguration's exerisCompatJacksonConverter, whose factory builds its own mapper. Same Jackson 3 defaults, different objects — confirmed equal by response-body checksum (heavy 82f9bcdf2852bd5e, light 615734f3df404338), not assumed. AUTH AXIS: neither arm carries Spring Security, so there is no per-request security asymmetry here, unlike any pair involving spring-hibernate or spring-on-exeris."
+    },
+    {
+      "pair_id": "spring-on-exeris__spring-on-exeris-comp-native",
+      "targets": [
+        "spring-on-exeris",
+        "spring-on-exeris-comp-native"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "expected_claim_status": "comparison_eligible",
+      "axis_note": "PERSISTENCE-AXIS pair under a compat web layer: both arms are mode=compat, so strict gate G3 passes and this is a normal comparative claim in the runtime track. GATE ELIGIBILITY IS NOT FAIRNESS — READ BEFORE QUOTING. This pair passes the gate and is nonetheless MORE confounded than the non_eligible spring-on-exeris-comp-native__spring-on-exeris-pure-native pair above. spring-on-exeris was outside the 2026-08-06 version alignment and still runs Spring Boot 3.5.14 and Jackson 2 (com.fasterxml) against comp-native's Boot 4.1.0 and Jackson 3 (tools.jackson). A Jackson major sits in the response path of EVERY request and weighs most on the light contract; the repo's own fence says numbers do not transfer across such a change. On top of that spring-on-exeris carries Spring Security (a per-request ExerisSecurityContextFilter) and the flow stack, neither of which comp-native has. So a delta here covers persistence PLUS a Boot major PLUS a Jackson major PLUS security PLUS bean graph. Label it as such or do not run it. TO MAKE IT CLEAN, align spring-on-exeris to Boot 4.1.0 / Jackson 3 / kernel 0.10.2 first and re-boot-verify it — at which point every compat number measured before the alignment stops transferring, including the 2026-08-05 triad. That is a deliberate cost, not an oversight. Note also that the flow stack cannot simply be ported: its SQL steps run on flow-worker virtual threads, which are outside the kernel provider scope that TransactionalExecutor requires."
     },
     {
       "pair_id": "exeris-community__spring-on-exeris-pure-native",

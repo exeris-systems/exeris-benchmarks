@@ -3074,6 +3074,7 @@ run_wrk_target() {
   # co-residence contamination, and the Spring ladder's 2.3-3.9 % between-leaf penalty that
   # appears whenever the resident neighbour is the other Exeris arm.
   local neighbour_sampler_pid="" neighbour_pid="" neighbour_port=""
+  local neighbour_jfr_name="" neighbour_jfr_file="" neighbour_jfr_started=0
   local neighbour_csv="${outdir}/neighbour-resource-samples.csv"
   # BUG 1: per-target pg_stat_statements measurement-window delta artifacts.
   local pgss_baseline="${outdir}/pg_stat_statements-measurement-baseline.json"
@@ -3134,6 +3135,41 @@ run_wrk_target() {
     if [[ -n "$neighbour_pid" && -d "/proc/$neighbour_pid" ]]; then
       start_resource_sampler "$neighbour_pid" "$neighbour_csv" 1 &
       neighbour_sampler_pid=$!
+
+      # IDLE PROFILE of the co-resident target. The sampler above says HOW MUCH an idle arm
+      # costs; this says WHAT it is doing. Both are needed, and only this half was missing.
+      #
+      # Measured on the 2026-08-06 ladder: an idle spring-on-exeris process burns 0.67-0.70 %
+      # of the 4-core server pin, against 0.04-0.05 % for Tomcat and for exeris-community —
+      # ~18x, split by hosting model rather than runtime family. Actuator, Micrometer, Quartz,
+      # spring-integration and every management/task/jmx property were ruled out statically,
+      # and thread count is flat (36.7 vs 43.9 against an 18x CPU difference), so the cause is
+      # in the composition and cannot be narrowed further from counters.
+      #
+      # An idle process is the ideal profiling subject: with no traffic, whatever appears in
+      # the profile IS the answer, because nothing else is running. That is why this is worth a
+      # recording rather than more sampling.
+      #
+      # Per-target JFR (jfr-start.json) brackets only that target's OWN window — verified from
+      # the ladder's sidecar timestamps: target-a recorded 23:13:44-23:33:47 and target-b
+      # 23:33:47-23:53:51, back to back, never overlapping. So the idle arm was never recorded
+      # and this data did not already exist in the campaign's ~23 GB of JFR.
+      #
+      # maxsize is deliberately small: the subject is idle, so the recording is tiny, and a cap
+      # keeps this from adding meaningfully to a campaign whose JFR volume is already the
+      # dominant artefact cost. settings=profile matches the driven recordings so the two are
+      # readable with the same views.
+      if [[ "${BENCH_PROFILE_IDLE_NEIGHBOUR:-1}" == "1" ]] && command -v jcmd >/dev/null 2>&1; then
+        neighbour_jfr_name="idle_neighbour_$(date -u +%Y%m%d_%H%M%S)"
+        neighbour_jfr_file="${outdir}/neighbour-idle.jfr"
+        if jcmd "$neighbour_pid" \
+             "JFR.start name=${neighbour_jfr_name} settings=profile disk=true maxsize=64m" \
+             > "${outdir}/neighbour-jfr-start.txt" 2>&1; then
+          neighbour_jfr_started=1
+        else
+          neighbour_jfr_started=0
+        fi
+      fi
     fi
   fi
 
@@ -3258,6 +3294,26 @@ run_wrk_target() {
   if [[ -n "$neighbour_sampler_pid" ]]; then
     kill "$neighbour_sampler_pid" 2>/dev/null || true
     wait "$neighbour_sampler_pid" 2>/dev/null || true
+  fi
+
+  # Dump and stop the idle-neighbour recording, bracketed to the same window as its sampler so
+  # the profile and the 0.0x-cores figure describe the same interval. Best-effort throughout:
+  # the neighbour is not the measured target, so nothing here may fail a leaf.
+  if [[ "${neighbour_jfr_started:-0}" == "1" && -n "$neighbour_pid" && -d "/proc/$neighbour_pid" ]]; then
+    jcmd "$neighbour_pid" "JFR.dump name=${neighbour_jfr_name} filename=${neighbour_jfr_file}" \
+      >> "${outdir}/neighbour-jfr-stop.txt" 2>&1 || true
+    jcmd "$neighbour_pid" "JFR.stop name=${neighbour_jfr_name}" \
+      >> "${outdir}/neighbour-jfr-stop.txt" 2>&1 || true
+    jq -n \
+      --arg measured "$target_id" \
+      --arg neighbour_port "${neighbour_port:-}" \
+      --arg neighbour_pid "$neighbour_pid" \
+      --arg file "$neighbour_jfr_file" \
+      --argjson present "$([[ -f "$neighbour_jfr_file" ]] && echo true || echo false)" \
+      '{measured_target_id: $measured, neighbour_port: $neighbour_port, neighbour_pid: $neighbour_pid,
+        jfr_file: $file, dumped: $present, window: "measurement", role: "resident-idle",
+        note: "JFR of the co-resident target that was launched but NOT driven during this window. With no traffic on it, the profile is the whole answer to what an idle instance spends CPU on — the companion to neighbour-resource-metrics.json, which says how much rather than what."}' \
+      > "${outdir}/neighbour-jfr-metadata.json" 2>/dev/null || true
   fi
   if [[ -f "$neighbour_csv" ]]; then
     summarize_resource_samples "$neighbour_csv" "${outdir}/neighbour-resource-metrics.json" "$MEASUREMENT_SECONDS"

@@ -353,10 +353,74 @@ The prediction was right about heavy and silent about light, where the effect wa
   (0.0280 vs 0.0270, both at 43.9 threads).
 - What remains is the **composition itself**: the kernel alone is quiet (community, 0.0020) and
   Spring alone is quiet (hibernate, 0.0015); only the kernel hosted *inside* a Spring context
-  idles hot. Diagnosis needs one 60-second JFR on a single idle instance — whatever burns
-  0.027 cores is the entire profile, since nothing else is running. Queued behind run A; it
-  cannot be done on this workstation, which has no local Postgres and where starting the Docker
-  daemon would resurrect an unrelated protected stack.
+  idles hot.
+
+### The density claim survives this — threshold computed
+
+The instinct to say "quoting only RSS picks the flattering axis" is methodologically right and
+**wrong on these numbers**. Memory per core at which idle CPU would start to bind before RAM:
+
+| arm | GB/core break-even |
+|---|---:|
+| spring-on-exeris-pure | 37.4 |
+| spring-on-exeris-pure-native | 32.7 |
+| exeris-community | 307.6 |
+| spring-hibernate | 953.1 |
+
+Commodity servers run 2–8 GB/core and memory-optimised shapes 8–16. Nothing real approaches
+33 GB/core, so **RAM binds first by an order of magnitude on all four arms**. Density remains
+legitimately an RSS claim. The 18× idle-CPU gap is worth fixing for what it does on a *busy*
+node — where those cycles compete with real work, and where it touches **L5** — not because it
+limits how many idle instances fit.
+
+Recorded with the threshold so the claim is not weakened later by the same reflex that nearly
+weakened it here.
+
+### But the instances-per-core column is DIRECTIONAL, not citable
+
+Every arm ran a pinned `-Xms1280m -Xmx1280m` with `AlwaysPreTouch` off, so idle RSS measures
+*pages touched at that heap*, not memory required:
+
+| arm | idle RSS | % of committed heap |
+|---|---:|---:|
+| spring-hibernate | 1464 MB | 114 % |
+| spring-on-exeris-pure | 1073 MB | 84 % |
+| spring-on-exeris-pure-native | 903 MB | 71 % |
+| exeris-community | 630 MB | 49 % |
+
+community sits at 630 MB here against a 128 MiB floor established by the memory sweep — so real
+density for the lean arms could be several times better than this table implies, and with touch
+ratios spanning 49–114 % the **ordering itself could move**. Instances-per-core is derivable
+only from a per-rung floor campaign, which does not exist yet. Until it does, this table shows
+the *ordering* of idle cost, not its magnitude.
+
+### Same structural condition as L5
+
+| | condition | symptom |
+|---|---|---|
+| **L5** | (Spring + native persistence) ∧ CPU saturation | tail excess absent at 78 % of pin, 2.8× at 99.7 % |
+| **L8** | (Spring + Exeris kernel), no load at all | 18× idle CPU |
+
+Different conditions, different symptoms, one shape: the cost exists only when both components
+share a process. That is not evidence of a common cause, but it is reason to look for one before
+diagnosing two things separately — and there is a concrete join: something burning 0.027 cores
+on an idle process is a *periodic wakeup*, and a periodic wakeup on a saturated system competes
+for carriers at precisely the worst moment, which is a mechanism capable of producing a
+saturation-dependent tail.
+
+### The idle profile did not already exist — now it will
+
+Per-target JFR brackets only that target's own window. Verified from the ladder's sidecar
+timestamps: target-a recorded 23:13:44–23:33:47, target-b 23:33:47–23:53:51 — back to back,
+never overlapping. (The shared suffix in both recording *names* is the leaf's launch token, not
+a start time; the file mtimes are what settle it.) So the idle arm was never recorded, and this
+was not sitting in the campaign's ~23 GB.
+
+`run-comparative.sh` now arms a capped `settings=profile` recording on the co-resident target
+for exactly the window its resource sampler covers (`neighbour-idle.jfr`,
+`BENCH_PROFILE_IDLE_NEIGHBOUR=1` by default, best-effort — it can never fail a leaf). Same class
+of change as the load-generator sampler, and it means the next campaign answers this for free
+rather than needing a bespoke run.
 
 ## L9 — OPEN: inter-pair drift is a per-request cost increase, not CPU starvation
 

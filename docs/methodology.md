@@ -274,6 +274,34 @@ It layers the matching host-net compose override and the chosen mode is recorded
 Default remains `bridge` (back-compatible); host mode is opt-in but **required** for
 cross-stack claims.
 
+### Ceilings that bound a result vs ceilings that replace it
+
+Every rig has resources that can run out. They are not equivalent, and the distinction decides
+what you may do with the run:
+
+- A **bounding ceiling** limits the number. The database is the standard case: when Postgres
+  saturates, throughput stops describing the stack and starts describing the database — but
+  `cpu/req` still describes the stack, the run is still evidence, and the correct response is
+  to declare the ceiling and switch comparator.
+- An **invalidating ceiling** replaces the measured object. The **load generator** is the case
+  that matters: a saturated driver means the number describes how fast the driver can *offer*
+  requests, not how fast the target can *serve* them. No comparator survives this. There is no
+  metric to fall back to, because the subject of the measurement changed. Discard the leaf.
+
+This is why `tools/aggregate-db-cpuset-mpstat.sh` emits `loadgen_saturated_RESULT_INVALID`
+rather than a descriptive label: the verdict is categorical, not a severity.
+
+**Sample the generator, do not assume it.** Until 2026-08-07 nothing in this lab sampled the
+load generator's own CPU, so "wrk was not the bottleneck" was an assumption underneath every
+result rather than a measurement — and no earlier campaign can be retro-checked, because the
+data was never captured. The first campaign that did sample it
+(`20260808T065528Z-purenative-vs-quarkustuned-n3`) measured a median of **7.0 %** busy with a
+maximum of **19.0 %** across 24 arm-windows, 24/24 with headroom. That closes the assumption
+for that campaign only.
+
+Rule: a runtime campaign records the load generator's cpuset utilisation alongside the target's
+and the database's, and any window at or above 95 % is discarded rather than caveated.
+
 ### Latency claim scope: JMH SampleTime vs E2E
 
 `Mode.SampleTime` measures the **distribution of individual operation cost** at maximum drive rate. Valid claims:

@@ -84,10 +84,28 @@ qualifier is withdrawn.
 `%sys+%soft` 12.47 → 12.60 — unchanged to within noise. Heavy's wall is genuine query
 execution, which is exactly what **L6** predicted and what removing the NAT hop confirms.
 
-Why the two contracts differ: light runs ~55.7 k rps of single-query requests, heavy ~12.9 k
-rps of three-query requests. Light does **4.3× more network round-trips per second** for far
-less DB work each, so the per-round-trip NAT cost dominates its DB-cpuset time and is
-negligible in heavy's.
+**Why the contracts differ is NOT yet explained — the first explanation offered here was wrong.**
+It claimed light does "4.3× more network round-trips per second". That used the *request* ratio
+and forgot that heavy issues **three queries per request**. The actual DB round-trip rates are
+55 736/s (light) and 12 958 × 3 = 38 874/s (heavy) — a ratio of **1.43×**, not 4.3×. A 1.43×
+difference in round-trips cannot produce a 50-point difference in effect.
+
+The per-round-trip figures make that plain:
+
+| pure-native | DB-side `sys+soft` per request | per DB round-trip |
+|---|---:|---:|
+| light, bridge | 79.7 µs | **79.7 µs** |
+| light, host | 28.3 µs | **28.3 µs** |
+| heavy, bridge | 78.9 µs | **26.3 µs** |
+| heavy, host | 77.8 µs | **25.9 µs** |
+
+On host both contracts converge to ~26–28 µs of DB-side kernel time per round-trip. On bridge,
+heavy was *already* at 26.3 — the NAT hop cost it nothing measurable — while light paid 79.7.
+So the bridge tax was not levied per round-trip at a uniform rate; it landed on one contract and
+not the other. Placement is the likely lever (softirq and the unpinned `docker-proxy` are
+scheduled, not pinned, so which cpuset absorbs them is not fixed), but this data cannot
+establish it. **Recorded as an observation with the mechanism open**, rather than given a
+plausible story.
 
 **Consequence for every bridged campaign in this repo:** a bridge-mode DB-busy figure is
 Postgres *plus* container networking and overstates database load — materially so on
@@ -184,6 +202,35 @@ persistence in the same path — and it now rests on two independent comparators
 (quarkus), i.e. pure-native's tail is *better* there. Whatever this is, it does not appear when
 the arm has 22 % of its pin idle.
 
+### The condition is a CONJUNCTION, and that narrows the suspect list
+
+| contract | pure-native % pin | pure-native p99 | comparator p99 |
+|---|---:|---:|---:|
+| heavy | ~78 % | **14.34** | 15.78 (quarkus) |
+| light | 96.9 % | 12.49 | 5.87 / 7.83 |
+| light | 99.7 % | **16.59** | 5.91 (quarkus) |
+
+Neither condition alone produces it. Not the stack: at 78 % of pin the same stack has the
+*better* tail. Not saturation: quarkus-tuned at 95.7 % has the tightest tail in the dataset.
+The trigger is **(Spring + native persistence) ∧ CPU saturation**.
+
+That shape matters. A fixed per-request cost would be visible at 78 % of pin on heavy, and it is
+not. Appearing only under saturation is the signature of **contention for a shared resource**,
+not of extra work per request.
+
+**Two discriminators, both from artefacts already on disk — no new campaign:**
+
+1. **`jdk.VirtualThreadPinned` from the existing JFR recordings.** If something on the Spring MVC
+   path pins a carrier, then under saturation the carrier pool becomes the constraint and the
+   tail inflates in exactly this pattern. JDK 26 removed `synchronized` pinning (JEP 491), so the
+   remaining candidates are native frames — a short list. One JFR view.
+2. **GC + safepoint logs at matched ~96 % of pin**, using the recipe from the triad report §7 tail
+   diagnostic (which cleared GC there: longest pause 23 ms, safepoint 28 ms). If it clears here
+   too, scheduling is what is left, and (1) becomes the only surviving candidate.
+
+Order is (1) then (2): cheaper, and aimed at the better hypothesis. Queued behind run A —
+extracting JFR on the box during a measurement window is itself CPU work.
+
 ## L6 — PRE-REGISTERED PREDICTION: what host networking does to the heavy ceiling
 
 Recorded **2026-08-08, before run B landed**, so the distinction between prediction and
@@ -241,11 +288,24 @@ The prediction was right about heavy and silent about light, where the effect wa
   0.9716–1.0288) agrees with the arm means.
 - **Footprint:** +4.1 % RSS, +0.8 % off-heap. Both iso-heap; neither is a large effect.
 - **Tail is the one large difference** — 2.81× on light. See **L5**.
-- **DOMINANT UNRESOLVED CONFOUND: Jackson 3 vs Jackson 2**, a major-version difference in the
-  response path of every request, previously profiled at roughly a fifth of Exeris on-CPU time
-  in this scenario. A 3.7 % cpu/req gap is well inside what that alone could produce, so **do
-  not attribute this gap to the runtime or the transport.** Other declared fences: HikariCP vs
-  Agroal, posix-hybrid vs Netty/Vert.x, pgjdbc-over-JUL, and heavy-response key ordering
-  (same 9105 bytes, `jq -S`-equal, deliberately un-normalised).
+- **The Jackson confound has a KNOWN SIGN, and it runs against pure-native.** An earlier draft of
+  this entry used the confound's *magnitude* (~⅕ of Exeris on-CPU time is serialisation) to
+  decline to attribute the gap. That was an error of method: it never checked the direction.
+  `JacksonVersionSerializationBenchmark`, on the identical 10×10×10 payload, measures
+  **Jackson 3 at 15.77 µs/op against Jackson 2 at 17.78 µs/op — Jackson 3 is ~11 % FASTER**, at
+  effectively identical allocation (18 005 vs 17 998 B/op) and byte-identical output
+  ([triad report §4](../results/reports/2026-07-21-entity-read-by-id-tuned-pg-triad-comparison-eligible.md)).
+  pure-native therefore runs the *faster* serialiser and is *still* 3.7 % more expensive per
+  request. Taking serialisation at ~20 % of on-CPU, the Jackson 3 advantage is worth ~2.2 % of
+  total, so pure-native's non-serialisation work is roughly **6 % more expensive, not 3.7 %**.
+  The confound does not excuse the gap — removing it widens it. (The ~6 % combines a profiling
+  share with a microbenchmark delta and is an estimate; the *sign* does not depend on that
+  arithmetic.)
+- Honest form of the claim: **parity within a few percent, and the serialisation confound has a
+  known direction that understates rather than flatters the gap.** That is still a strong result
+  for a Spring application against hand-tuned Quarkus; it is simply not a result that may lean
+  on "but Jackson".
+- Other declared fences: HikariCP vs Agroal, posix-hybrid vs Netty/Vert.x, pgjdbc-over-JUL, and
+  heavy-response key ordering (same 9105 bytes, `jq -S`-equal, deliberately un-normalised).
 - **Load generator ruled out**, not assumed: 7.4 % / 19.4 % busy, 24/24 windows
   `loadgen_headroom_available`.

@@ -422,6 +422,26 @@ for exactly the window its resource sampler covers (`neighbour-idle.jfr`,
 of change as the load-generator sampler, and it means the next campaign answers this for free
 rather than needing a bespoke run.
 
+**Two conditions on reading it, both settled before the instrument ships:**
+
+*The profile will partly contain JFR.* On a loaded application JFR's overhead is ~1–2 % and
+disappears into the background; on a process burning 0.027 cores the same absolute overhead is
+proportionally enormous, and `profile` contributes its own periodic work (`jdk.CPULoad` each
+second, the sampler thread, chunk rotation) which appears in the profile *as work*. The floor
+comes free from the same change: exeris-community (0.0020 cores) and spring-hibernate (0.0015)
+are recorded as neighbours under identical settings, so **their profiles are the instrument's
+noise floor** and anything absent from them is signal. The quiet arms are the control, not
+"nothing interesting" — without them the noisy profile is unreadable.
+
+*Park intervals before hot-methods.* 0.027 cores over a 20-minute window is ~32 CPU-seconds
+arriving as periodic wakeups. `ExecutionSample` will catch that but smear it across frames; a
+thread parking on a **fixed interval** is the signature of a timer rather than of work. The
+precedent is in this lab: triad report §7 identified Agroal pool housekeeping from
+"`ThreadPark`/`JavaMonitorWait` on `agroal-*` threads with 2-minute and **exactly-2000 ms**
+timers". *Exactly 2000 ms* is what names a timer; an averaged CPU figure never could. So read
+repeated exact park durations first — they yield a thread name and a period — and hot-methods
+second.
+
 ## L9 — OPEN: inter-pair drift is a per-request cost increase, not CPU starvation
 
 - Class: descriptive-only, **unresolved** · Track: internal

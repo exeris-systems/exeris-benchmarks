@@ -3159,6 +3159,29 @@ run_wrk_target() {
       # keeps this from adding meaningfully to a campaign whose JFR volume is already the
       # dominant artefact cost. settings=profile matches the driven recordings so the two are
       # readable with the same views.
+      #
+      # THE PROFILE WILL PARTLY CONTAIN JFR ITSELF, AND THAT IS HANDLED BY DESIGN.
+      # On a loaded application JFR's overhead is ~1-2 % and vanishes into the background. On a
+      # process burning 0.027 cores the same absolute overhead is proportionally enormous, and
+      # `profile` adds its own periodic work (jdk.CPULoad every second, the sampler thread,
+      # chunk rotation) which shows up in the profile AS work. Read naively, an idle profile
+      # therefore reports JFR.
+      #
+      # The floor comes free from this very change: exeris-community (0.0020 cores) and
+      # spring-hibernate (0.0015) are recorded as neighbours under IDENTICAL settings. Their
+      # profiles ARE the instrument's noise floor. Anything in a spring-on-exeris idle profile
+      # that is not also in theirs is signal. Do not skip the quiet arms as "nothing
+      # interesting" — they are the control, and without them the noisy profile cannot be read.
+      #
+      # READING ORDER: park intervals BEFORE hot-methods.
+      # 0.027 cores over a 20-minute window is ~32 CPU-seconds arriving as periodic wakeups.
+      # ExecutionSample will catch it but smear it across many frames; a periodic wakeup is far
+      # more legible in PARK DURATION, because a thread parking on a fixed interval is the
+      # signature of a timer rather than of work. This lab has the precedent: the triad report
+      # §7 identified Agroal pool housekeeping from "ThreadPark/JavaMonitorWait on agroal-*
+      # threads with 2-minute and exactly-2000 ms timers". "Exactly 2000 ms" is what names a
+      # timer; an averaged CPU figure never could. So: repeated exact park durations first (they
+      # yield a thread name and a period), hot-methods second.
       if [[ "${BENCH_PROFILE_IDLE_NEIGHBOUR:-1}" == "1" ]] && command -v jcmd >/dev/null 2>&1; then
         neighbour_jfr_name="idle_neighbour_$(date -u +%Y%m%d_%H%M%S)"
         neighbour_jfr_file="${outdir}/neighbour-idle.jfr"
@@ -3312,7 +3335,7 @@ run_wrk_target() {
       --argjson present "$([[ -f "$neighbour_jfr_file" ]] && echo true || echo false)" \
       '{measured_target_id: $measured, neighbour_port: $neighbour_port, neighbour_pid: $neighbour_pid,
         jfr_file: $file, dumped: $present, window: "measurement", role: "resident-idle",
-        note: "JFR of the co-resident target that was launched but NOT driven during this window. With no traffic on it, the profile is the whole answer to what an idle instance spends CPU on — the companion to neighbour-resource-metrics.json, which says how much rather than what."}' \
+        note: "JFR of the co-resident target that was launched but NOT driven during this window. With no traffic on it, the profile is the whole answer to what an idle instance spends CPU on — the companion to neighbour-resource-metrics.json, which says how much rather than what. READ WITH A NOISE FLOOR: settings=profile costs the same absolute overhead on an idle process as on a busy one, and contributes its own periodic events, so an idle profile partly contains JFR. The quiet arms recorded under identical settings (exeris-community 0.0020 cores, spring-hibernate 0.0015) are that floor; anything not also present in them is signal. READING ORDER: repeated exact park durations first (a fixed interval names a timer and a thread — cf. triad report section 7, which identified Agroal housekeeping from exactly-2000 ms ThreadPark on agroal-* threads), hot-methods second, because ~32 CPU-seconds of periodic wakeups smear across frames in an execution profile."}' \
       > "${outdir}/neighbour-jfr-metadata.json" 2>/dev/null || true
   fi
   if [[ -f "$neighbour_csv" ]]; then

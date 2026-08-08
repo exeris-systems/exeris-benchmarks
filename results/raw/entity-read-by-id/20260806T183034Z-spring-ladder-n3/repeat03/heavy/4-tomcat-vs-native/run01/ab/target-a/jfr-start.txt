@@ -1,0 +1,8 @@
+4163156:
+No available recordings.
+
+Use jcmd 4163156 JFR.start to start a recording.
+4163156:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 4163156 JFR.dump name=spring_hibernate_20260807_201146 filename=FILEPATH to copy recording data to file.

@@ -3604,6 +3604,8 @@ parse_wrk_to_result() {
     --arg benchmark_tool_version "$WRK_VERSION_DETECTED" \
     --arg hardware_profile    "$HARDWARE_PROFILE_REF" \
     --arg backend_network_mode "$BACKEND_NETWORK_MODE" \
+    --arg db_cpuset           "${DB_CPUSET_RESOLVED:-}" \
+    --arg db_cpuset_source    "${DB_CPUSET_SOURCE:-unresolved}" \
     --arg target_classification "$TARGET_CLASSIFICATION" \
     --arg pinned_jdk_version "${PINNED_JDK_VERSION:-${JDK_VERSION_DETECTED:-unknown}}" \
     --arg pinned_tool_version "${PINNED_BENCH_TOOL_VERSION:-${WRK_VERSION_DETECTED:-unknown}}" \
@@ -3704,6 +3706,8 @@ parse_wrk_to_result() {
         jvm_flags: $jvm_flags,
         hardware_profile: $hardware_profile,
         backend_network_mode: $backend_network_mode,
+        db_cpuset: $db_cpuset,
+        db_cpuset_source: $db_cpuset_source,
         scenario_id: $scenario,
         target_classification: $target_classification
       },

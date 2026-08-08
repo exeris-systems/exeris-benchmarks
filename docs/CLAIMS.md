@@ -309,3 +309,58 @@ The prediction was right about heavy and silent about light, where the effect wa
   heavy-response key ordering (same 9105 bytes, `jq -S`-equal, deliberately un-normalised).
 - **Load generator ruled out**, not assumed: 7.4 % / 19.4 % busy, 24/24 windows
   `loadgen_headroom_available`.
+
+## L8 — an idle Spring-on-Exeris process is ~18× less idle than Tomcat or the native runtime
+
+- Class: fact (measured) · Track: **internal** · Campaign: `20260806T183034Z-spring-ladder-n3`, n=24 windows per identity
+- The runner samples the *co-resident, launched-but-not-driven* target during each measurement
+  window (`neighbour-resource-metrics.json`, `role: resident-idle`). Doing nothing costs:
+
+  | idle arm | cores | % of the 4-core server pin |
+  |---|---:|---:|
+  | spring-on-exeris-pure | 0.0280 | **0.70 %** |
+  | spring-on-exeris-pure-native | 0.0270 | **0.67 %** |
+  | exeris-community | 0.0020 | 0.05 % |
+  | spring-hibernate | 0.0015 | 0.04 % |
+
+- The split is by **hosting model, not by runtime family**: the two Spring-on-Exeris arms burn
+  ~18× what either Tomcat *or* the native Exeris arm does. exeris-community runs the same kernel
+  as pure-native and is as quiet as Tomcat, so this is not "Exeris spins" — it is something in
+  the Spring-hosted composition. Not diagnosed here.
+- Small in absolute terms (0.7 % of a pin) and it does **not** invalidate any co-residency
+  measurement, but it is a real cost of the launch-both-then-measure-sequentially design, and it
+  was never quantified before.
+
+## L9 — OPEN: inter-pair drift is a per-request cost increase, not CPU starvation
+
+- Class: descriptive-only, **unresolved** · Track: internal
+- The long-standing observation: the same arm measured in different pairs differs by 1–3 %,
+  reproducibly and in a consistent direction within a campaign. Slot order and neighbour identity
+  were indistinguishable.
+- **CPU theft is now eliminated as the mechanism.** The candidate was the unpinned `docker-proxy`
+  landing on the server cpuset and stealing cycles. That predicts *fewer cores at constant
+  cpu/req*. Measured, ladder n=12 per cell:
+
+  | measured arm | contract | rps | cpu/req | cores |
+  |---|---|---:|---:|---:|
+  | pure | light | −3.0 % | **+3.1 %** | −0.1 % |
+  | pure | heavy | −2.1 % | **+1.5 %** | −0.6 % |
+  | pure-native | light | −1.2 % | **+1.6 %** | **+0.4 %** |
+  | pure-native | heavy | −1.7 % | **+0.8 %** | −0.9 % |
+
+  Cores are flat or *higher* while cpu/req rises by about what throughput loses. The arms are not
+  starved; each request genuinely costs more. That rules out starvation of any kind, `docker-proxy`
+  included, and it also means the drift **cannot** be corrected by normalising to cores.
+- **Idle-neighbour CPU (L8) is not the explanation either, though it correlates.** Six of the
+  eight arm/neighbour combinations move the right way — a noisy Spring-on-Exeris neighbour costs
+  the measured arm more. But `pure-native` **inverts** in both contracts: it is worse beside the
+  *quiet* community (0.002 idle cores) than beside the *noisy* pure (0.028). One clean inversion
+  is enough to reject the single-variable version of the hypothesis.
+- What survives: the effect is concentrated on **pair 3**, which penalises *both* its arms, and
+  pair 3 is the only pair whose arms are both Exeris-kernel-backed. Slot order is ruled out by
+  community, which is *worse* in the earlier pair 3 than in the later pair 4.
+- Next candidates, in order of cheapness: LLC/memory-bandwidth interference from the resident
+  neighbour (cpu/req rising with cores flat is the classic signature), and SMT sibling effects —
+  the server pin `0-1,8-9` is two physical cores with both threads, so a co-resident process can
+  land on a sibling thread of the measured one. Neither is testable from the artefacts currently
+  captured; both would need per-core counters the rig does not yet sample.

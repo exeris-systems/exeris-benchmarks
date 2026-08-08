@@ -302,6 +302,29 @@ for that campaign only.
 Rule: a runtime campaign records the load generator's cpuset utilisation alongside the target's
 and the database's, and any window at or above 95 % is discarded rather than caveated.
 
+### A confound excuses nothing until its SIGN is known
+
+Magnitude alone never licenses setting a result aside. A confound larger than the effect but
+pointing the *other way* does not obscure the effect — it **understates** it, and dismissing the
+result on size is then exactly backwards.
+
+The case that produced this rule: the Exeris arm was measured 3.7 % more expensive per request
+than Quarkus, and the write-up declined to attribute that because serialisation differs
+(Jackson 3 vs Jackson 2) and is roughly a fifth of on-CPU time — comfortably larger than 3.7 %.
+Correct arithmetic, wrong method: nobody checked the direction. This lab's own
+`JacksonVersionSerializationBenchmark` measures Jackson 3 at **15.77 µs/op against Jackson 2 at
+17.78** on the identical payload — Jackson 3 is ~11 % *faster*. The arm with the faster
+serialiser was still more expensive, so removing the confound **widens** the gap to ~6 %.
+
+Rule: before a confound is used to qualify, weaken or set aside a result, state its **direction**
+and the evidence for that direction. "Large enough to explain it" is not a finding; "large
+enough and pointing the right way" is. When the direction is genuinely unknown, say that — an
+unsigned confound bounds nothing in either direction, and it is not a licence to assume it
+favours the reading you prefer.
+
+This is the companion to *sample the generator, do not assume it*: both say do not assume what
+you have not measured, in either direction.
+
 ### Latency claim scope: JMH SampleTime vs E2E
 
 `Mode.SampleTime` measures the **distribution of individual operation cost** at maximum drive rate. Valid claims:

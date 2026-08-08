@@ -327,9 +327,36 @@ The prediction was right about heavy and silent about light, where the effect wa
   ~18× what either Tomcat *or* the native Exeris arm does. exeris-community runs the same kernel
   as pure-native and is as quiet as Tomcat, so this is not "Exeris spins" — it is something in
   the Spring-hosted composition. Not diagnosed here.
-- Small in absolute terms (0.7 % of a pin) and it does **not** invalidate any co-residency
-  measurement, but it is a real cost of the launch-both-then-measure-sequentially design, and it
-  was never quantified before.
+- **In density terms — which is how the platform is sold — 0.028 cores is not small:**
+
+  | idle arm | cores | threads | idle RSS | **idle instances per core** |
+  |---|---:|---:|---:|---:|
+  | spring-on-exeris-pure | 0.0280 | 43.9 | 1073 MB | **36** |
+  | spring-on-exeris-pure-native | 0.0270 | 43.9 | 903 MB | **37** |
+  | exeris-community | 0.0020 | 36.7 | 630 MB | **503** |
+  | spring-hibernate | 0.0015 | 38.2 | 1464 MB | **645** |
+
+  A Spring-on-Exeris instance that is serving nothing exhausts a core in **36 copies**, where
+  the native runtime needs 503 and Tomcat 645. On any deployment where most instances idle most
+  of the time — multi-tenant, edge, per-branch — that is a first-order number against exactly
+  the density argument the small memory floor is meant to support.
+- **Density is limited by whichever resource runs out first, and these two arms fail on
+  different ones.** Tomcat holds the largest idle footprint (1464 MB) and the lowest idle CPU;
+  Spring-on-Exeris holds ~40 % less memory and ~18× the CPU. A density claim that quotes only
+  RSS picks the axis that flatters, and this table is why both belong.
+- **Not a thread-count effect.** Idle threads differ by ~20 % (36.7–43.9) against an ~18× CPU
+  difference, so this is a handful of threads doing periodic work, not more threads existing.
+- **Three of the obvious Spring-side suspects are eliminated statically:** no arm declares
+  `spring-boot-starter-actuator`, Micrometer, Quartz or `spring-boot-starter-integration`, and
+  none sets any `management.*`, `spring.task.*` or `spring.jmx.*` property. It is also not the
+  persistence mode — pure (ORM) and pure-native (kernel-native) are indistinguishable here
+  (0.0280 vs 0.0270, both at 43.9 threads).
+- What remains is the **composition itself**: the kernel alone is quiet (community, 0.0020) and
+  Spring alone is quiet (hibernate, 0.0015); only the kernel hosted *inside* a Spring context
+  idles hot. Diagnosis needs one 60-second JFR on a single idle instance — whatever burns
+  0.027 cores is the entire profile, since nothing else is running. Queued behind run A; it
+  cannot be done on this workstation, which has no local Postgres and where starting the Docker
+  daemon would resurrect an unrelated protected stack.
 
 ## L9 — OPEN: inter-pair drift is a per-request cost increase, not CPU starvation
 

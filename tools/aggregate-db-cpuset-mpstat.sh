@@ -34,9 +34,18 @@
 # time from the DB cpuset, which invalidates the ceiling reading rather than
 # supporting it.
 #
+# THE LOAD GENERATOR IS THE SAME PROBLEM, WITH THE OPPOSITE VERDICT
+#
+# --role loadgen aggregates loadgen-cpuset-mpstat.csv, which the runner started sampling on
+# 2026-08-07. It is the same measurement and the same size problem, but it is read the other
+# way round. A saturated DB bounds the result and must be declared; a saturated LOAD GENERATOR
+# INVALIDATES it — at that point the number describes how fast wrk can offer requests, not how
+# fast the server can serve them, and no amount of care elsewhere rescues it. It is the last
+# ceiling in the rig that was never sampled, so until 2026-08-07 nothing could rule it out.
+#
 # USAGE
-#   tools/aggregate-db-cpuset-mpstat.sh <db-cpuset-mpstat.csv> [output.json]
-#   tools/aggregate-db-cpuset-mpstat.sh --walk <dir>     # every stream beneath <dir>
+#   tools/aggregate-db-cpuset-mpstat.sh <stream.csv> [output.json]
+#   tools/aggregate-db-cpuset-mpstat.sh --walk <dir> [--role db|loadgen]
 #
 # Idempotent: re-running overwrites the aggregate from the stream it is given.
 
@@ -64,7 +73,9 @@ aggregate_one() {
     meta_json="$(cat "$meta")"
   fi
 
-  LC_ALL=C awk -F, -v meta="$meta_json" -v src="$(basename "$csv")" '
+  local role="db"; [[ "$(basename "$csv")" == loadgen-* ]] && role="loadgen"
+
+  LC_ALL=C awk -F, -v meta="$meta_json" -v src="$(basename "$csv")" -v role="$role" '
     NR == 1 {
       # Resolve columns by NAME. mpstat field order has changed across sysstat
       # releases (%gnice is recent); a fixed index would silently read the wrong
@@ -141,8 +152,14 @@ aggregate_one() {
 
       # Not a verdict, a reading. The threshold is stated so a reader can disagree
       # with it without having to re-derive the number.
-      printf "  \"ceiling_reading\": \"%s\",\n", (mean >= 95 ? "db_saturated" : (mean >= 80 ? "db_near_saturation" : "db_headroom_available"))
-      printf "  \"ceiling_reading_threshold_note\": \"db_saturated at busy_pct_mean >= 95, db_near_saturation >= 80. When saturated, throughput ratios between arms read the Postgres ceiling and cpu/req is the sound comparator.\",\n"
+      printf "  \"role\": \"%s\",\n", role
+      if (role == "loadgen") {
+        printf "  \"ceiling_reading\": \"%s\",\n", (mean >= 95 ? "loadgen_saturated_RESULT_INVALID" : (mean >= 80 ? "loadgen_near_saturation" : "loadgen_headroom_available"))
+        printf "  \"ceiling_reading_threshold_note\": \"loadgen_saturated at busy_pct_mean >= 95, near_saturation >= 80. A saturated load generator does NOT bound the result, it INVALIDATES it: the measurement then describes how fast the driver can offer requests, not how fast the target can serve them. Unlike the DB ceiling, no comparator survives this — discard the leaf.\",\n"
+      } else {
+        printf "  \"ceiling_reading\": \"%s\",\n", (mean >= 95 ? "db_saturated" : (mean >= 80 ? "db_near_saturation" : "db_headroom_available"))
+        printf "  \"ceiling_reading_threshold_note\": \"db_saturated at busy_pct_mean >= 95, db_near_saturation >= 80. When saturated, throughput ratios between arms read the Postgres ceiling and cpu/req is the sound comparator.\",\n"
+      }
       printf "  \"sampler_meta\": %s\n", meta
       printf "}\n"
     }
@@ -158,6 +175,7 @@ main() {
   if [[ "$1" == "--walk" ]]; then
     [[ $# -lt 2 ]] && usage 1
     local root="$2" count=0 failed=0
+    local stream_name="${3:-db-cpuset-mpstat.csv}"
     while IFS= read -r -d '' csv; do
       if aggregate_one "$csv" >/dev/null; then
         count=$((count + 1))
@@ -165,7 +183,7 @@ main() {
         failed=$((failed + 1))
         echo "WARN: failed on $csv" >&2
       fi
-    done < <(find "$root" -type f -name 'db-cpuset-mpstat.csv' -print0 | sort -z)
+    done < <(find "$root" -type f -name "$stream_name" -print0 | sort -z)
     echo "aggregated=$count failed=$failed"
     [[ $failed -eq 0 ]]
     return

@@ -59,6 +59,12 @@ results/**/resource-samples.csv
 # attributable; keep that, drop the stream.
 results/**/db-cpuset-mpstat.csv
 results/**/neighbour-resource-samples.csv
+# Load-generator cpuset stream, sampled since 2026-08-07. Same size class (~5 MB/campaign) and
+# the same rule: the aggregate stays, the stream goes. Derive it BEFORE dropping the stream —
+# tools/aggregate-db-cpuset-mpstat.sh --walk <dir> loadgen-cpuset-mpstat.csv — because this is
+# the one ceiling whose verdict is fatal rather than qualifying: a saturated load generator
+# does not bound the result, it invalidates it (you measured wrk, not the server).
+results/**/loadgen-cpuset-mpstat.csv
 
 # Environment files with real values — template is committed, actuals are not
 runtime/drivers/env/*.env

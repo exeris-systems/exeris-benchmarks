@@ -1,0 +1,8 @@
+997226:
+No available recordings.
+
+Use jcmd 997226 JFR.start to start a recording.
+997226:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 997226 JFR.dump name=quarkus_tuned_20260808_065554 filename=FILEPATH to copy recording data to file.

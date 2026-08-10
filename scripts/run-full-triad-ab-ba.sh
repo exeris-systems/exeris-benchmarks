@@ -732,6 +732,11 @@ build_target_artifact() {
     spring-hibernate)
       module_path="targets/spring-benchmark-app"
       ;;
+    spring-jdbc)
+      # ORM-free counterpart of spring-hibernate: same Tomcat/Boot 4.1.0 web layer,
+      # plain JdbcTemplate instead of Hibernate. Isolates the ORM axis on a fixed web stack.
+      module_path="targets/spring-benchmark-app-jdbc"
+      ;;
     quarkus-hibernate)
       module_path="targets/quarkus-benchmark-app"
       ;;

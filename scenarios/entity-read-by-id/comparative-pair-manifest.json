@@ -47,6 +47,15 @@
       "notes": "Comparison-eligible only for within-tier H1 (community, loopback-h1) under required_contract=fixed_contract_cross_runtime_h1_v1. No cross-tier inference."
     },
     {
+      "target_id": "spring-jdbc",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "ORM-free counterpart of spring-hibernate: identical Tomcat + Spring Boot 4.1.0 host, plain JdbcTemplate instead of Spring Data JPA + Hibernate ORM. Comparison-eligible within-tier H1 (community, loopback-h1)."
+    },
+    {
       "target_id": "quarkus-hibernate",
       "tier": "community",
       "protocol_mode": "h1",
@@ -216,6 +225,19 @@
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
       "axis_note": "Same runtime (Quarkus), differs on data-access (Hibernate ORM vs pure-JDBC) + transport (JDK NIO vs native epoll): quantifies the ORM+transport delta within Quarkus, the decomposition context for exeris-vs-quarkus-tuned."
+    },
+    {
+      "pair_id": "spring-hibernate__spring-jdbc",
+      "targets": [
+        "spring-hibernate",
+        "spring-jdbc"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "expected_claim_status": "comparison_eligible",
+      "axis_note": "ORM-AXIS pair, the Spring-family counterpart of quarkus-hibernate__quarkus-tuned. Both arms are the same Tomcat + Spring Boot 4.1.0 host, same SecurityConfig, same pgjdbc/HikariCP pool, same SQL shapes and byte-identical response contracts; the ONLY application-level difference is that spring-hibernate reads through Spring Data JPA + Hibernate ORM 7.2.7 while spring-jdbc reads through plain JdbcTemplate (see UserRepository in each module). Unlike quarkus-hibernate__quarkus-tuned this pair does NOT also move transport (both stay on Tomcat/servlet NIO), so it is the cleanest single-variable ORM-presence measurement available on the Tomcat side, directly answering the CLAIMS.md L3 Amdahl-ceiling premise: does Hibernate cost the same fraction of a request under Tomcat as it does under Exeris compat/pure? Both arms are mode=pure, so strict gate G3 passes. AUTH AXIS: both arms carry spring-boot-starter-security with the identical SecurityConfig (permitAll on /health, /db/ping, /graph/ping, GET /api/v1/users, GET /api/v1/user; anyRequest authenticated otherwise) and traffic is unauthenticated, so the per-request servlet SecurityFilterChain cost is present and equal on both arms -- no security asymmetry, unlike any pair crossing into the Exeris arms. TRANSACTION-MANAGER FENCE: spring-jdbc also depends on spring-boot-starter-data-neo4j for its unrelated /graph/ping probe; without an explicit @Primary PlatformTransactionManager (JdbcTransactionConfig, added 2026-08-10) @Transactional on UserService silently resolved to the Neo4j transaction manager and failed every read whenever Neo4j was not running, surfacing as a misleading 401 via the unauthorized /error forward rather than its true error. Boot-verify against a live target is a hard entry condition for this pair for exactly that reason -- a jar-only check would not have caught it."
     },
     {
       "pair_id": "spring-hibernate__spring-on-exeris",

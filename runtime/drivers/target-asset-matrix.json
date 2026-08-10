@@ -152,6 +152,26 @@
       "mode": "pure"
     },
     {
+      "target_id": "spring-jdbc",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/spring-jdbc.env",
+      "profile_id": "spring-jdbc",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9008/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Spring Boot + Tomcat, plain JDBC (JdbcTemplate, no ORM)",
+      "app_dir": "targets/spring-benchmark-app-jdbc",
+      "default_protocol_note": "protocol_mode is the fair-baseline default (community H1 loopback). ORM-free counterpart of spring-hibernate: same web layer (Tomcat + Spring MVC), Hibernate removed, hand-written SQL matching pure-native's shapes via JdbcTemplate. Isolates the ORM axis from the Exeris axis (see docs/CLAIMS.md L3 Amdahl ceiling).",
+      "legacy_target_ids": [],
+      "mode": "pure"
+    },
+    {
       "target_id": "spring-on-exeris",
       "tier": "community",
       "protocol_mode": "h1",

@@ -24,7 +24,7 @@ Enforce: `publish-report.sh` default `--publication-mode public` blocks raw `.jf
 1. **Mode choice** — what `--publication-mode` is chosen? `public` is default; `internal-only` / `redacted` need explicit reason.
 2. **`.jfr` extension check** — `public` mode blocks `.jfr` extension (case-insensitive). Confirm.
 3. **`FLR\0` content signature check** — `public` mode blocks files starting with `FLR\0`. Confirm.
-4. **Enterprise behaviour exclusion** — public artefacts MUST NOT surface H3, locality strategies, or enterprise target classifications (`targets/exeris-community-app-locality/`, `targets/exeris-spring-runtime-benchmark-app-comp/`, `enterprise/` tree).
+4. **Enterprise behaviour exclusion** — public artefacts MUST NOT surface H3, locality strategies, or enterprise target classifications (`targets/exeris-community-app-locality/`, `enterprise/` tree). **`spring-on-exeris*` is NOT on this list** (correction 2026-08-11): Exeris Spring Runtime is a product repo and has never been confidential, and the path this clause used to name never existed. Do not flag a compat measurement as a confidentiality violation — Pure-vs-Compat is a labelling axis. Flag it only if it is *unlabelled*, blended into a pure row, or not routed to the `compat/` track.
 5. **Report stamps** — generated reports MUST stamp `publication_mode`, `confidentiality_status`, `jfr_handling`.
 6. **Cross-repo movement** — if movement to enterprise sister or external, confirm an explicit scrub was performed and documented.
 7. **Decision and report** — `APPROVE` / `CONDITIONAL` / `REJECT`.

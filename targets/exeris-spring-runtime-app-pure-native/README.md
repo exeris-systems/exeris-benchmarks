@@ -31,8 +31,10 @@ nothing for pure mode to win. This target moves the layer that actually dominate
   `ExerisCompatAutoConfiguration` stays off; and `exeris-spring-runtime-data` is not a
   dependency at all, so there is no `ExerisDataSource`, no JPA, no Hibernate, no Spring
   `DataSource` and no `JdbcTemplate`.
-- **Public docs path**: **excluded**, same as the other `spring-on-exeris` arms. Community +
-  H1, internal-only publication.
+- **Public docs path**: **included** — publishable, same as the other `spring-on-exeris` arms.
+  Community + H1. The former internal-only stamp was withdrawn on 2026-08-11: it derived from
+  a CLAUDE.md line naming a path that never existed in this repo, and Exeris Spring Runtime
+  has never been confidential.
 - **Protocol**: H1 plaintext only.
 
 ## The four arms

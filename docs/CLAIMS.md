@@ -19,6 +19,18 @@ The tax is charged per DB round-trip, so the faster arm — which issues 2.8× (
 3.6× (heavy) more round-trips per second — pays proportionally more of it. **Every
 Exeris-favourable number below is therefore a floor, not a point estimate.**
 
+**Correction 2026-08-11 — `spring-on-exeris*` was never confidential, and eight entries below
+were mislabelled `Track: internal` because of it.** The stamp traced to a CLAUDE.md scoping line
+naming `targets/exeris-spring-runtime-benchmark-app-comp/`, a path that has never existed in this
+repo (the target is `targets/exeris-spring-runtime-app-comp/`); it entered in an unrelated PR with
+no rationale recorded in `docs/` or `.github/`. Exeris Spring Runtime is a product repo, listed in
+CLAUDE.md separately from "enterprise repos", and every `spring-on-exeris*` arm is `tier=community`
+in the pair manifest. What was really being enforced is the Pure-vs-Compat **labelling** axis, which
+still binds in full: never collapse a compat row into a pure one, and route compat overhead to the
+`compat/` track. Labelling is not secrecy. **Consumers who copied these entries while they read
+`internal` may republish them as `public-eligible`** — the numbers did not change, only the void
+restriction on them.
+
 ---
 
 ## L1 — cpu/req reduction, exeris-community vs Tomcat (light)
@@ -27,8 +39,11 @@ Exeris-favourable number below is therefore a floor, not a point estimate.**
 - **PL:** `65,3% mniej CPU na żądanie niż Spring Boot na Tomcacie, ten sam kontrakt, ta sama maszyna (50,9 µs vs 146,7 µs, n=12 na ramię)`
 - Class: comparison-eligible · Tier: Community · Track: **public-eligible**
 - Contract: `fixed_contract_cross_runtime_h1_single_read_v1` · Campaign: `20260806T183034Z-spring-ladder-n3`
-- Note: pair 4 (`spring-hibernate` ↔ `exeris-community`) only — both arms are outside the
-  `spring-on-exeris*` internal track, which is what makes this one publishable.
+- Note: pair 4 (`spring-hibernate` ↔ `exeris-community`) only — neither arm is a
+  `spring-on-exeris*` arm. That distinction was previously given as the reason this claim is
+  publishable, on the belief those arms were internal; they never were (see the correction note
+  at the top), so it carries no weight. L1 is publishable because it is a gated Community
+  measurement, like everything else in this registry.
   Iso-heap 1280 MB, version-aligned (Boot 4.1.0, Jackson 3, kernel 0.10.2), DB pinned
   4-7,12-15. Heavy equivalent is −80.4 %, but see **L2**: on heavy the throughput side of
   this pair reads the DB ceiling, so quote cpu/req there or nothing. Bridge fence applies —
@@ -43,7 +58,7 @@ Exeris-favourable number below is therefore a floor, not a point estimate.**
 ## L2 — the heavy contract is DB-bound *for the fast arms only*
 
 - **EN:** `DB saturation is a property of the stack that reaches the database, not of the workload: at the same offered load Postgres sits at 99.8% for the two fastest arms and 30–35% for the two slowest`
-- Class: fact (measured) · Tier: Community + internal arms · Track: **internal** (names internal arms)
+- Class: fact (measured) · Tier: Community · Track: **public-eligible** (was: internal, on the void `spring-on-exeris*` exclusion)
 - Mean DB-cpuset utilisation over each arm's own measurement window, n=12, `%steal` 0.00:
 
   | arm | rps | own pin | idle | DB busy | actually limited by |
@@ -119,7 +134,7 @@ inflated too, though not enough to change their reading: they had ample headroom
 ## L3 — Amdahl ceiling on runtime work while the ORM stays
 
 - **EN:** `With Hibernate in the request path, no runtime work can exceed ×1.49 on this contract — Hibernate is 67% of the cost`
-- Class: exploratory · Tier: internal arms · Track: **internal** (derived from `spring-on-exeris-pure`)
+- Class: exploratory · Tier: Community · Track: **public-eligible** (was: internal, on the void `spring-on-exeris*` exclusion). Publish as *exploratory* — the gate here is the evidence class and the L10 attribution caveat, not confidentiality.
 - Derivation, heavy contract, cpu/req arm-means (n=12):
   - ORM component = `pure − pure-native` = 955.88 − 231.91 = **723.97 µs** = **67.20 %** of Tomcat's 1077.40 µs
   - runtime-addressable remainder = **353.43 µs** (32.80 %)
@@ -144,7 +159,7 @@ inflated too, though not enough to change their reading: they had ample headroom
 
 ## L4 — the ladder decomposition closes, and cpu/req is the metric to close it on
 
-- Class: fact (measured) · Track: **internal**
+- Class: fact (measured) · Tier: Community · Track: **public-eligible** (was: internal, on the void `spring-on-exeris*` exclusion)
 - Product of the three rungs vs the directly-measured end-to-end pair:
 
   | | product | direct | drift |
@@ -164,7 +179,7 @@ inflated too, though not enough to change their reading: they had ample headroom
 
 ## L5 — OPEN: pure-native's light-contract tail
 
-- Class: descriptive-only, **unresolved** · Track: internal
+- Class: descriptive-only, **unresolved** · Tier: Community · Track: **public-eligible** (was: internal, on the void `spring-on-exeris*` exclusion) — publishable *as an open question*, which is how this repo publishes unresolved items.
 - pure-native has the second-best median and the **worst p99 of all four arms**, worse than
   Tomcat, on light only:
 
@@ -282,7 +297,7 @@ The prediction was right about heavy and silent about light, where the effect wa
 ## L7 — pure-native vs quarkus-tuned, ORM removed on both sides
 
 - **EN:** `With the ORM removed from both stacks, Exeris pure-native and hand-tuned Quarkus land within 0.7% on throughput; Exeris spends 3.7% more CPU per request on the light contract and holds 4% more RSS`
-- Class: comparison-eligible · Tier: internal arms · Track: **internal** (names `spring-on-exeris-pure-native`)
+- Class: comparison-eligible · Tier: Community · Track: **public-eligible** (was: internal, on the void `spring-on-exeris*` exclusion)
 - Campaign: `20260808T065528Z-purenative-vs-quarkustuned-n3`, n=6 per arm per contract, host-net, iso-heap 1280 MB, DB pinned 4-7,12-15, 12/12 comparison_eligible.
 
 | | rps | cpu/req | % pin | RSS | off-heap | p50 | p99 |
@@ -324,7 +339,7 @@ The prediction was right about heavy and silent about light, where the effect wa
 
 ## L8 — an idle Spring-on-Exeris process is ~18× less idle than Tomcat or the native runtime
 
-- Class: fact (measured) · Track: **internal** · Campaign: `20260806T183034Z-spring-ladder-n3`, n=24 windows per identity
+- Class: fact (measured) · Tier: Community · Track: **public-eligible** (was: internal, on the void `spring-on-exeris*` exclusion) · Campaign: `20260806T183034Z-spring-ladder-n3`, n=24 windows per identity
 - The runner samples the *co-resident, launched-but-not-driven* target during each measurement
   window (`neighbour-resource-metrics.json`, `role: resident-idle`). Doing nothing costs:
 
@@ -456,7 +471,7 @@ second.
 
 ## L9 — OPEN: inter-pair drift is a per-request cost increase, not CPU starvation
 
-- Class: descriptive-only, **unresolved** · Track: internal
+- Class: descriptive-only, **unresolved** · Tier: Community · Track: **public-eligible** (was: internal, on the void `spring-on-exeris*` exclusion) — publishable as an open question.
 - The long-standing observation: the same arm measured in different pairs differs by 1–3 %,
   reproducibly and in a consistent direction within a campaign. Slot order and neighbour identity
   were indistinguishable.
@@ -490,7 +505,7 @@ second.
 
 ## L10 — OPEN: the "ORM cost" on the Spring arms is partly Spring Data projection-proxy cost
 
-- Class: exploratory, **unresolved** · Track: **internal** (touches L3, which is internal)
+- Class: exploratory, **unresolved** · Tier: Community · Track: **public-eligible** (was: internal, inherited from L3, whose exclusion was void)
 - Campaign: `20260810T131208Z-hibernate-vs-jdbc-n3`, 12/12 `comparison_eligible`, n=6 per contract
   (3 repeats × ab/ba). Pair `spring-hibernate__spring-jdbc` — same Tomcat, same Boot 4.1.0, same
   `SecurityConfig`, same HikariCP, same normalised pgjdbc URL, same three-query SQL shapes.

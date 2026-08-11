@@ -14,8 +14,10 @@ This README is the only documentation surface for the target.
   `ExerisSpringMvcBridge`, `ExerisHandlerMethodRegistry` or MVC argument resolver on the
   request path. `ExerisWebAutoConfiguration`'s native `ExerisHttpDispatcher` serves every
   request against `@ExerisRoute`-annotated `ExerisRequestHandler` beans.
-- **Public docs path**: **excluded**, same as `exeris-spring-runtime-app-comp`. Measurements
-  are Community + H1, internal-only publication.
+- **Public docs path**: **included** — publishable, same as `exeris-spring-runtime-app-comp`.
+  Measurements are Community + H1. The former internal-only stamp was withdrawn on
+  2026-08-11: it derived from a CLAUDE.md line naming a path that never existed in this
+  repo, and Exeris Spring Runtime has never been confidential.
 - **Protocol**: H1 plaintext only.
 
 ## The three arms

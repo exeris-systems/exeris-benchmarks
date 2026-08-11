@@ -152,6 +152,27 @@
       "mode": "pure"
     },
     {
+      "target_id": "spring-hibernate-nosec",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/spring-hibernate-nosec.env",
+      "profile_id": "spring-hibernate-nosec",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9009/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Spring Boot + Tomcat + Hibernate, servlet SecurityFilterChain DISABLED (same jar as spring-hibernate)",
+      "app_dir": "targets/spring-benchmark-app",
+      "default_protocol_note": "protocol_mode is the fair-baseline default (community H1 loopback). H2C is reached via the run-guided protocol override (the legacy spring-app-axon saga label was the same jar/env at h2c). Persistence layer = Hibernate ORM.",
+      "mode": "pure",
+      "eligibility_note": "Same module, same jar and same artifact_sha256 as spring-hibernate; the arms are separated by launch properties only (benchmark.security.filter-chain.enabled=false plus the three security auto-configuration exclusions). Exists solely to bound the security confound in the hosting rung of CLAIMS L3: spring-hibernate runs a per-request authorization decision that spring-on-exeris-pure does not, and that has never been measured on the Tomcat side. NOT a stack anyone would ship and not a comparator for anything else — pair it with spring-hibernate and nothing more.",
+      "legacy_target_ids": []
+    },
+    {
       "target_id": "spring-jdbc",
       "tier": "community",
       "protocol_mode": "h1",

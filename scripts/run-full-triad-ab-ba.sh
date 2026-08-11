@@ -737,6 +737,12 @@ build_target_artifact() {
       # plain JdbcTemplate instead of Hibernate. Isolates the ORM axis on a fixed web stack.
       module_path="targets/spring-benchmark-app-jdbc"
       ;;
+    spring-hibernate-nosec)
+      # SAME module and SAME jar as spring-hibernate — the arms differ only in the launch
+      # properties that disable the servlet SecurityFilterChain (see the env file). Building it
+      # from the same module is the point: one artifact_sha256 across both arms of the pair.
+      module_path="targets/spring-benchmark-app"
+      ;;
     quarkus-hibernate)
       module_path="targets/quarkus-benchmark-app"
       ;;

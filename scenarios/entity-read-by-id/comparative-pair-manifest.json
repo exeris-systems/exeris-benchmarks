@@ -47,6 +47,15 @@
       "notes": "Comparison-eligible only for within-tier H1 (community, loopback-h1) under required_contract=fixed_contract_cross_runtime_h1_v1. No cross-tier inference."
     },
     {
+      "target_id": "spring-hibernate-nosec",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "candidate",
+      "claim_scope": "comparison_eligible",
+      "notes": "spring-hibernate's own jar launched with the servlet SecurityFilterChain disabled. Same artifact_sha256 as the stock arm — classpath, loaded classes and metaspace are held constant so RSS stays comparable, and exactly one variable moves. Comparison-eligible within-tier H1 for the spring-hibernate__spring-hibernate-nosec pair ONLY."
+    },
+    {
       "target_id": "spring-jdbc",
       "tier": "community",
       "protocol_mode": "h1",
@@ -408,6 +417,19 @@
       "transport_mode": "loopback-h1",
       "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
       "axis_note": "2x2 serialisation matrix, ENCODE lever at BLACKBIRD accessors (arm2 vs arm4). The second, independent route to the interaction: (arm4-arm2)-(arm3-arm1) must agree with (arm4-arm3)-(arm2-arm1). Disagreement means one arm is not what it claims to be. Within-exeris version delta only."
+    },
+    {
+      "pair_id": "spring-hibernate__spring-hibernate-nosec",
+      "targets": [
+        "spring-hibernate",
+        "spring-hibernate-nosec"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+      "expected_claim_status": "comparison_eligible",
+      "axis_note": "SECURITY-CONFOUND BOUND. One jar, one variable: both arms launch targets/spring-benchmark-app/target/spring-benchmark-app-1.0.0-SNAPSHOT.jar with identical artifact_sha256, and differ only in three launch properties that switch off the servlet SecurityFilterChain. Its whole purpose is to put a number on a confound the repo currently carries unbounded: the hosting rung of CLAIMS L3 (spring-hibernate -> spring-on-exeris-pure, 121.52 us/req, x1.127) crosses a boundary where one arm runs a per-request authorization decision and the other carries no Spring Security at all. A filter chain costing 10/20/30 us would be 8.2/16.5/24.7 % of that entire hosting gain. READ THE LIGHT CONTRACT, NOT HEAVY — THIS IS THE DESIGN, NOT A PREFERENCE. Against the +/-2.80 % cpu/req error budget the plausible 10-30 us range is 0.93-2.78 % of heavy's 1077 us baseline, i.e. AT OR BELOW the noise floor: heavy cannot resolve this confound and a null result there would mean nothing. On light's 147 us baseline the same range is 6.8-20.5 %, comfortably resolvable. Heavy is still run, but as a TEST OF TRANSFERABILITY — a per-request filter chain should cost roughly constant absolute microseconds regardless of contract, and heavy can falsify that even where it cannot measure it. THREE PROPERTIES, NOT ONE: disabling the app's SecurityConfig alone would let Boot's SecurityAutoConfiguration install a default chain (HTTP basic + form login) that is MORE per-request work, so the auto-configurations are excluded too; boot-verify must show no springSecurityFilterChain registration and 200 on both read endpoints with no Authorization header. SCOPE: the nosec arm is not a shippable stack and is not a comparator for anything except its own stock twin. Both arms are mode=pure, so strict gate G3 passes."
     }
   ],
   "forbidden_pairs": [

@@ -44,6 +44,9 @@ normalize_target_alias() {
     # 2b) Spring Boot + Tomcat, no ORM (plain JdbcTemplate) — the honest no-Exeris,
     #     no-ORM comparator; see targets/spring-benchmark-app-jdbc/.../UserRepository.java
     spring-jdbc|spring-benchmark-app-jdbc) echo "spring-jdbc" ;;
+    # 2c) The SAME spring-hibernate jar with the servlet SecurityFilterChain switched off.
+    #     Exists only to bound the security confound in the hosting rung (CLAIMS L3).
+    spring-hibernate-nosec|spring-nosec) echo "spring-hibernate-nosec" ;;
 
     # 3) Spring on Exeris (compat + Flow)
     spring-on-exeris|spring-runtime-on-exeris-flow|spring-on-exeris-flow|\

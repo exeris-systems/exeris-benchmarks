@@ -175,7 +175,34 @@ main() {
   if [[ "$1" == "--walk" ]]; then
     [[ $# -lt 2 ]] && usage 1
     local root="$2" count=0 failed=0
-    local stream_name="${3:-db-cpuset-mpstat.csv}"
+    local stream_name="db-cpuset-mpstat.csv"
+    shift 2
+
+    # --role was documented from the start but never parsed: $3 was read straight into
+    # stream_name, so `--walk <dir> --role loadgen` searched for files literally named
+    # "--role", matched none, and printed "aggregated=0 failed=0" with exit 0. A silent
+    # no-op that reports success is worse than an error — it is why some campaigns carry
+    # db aggregates and no loadgen ones. Both spellings now work, and an unknown argument
+    # is refused rather than mistaken for a filename.
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --role)
+          [[ $# -lt 2 ]] && { echo "ERROR: --role needs a value (db|loadgen)" >&2; exit 1; }
+          case "$2" in
+            db)      stream_name="db-cpuset-mpstat.csv" ;;
+            loadgen) stream_name="loadgen-cpuset-mpstat.csv" ;;
+            *)       echo "ERROR: --role must be db or loadgen, got '$2'" >&2; exit 1 ;;
+          esac
+          shift 2
+          ;;
+        --*)
+          echo "ERROR: unknown option '$1'" >&2; exit 1 ;;
+        *)
+          # Backward compatibility: an explicit stream filename, which is how every
+          # existing caller actually invoked the loadgen role.
+          stream_name="$1"; shift ;;
+      esac
+    done
     while IFS= read -r -d '' csv; do
       if aggregate_one "$csv" >/dev/null; then
         count=$((count + 1))

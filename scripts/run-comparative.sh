@@ -3357,6 +3357,34 @@ run_wrk_target() {
     bench_stop_mpstat_sampler "$loadgen_cpu_mpstat_pid" "$loadgen_cpu_mpstat_csv" || true
   fi
 
+  # Aggregate both mpstat streams HERE, at window close, not at campaign end.
+  #
+  # Both CSVs are git-ignored for size (.gitignore: results/**/db-cpuset-mpstat.csv), so the
+  # committable evidence is the derived -metrics.json and nothing else. Until 2026-08-11 the
+  # aggregation was a manual post-hoc step that nothing in the harness called: campaign
+  # 20260810T131208Z-hibernate-vs-jdbc-n3 finished with 24 raw streams and ZERO aggregates,
+  # which left its DB-ceiling reading (97.4 % under spring-jdbc vs 26.4 % under
+  # spring-hibernate — the fact that decides whether heavy throughput may be quoted at all)
+  # citable only from a perf-box file that disk reclaim is free to delete.
+  #
+  # Deriving it per window rather than per campaign also bounds the blast radius: a stream
+  # that never gets aggregated costs one arm-window, not every leaf behind it.
+  #
+  # Best-effort by design. A missing or malformed stream must not fail a measured leaf that
+  # is otherwise complete — the aggregate is evidence ABOUT the leaf, and its absence is
+  # visible as a missing file plus this warning.
+  if [[ -x "${REPO_ROOT}/tools/aggregate-db-cpuset-mpstat.sh" ]]; then
+    for _mpstat_csv in "$db_cpu_mpstat_csv" "$loadgen_cpu_mpstat_csv"; do
+      [[ -n "$_mpstat_csv" && -s "$_mpstat_csv" ]] || continue
+      if ! "${REPO_ROOT}/tools/aggregate-db-cpuset-mpstat.sh" "$_mpstat_csv" >/dev/null 2>&1; then
+        echo "  WARN: mpstat aggregation failed for $(basename "$_mpstat_csv") — raw stream kept, aggregate missing" >&2
+      fi
+    done
+    unset _mpstat_csv
+  else
+    echo "  WARN: tools/aggregate-db-cpuset-mpstat.sh not executable — cpuset ceiling readings will be missing" >&2
+  fi
+
   # BUG 1: pg_stat_statements final at measurement-end, then emit the per-target window delta.
   # The inhibit flag is released only after the final snapshot — a reset between the two would
   # reproduce exactly the defect it guards against.

@@ -621,24 +621,36 @@ question is no longer "is it real" but "what makes it start at ~30 k".
 
 ---
 
-## 8. Open questions carried forward
+## 8. Open questions — answered, carried, and why the rest do not block
 
-- **L5** — the pure-native light tail. **Resolved in §7.3** as a capacity-approach behaviour
-  rather than either a queueing artefact or a service-time property; CLAIMS L5 rewritten
-  accordingly. *(what remains open: the mechanism — why the divergence starts around 30 000 rps,
-  and L5's original localisation to "Spring AND native persistence both in the path")*
-- **L9** — inter-pair drift is a per-request cost increase, not CPU starvation; CPU theft and
-  idle-neighbour CPU are both eliminated. Needs per-core counters (LLC / memory bandwidth, SMT
-  siblings) the rig does not sample. *(open, not addressable from current artefacts)*
-- **L10** — the repository-layer cost attribution (§5). *(open, needs an `EntityManager` /
-  constructor-expression arm — which would also price the cheapest customer path and therefore
-  test L3's migration order, see §5)*
-- **The hosting step's security confound** — **CLOSED 2026-08-11** at +28.31 ± 3.25 µs/req,
-  23.3 % of the step, corrected rung ×1.09–1.10 (§6). *(what remains: the split between
-  authorization work and the 170 bytes of security headers, unquantified; and heavy's
-  reproducibility asymmetry, where the arm with fewer layers is the less stable one)*
-- **Arm 3 version alignment** — Boot 3.5.14 / Jackson 2 against everything else on 4.1.0 /
-  Jackson 3. *(decision pending, see fairness posture 5)*
+This report answered two of its own open questions while it was being written, and both were worth
+chasing by the same test: **could the answer overturn a headline?**
+
+- **L5 — the pure-native light tail. ANSWERED (§7.3), and it overturned both hypotheses.** Not a
+  closed-loop artefact (it reproduces open-loop) and not a flat service-time property (absent
+  below ~30 000 rps). It is a capacity-approach behaviour, and the closed-loop figure had
+  overstated it ~2.5×. CLAIMS L5 rewritten.
+- **The hosting step's security confound. ANSWERED (§6), and it cost the rung a quarter of its
+  size.** +28.31 ± 3.25 µs/req, 23.3 % of the 121.52 µs step, correcting it to ×1.09–1.10. The
+  term had been carried as *unbounded*; ×1.127 is now retired from the citation canon rather than
+  merely qualified.
+
+**Nothing remaining passes that test, which is why this report ships with the rest open.** Each is
+stated where it belongs and none of them can move a claim made here:
+
+| carried forward | what an answer would change | why it does not block |
+|---|---|---|
+| **L10** — how much of the repository-layer cost is Spring Data projection proxies rather than Hibernate | splits the pool | The report has already **retracted** the plain-"ORM" label and attributes the cost to the Spring Data repository layer (§5). An answer refines the split; it cannot restore the label. |
+| **L9** — inter-pair drift is a per-request cost increase, not CPU starvation | explains a 1–3 % drift | No claim rests on it, and it is not addressable from any campaign: it needs per-core counters (LLC / memory bandwidth, SMT siblings) the rig does not sample. That is new instrumentation, not a new run. |
+| the split of L11's 28.31 µs between authorization work and 170 bytes of security headers | refines L11 | The full figure is correct for the question the rung asks (*what does removing Spring Security save*); the split only matters for a narrower question this report does not ask. |
+| the mechanism behind L5's ~30 000 rps onset | explains L5 | L5's claim is stated as a behaviour with a measured onset, not as a mechanism. |
+
+**The one thing that does block publication is not an open question:** §2's error budget carries
+numbers with no cited source and says so in its own text. Sourcing it is bookkeeping, not
+research.
+
+*(Arm 3's version skew is no longer listed here — it is a decision, taken on 2026-08-11 to publish
+with the fence rather than hold the report, and it lives in fairness posture 5.)*
 
 ---
 

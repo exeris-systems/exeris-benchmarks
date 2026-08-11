@@ -234,8 +234,38 @@ identical fence.** That is the strongest available argument for why §7 waits fo
 recycling closed-loop percentiles: a tail metric that reacts 85× harder to a change the throughput
 metric barely registers cannot be quoted from a run that was not designed to isolate it.
 
-**[TODO]** promote this table to `docs/methodology.md` once sourced, so it stops being
-report-local.
+### 2.1 A budget needs a scope, or it misleads in both directions
+
+**The table above is an envelope for CROSS-CAMPAIGN, cross-arm comparisons. Applying it to a
+tighter comparison over-states uncertainty; substituting a looser proxy under-states it.** Three of
+its four rows are inapplicable to a same-jar A/B run inside one campaign: the runtime-snapshot term
+is *zero* when both arms launch a byte-identical artefact, the network-mode term does not apply
+within one campaign, and the arm-order term is measured rather than assumed once both directions
+are run.
+
+The security-confound campaign (`20260811T114140Z-security-confound-n3`, §6) supplied three
+counter-examples in a single run, and they point in opposite directions — which is why the rule is
+worth stating as scope rather than as a number:
+
+| candidate yardstick | what it actually measures | on this pair | error |
+|---|---|---|---|
+| imported ±2.80 % budget | cross-campaign envelope | ±29 µs on a heavy arm | **over-states** — declared a resolvable effect unresolvable |
+| ab vs ba inside one repeat | stability *within* one JVM lifetime — both directions share the same instances, warmup and JIT state | 0.02–0.11 % | **under-states** — omits the restart variance entirely |
+| an incomplete repeat | a smaller sample wearing a repeat's label | inflated the light spread ~10× | **over-states** |
+| **repeat-to-repeat, complete repeats only** | **would this difference recur if I ran it again from scratch** | see §6 | the applicable one |
+
+Each of those three was calculated correctly. Each answered a different question from the one
+being asked. **The applicable layer is the repeat: a full JVM restart, both directions, counted
+only when complete.** Anything narrower measures a sub-layer; anything broader imports conditions
+that are not present.
+
+This also explains why the same pair can be measurable on one contract and not on another. It is
+not the repeat count that decides — it is the ratio of the effect to the layer's own variance. On
+the light contract that ratio is large and n=3 settles it; on heavy the arms' restart variance is
+comparable to the effect itself, so no number of repeats would settle it (§6).
+
+**[TODO]** promote both the table and this scope rule to `docs/methodology.md` once sourced, so
+they stop being report-local. The scope rule is arguably the more portable of the two.
 
 ---
 
@@ -412,6 +442,16 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 > **One leaf bounds it**: `spring-hibernate` rebuilt without `spring-boot-starter-security`, same
 > contract, against the stock arm. Until then, ×1.127 is quoted **as an upper bound on the hosting
 > gain**, never as the hosting gain itself, and the qualifier travels with it on every surface.
+>
+> **[CAMPAIGN IN FLIGHT — `20260811T114140Z-security-confound-n3`.]** The experiment is running as
+> `spring-hibernate` × `spring-hibernate-nosec`: one jar, byte-identical `artifact_sha256`, the two
+> arms separated only by the launch properties that disable the servlet filter chain, so classpath,
+> loaded classes and metaspace stay constant and RSS remains comparable. It is designed to be read
+> on the **light** contract: against the plausible 10–30 µs range, heavy's 1077 µs baseline puts the
+> effect at 0.93–2.78 %, at or below the noise floor, while light's 147 µs baseline puts it at
+> 6.8–20.5 %. Heavy runs only as a transferability check. **Results are not written here yet** —
+> §2.1 cites this campaign for its variance-layering counter-examples, which are already settled,
+> not for its headline number, which is not.
 
 - The decomposition **closes**: product of the rungs vs the directly-measured end-to-end pair is
   **+2.0 % on heavy cpu/req**, inside the ±2.80 % budget of §2 (and inside the ≤ 2 %

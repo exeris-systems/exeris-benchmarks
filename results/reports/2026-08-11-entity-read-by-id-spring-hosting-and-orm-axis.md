@@ -32,11 +32,11 @@ hardware_profile: perf-box-amd64
 
 > **DRAFT STATUS.** The open-loop wrk2 campaign has **landed** (§7, 36/36 leaves
 > `comparison_eligible`), so no section is waiting on data any more. What remains open is prose,
-> one hard blocker (§2's error budget carries numbers with no cited source) and one cheap
-> experiment that would clean up a headline (§6's security confound). Two editorial questions are
-> now **decided**: the compat rung stays out of §6's pure ladder and goes to the `compat/` track,
-> and arm 3 publishes with its version-skew fence rather than holding the report for an alignment
-> campaign. Every number here is from a committed, gate-passing campaign
+> **one hard blocker**: §2's error budget carries numbers with no cited source. Everything else is
+> settled — §6's security confound was the last open experiment and it closed on 2026-08-11 at
+> +28.31 ± 3.25 µs/req. Two editorial questions are decided: the compat rung stays out of §6's pure
+> ladder and goes to the `compat/` track, and arm 3 publishes with its version-skew fence rather
+> than holding the report for an alignment campaign. Every number here is from a committed, gate-passing campaign
 > and was re-derived from its artefacts before being written down. **No number in this file is
 > provisional or estimated.**
 
@@ -91,15 +91,16 @@ Three things are new and none of them existed on 2026-07-21:
 - **Until this campaign, that cost was an assumption on Tomcat.** L3 measured it on the
   Exeris-hosted arm and applied it to Tomcat because no ORM-free Tomcat arm existed. Arm 2 is that
   arm, and the direction holds.
-- **The hosting swap is the smaller effect, and it is an upper bound rather than a pinned number.**
-  Moving one identical Spring+JPA application from Tomcat to the Exeris native web layer buys
-  **121.52 µs/req (×1.127)** against a repository layer worth **723.97 µs/req, 67.2 % of the
-  request** (L3, L4) — so runtime work is optimising the smaller third. **Qualifier that must
-  travel with ×1.127:** the two arms also differ in per-request security work — the Tomcat arm
-  runs a servlet `SecurityFilterChain`, the Exeris arm carries no Spring Security at all — and
-  that has never been measured on the Tomcat side. Against a 121.52 µs step a filter chain
-  costing 10 / 20 / 30 µs would be **8.2 % / 16.5 % / 24.7 %** of the whole hosting gain.
-  Unbounded because unmeasured (§6).
+- **The hosting swap is the smaller effect, and a quarter of it turned out to be security.**
+  The raw rung buys **121.52 µs/req (×1.127)** against a repository layer worth **723.97 µs/req,
+  67.2 % of the request** (L3, L4), so runtime work is optimising the smaller third. But the two
+  arms also differ in per-request security work, and that term is now **measured rather than
+  feared**: **+28.31 ± 3.25 µs/req**, one jar with the servlet filter chain switched off, 12/12
+  leaves eligible — **23.3 % of the entire hosting gain** (§6). Corrected, the hosting step is
+  **≈ 89–96 µs, ×1.09–1.10**: same direction, about a quarter smaller. Two fences travel with it —
+  the subtraction across contracts is a supported *assumption* (heavy's own uncertainty is 29 %,
+  so it agrees without proving), and part of the 28.31 µs is 170 bytes of security response
+  headers rather than authorization work.
 - **L5 is resolved, and neither of its two hypotheses was right.**
   `spring-on-exeris-pure-native`'s light tail is not a closed-loop artefact — it reproduces
   open-loop — but neither is it a flat service-time property: it is absent below ~30 000 rps and
@@ -420,38 +421,56 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 > reported separately in the `compat/` track with both modes stored apart and labelled. Removing
 > the row costs this table nothing it was entitled to show.
 
-> **×1.127 IS NOT A CLEAN HOSTING NUMBER, AND THE CONFOUND IS UNBOUNDED.** The rung is
-> `spring-hibernate` → `spring-on-exeris-pure` (1077.40 − 955.88 = 121.52 µs). Those two arms
-> differ in more than hosting: the Tomcat arm carries `spring-boot-starter-security` and runs a
-> servlet `SecurityFilterChain` that reaches an authorization decision on every request even when
-> the match is `permitAll`; the Exeris arm carries no Spring Security at all and runs no
-> per-request security code. **That difference has never been measured on the Tomcat side**, and
-> fairness posture 4 forbids borrowing the Exeris-side bound (+0.14 %) for it — a
-> `FilterChainProxy` dispatch with `SecurityContextHolder` lifecycle and `AuthorizationManager`
-> evaluation is a different and heavier mechanism.
+> **×1.127 CONTAINED A SECURITY TERM, NOW MEASURED: ~23 % OF IT.** The rung is
+> `spring-hibernate` → `spring-on-exeris-pure` (1077.40 − 955.88 = 121.52 µs). Those arms differ
+> in more than hosting: the Tomcat arm carries `spring-boot-starter-security` and runs a servlet
+> `SecurityFilterChain` that reaches an authorization decision on every request even when the
+> match is `permitAll`; the Exeris arm carries no Spring Security at all. That term was unbounded
+> until 2026-08-11 and is now measured.
 >
-> Against a 121.52 µs step this is not a rounding error. It is the smallest effect in the report,
-> so it is the one an unmeasured term can most easily dominate:
+> **Campaign `20260811T114140Z-security-confound-n3`**, 12/12 leaves `comparison_eligible`:
+> `spring-hibernate` against `spring-hibernate-nosec` — **one jar, byte-identical
+> `artifact_sha256`**, the arms separated only by the launch properties that disable the filter
+> chain, so classpath, loaded classes and metaspace stay constant. Complete repeats only (full JVM
+> restart, both directions):
 >
-> | hypothetical filter-chain cost | share of the entire hosting gain |
-> |---:|---:|
-> | 10 µs/req | 8.2 % |
-> | 20 µs/req | 16.5 % |
-> | 30 µs/req | 24.7 % |
+> | contract | repeat01 | repeat02 | repeat03 | mean | sd | share of the 121.52 µs step |
+> |---|---:|---:|---:|---:|---:|---:|
+> | **light** (the measurement) | +26.23 | +26.64 | +32.06 | **+28.31 µs** | 3.25 (11 %) | **23.3 %** |
+> | heavy (transferability check) | +40.40 | +21.99 | +35.35 | +32.58 µs | 9.52 (29 %) | 26.8 % |
 >
-> **One leaf bounds it**: `spring-hibernate` rebuilt without `spring-boot-starter-security`, same
-> contract, against the stock arm. Until then, ×1.127 is quoted **as an upper bound on the hosting
-> gain**, never as the hosting gain itself, and the qualifier travels with it on every surface.
+> **Light is the measurement by design, not by preference.** Against the ±2.80 % budget of §2 a
+> 10–30 µs effect is 0.93–2.78 % of heavy's 1077 µs baseline — at or below the noise floor — and
+> 6.8–20.5 % of light's 147 µs. Heavy could never have resolved this, and its 29 % relative
+> uncertainty confirms it: the limit is not repeat count but the ratio of the effect to that
+> layer's own variance (§2.1).
 >
-> **[CAMPAIGN IN FLIGHT — `20260811T114140Z-security-confound-n3`.]** The experiment is running as
-> `spring-hibernate` × `spring-hibernate-nosec`: one jar, byte-identical `artifact_sha256`, the two
-> arms separated only by the launch properties that disable the servlet filter chain, so classpath,
-> loaded classes and metaspace stay constant and RSS remains comparable. It is designed to be read
-> on the **light** contract: against the plausible 10–30 µs range, heavy's 1077 µs baseline puts the
-> effect at 0.93–2.78 %, at or below the noise floor, while light's 147 µs baseline puts it at
-> 6.8–20.5 %. Heavy runs only as a transferability check. **Results are not written here yet** —
-> §2.1 cites this campaign for its variance-layering counter-examples, which are already settled,
-> not for its headline number, which is not.
+> **Contract-dependence is NOT established.** The two intervals overlap ([25.1, 31.6] against
+> [23.1, 42.1]), so the data are consistent with a constant absolute per-request cost but do not
+> prove one. Subtracting the light figure from a heavy rung therefore remains a stated
+> **assumption**, supported by heavy's agreement and not demonstrated by it.
+>
+> **Corrected reading of the rung, under that assumption:** removing the security term leaves a
+> hosting step of **≈ 89–96 µs, ×1.09–1.10** (light-derived 93.21 µs / ×1.098; heavy-derived
+> 88.94 µs / ×1.093; the light error bar spans 89.96–96.46 µs). The hosting gain is therefore
+> **~9.5 % rather than 12.7 %** — the direction is unchanged and the magnitude drops by about a
+> quarter. Quote ×1.127 only as the *un-corrected* step, always with this correction attached.
+>
+> **FENCE — part of that 28.31 µs is bytes, not authorization.** Spring Security's
+> `HeaderWriterFilter` adds six response headers the nosec arm does not send
+> (`X-Content-Type-Options`, `X-XSS-Protection`, `Cache-Control`, `Pragma`, `Expires`,
+> `X-Frame-Options`): **170 bytes**, against a light response body of **30 bytes**. The stock arm
+> writes 314 bytes per light response where the nosec arm writes 144 — **2.18×**. The share of the
+> 28.31 µs attributable to those bytes is **not quantified** and is deliberately not estimated
+> here. For the question this rung asks — *what does removing Spring Security save* — the full
+> figure is correct, because `spring-on-exeris-pure` does not emit those headers either. For the
+> narrower question *what does the authorization decision cost*, 28.31 µs is an over-estimate by an
+> unmeasured amount. (An earlier note in this series called the two arms' responses byte-identical;
+> that was checked on **bodies** only and is corrected here.)
+>
+> **Also observed, unexplained:** on heavy the stock arm is far more reproducible across repeats
+> (sd 0.21 %) than the nosec arm (0.82 %, range 15 µs). The arm with *fewer* layers is the less
+> stable one. n=3, no mechanism proposed.
 
 - The decomposition **closes**: product of the rungs vs the directly-measured end-to-end pair is
   **+2.0 % on heavy cpu/req**, inside the ±2.80 % budget of §2 (and inside the ≤ 2 %
@@ -614,10 +633,10 @@ question is no longer "is it real" but "what makes it start at ~30 k".
 - **L10** — the repository-layer cost attribution (§5). *(open, needs an `EntityManager` /
   constructor-expression arm — which would also price the cheapest customer path and therefore
   test L3's migration order, see §5)*
-- **The hosting step's security confound** — ×1.127 contains an unmeasured servlet
-  `SecurityFilterChain` difference worth an unbounded share of a 121.52 µs step. One leaf
-  (`spring-hibernate` without `spring-boot-starter-security`, same contract) bounds it.
-  *(open, cheap, and it gates a headline number)*
+- **The hosting step's security confound** — **CLOSED 2026-08-11** at +28.31 ± 3.25 µs/req,
+  23.3 % of the step, corrected rung ×1.09–1.10 (§6). *(what remains: the split between
+  authorization work and the 170 bytes of security headers, unquantified; and heavy's
+  reproducibility asymmetry, where the arm with fewer layers is the less stable one)*
 - **Arm 3 version alignment** — Boot 3.5.14 / Jackson 2 against everything else on 4.1.0 /
   Jackson 3. *(decision pending, see fairness posture 5)*
 
@@ -628,6 +647,17 @@ question is no longer "is it real" but "what makes it start at ~30 k".
 <!-- One of the four summarizing surfaces. Every retraction stays visible, per house style. -->
 
 - **2026-08-11 — draft opened.** Skeleton with §2–§6 data from committed campaigns; §7 pending.
+- **2026-08-11 — the security confound closed, and it cost the hosting rung a quarter of its
+  size.** `spring-hibernate` against the same jar with the servlet filter chain disabled measured
+  **+28.31 ± 3.25 µs/req** (light, n=3 complete repeats, 12/12 leaves eligible) — **23.3 % of the
+  121.52 µs hosting step**, which corrects the rung to **≈ 89–96 µs, ×1.09–1.10**. The term had
+  been carried as *unbounded* since the ladder was published; it is now a number, and the audit
+  instinct that demanded the qualifier was right about the magnitude. Two fences came with it: the
+  cross-contract subtraction remains an assumption (heavy agrees at +32.58 µs but with 29 %
+  uncertainty, so it cannot prove constancy), and 170 bytes of security response headers — 567 %
+  of the 30-byte light body — are inside the 28.31 µs and are not separated from authorization
+  work. A claim elsewhere in this series that the two arms' responses were byte-identical is
+  corrected: that held for **bodies**, not headers.
 - **2026-08-11 — §7 landed, and it changed two headline framings.** The open-loop campaign
   (36/36 eligible) replaced "the ORM costs ×3.95" with "the repository layer costs headroom, not
   per-request latency", which is the only form that holds on both contracts. And it **resolved

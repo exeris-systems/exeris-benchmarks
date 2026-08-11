@@ -1,0 +1,32 @@
+{
+  "campaign": "entity-read-by-id-security-confound-n3",
+  "campaign_ts": "20260811T114140Z",
+  "commit_sha": "ded0145f",
+  "repeats": "01,02,03",
+  "contracts": "light,heavy",
+  "contract_order_note": "Light runs FIRST because it is the measurement; heavy is a transferability test only.",
+  "repeat_loop_position": "outer",
+  "runs_per_pair": 1,
+  "expected_leaves": 12,
+  "triad_pairs": "1-sec-vs-nosec:spring-hibernate:spring-hibernate-nosec:1:9001:9009",
+  "benchmark_family": "runtime",
+  "axis_under_test": "servlet-security-filter-chain",
+  "axis_under_test_note": "One jar, identical artifact_sha256 on both arms, separated by benchmark.security.filter-chain.enabled plus seven Boot 4 security auto-configuration exclusions. Bounds the unmeasured security term inside the 121.52 us/req hosting rung of CLAIMS L3.",
+  "READ_LIGHT_NOT_HEAVY": "Against the +/-2.80 % cpu/req budget a 10-30 us chain is 0.93-2.78 % of heavy's 1077 us baseline (at or below the noise floor) and 6.8-20.5 % of light's 147 us. Heavy is a transferability test; a heavy null result means nothing on its own.",
+  "iso_heap_mb": 1280,
+  "server_cpu_affinity": "0-1,8-9",
+  "loadgen_cpu_affinity": "2-3,10-11",
+  "db_cpuset": "4-7,12-15",
+  "backend_network_mode": "host",
+
+  "AXIS_FENCES": "The nosec arm is not a shippable configuration and is not a comparator for anything except its own stock twin.",
+  "fence_not_the_exeris_mechanism": "This bounds the cost of THIS app's permitAll chain on Tomcat. It is not a general figure for Spring Security, and the Exeris arm's ExerisSecurityContextFilter is a different mechanism measured separately (+0.14 %).",
+  "fence_jwt_beans_remain": "Only the SecurityFilterChain is gated. RSAKey/JwtEncoder/JwtDecoder stay in both arms — AuthTokenService needs JwtEncoder and gating the whole config broke startup. They cost nothing on the request path, and keeping them means the arms differ by the chain alone rather than by a bean graph.",
+  "fence_boot4_package_move": "The exclusion list is Boot-4 specific. Boot-3 package names match nothing SILENTLY and yield a default chain serving 401 while the app looks healthy; re-derive the names from the jar if Boot is upgraded.",
+
+  "db_client": {
+    "fetch_mode": "equalized",
+    "jdbc_url": "jdbc:postgresql://localhost:5432/benchmark_db?prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false&preferQueryMode=extended",
+    "username": "benchmark"
+  }
+}

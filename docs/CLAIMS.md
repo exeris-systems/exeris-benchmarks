@@ -54,10 +54,12 @@ is a cpu/req figure, so it survives the L2 ceiling rule that makes heavy through
 - **×3.95** without the contract it belongs to and without "it is not simply Hibernate". Both
   omissions are things this registry has formally retracted (L10).
 - **"×3.95 slower."** It is false on both contracts. The ratio is cost, not latency.
-- **×1.127** (the hosting step) in any form. It is the smallest effect in the series, it is an
-  **upper bound**, and it contains an unmeasured servlet `SecurityFilterChain` difference that a
-  10–30 µs filter chain would make 8.2–24.7 % of. One leaf would bound it; until then the number
-  travels with its qualifier or not at all.
+- **×1.127** — **superseded, do not quote it at all.** The security term inside it is measured
+  (L11): 23.3 % of the step was Spring Security, not hosting. The current figure is
+  **≈ 89–96 µs, ×1.09–1.10**, and it still travels with two fences — the cross-contract
+  subtraction is an assumption, and 170 bytes of security response headers sit inside the
+  subtracted term. It remains the smallest effect in the series; quote it only when the hosting
+  axis is specifically the subject.
 - **Any p99 as a point.** Tails in the open-loop campaign are far more order-sensitive than
   throughput (5.25 vs 15.07 ms at one offered rate); quote the ab–ba range.
 - **Any heavy throughput ratio between a fast and a slow arm.** It reads the Postgres ceiling
@@ -184,6 +186,15 @@ inflated too, though not enough to change their reading: they had ample headroom
   host-independence of the Hibernate cost is assumed. It is supported, not proven, by **L4**:
   the axes compose to +2.0 % on the ceiling-free metric, which is what host-independent
   layer costs would produce.
+- **SECURITY-TERM CORRECTION 2026-08-11 — the hosting step is ×1.09–1.10, not ×1.127.** The
+  measured hosting rung (Tomcat → pure, 121.52 µs) contained an unmeasured servlet
+  `SecurityFilterChain` difference: the Tomcat arm runs a per-request authorization decision, the
+  Exeris arm carries no Spring Security at all. **Now measured (L11): +28.31 ± 3.25 µs/req, 23.3 %
+  of the step.** Corrected, the rung is ≈ 89–96 µs (×1.09–1.10) and the share of the addressable
+  pool already captured drops from 34.4 % to roughly 25–27 %. The ×1.488 ceiling and the
+  migration-order conclusion are unaffected — both rest on the ORM component, not on this rung.
+  Subtracting a light-contract figure from a heavy rung is a stated assumption, not a measurement;
+  see L11's fences.
 - **ATTRIBUTION CAVEAT 2026-08-11 — see L10 before calling this pool "Hibernate".** The ORM
   component is a subtraction between an arm that uses Spring Data JPA repositories with **interface
   projections** and one that uses none, so it contains the Spring Data projection-proxy cost as
@@ -589,3 +600,49 @@ second.
   shrinks its percentages uniformly and cannot manufacture the asymmetry, but no cross-arm share
   is quoted as a like-for-like number here. Exploratory: no `claim-status.json` rides on these
   views, and no comparative claim is made from them.
+
+## L11 — the servlet SecurityFilterChain costs 28.31 us/req, and it was 23 % of the hosting rung
+
+- **EN:** `A permitAll Spring Security servlet filter chain costs 28.31 +/- 3.25 us of CPU per request on a single-row read - 24% of the request's own cost, and 23% of the Tomcat-to-Exeris hosting gain it was silently inflating`
+- Class: **comparison-eligible** · Tier: Community · Track: **public-eligible**
+- Contract: `fixed_contract_cross_runtime_h1_single_read_v1` · Campaign:
+  `20260811T114140Z-security-confound-n3`, **12/12 leaves `comparison_eligible`**, n=3 complete
+  repeats (full JVM restart, both directions; partial repeats excluded)
+- **One jar, one variable.** Both arms launch the identical
+  `spring-benchmark-app-1.0.0-SNAPSHOT.jar` with the same `artifact_sha256`, separated only by
+  `benchmark.security.filter-chain.enabled=false` plus seven Boot 4 security auto-configuration
+  exclusions. Classpath, loaded classes and metaspace are constant, so RSS stays comparable.
+
+  | contract | repeat01 | repeat02 | repeat03 | mean | sd | share of the 121.52 us step |
+  |---|---:|---:|---:|---:|---:|---:|
+  | **light** (the measurement) | +26.23 | +26.64 | +32.06 | **+28.31 us** | 3.25 (11 %) | **23.3 %** |
+  | heavy (transferability check) | +40.40 | +21.99 | +35.35 | +32.58 us | 9.52 (29 %) | 26.8 % |
+
+- **Light is the measurement by design.** A 10-30 us effect is 0.93-2.78 % of heavy's 1077 us
+  baseline (at or below the +/-2.80 % budget) and 6.8-20.5 % of light's 147 us. Heavy could never
+  have resolved it, and its 29 % relative uncertainty confirms that the limit is the ratio of
+  effect to layer variance, not the repeat count.
+
+### Fences — three, and none is optional
+
+1. **Contract-dependence is NOT established, so the subtraction is an assumption.** The intervals
+   overlap ([25.1, 31.6] against [23.1, 42.1]). The data are consistent with a constant absolute
+   per-request cost and do not prove one. Any use of the light figure against a heavy rung must say
+   so.
+2. **Part of the 28.31 us is bytes, not authorization.** `HeaderWriterFilter` adds six response
+   headers the nosec arm omits (`X-Content-Type-Options`, `X-XSS-Protection`, `Cache-Control`,
+   `Pragma`, `Expires`, `X-Frame-Options`): **170 bytes against a 30-byte light body**, so the
+   stock arm writes 314 bytes per response where the other writes 144 - **2.18x**. The split is
+   **not quantified and deliberately not estimated**. For *"what does removing Spring Security
+   save"* the full figure is right, because `spring-on-exeris-pure` does not emit those headers
+   either. For *"what does the authorization decision cost"* it is an over-estimate by an unknown
+   amount.
+3. **Not a general Spring Security figure.** This is one application's permitAll chain on Tomcat
+   under one contract. The Exeris-side equivalent (`ExerisSecurityContextFilter`) is a different
+   mechanism, separately measured at +0.14 %, and the two must not be swapped.
+
+### Unexplained, recorded rather than dropped
+
+On heavy the arm **with** the filter chain is markedly more reproducible across repeats
+(sd 0.21 %) than the arm without it (0.82 %, range 15 us). The configuration with fewer layers is
+the less stable one. n=3, no mechanism proposed, and no claim rests on it.

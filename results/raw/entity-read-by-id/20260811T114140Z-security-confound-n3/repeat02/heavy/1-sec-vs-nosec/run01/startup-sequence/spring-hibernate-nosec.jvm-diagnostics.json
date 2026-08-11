@@ -1,0 +1,20 @@
+{
+  "target_id": "spring-hibernate-nosec",
+  "pid": 2339224,
+  "capture_utc": "2026-08-11T15:46:38Z",
+  "jcmd_available": true,
+  "captures": {
+    "vm_flags": {
+      "path": "results/raw/entity-read-by-id/20260811T114140Z-security-confound-n3/repeat02/heavy/1-sec-vs-nosec/run01/startup-sequence/spring-hibernate-nosec.jcmd-vm.flags.txt",
+      "status": "captured"
+    },
+    "vm_command_line": {
+      "path": "results/raw/entity-read-by-id/20260811T114140Z-security-confound-n3/repeat02/heavy/1-sec-vs-nosec/run01/startup-sequence/spring-hibernate-nosec.jcmd-vm.command_line.txt",
+      "status": "captured"
+    },
+    "jfr_check": {
+      "path": "results/raw/entity-read-by-id/20260811T114140Z-security-confound-n3/repeat02/heavy/1-sec-vs-nosec/run01/startup-sequence/spring-hibernate-nosec.jcmd-jfr.check.txt",
+      "status": "captured"
+    }
+  }
+}

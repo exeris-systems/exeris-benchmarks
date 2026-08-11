@@ -177,86 +177,67 @@ inflated too, though not enough to change their reading: they had ample headroom
   gap exceed the heavy gap. Light drift (+4.3 %) exceeds heavy (+2.0 %), but on the
   ceiling-free metric the axes compose; the residual is drift, not interaction.
 
-## L5 — OPEN: pure-native's light-contract tail
+## L5 — RESOLVED 2026-08-11: pure-native's light tail is a capacity-approach behaviour
 
-- Class: descriptive-only, **unresolved** · Tier: Community · Track: **public-eligible** (was: internal, on the void `spring-on-exeris*` exclusion) — publishable *as an open question*, which is how this repo publishes unresolved items.
-- pure-native has the second-best median and the **worst p99 of all four arms**, worse than
-  Tomcat, on light only:
+- **EN:** `Approaching capacity on the single-row read, spring-on-exeris-pure-native's tail degrades earlier and faster than the native baseline's: p99.9 is within 1.34x of exeris-community at 40k rps and 2.85x at 50k (91% of its saturation), while both arms are indistinguishable below 30k`
+- Class: **comparison-eligible** (was: descriptive-only, unresolved) · Tier: Community ·
+  Track: **public-eligible**
+- Contract: `fixed_contract_p99_stable_h1_wrk2_single_read_v1` (wrk2 open loop, CO-free) ·
+  Campaign: `20260811T063920Z-l5-curve-tail`, 12/12 leaves `comparison_eligible`, n=2 per cell
+  (ab+ba), every rung `publishable=true` with `rate_attainment_pct` >= 99.55 %
+- Measured, p50 as mean, tails as ab-ba range (ms):
 
-  | arm (light) | p50 | p99 | p99/p50 |
-  |---|---:|---:|---:|
-  | spring-hibernate | 4.83 | 8.97 | 1.86 |
-  | spring-on-exeris-pure | 2.95 | 7.83 | 2.66 |
-  | **spring-on-exeris-pure-native** | **2.00** | **12.49** | **6.26** |
-  | exeris-community | 1.48 | 7.46 | 5.05 |
+  | offered rps | community p99 | pure-native p99 | community p99.9 | pure-native p99.9 | p99.9 ratio |
+  |---:|---:|---:|---:|---:|---:|
+  | 10 000 | 1.86-1.88 | 1.97 | 2.04 | 2.27 | 1.11x |
+  | 20 000 | 1.73-1.91 | 2.00-2.01 | 2.10-2.22 | 2.37-2.39 | 1.10x |
+  | 30 000 | 2.17-2.18 | 2.57-2.73 | 2.55-2.57 | 3.21-3.25 | 1.26x |
+  | 40 000 | 2.71-2.73 | 3.24-3.26 | 3.12-3.14 | 4.19-4.22 | 1.34x |
+  | 45 000 | 2.69-2.83 | 3.96-4.02 | 3.20-3.33 | 6.85-7.38 | **2.18x** |
+  | 50 000 | 3.12-3.14 | 4.51-5.00 | 3.74-3.76 | 9.81-11.56 | **2.85x** |
 
-- Two hypotheses already eliminated by the data:
-  - *Not a fixed-cost event masked by a larger median.* The excess is **absent** on heavy
-    (pure-native − community = **+0.17 ms**, vs **+5.04 ms** on light). Regime-dependent,
-    not scale-dependent.
-  - *Not a load-fraction artifact.* pure at 96.41 % of pin gives p99 7.83; pure-native at
-    96.90 % gives 12.49. Half a point of saturation, +60 % of tail.
-- What is left is localisation, not mechanism: the excess appears only where Spring **and**
-  native persistence are both in the path **and** the arm is CPU-saturated. Neither alone
-  shows it. Same pair of layers as the `PERSISTENCE_ENGINE` / `KernelProviderBinder.bind`
-  scope work — a place to look, not a diagnosis.
-- Next step unchanged: open-loop wrk2 below saturation. These p99 are still queue tails
-  (p50 agrees with Little's law within a few percent in all eight cells).
+### What the open-loop measurement RETRACTS from the original L5
 
-### ESCALATED 2026-08-08 — reproduced against a different comparator, on different networking
+The original entry rested entirely on closed-loop wrk at saturation, whose percentiles are queue
+occupancy. Three of its statements do not survive a CO-free measurement:
 
-Run B (n=6, host-net, quarkus-tuned as the comparator) reproduces it and makes it worse:
+- **"The worst p99 of all four arms, worse than Tomcat."** At matched sub-saturation load
+  pure-native tracks the native baseline within 5-22 % up to 40 000 rps.
+- **"p99/p50 = 6.26x versus community's 5.05x."** Open loop at the top rung gives **3.2x** for
+  pure-native and **2.4x** for community. The shape difference is far smaller than closed loop
+  implied.
+- **The magnitude.** 12.49 ms becomes **4.51-5.00 ms** at the highest sustainable rate: the
+  closed-loop figure was inflated roughly 2.5x by queueing.
 
-| light | p50 | p99 | p99/p50 |
-|---|---:|---:|---:|
-| quarkus-tuned | 2.09 | **5.91** | 2.8× |
-| pure-native | 1.88 | **16.59** | **8.8×** |
+Run B's escalation ("2.81x the comparator's tail" against quarkus-tuned) is **not retracted and
+not confirmed** — that pair was dropped from the open-loop campaign as a Quarkus reference inside
+a Spring-series report, so no CO-free reproduction of it exists. Treat the 2.81x as a closed-loop
+number with the same inflation caveat until someone runs it.
 
-**2.81× the comparator's tail**, on an arm with the *better* median. This is no longer a
-property of the Spring ladder: different campaign, different opponent, different DB
-networking, same arm, same excess.
+### What survives, and why both original hypotheses were wrong
 
-Two readings, both supported:
-- **Saturation aggravates it.** pure-native at 96.9 % of pin → 12.49 ms; at 99.7 % → 16.59 ms.
-- **Saturation does not cause it.** At ~96 % matched utilisation the arm still sits at 12.49
-  against quarkus's 5.91 and pure's 7.83.
+The excess is **real but load-dependent**: absent below ~30 000 rps, widening in p99, and turning
+sharp in the far tail above ~80 % of capacity.
 
-quarkus-tuned is a useful new control: no ORM and no Spring, and the tightest tail in the whole
-dataset. That is consistent with the localisation — the excess needs Spring *and* native
-persistence in the same path — and it now rests on two independent comparators rather than one.
+- *"Queueing artefact"* is wrong: the effect reproduces open-loop at a sustained fixed rate.
+- *"Service-time property"* is wrong: a per-request property would be present at moderate load,
+  and it is not.
 
-**Heavy remains clean and is now the sharper contrast**: p99 14.34 (pure-native) vs 15.78
-(quarkus), i.e. pure-native's tail is *better* there. Whatever this is, it does not appear when
-the arm has 22 % of its pin idle.
+It is a **capacity-approach behaviour**, and only a rate ladder can see it — a saturating driver
+reports the endpoint and a single sub-saturation point reports nothing. That is the methodological
+finding, and it generalises beyond this arm.
 
-### The condition is a CONJUNCTION, and that narrows the suspect list
+### What is still open
 
-| contract | pure-native % pin | pure-native p99 | comparator p99 |
-|---|---:|---:|---:|
-| heavy | ~78 % | **14.34** | 15.78 (quarkus) |
-| light | 96.9 % | 12.49 | 5.87 / 7.83 |
-| light | 99.7 % | **16.59** | 5.91 (quarkus) |
+The **mechanism**. L5's original localisation stands unchallenged: the excess appears where Spring
+and kernel-native persistence are both in the path, and neither alone shows it. What is now
+unexplained is why the divergence starts around 30 000 rps on this contract and this box. Nothing
+in the current artefacts distinguishes the candidates.
 
-Neither condition alone produces it. Not the stack: at 78 % of pin the same stack has the
-*better* tail. Not saturation: quarkus-tuned at 95.7 % has the tightest tail in the dataset.
-The trigger is **(Spring + native persistence) ∧ CPU saturation**.
-
-That shape matters. A fixed per-request cost would be visible at 78 % of pin on heavy, and it is
-not. Appearing only under saturation is the signature of **contention for a shared resource**,
-not of extra work per request.
-
-**Two discriminators, both from artefacts already on disk — no new campaign:**
-
-1. **`jdk.VirtualThreadPinned` from the existing JFR recordings.** If something on the Spring MVC
-   path pins a carrier, then under saturation the carrier pool becomes the constraint and the
-   tail inflates in exactly this pattern. JDK 26 removed `synchronized` pinning (JEP 491), so the
-   remaining candidates are native frames — a short list. One JFR view.
-2. **GC + safepoint logs at matched ~96 % of pin**, using the recipe from the triad report §7 tail
-   diagnostic (which cleared GC there: longest pause 23 ms, safepoint 28 ms). If it clears here
-   too, scheduling is what is left, and (1) becomes the only surviving candidate.
-
-Order is (1) then (2): cheaper, and aimed at the better hypothesis. Queued behind run A —
-extracting JFR on the box during a measurement window is itself CPU work.
+**Fence for anyone quoting this entry:** percentiles here are **ab-ba ranges, not points**. Tail
+metrics in this campaign proved far more order-sensitive than throughput (the sibling ORM phase
+read p99 5.25 against 15.07 ms in one cell at the same offered rate), and the +/-2.00 % arm-order
+term in the cpu/req error budget is measured on cpu/req and **does not transfer to tails**.
 
 ## L6 — PRE-REGISTERED PREDICTION: what host networking does to the heavy ceiling
 

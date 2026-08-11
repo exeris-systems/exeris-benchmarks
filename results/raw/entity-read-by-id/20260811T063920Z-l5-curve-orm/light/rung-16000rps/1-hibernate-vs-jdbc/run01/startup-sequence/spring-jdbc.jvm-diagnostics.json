@@ -1,0 +1,20 @@
+{
+  "target_id": "spring-jdbc",
+  "pid": 1412291,
+  "capture_utc": "2026-08-11T08:42:12Z",
+  "jcmd_available": true,
+  "captures": {
+    "vm_flags": {
+      "path": "results/raw/entity-read-by-id/20260811T063920Z-l5-curve-orm/light/rung-16000rps/1-hibernate-vs-jdbc/run01/startup-sequence/spring-jdbc.jcmd-vm.flags.txt",
+      "status": "captured"
+    },
+    "vm_command_line": {
+      "path": "results/raw/entity-read-by-id/20260811T063920Z-l5-curve-orm/light/rung-16000rps/1-hibernate-vs-jdbc/run01/startup-sequence/spring-jdbc.jcmd-vm.command_line.txt",
+      "status": "captured"
+    },
+    "jfr_check": {
+      "path": "results/raw/entity-read-by-id/20260811T063920Z-l5-curve-orm/light/rung-16000rps/1-hibernate-vs-jdbc/run01/startup-sequence/spring-jdbc.jcmd-jfr.check.txt",
+      "status": "captured"
+    }
+  }
+}

@@ -48,7 +48,7 @@ Three things are new and none of them existed on 2026-07-21:
    [`docs/CLAIMS.md` L3](../../docs/CLAIMS.md) rested on measuring the ORM's cost on the
    *Exeris-hosted* arm and applying it to Tomcat, because no ORM-free Tomcat arm existed.
    It does now.
-2. **The attribution of that cost is corrected** (§4). It is not simply "Hibernate".
+2. **The attribution of that cost is corrected** (§5). It is not simply "Hibernate".
 3. **Service-time latency for the Spring family** — the series has never had any. **[PENDING wrk2]**
 
 ---
@@ -57,32 +57,45 @@ Three things are new and none of them existed on 2026-07-21:
 
 <!-- Write this AFTER the body. It is one of the four summarizing surfaces; see the sweep note. -->
 
-- **The hosting swap is worth ×1.13. Removing the repository layer is worth ×4.** On the
-  DB-bound aggregate, moving one identical Spring+JPA application from Tomcat to the Exeris
-  native web layer buys **121.52 µs/req (×1.127)**, while the persistence layer under it accounts
-  for **723.97 µs/req — 67.2 % of the whole request** (L3, L4). Runtime work is optimising the
-  smaller third.
-- **That now holds on Tomcat too, not just by assumption.** `spring-hibernate` → `spring-jdbc`,
-  same host, same Boot 4.1.0, same security config, same SQL shapes, only the repository layer
-  differs: **1074.7 → 271.8 µs/req on heavy (×3.95)** and **143.6 → 122.5 µs on light (×1.17)**,
-  n=6 per arm, 12/12 leaves `comparison_eligible` (§3).
-- **But "the ORM costs ×4" is the wrong label, and this report retracts it.** JFR puts Spring
-  AOP and reflection *above* Hibernate's own tuple materialisation in the ORM arm. The arms
-  differ by **two** things — Hibernate **and** Spring Data interface projections, which proxy
-  one object per returned row. That is also what explains ×3.95 on heavy against ×1.17 on light:
-  heavy returns ~200 rows, light returns a managed entity and no proxy at all (§4).
+- **The repository layer accounts for ×3.95 of cpu/req on the DB-bound aggregate and ×1.17 on the
+  single-row read — and it is not simply Hibernate (§5).** The contract dependence *is* the
+  finding, not a detail: the cost scales with rows materialised, so quoting either number alone
+  misstates it. Measured on Tomcat with everything else held fixed — same host, same Boot 4.1.0,
+  same security config, same SQL shapes, only the repository layer differs: 1074.7 → 271.8 µs/req
+  heavy, 143.6 → 122.5 µs light, n=6 per arm, 12/12 leaves `comparison_eligible` (§4).
+- **Until this campaign that was an assumption.** The migration-order conclusion rested on
+  measuring the repository cost on the *Exeris-hosted* arm and applying it to Tomcat, because no
+  ORM-free Tomcat arm existed (L3). It does now, and the direction holds.
+- **The hosting swap is the smaller effect, and its size is bounded from below, not pinned.**
+  Moving one identical Spring+JPA application from Tomcat to the Exeris native web layer buys
+  **121.52 µs/req (×1.127)** against a repository layer worth **723.97 µs/req — 67.2 % of the
+  request** (L3, L4). So runtime work is optimising the smaller third. **Qualifier that must
+  travel with ×1.127:** the two arms differ in per-request security work as well as in hosting —
+  the Tomcat arm runs a servlet `SecurityFilterChain`, the Exeris arm carries no Spring Security
+  at all — and that difference has never been measured on the Tomcat side. It is not a rounding
+  error against a 121.52 µs step: a filter chain costing 10 / 20 / 30 µs per request would be
+  **8.2 % / 16.5 % / 24.7 %** of the entire hosting gain. Unbounded because unmeasured (§6 — the hosting ladder).
+- **The cost is the Spring Data repository layer, not Hibernate — and this report retracts the
+  plain-"ORM" label for it.** JFR puts Spring AOP and reflection *above* Hibernate's own tuple
+  materialisation in that arm. The two arms differ by **two** things: Hibernate **and** Spring
+  Data interface projections, which proxy one object per returned row. The mechanism is what
+  produces the contract dependence — heavy returns ~200 rows and pays ~200 proxy constructions,
+  light calls `findById`, gets a managed entity, and pays none (§5). **Practical consequence:**
+  the cheapest fix for a Spring team is therefore not `JdbcTemplate` but dropping interface
+  projections for DTO constructor expressions, staying on JPA — a change of return types, and
+  an unmeasured first rung of the migration order L3 recommends.
 - **Which numbers may be quoted at all depends on where the ceiling is.** On heavy the fast arms
   saturate the Postgres cpuset and the slow ones do not, so a heavy *throughput* ratio between a
   fast and a slow arm reads the database, not the stack. cpu/req survives it; throughput does not
-  (§2).
-- **Footprint and idle cost** — §5. **[PENDING: consolidate L8 + RSS across the ladder]**
+  (§3).
+- **Footprint and idle cost** — §6. **[PENDING: consolidate L8 + RSS across the ladder]**
 - **Latency** — **[PENDING wrk2]**. Until that campaign lands, this report makes **no
   service-time claim whatsoever**: every percentile in the series so far comes from a closed-loop
-  driver at saturation and measures queue occupancy (§6).
+  driver at saturation and measures queue occupancy (§7).
 
 **What this report will not claim:** any service-time comparison from the closed-loop campaigns;
 any transfer of the heavy ranking to a setup where the database is not the bottleneck; any
-attribution of the repository-layer cost to Hibernate specifically (§4).
+attribution of the repository-layer cost to Hibernate specifically (§5).
 
 ---
 
@@ -92,10 +105,10 @@ attribution of the repository-layer cost to Hibernate specifically (§4).
 |---|---|
 | **Hardware** | AMD Ryzen 7 7700 (8C/16T), 62 GB RAM, governor `performance`, turbo **off**, dedicated bare metal |
 | **JDK** | Eclipse Temurin 26.0.1 |
-| **Driver** | wrk 4.1.0 closed-loop, 4 threads / 128 connections (`driver.mode=closed`) — throughput and resource metrics only. wrk2 open-loop for §6 **[PENDING]** |
+| **Driver** | wrk 4.1.0 closed-loop, 4 threads / 128 connections (`driver.mode=closed`) — throughput and resource metrics only. wrk2 open-loop for §7 **[PENDING]** |
 | **Transport** | HTTP/1.1 cleartext over loopback (`transport_mode=loopback-h1`) |
 | **CPU pinning** | targets `0-1,8-9` · loadgen `2-3,10-11` · Postgres `4-7,12-15`, disjoint, SMT siblings pinned as units |
-| **Backend** | PostgreSQL 16.2, **host networking** + cpuset isolation (`BENCH_DB_TUNED=1`) |
+| **Backend** | PostgreSQL 16.2 + cpuset isolation (`BENCH_DB_TUNED=1`). **Container network mode differs by campaign and is not a report-wide property — see the table below.** |
 | **Memory** | equal 2048 MB budget per target; **iso-heap 1280 MB** on every arm including `exeris-community`, whose harness default is 256 |
 | **DB pool** | min 16 / max 256, identical on all arms |
 | **Windows** | 300 s warmup + 900 s measurement per arm (wrk2 phase: 60 s + 120 s) |
@@ -103,11 +116,20 @@ attribution of the repository-layer cost to Hibernate specifically (§4).
 
 **Campaigns behind this report** (all committed under `results/raw/entity-read-by-id/`):
 
-| campaign | arms | n | status |
-|---|---|---|---|
-| `20260806T183034Z-spring-ladder-n3` | the four-arm ladder | 3 × ab/ba × 2 contracts | 48 leaves |
-| `20260810T131208Z-hibernate-vs-jdbc-n3` | ORM axis on Tomcat | 3 × ab/ba × 2 contracts | **12/12 `comparison_eligible`** |
-| `20260811T0639…-l5-curve-orm` / `-tail` | open-loop wrk2 | 6 rungs × ab/ba | **[PENDING]** |
+| campaign | arms | n | DB network | status |
+|---|---|---|---|---|
+| `20260806T183034Z-spring-ladder-n3` | the four-arm ladder | 3 × ab/ba × 2 contracts | **bridge** | 48 leaves |
+| `20260810T131208Z-hibernate-vs-jdbc-n3` | ORM axis on Tomcat | 3 × ab/ba × 2 contracts | **host** | **12/12 `comparison_eligible`** |
+| `20260811T0639…-l5-curve-orm` / `-tail` | open-loop wrk2 | 6 rungs × ab/ba | host | **[PENDING]** |
+
+**The bridge/host split is load-bearing and is not cosmetic.** Under bridge the DB-cpuset figure
+is Postgres *plus* container networking plus a userspace `docker-proxy` relay, so it is an **upper
+bound on Postgres, not a measurement of it**. The size of the deformation is measured: on the
+light contract the same arm at the same delivered throughput read **87.36 % busy under bridge and
+37.34 % under host** — ~50 points, of which 55 of the 87 were `sys`+`soft`, i.e. kernel networking
+(the 2026-08-08 correction in `docs/CLAIMS.md` L2). Heavy is unaffected to within noise
+(99.80 → 99.84 %), because heavy's wall is genuine query execution. **Never compare a bridge
+DB-busy figure with a host one**, and never read a bridge one as Postgres utilisation.
 
 ### Fairness posture — read before the numbers
 
@@ -128,7 +150,7 @@ attribution of the repository-layer cost to Hibernate specifically (§4).
    `permitAll`, so no *authentication* work is measured — but a servlet `SecurityFilterChain`
    still reaches an authorization decision per request. Measured on the Exeris side and
    negligible there (+0.14 % against 1.48 % run-to-run spread); **not** measured for the Tomcat
-   filter chain, so no bound may be borrowed. Within §3's ORM pair the two arms carry the
+   filter chain, so no bound may be borrowed. Within §4's ORM pair the two arms carry the
    *identical* config, so that pair is unaffected.
 5. **Version alignment.** Arms 1, 2, 5 and the ladder run Boot 4.1.0 / Jackson 3 / kernel 0.10.2.
    **Arm 3 (`spring-on-exeris`) is still on Boot 3.5.14 / Jackson 2** — a Boot major and a Jackson
@@ -136,7 +158,7 @@ attribution of the repository-layer cost to Hibernate specifically (§4).
    decide whether to align arm 3 before publishing, which retires every pre-alignment compat
    number, or to publish arm 3 with the fence stated.]**
 6. **Closed-loop driver.** Percentiles from the wrk campaigns are queue occupancy, not service
-   time; the artefacts stamp `latency_percentile_eligibility.publishable=false` saying so. §6 is
+   time; the artefacts stamp `latency_percentile_eligibility.publishable=false` saying so. §7 is
    the service-time axis. **[PENDING]**
 
 ---
@@ -156,31 +178,73 @@ attribution of the repository-layer cost to Hibernate specifically (§4).
 
 ---
 
-## 2. Which ceiling is binding — and therefore which numbers are quotable
+## 2. The error budget — what counts as a difference
 
-**[SECTION SKELETON — data present, prose to write]**
+**[SECTION SKELETON — numbers carried from the prior error-budget analysis. PROVENANCE TODO
+before publish: each row must cite the campaign it was derived from. These were computed in
+earlier work and are NOT re-derived from artefacts in this draft; a report may not carry an
+error budget without a citation, so this section blocks publication until the sources are
+attached.]**
 
-Mean DB-cpuset utilisation over each arm's own measurement window (L2, n=12; ORM campaign n=6):
+Several claims in this report currently argue tolerance ad hoc ("+2.0 % closure, inside the
+≤ 2 % control"). Stated once, as a budget on **cpu/req**:
 
-| arm | contract | rps | own pin | DB busy | bounded by |
-|---|---|---:|---:|---:|---|
-| `spring-hibernate` | heavy | 3 664 | 98.7 % | 30.5 % | its own CPU |
-| `spring-on-exeris-pure` | heavy | 4 131 | 98.7 % | 34.9 % | its own CPU |
-| `spring-on-exeris-pure-native` | heavy | 12 645 | 73.3 % | 99.8 % | **the database** |
-| `exeris-community` | heavy | 13 107 | 69.1 % | 99.8 % | **the database** |
-| `spring-jdbc` | heavy | 12 664 | — | **97.4 %** | **the database** |
+| source | cpu/req |
+|---|---:|
+| harness noise | ± 0.30 % |
+| arm order (ab vs ba) | ± 2.00 % |
+| DB network mode | ± 0.30 % |
+| runtime snapshot | ± 0.20 % |
+| **total** | **± 2.80 %** |
 
-The consequence is the reading rule for this whole report: **a heavy throughput ratio between a
-fast arm and a slow arm is a lower bound with one side capped**, so quote cpu/req there. On light
-every arm leaves the database at 19–37 % and throughput is meaningful.
+This turns §3's reading rule from prose into arithmetic: a cpu/req difference below **±2.80 %** is
+not a difference. Both ORM-axis results clear it by a wide margin (×3.95 and ×1.17 are
++295 % and +17 %), and so does the ladder closure (+2.0 %, inside the budget — which is what makes
+the decomposition an attribution instrument rather than a coincidence).
 
-- **[TODO]** fold in the 2026-08-08 bridge-vs-host correction (light was 87 % under bridge; that
-  was kernel networking, not Postgres — 37 % on host).
-- **[TODO]** the "≤ 1.3 % / +36 % / +45 %" headroom bounds from L2.
+**The budget does not transfer across metrics, and that is the point of stating it.** On the same
+snapshot pair, **p99 moved 16.9 % where cpu/req moved 0.20 % — roughly 85× the sensitivity to an
+identical fence.** That is the strongest available argument for why §7 waits for wrk2 instead of
+recycling closed-loop percentiles: a tail metric that reacts 85× harder to a change the throughput
+metric barely registers cannot be quoted from a run that was not designed to isolate it.
+
+**[TODO]** promote this table to `docs/methodology.md` once sourced, so it stops being
+report-local.
 
 ---
 
-## 3. The ORM axis, measured on Tomcat
+## 3. Which ceiling is binding — and therefore which numbers are quotable
+
+**[SECTION SKELETON — data present, prose to write]**
+
+Mean DB-cpuset utilisation over each arm's own measurement window, heavy contract.
+**The DB-busy column is not homogeneous — read the network-mode column first.**
+
+| arm | rps | own pin | DB busy | network | reading | bounded by |
+|---|---:|---:|---:|---|---|---|
+| `spring-hibernate` | 3 664 | 98.7 % | 30.5 % | bridge | **upper bound** | its own CPU |
+| `spring-on-exeris-pure` | 4 131 | 98.7 % | 34.9 % | bridge | **upper bound** | its own CPU |
+| `spring-on-exeris-pure-native` | 12 645 | 73.3 % | 99.8 % | bridge | upper bound, but *at the ceiling either way* | **the database** |
+| `exeris-community` | 13 107 | 69.1 % | 99.8 % | bridge | upper bound, but *at the ceiling either way* | **the database** |
+| `spring-jdbc` | 12 664 | — | **97.4 %** | **host** | **Postgres utilisation** | **the database** |
+
+Sources: rows 1–4 `20260806T183034Z-spring-ladder-n3` (n=12, bridge); row 5
+`20260810T131208Z-hibernate-vs-jdbc-n3` (n=6, host). **A bridge figure and a host figure are not
+comparable** (see Setup). The two saturated bridge rows survive the caveat only because an upper
+bound pinned at 99.8 % still establishes saturation; the two low bridge rows establish *headroom
+exists*, not how much.
+
+The consequence is the reading rule for this whole report: **a heavy throughput ratio between a
+fast arm and a slow arm is a lower bound with one side capped**, so quote cpu/req there. On light
+every arm leaves the database with substantial headroom (37 % measured on host) and throughput is
+meaningful.
+
+- **[TODO]** the "≤ 1.3 % / +36 % / +45 %" headroom bounds from L2, restated with the bridge
+  caveat attached to whichever of them derive from bridge rows.
+
+---
+
+## 4. The ORM axis, measured on Tomcat
 
 **[SECTION SKELETON — data final, prose to write]**
 
@@ -193,14 +257,21 @@ n=6 per arm (3 repeats × ab/ba), 12/12 `comparison_eligible`, 0 errors.
 |---|---:|---:|---:|
 | **heavy** cpu/req | 1074.7 µs (±12.0) | 271.8 µs (±2.8) | **×3.95** |
 | heavy RSS (avg) | 1668 MB | 1168 MB | ×1.43 |
-| heavy rps | 3 681 | 12 664 | *not quotable — see §2* |
+| heavy rps | 3 681 | 12 664 | *not quotable — see §3* |
 | heavy DB busy | 26.4 % | **97.4 %** | — |
 | **light** cpu/req | 143.6 µs (±2.2) | 122.5 µs (±1.3) | **×1.17** |
 | light RSS (avg) | 1247 MB | 1167 MB | ×1.07 |
 | light rps | 27 571 | 32 190 | **quotable** — DB at 19–22 % both arms |
 
 The heavy/light asymmetry is the finding, not a curiosity: **the cost is not a fixed per-request
-tax.** §4 explains it.
+tax.** §5 explains it.
+
+> **Two figures for `spring-hibernate` throughput appear in this report, on purpose.** The table
+> above quotes the **arm mean** over all six leaves (heavy 3 681, light 27 571). §7 quotes the
+> **worst-observed single leaf** (heavy 3 628, light 27 108) because a rate ladder must clear the
+> slowest leaf the arm actually produced, not its average — sizing an offered rate off a mean puts
+> half the leaves above it. Leaf-to-leaf spread within the arm is 2.8 % heavy / 3.5 % light, which
+> is itself inside the error budget below.
 
 - **[TODO]** relate to L3's ×1.488 Amdahl ceiling: this measurement is what L3 assumed.
 - **[TODO]** the honest commercial framing — this is the cheapest change a Spring team can make,
@@ -208,7 +279,7 @@ tax.** §4 explains it.
 
 ---
 
-## 4. What the ×3.95 actually is — and why "the ORM" is the wrong name for it
+## 5. What the ×3.95 actually is — and why "the ORM" is the wrong name for it
 
 **[SECTION SKELETON — data final, prose to write. This is the report's most important correction.]**
 
@@ -232,7 +303,7 @@ no projection, no proxy. `spring-jdbc` maps rows with a lambda `RowMapper` strai
 on both contracts. `ProxyFactory` being allocated at steady state means each row's proxy carries
 a cold `AdvisedSupport` `methodCache`, which is why the *cache-miss* frame tops the arm.
 
-**Consequences, both of which must travel with any number from §3:**
+**Consequences, both of which must travel with any number from §4:**
 
 1. The pair moves **two** things. Label it *"Spring Data JPA + Hibernate vs JdbcTemplate +
    RowMapper"* — a real and idiomatic stack choice — never *"the cost of the ORM"*.
@@ -242,8 +313,26 @@ a cold `AdvisedSupport` `methodCache`, which is why the *cache-miss* frame tops 
    conclusion are unaffected in direction — that cost is real and does leave with the
    repositories — but the attribution to Hibernate specifically is not established by these arms.
 
-**What would settle it:** one arm running JPA through `EntityManager` or DTO/constructor-expression
-queries with no Spring Data proxy. Not built; no campaign pending.
+### The consequence nobody has priced — and it changes the migration order
+
+If the cost sits in Spring Data's projection proxies rather than in Hibernate, then **the cheapest
+fix available to a Spring team is not moving to `JdbcTemplate`.** It is dropping interface
+projections and returning DTOs through constructor expressions — *staying on JPA*. That is a
+change of return types, not a rewrite of the persistence layer.
+
+This matters beyond tidiness, because L3's migration-order conclusion ("on a DB-bound workload the
+repositories go first") is currently priced as one large step. If a change of return types
+captures a substantial share of the ×3.95, that step has a **much cheaper first rung that nobody
+has measured** — and the ordering advice changes with it.
+
+**So the missing arm has two jobs, not one.** The same experiment §5 names as decisive for
+attribution — JPA through `EntityManager` or DTO/constructor-expression queries, no Spring Data
+proxy — also prices the cheapest path a customer can take. That moves it off the "nice to have"
+list: it is the difference between telling a team "rewrite your repositories" and telling them
+"change your return types first, then measure again."
+
+**What would settle it:** that one arm, against the existing `spring-hibernate`, same contract.
+Not built; no campaign pending. **[TODO: propose it as the next campaign after the wrk2 curve.]**
 
 **Instrumentation caveats.** JFR `ExecutionSample` is Java-frames-only and says nothing about the
 `%sys`+`%soft` half of the budget. The two arms' recordings have different denominators — 874 s
@@ -254,32 +343,57 @@ asymmetry, but no cross-arm share is quoted here as like-for-like. Exploratory: 
 
 ---
 
-## 5. The hosting ladder, and where each rung's cost lives
+## 6. The hosting ladder, and where each rung's cost lives
 
 **[SECTION SKELETON — data present in L3/L4, prose to write]**
 
 Heavy cpu/req arm-means, ladder campaign (n=12):
 
-| rung | step | µs/req | ×  |
-|---|---|---:|---:|
-| Tomcat → Exeris compat | web dispatch | **[TODO from L-data]** | |
-| Tomcat → Exeris native web | hosting | 121.52 | ×1.127 |
-| JPA → kernel-native persistence | repository layer | 723.97 | — |
-| **whole stack** | Tomcat+JPA → native+native | — | ×5.118 direct |
+| rung | step | µs/req | × | clean? |
+|---|---|---:|---:|---|
+| Tomcat → Exeris compat | web dispatch | **[TODO from L-data]** | | |
+| Tomcat → Exeris native web | hosting | 121.52 | ×1.127 | **no — see below** |
+| JPA → kernel-native persistence | repository layer | 723.97 | — | attribution corrected in §5 |
+| **whole stack** | Tomcat+JPA → native+native | — | ×5.118 direct | |
+
+> **×1.127 IS NOT A CLEAN HOSTING NUMBER, AND THE CONFOUND IS UNBOUNDED.** The rung is
+> `spring-hibernate` → `spring-on-exeris-pure` (1077.40 − 955.88 = 121.52 µs). Those two arms
+> differ in more than hosting: the Tomcat arm carries `spring-boot-starter-security` and runs a
+> servlet `SecurityFilterChain` that reaches an authorization decision on every request even when
+> the match is `permitAll`; the Exeris arm carries no Spring Security at all and runs no
+> per-request security code. **That difference has never been measured on the Tomcat side**, and
+> fairness posture 4 forbids borrowing the Exeris-side bound (+0.14 %) for it — a
+> `FilterChainProxy` dispatch with `SecurityContextHolder` lifecycle and `AuthorizationManager`
+> evaluation is a different and heavier mechanism.
+>
+> Against a 121.52 µs step this is not a rounding error. It is the smallest effect in the report,
+> so it is the one an unmeasured term can most easily dominate:
+>
+> | hypothetical filter-chain cost | share of the entire hosting gain |
+> |---:|---:|
+> | 10 µs/req | 8.2 % |
+> | 20 µs/req | 16.5 % |
+> | 30 µs/req | 24.7 % |
+>
+> **One leaf bounds it**: `spring-hibernate` rebuilt without `spring-boot-starter-security`, same
+> contract, against the stock arm. Until then, ×1.127 is quoted **as an upper bound on the hosting
+> gain**, never as the hosting gain itself, and the qualifier travels with it on every surface.
 
 - The decomposition **closes**: product of the rungs vs the directly-measured end-to-end pair is
-  **+2.0 % on heavy cpu/req**, inside the ≤ 2 % counterbalanced arm-order control. It is an
-  attribution instrument, not a heuristic — and it closes on cpu/req, not on rps (+3.8 %), which
-  is the DB ceiling seen a third way (L4).
+  **+2.0 % on heavy cpu/req**, inside the ±2.80 % budget of §2 (and inside the ≤ 2 %
+  counterbalanced arm-order term specifically). It is an attribution instrument, not a heuristic —
+  and it closes on cpu/req, not on rps (+3.8 %), which is the DB ceiling seen a third way (L4).
+  Note the closure does **not** clear the security confound above: a term present in one rung and
+  in the end-to-end pair alike cancels in the closure check while remaining in both numbers.
 - **Amdahl consequence:** with the repository layer in the path, no amount of runtime work can
-  exceed **×1.488** on this contract. **[TODO]** restate with §4's corrected label.
-- **[TODO]** §5b footprint: RSS across the ladder, and L8's idle-cost finding (an idle
+  exceed **×1.488** on this contract. **[TODO]** restate with §5's corrected label.
+- **[TODO]** §6b footprint: RSS across the ladder, and L8's idle-cost finding (an idle
   Spring-on-Exeris process is ~18× less idle than Tomcat or the native runtime) with its
   threshold and the directional-only caveat on instances-per-core.
 
 ---
 
-## 6. Service-time latency **[PENDING wrk2]**
+## 7. Service-time latency **[PENDING wrk2]**
 
 **[SECTION SKELETON — no data yet. Do not fill from closed-loop runs.]**
 
@@ -300,7 +414,7 @@ Two things this phase is for:
 
 1. **The first fair heavy comparison of the ORM pair.** At a matched offered rate below both arms,
    both do identical work per second and so present identical load to Postgres — dissolving the
-   §2 asymmetry that makes heavy throughput unquotable today.
+   §3 asymmetry that makes heavy throughput unquotable today.
 2. **L5.** `spring-on-exeris-pure-native` has the second-best median and the worst p99 of the four
    ladder arms on light (2.00 / 12.49 ms against `exeris-community`'s 1.48 / 7.46), reproduced
    against a different comparator on different networking. If the tail is a service-time property
@@ -311,13 +425,19 @@ that entered the knee.
 
 ---
 
-## 7. Open questions carried forward
+## 8. Open questions carried forward
 
-- **L5** — the pure-native light tail. §6 is the test. *(open)*
+- **L5** — the pure-native light tail. §7 is the test. *(open)*
 - **L9** — inter-pair drift is a per-request cost increase, not CPU starvation; CPU theft and
   idle-neighbour CPU are both eliminated. Needs per-core counters (LLC / memory bandwidth, SMT
   siblings) the rig does not sample. *(open, not addressable from current artefacts)*
-- **L10** — the repository-layer cost attribution (§4). *(open, needs an `EntityManager` arm)*
+- **L10** — the repository-layer cost attribution (§5). *(open, needs an `EntityManager` /
+  constructor-expression arm — which would also price the cheapest customer path and therefore
+  test L3's migration order, see §5)*
+- **The hosting step's security confound** — ×1.127 contains an unmeasured servlet
+  `SecurityFilterChain` difference worth an unbounded share of a 121.52 µs step. One leaf
+  (`spring-hibernate` without `spring-boot-starter-security`, same contract) bounds it.
+  *(open, cheap, and it gates a headline number)*
 - **Arm 3 version alignment** — Boot 3.5.14 / Jackson 2 against everything else on 4.1.0 /
   Jackson 3. *(decision pending, see fairness posture 5)*
 
@@ -327,7 +447,7 @@ that entered the knee.
 
 <!-- One of the four summarizing surfaces. Every retraction stays visible, per house style. -->
 
-- **2026-08-11 — draft opened.** Skeleton with §2–§5 data from committed campaigns; §6 pending.
+- **2026-08-11 — draft opened.** Skeleton with §2–§6 data from committed campaigns; §7 pending.
 - **[TODO on publish]** record that this report retracts the plain-"ORM" label used for the
   L3 pool, and why.
 
@@ -345,7 +465,7 @@ Two specific traps:
   - a bound must be the one measured on the axis being claimed (a <=2% throughput order-effect
     says nothing about RSS, where the same control read +13.5%).
 Cross-cutting facts belong on this sweep too: the pgjdbc fetch normalisation, the auth-axis
-asymmetry, and the §4 attribution correction.
+asymmetry, and the §5 attribution correction.
 
 PRE-PUBLISH CHECKLIST
   [ ] tier / protocol mode / benchmark family / comparison axis labelled on every table

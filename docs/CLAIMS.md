@@ -33,6 +33,44 @@ restriction on them.
 
 ---
 
+## Citation canon — what to quote, and what never to quote alone
+
+Added 2026-08-11, after the open-loop campaign changed which sentence is both the truest and the
+most interesting one available. This section is for anyone copying from this registry into a
+report, a deck, a post or a conversation.
+
+**The flagship sentence** is *"the Spring Data repository layer does not make a request slower —
+it makes the arm run out of headroom sooner."* It is the only formulation that survives **both**
+contracts. It is supported by two instruments that disagree in magnitude and agree in direction:
+×3.95 cpu/req on heavy against a heavy median gap of only ×1.43 at low load, with the arms
+indistinguishable on light until 88 % of capacity (L10, and the report's §4/§7).
+
+**The number for a non-specialist audience** is the whole-stack **×5.118 cpu/req**, quoted as
+*"the same Spring application, the same SQL contracts, with the repository layer rewritten"*. It
+is a cpu/req figure, so it survives the L2 ceiling rule that makes heavy throughput unquotable.
+
+**Never quote these alone:**
+
+- **×3.95** without the contract it belongs to and without "it is not simply Hibernate". Both
+  omissions are things this registry has formally retracted (L10).
+- **"×3.95 slower."** It is false on both contracts. The ratio is cost, not latency.
+- **×1.127** (the hosting step) in any form. It is the smallest effect in the series, it is an
+  **upper bound**, and it contains an unmeasured servlet `SecurityFilterChain` difference that a
+  10–30 µs filter chain would make 8.2–24.7 % of. One leaf would bound it; until then the number
+  travels with its qualifier or not at all.
+- **Any p99 as a point.** Tails in the open-loop campaign are far more order-sensitive than
+  throughput (5.25 vs 15.07 ms at one offered rate); quote the ab–ba range.
+- **Any heavy throughput ratio between a fast and a slow arm.** It reads the Postgres ceiling
+  (L2). Use cpu/req.
+
+**The objection this canon will attract, and the honest answer.** A careful reader will say: *your
+own benchmark says the runtime is optimising the smaller third.* That is exactly what it says, and
+it should be conceded rather than deflected. The answer is structural, not rhetorical: the
+kernel-native persistence arm **is** the answer to the larger two thirds, L3's migration order is
+the brownfield adoption path, and a benchmark that tells a customer *"do the cheap step first, the
+one that needs none of our software"* is the same discipline as the retractions in this file,
+applied at product level rather than at claim level.
+
 ## L1 — cpu/req reduction, exeris-community vs Tomcat (light)
 
 - **EN:** `65.3% less CPU per request than Spring Boot on Tomcat, same contract, same box (50.9 µs vs 146.7 µs, n=12 per arm)`

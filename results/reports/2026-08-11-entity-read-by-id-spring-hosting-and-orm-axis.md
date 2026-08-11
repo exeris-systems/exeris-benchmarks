@@ -11,8 +11,17 @@ authors:
 track: Community
 benchmark_family: Runtime
 scenario: entity-read-by-id
-claim_scope: comparison_eligible
-reproducibility_status: complete
+claim_scope: draft_not_for_publication
+reproducibility_status: incomplete
+claim_scope_note: >
+  Deliberately NOT comparison_eligible while this is a draft, even though the underlying
+  campaigns are. §2's error budget carries numbers with no cited source and says in its own
+  text that it blocks publication; two sections still carry TODOs. A file-level
+  comparison_eligible would also over-claim across the whole report: the ladder campaign's
+  48 leaves are not declared all-eligible anywhere, and the two pairs that cross the
+  Pure-vs-Compat axis are non_eligible BY DESIGN. Eligibility is a per-campaign, per-pair
+  property in this repo and is stated at each table; it is not a document attribute.
+  Flip both fields only when every TODO is closed and each table states its own gate status.
 comparison_axis: within-tier
 hardware_profile: perf-box-amd64
 ---
@@ -23,8 +32,11 @@ hardware_profile: perf-box-amd64
 
 > **DRAFT STATUS.** The open-loop wrk2 campaign has **landed** (§7, 36/36 leaves
 > `comparison_eligible`), so no section is waiting on data any more. What remains open is prose,
-> two sourcing tasks (§2's error budget, §6's compat rung) and one editorial decision (arm 3's
-> version skew — fairness posture 5). Every number here is from a committed, gate-passing campaign
+> one hard blocker (§2's error budget carries numbers with no cited source) and one cheap
+> experiment that would clean up a headline (§6's security confound). Two editorial questions are
+> now **decided**: the compat rung stays out of §6's pure ladder and goes to the `compat/` track,
+> and arm 3 publishes with its version-skew fence rather than holding the report for an alignment
+> campaign. Every number here is from a committed, gate-passing campaign
 > and was re-derived from its artefacts before being written down. **No number in this file is
 > provisional or estimated.**
 
@@ -122,6 +134,7 @@ attribution of the repository-layer cost to Hibernate specifically (§5).
 | **Memory** | equal 2048 MB budget per target; **iso-heap 1280 MB** on every arm including `exeris-community`, whose harness default is 256 |
 | **DB pool** | min 16 / max 256, identical on all arms |
 | **Windows** | 300 s warmup + 900 s measurement per arm (wrk2 phase: 60 s + 120 s) |
+| **Notation** | `±` on a mean is the **sample standard deviation** across that arm's leaves (n stated per table), never standard error or min–max spread. For n=6, SE is ~0.41× the quoted SD and the min–max spread ~2.5× it, so the choice changes the apparent tightness by a factor of six — which is why it is named rather than assumed. Percentiles are **not** given as mean ± anything: they appear as ab–ba ranges (§7) |
 | **Contracts** | heavy `fixed_contract_cross_runtime_h1_v2` (3 queries, ~9.2 KB) · light `fixed_contract_cross_runtime_h1_single_read_v1` (1 PK row, ~125 B) |
 
 **Campaigns behind this report** (all committed under `results/raw/entity-read-by-id/`):
@@ -164,9 +177,12 @@ DB-busy figure with a host one**, and never read a bridge one as Postgres utilis
    *identical* config, so that pair is unaffected.
 5. **Version alignment.** Arms 1, 2, 5 and the ladder run Boot 4.1.0 / Jackson 3 / kernel 0.10.2.
    **Arm 3 (`spring-on-exeris`) is still on Boot 3.5.14 / Jackson 2** — a Boot major and a Jackson
-   major inside the request path. Any number from arm 3 carries that fence explicitly. **[TODO:
-   decide whether to align arm 3 before publishing, which retires every pre-alignment compat
-   number, or to publish arm 3 with the fence stated.]**
+   major inside the request path. Any number from arm 3 carries that fence explicitly.
+   **DECIDED 2026-08-11: publish with the fence, do not hold the report.** Aligning arm 3 to
+   Boot 4.1.0 / Jackson 3 / kernel 0.10.2 retires every compat number measured before it,
+   including the 2026-08-05 triad — that is a real cost and it deserves its own campaign, not a
+   blocking dependency on a report whose other five arms are aligned and whose one skewed arm is
+   measured, disclosed and fenced. The alignment runs separately as a compat-track campaign.
 6. **Closed-loop driver.** Percentiles from the wrk campaigns are queue occupancy, not service
    time; the artefacts stamp `latency_percentile_eligibility.publishable=false` saying so. §7 is
    the service-time axis and carries `publishable=true` on all 36 of its leaves.
@@ -361,10 +377,18 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 
 | rung | step | µs/req | × | clean? |
 |---|---|---:|---:|---|
-| Tomcat → Exeris compat | web dispatch | **[TODO from L-data]** | | |
 | Tomcat → Exeris native web | hosting | 121.52 | ×1.127 | **no — see below** |
 | JPA → kernel-native persistence | repository layer | 723.97 | — | attribution corrected in §5 |
 | **whole stack** | Tomcat+JPA → native+native | — | ×5.118 direct | |
+
+> **The compat rung is deliberately absent from this table.** An earlier draft carried a
+> `Tomcat → Exeris compat` row here, which would have put arm 3 — the only compat arm — inside a
+> ladder whose other rungs are all pure. That breaks fairness posture 1 and the pre-publish
+> checklist item "arm 3 never blended into a pure row", and the strict gate agrees: every pair
+> crossing the Pure-vs-Compat axis is `non_eligible` with `EQUIVALENCE_MISMATCH` by design. The
+> compat seam is a **compatibility-overhead** measurement, not a rung of a pure ladder; it is
+> reported separately in the `compat/` track with both modes stored apart and labelled. Removing
+> the row costs this table nothing it was entitled to show.
 
 > **×1.127 IS NOT A CLEAN HOSTING NUMBER, AND THE CONFOUND IS UNBOUNDED.** The rung is
 > `spring-hibernate` → `spring-on-exeris-pure` (1077.40 − 955.88 = 121.52 µs). Those two arms
@@ -447,6 +471,19 @@ top rungs. That is the precondition for the whole section and it is met, not ass
 
 **`spring-jdbc` is flat across the entire range.** From 600 to 3400 rps — 5.7× the load — its p50
 moves between 1.33 and 1.43 ms and its p99 sits at ~2.35 ms apart from two single-leaf excursions.
+
+> **Those two excursions are unexplained, and saying so is the honest option.** `spring-jdbc` reads
+> p99 4.04 at 600 rps (`ba`) and 4.09 at 1800 rps (`ab`) against ~2.35 everywhere else — a *worse*
+> tail at *lower* load, which is the opposite of the pattern the rest of the section describes.
+> What was checked and ruled out: they are **not the same direction** (one `ba`, one `ab`), **not
+> the first leaf** of the campaign, and not a warmup-volume effect (the 1800 leaf saw 108 k warmup
+> requests, more than the clean 1200 leaf's 72 k). What they do share is a signature: p50 +12 % and
+> p99 +73 % against the arm's own baseline **with cpu/req, RSS and thread count unchanged**
+> (333/306 µs against 325/315 µs in clean leaves) — the arm was not doing more work, so this looks
+> like a transient stall from outside the process rather than anything about load. Neither
+> reproduced in the other direction at the same rung. Magnitude is 1.7×, well below the
+> near-capacity excursions in §7.3, and in the opposite load regime. **No claim in this report
+> rests on those two cells**, and the ranges are printed unsmoothed so a reader sees them.
 `spring-hibernate` rises: p50 +64 %, p99 roughly ×2.8, p99.9 from ~4 ms to 15–22 ms.
 
 **This is the result that makes §4's ×3.95 legible.** At 600 rps the median gap is 1.43× — nothing

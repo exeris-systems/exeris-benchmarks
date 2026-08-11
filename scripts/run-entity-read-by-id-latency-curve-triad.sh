@@ -40,8 +40,14 @@ LIGHT_CONTRACT="${LATENCY_LIGHT_CONTRACT:-fixed_contract_p99_stable_h1_wrk2_sing
 # Offered-rate ladders (rps). Heavy bounded by ~11k (quarkus-hibernate closed-loop max).
 # Light default is a PLACEHOLDER — discover quarkus-hibernate's single-read saturation and
 # override LATENCY_LIGHT_RUNGS so the top rung stays sub-saturation.
-read -r -a HEAVY_RUNGS <<< "${LATENCY_HEAVY_RUNGS:-2000 4000 6000 8000 10000}"
-read -r -a LIGHT_RUNGS <<< "${LATENCY_LIGHT_RUNGS:-5000 10000 15000 20000 25000}"
+# ${VAR-default}, NOT ${VAR:-default}. The colon form substitutes the default for an
+# explicitly-empty value too, so LATENCY_HEAVY_RUNGS="" — the obvious way to ask for one
+# endpoint only — silently ran the full default heavy ladder instead of none. Caught live on
+# 2026-08-11 by a caller that wanted light-only and got five unrequested heavy rungs queued
+# ahead of the rungs it did want. Unset still means "use the default"; empty now means "skip
+# this endpoint", which is the only reading that lets a caller turn one off.
+read -r -a HEAVY_RUNGS <<< "${LATENCY_HEAVY_RUNGS-2000 4000 6000 8000 10000}"
+read -r -a LIGHT_RUNGS <<< "${LATENCY_LIGHT_RUNGS-5000 10000 15000 20000 25000}"
 
 # tuned-PG baseline (host-net + PG cpuset), matching 60707c4; the box already has it up.
 export BENCH_DB_TUNED="${BENCH_DB_TUNED:-1}"

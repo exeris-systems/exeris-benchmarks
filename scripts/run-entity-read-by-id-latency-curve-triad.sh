@@ -120,7 +120,12 @@ run_rung() {
   BENCH_TRIAD_PAIRS="$TRIAD_PAIRS" \
   BENCH_CAMPAIGN_OUTPUT_DIR_OVERRIDE="$out" \
     bash "$TRIAD_HARNESS" || rc=$?
-  local eligible; eligible="$(find "$out" -name claim-status.json -exec jq -r '.final_status // .status // empty' {} \; 2>/dev/null | sort -u | tr '\n' ',')"
+  # The key is claim_status, and always has been — .final_status/.status matched nothing, so
+  # every rung of the 2026-07-22 curve reported claim_status={} and the per-rung health signal
+  # was silently blank for the whole run. Old spellings kept as fallbacks; empty is now visibly
+  # "no-claim-status-file" rather than indistinguishable from a rung that produced none.
+  local eligible; eligible="$(find "$out" -name claim-status.json -exec jq -r '.claim_status // .final_status // .status // empty' {} \; 2>/dev/null | sort -u | tr '\n' ',')"
+  [[ -z "$eligible" ]] && eligible="NO-CLAIM-STATUS-FILE"
   jq -cn --arg ep "$endpoint" --arg c "$contract" --argjson rps "$rps" --argjson rc "$rc" --arg elig "$eligible" --arg out "$out" \
     '{endpoint:$ep, offered_rps:$rps, contract:$c, rc:$rc, claim_status_values:$elig, out:$out}' >> "$STATUS_JSONL"
   echo "[curve] rung done: endpoint=${endpoint} rps=${rps} rc=${rc} claim_status={${eligible}}"

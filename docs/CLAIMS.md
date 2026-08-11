@@ -35,6 +35,10 @@ Exeris-favourable number below is therefore a floor, not a point estimate.**
   this is a floor.
 - Supersedes the June n=3 dev-laptop measurement (h2+TLS, Boot 3.5). Three measurements,
   two environments, two Spring generations, same direction.
+- **Scope note (L10):** this is a whole-stack claim and stays valid as one — the Spring arm is
+  idiomatic Spring Data JPA, which is what a Spring team ships. But part of its cost is
+  Spring-side-addressable (projection proxies, L10), so it is *not* a claim that the remaining
+  gap is irreducible for Spring. State it as measured stacks, never as "Spring cannot do better".
 
 ## L2 — the heavy contract is DB-bound *for the fast arms only*
 
@@ -127,6 +131,14 @@ inflated too, though not enough to change their reading: they had ample headroom
   host-independence of the Hibernate cost is assumed. It is supported, not proven, by **L4**:
   the axes compose to +2.0 % on the ceiling-free metric, which is what host-independent
   layer costs would produce.
+- **ATTRIBUTION CAVEAT 2026-08-11 — see L10 before calling this pool "Hibernate".** The ORM
+  component is a subtraction between an arm that uses Spring Data JPA repositories with **interface
+  projections** and one that uses none, so it contains the Spring Data projection-proxy cost as
+  well as Hibernate's. JFR on the new `spring-hibernate__spring-jdbc` pair puts Spring AOP /
+  reflection frames *above* Hibernate's own tuple materialisation. The 723.97 µs pool, the ×1.488
+  ceiling and the migration-order conclusion are unaffected — that cost is real and it does leave
+  with the repositories — but "Hibernate is 67 % of the cost" overstates what the arms separate.
+  Prefer: *"the Spring Data JPA + Hibernate repository layer is 67 % of the cost"*.
 - Migration-order consequence: on a DB-bound workload the repositories go first. Until the
   ORM leaves the path, runtime work is optimising 33 % of the request.
 
@@ -475,3 +487,71 @@ second.
   the server pin `0-1,8-9` is two physical cores with both threads, so a co-resident process can
   land on a sibling thread of the measured one. Neither is testable from the artefacts currently
   captured; both would need per-core counters the rig does not yet sample.
+
+## L10 — OPEN: the "ORM cost" on the Spring arms is partly Spring Data projection-proxy cost
+
+- Class: exploratory, **unresolved** · Track: **internal** (touches L3, which is internal)
+- Campaign: `20260810T131208Z-hibernate-vs-jdbc-n3`, 12/12 `comparison_eligible`, n=6 per contract
+  (3 repeats × ab/ba). Pair `spring-hibernate__spring-jdbc` — same Tomcat, same Boot 4.1.0, same
+  `SecurityConfig`, same HikariCP, same normalised pgjdbc URL, same three-query SQL shapes.
+- **The measured deltas, which are not in question:**
+
+  | contract | spring-hibernate | spring-jdbc | ratio | DB busy (hib / jdbc) |
+  |---|---:|---:|---:|---|
+  | heavy | 1074.7 µs (±12.0) | 271.8 µs (±2.8) | **×3.95** | 26.4 % / **97.4 %** |
+  | light | 143.6 µs (±2.2) | 122.5 µs (±1.3) | **×1.17** | 19.0 % / 21.9 % |
+
+  Heavy rps is **not** quotable as an arm ratio: `spring-jdbc` saturates the DB cpuset at 97.4 %
+  while `spring-hibernate` leaves it at 26.4 %, so the heavy throughput side reads the Postgres
+  ceiling for one arm only (same regime as L2). Light is DB-unsaturated on both arms, so light rps
+  (27 571 vs 32 190) **is** quotable. Errors 0/0 across all 12 leaves.
+- **What the JFR views say the ×3.95 actually is.** `hot-methods` and `allocation-by-class` on the
+  heavy leaves ([`jfr-views/`](../results/raw/entity-read-by-id/20260810T131208Z-hibernate-vs-jdbc-n3/jfr-views/),
+  repeat01 and repeat03 agree to 0.05 pp on the top frame, so this is not profiler noise):
+
+  | | spring-hibernate | spring-jdbc |
+  |---|---|---|
+  | top CPU frame | `DefaultAdvisorAdapterRegistry.getInterceptors(Advisor)` **9.6 %** | `pgjdbc VisibleBufferedInputStream.ensureBytes` 5.3 % |
+  | next | `ResolvableType.calculateHashCode` 4.5 %, `Class.copyMethods` 4.4 % | `Invokers.checkCustomized` 5.2 %, Jackson `_verifyValueWrite` 4.9 % |
+  | top allocations | `Object[]` 14.6 %, **`java.lang.reflect.Method` 11.2 %**, `ResolvableType` 7.0 % | pgjdbc + Jackson + DTOs |
+  | AOP-specific allocations | `ReflectiveMethodInvocation` 3.2 %, `MethodInterceptor[]` 2.8 %, `PropertyDescriptor[]` 2.0 %, `AdvisedSupport$MethodCacheKey` 1.6 %, **`ProxyFactory` 1.5 %**, `Advisor[]` 1.4 % | none in top 25 |
+  | genuine ORM row-mapping | `LinkedHashMap$Entry` 5.0 %, `NativeTupleElementImpl` 1.5 % | n/a |
+
+  Spring AOP / reflection machinery outweighs Hibernate's own tuple materialisation in this
+  profile. `ProxyFactory` being allocated at all at steady state means proxies are constructed on
+  the request path, and a fresh `ProxyFactory` carries a fresh `AdvisedSupport`, so its
+  `methodCache` is cold every time — which is why the *cache-miss* frame
+  (`getInterceptors`) is the hottest method in the arm.
+- **Mechanism, and it explains the heavy/light asymmetry.** `spring-hibernate`'s repositories
+  return Spring Data **interface projections** (`FriendByUserRowProjection`,
+  `InterestByUserRowProjection`); Spring Data proxies **one per returned row** and routes every
+  getter through the interceptor chain. Heavy returns ~200 rows/request and reads 3–4 getters
+  each ⇒ ~200 proxy constructions + ~700 proxied invocations per request. Light calls
+  `findById(id)`, which returns a managed **entity** — no projection, no proxy. That is precisely
+  the shape of the data: ×3.95 heavy vs ×1.17 light. `spring-jdbc` maps rows with a lambda
+  `RowMapper` straight into records — no proxy on either contract.
+- **Consequence for the pair's label.** `spring-hibernate__spring-jdbc` does **not** isolate ORM
+  presence. It moves two things at once: Hibernate *and* the Spring Data repository/projection
+  abstraction. Quote it as **"Spring Data JPA + Hibernate vs JdbcTemplate + RowMapper"** — which is
+  a real and idiomatic choice a Spring team makes, and defensible as a *stack* comparison — but not
+  as "the cost of the ORM".
+- **This propagates to L3, and L3 is the load-bearing one.** L3's ORM component is
+  `spring-on-exeris-pure − spring-on-exeris-pure-native` = 723.97 µs = 67.2 %. Verified 2026-08-11:
+  `spring-on-exeris-pure` declares the **same four projection interfaces**, and
+  `spring-on-exeris-pure-native` declares **none**. So L3's subtraction carries the identical
+  confound — its "67 % is Hibernate" is really "67 % is Hibernate + Spring Data projection
+  proxies". The ×1.49 Amdahl ceiling and the migration-order conclusion ("the repositories go
+  first") are **unaffected in direction** — that pool of cost is real and it does leave the path
+  when the repositories do — but the *attribution to Hibernate specifically* is not established by
+  the current arms.
+- **What would settle it:** one arm of Hibernate/JPA driven through `EntityManager` (or a
+  constructor-expression / DTO query) with no Spring Data repository proxy, against the existing
+  `spring-hibernate`. That splits the pool into ORM row-mapping vs Spring Data abstraction. Not
+  built; no campaign is pending for it.
+- **Instrumentation caveats.** JFR `ExecutionSample` is Java-frames-only, so this says nothing
+  about the `%sys`+`%soft` half of the budget. The two arms' recordings also have different
+  denominators — 874 s (spring-hibernate, ≈ its own window) vs 1213 s (spring-jdbc, which was
+  resident and idle during its partner's leg), so `spring-jdbc`'s shares are diluted. Dilution
+  shrinks its percentages uniformly and cannot manufacture the asymmetry, but no cross-arm share
+  is quoted as a like-for-like number here. Exploratory: no `claim-status.json` rides on these
+  views, and no comparative claim is made from them.

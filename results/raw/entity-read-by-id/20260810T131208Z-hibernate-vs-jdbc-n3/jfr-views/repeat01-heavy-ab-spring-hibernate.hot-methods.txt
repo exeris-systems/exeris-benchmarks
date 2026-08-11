@@ -1,0 +1,30 @@
+
+                                           Java Methods that Execute the Most
+
+Method                                                                                                  Samples Percent
+------------------------------------------------------------------------------------------------------- ------- -------
+org.springframework.aop.framework.adapter.DefaultAdvisorAdapterRegistry.getInterceptors(Advisor)         24,210   9.60%
+org.springframework.core.ResolvableType.calculateHashCode()                                              11,341   4.50%
+java.lang.invoke.Invokers$Holder.invokeExact_MT(Object, Object, Object)                                  11,089   4.40%
+java.lang.Class.copyMethods(Method[])                                                                    11,033   4.38%
+java.util.HashMap.getNode(Object)                                                                         9,021   3.58%
+java.lang.StringLatin1.toLowerCase(String, byte[], Locale)                                                7,557   3.00%
+java.util.concurrent.ConcurrentHashMap.get(Object)                                                        6,841   2.71%
+org.springframework.util.ObjectUtils.nullSafeEquals(Object, Object)                                       6,174   2.45%
+java.util.Arrays.copyOf(Object[], int)                                                                    5,954   2.36%
+java.lang.reflect.Array.newInstance(Class, int)                                                           5,703   2.26%
+java.util.HashMap.putVal(int, Object, Object, boolean, boolean)                                           5,074   2.01%
+org.springframework.aop.framework.AdvisedSupport.getInterceptorsAndDynamicInterceptionAdvice(...)         4,858   1.93%
+org.springframework.core.BridgeMethodResolver.resolveBridgeMethod(Method, Class)                          4,673   1.85%
+java.lang.reflect.Method.hashCode()                                                                       4,638   1.84%
+java.util.concurrent.ConcurrentHashMap.putVal(Object, Object, boolean)                                    4,617   1.83%
+java.lang.invoke.DirectMethodHandle$Holder.invokeSpecial(Object, Object, Object)                          3,599   1.43%
+ch.qos.logback.classic.Logger.isTraceEnabled(Marker)                                                      3,507   1.39%
+org.springframework.core.ResolvableType.forMethodParameter(MethodParameter, Type, int)                    3,196   1.27%
+org.hibernate.jpa.spi.NativeQueryTupleTransformer$NativeTupleImpl.getElements()                           3,099   1.23%
+org.springframework.core.ResolvableType.forMethodParameter(MethodParameter, Type)                         3,058   1.21%
+org.springframework.core.ResolvableType.hasGenerics()                                                     2,902   1.15%
+tools.jackson.core.json.UTF8JsonGenerator._writeStringSegment(String, int, int)                           2,713   1.08%
+org.springframework.util.ConcurrentLruCache.processRead(ConcurrentLruCache$Node)                          2,594   1.03%
+java.lang.reflect.Method.getGenericParameterTypes()                                                       2,495   0.99%
+org.postgresql.core.VisibleBufferedInputStream.ensureBytes(int, boolean)                                  2,492   0.99%

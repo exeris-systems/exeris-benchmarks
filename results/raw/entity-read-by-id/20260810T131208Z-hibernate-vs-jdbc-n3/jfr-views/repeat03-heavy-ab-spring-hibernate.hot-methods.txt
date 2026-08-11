@@ -1,0 +1,30 @@
+
+                                           Java Methods that Execute the Most
+
+Method                                                                                                  Samples Percent
+------------------------------------------------------------------------------------------------------- ------- -------
+org.springframework.aop.framework.adapter.DefaultAdvisorAdapterRegistry.getInterceptors(Advisor)         24,116   9.55%
+java.util.concurrent.ConcurrentHashMap.get(Object)                                                       16,088   6.37%
+java.lang.invoke.Invokers.checkCustomized(MethodHandle)                                                  14,555   5.76%
+java.lang.Class.copyMethods(Method[])                                                                    10,753   4.26%
+java.lang.StringLatin1.toLowerCase(String, byte[], Locale)                                                7,896   3.13%
+java.util.Arrays.copyOf(Object[], int)                                                                    6,000   2.38%
+org.springframework.util.ObjectUtils.nullSafeEquals(Object, Object)                                       5,346   2.12%
+org.springframework.boot.loader.net.protocol.jar.JarFileUrlKey.equals(Object)                             5,033   1.99%
+java.util.HashMap.putVal(int, Object, Object, boolean, boolean)                                           4,926   1.95%
+java.lang.reflect.Array.newInstance(Class, int)                                                           4,789   1.90%
+org.springframework.aop.framework.AdvisedSupport.getInterceptorsAndDynamicInterceptionAdvice(...)         4,776   1.89%
+org.springframework.core.BridgeMethodResolver.resolveBridgeMethod(Method, Class)                          4,660   1.84%
+java.util.concurrent.ConcurrentHashMap.putVal(Object, Object, boolean)                                    3,791   1.50%
+ch.qos.logback.classic.Logger.isTraceEnabled(Marker)                                                      3,510   1.39%
+org.springframework.core.ResolvableType.forMethodParameter(MethodParameter, Type)                         3,413   1.35%
+org.springframework.core.ResolvableType.forType(...)                                                      3,391   1.34%
+org.springframework.core.ResolvableType.forMethodParameter(MethodParameter, Type, int)                    3,325   1.32%
+org.springframework.util.ConcurrentLruCache.processRead(ConcurrentLruCache$Node)                          3,217   1.27%
+java.lang.invoke.DirectMethodHandle$Holder.invokeSpecial(Object, Object, Object)                          3,197   1.27%
+org.springframework.core.ResolvableType.hasGenerics()                                                     3,058   1.21%
+org.hibernate.jpa.spi.NativeQueryTupleTransformer$NativeTupleImpl.getElements()                           2,892   1.14%
+java.lang.String.hashCode()                                                                               2,808   1.11%
+java.lang.String.equals(Object)                                                                           2,541   1.01%
+java.lang.invoke.Invokers$Holder.invokeExact_MT(Object, Object, Object)                                   2,520   1.00%
+org.springframework.util.ConcurrentLruCache$WriteOperations.drain()                                       2,448   0.97%

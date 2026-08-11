@@ -1,0 +1,30 @@
+
+                                                  Allocation by Class
+
+Object Type                                                                                         Allocation Pressure
+--------------------------------------------------------------------------------------------------- -------------------
+byte[]                                                                                                           39.29%
+java.lang.String                                                                                                 16.78%
+jdk.internal.vm.StackChunk                                                                                        7.74%
+byte[][]                                                                                                          6.06%
+java.lang.Object[]                                                                                                5.51%
+org.postgresql.core.Tuple                                                                                         4.60%
+eu.exeris.benchmarks.targets.springapp.InterestView                                                               2.35%
+eu.exeris.benchmarks.targets.springapp.FriendSummary                                                              2.24%
+java.util.concurrent.ConcurrentHashMap$Node                                                                       1.19%
+java.util.ArrayList                                                                                               0.92%
+java.util.HashMap$Node                                                                                            0.73%
+java.util.LinkedHashMap                                                                                           0.62%
+java.util.HashMap$Node[]                                                                                          0.45%
+org.postgresql.jdbc.PgResultSet                                                                                   0.38%
+org.springframework.web.util.pattern.PathPattern$MatchingContext                                                  0.36%
+java.lang.ThreadLocal$ThreadLocalMap$Entry                                                                        0.35%
+java.util.HashMap                                                                                                 0.34%
+org.postgresql.jdbc.PgPreparedStatement                                                                           0.33%
+eu.exeris.benchmarks.targets.springapp.UserView                                                                   0.31%
+java.lang.ThreadLocal$ThreadLocalMap$Entry[]                                                                      0.28%
+org.springframework.security.web.util.matcher.RequestMatcher$MatchResult                                          0.27%
+eu.exeris.benchmarks.targets.springapp.UserSummary                                                                0.26%
+org.springframework.core.ResolvableType                                                                           0.26%
+java.util.LinkedHashMap$Entry                                                                                     0.25%
+java.util.concurrent.ConcurrentHashMap                                                                            0.25%

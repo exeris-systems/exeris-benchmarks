@@ -1,0 +1,30 @@
+
+                                           Java Methods that Execute the Most
+
+Method                                                                                                  Samples Percent
+------------------------------------------------------------------------------------------------------- ------- -------
+org.postgresql.core.VisibleBufferedInputStream.ensureBytes(int, boolean)                                  6,626   5.26%
+java.lang.invoke.Invokers.checkCustomized(MethodHandle)                                                   6,588   5.23%
+java.lang.invoke.Invokers$Holder.invokeExact_MT(Object, Object, Object)                                   6,220   4.93%
+tools.jackson.core.json.UTF8JsonGenerator._verifyValueWrite(String)                                       6,215   4.93%
+org.postgresql.core.Encoding.decode(byte[], int, int)                                                     4,050   3.21%
+tools.jackson.databind.ser.UnrolledBeanSerializer.serializeNonFiltered(...)                               3,571   2.83%
+jdk.internal.util.DecimalDigits.uncheckedGetCharsLatin1(long, int, byte[])                                2,936   2.33%
+org.postgresql.core.v3.QueryExecutorImpl.processResults(ResultHandler, int, boolean)                      2,688   2.13%
+org.postgresql.jdbc.PgResultSet.getLong(int)                                                              2,512   1.99%
+java.lang.String.equalsIgnoreCase(String)                                                                 2,360   1.87%
+java.lang.String.ascii(byte[], int, int)                                                                  2,325   1.84%
+java.lang.invoke.DirectMethodHandle$Holder.invokeSpecial(Object, Object, Object)                          1,964   1.56%
+org.springframework.jdbc.core.JdbcTemplate$RowCallbackHandlerResultSetExtractor.extractData(ResultSet)    1,917   1.52%
+java.lang.ThreadLocal$ThreadLocalMap.getEntry(ThreadLocal)                                                1,886   1.50%
+java.util.concurrent.ConcurrentHashMap.get(Object)                                                        1,837   1.46%
+java.util.HashMap.computeIfAbsent(Object, Function)                                                       1,810   1.44%
+org.springframework.security.web.FilterChainProxy$VirtualFilterChain.doFilter(...)                        1,514   1.20%
+java.lang.CharacterDataLatin1.equalsIgnoreCase(byte, byte)                                                1,339   1.06%
+java.lang.String.hashCode()                                                                               1,197   0.95%
+tools.jackson.databind.ser.jdk.IndexedListSerializer.serializeContentsUsingImpl(...)                      1,193   0.95%
+java.util.HashMap.hash(Object)                                                                            1,191   0.94%
+java.lang.ThreadLocal.getMap(Thread)                                                                      1,039   0.82%
+java.util.HashMap.get(Object)                                                                             1,026   0.81%
+java.lang.String.equals(Object)                                                                           1,016   0.81%
+org.apache.coyote.http11.Http11OutputBuffer.write(MessageBytes)                                           1,004   0.80%

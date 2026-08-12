@@ -1,0 +1,225 @@
+{
+  "comparative_id": "7594160c-b5d1-4634-a37f-45b8a096d7a3",
+  "timestamp_utc": "2026-08-10T18:38:21Z",
+  "scenario_id": "entity-read-by-id",
+  "contract_id": "fixed_contract_cross_runtime_h1_v2",
+  "track_id": "track-ab-01",
+  "pair_id": "entity-read-by-id-fixed_contract_cross_runtime_h1_v2-spring-hibernate__spring-jdbc",
+  "pair_order": "ab",
+  "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk",
+  "ab_ba_orders_completed": [
+    "ab",
+    "ba"
+  ],
+  "pair_completion_evidence": {
+    "invocation_order": "ab",
+    "completed_orders": [
+      "ab",
+      "ba"
+    ],
+    "completion_marker_utc": "2026-08-10T18:38:21Z"
+  },
+  "pair_fingerprint": {
+    "scenario_id": "entity-read-by-id",
+    "contract_id": "fixed_contract_cross_runtime_h1_v2",
+    "canonical_unordered_targets": [
+      "spring-hibernate",
+      "spring-jdbc"
+    ],
+    "tier": "community",
+    "protocol_mode": "h1",
+    "transport_mode": "loopback-h1",
+    "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk"
+  },
+  "claim_status": "comparison_eligible",
+  "measurement_seconds": 900,
+  "warmup_seconds": 300,
+  "targets": [
+    {
+      "target_id": "spring-hibernate",
+      "maturity_level": "unknown",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "metrics": {
+        "throughput_rps": 3648.42,
+        "latency_p50_us": 37910.000000,
+        "latency_p75_us": 44800.000000,
+        "latency_p90_us": 52240.000000,
+        "latency_p95_us": 57950.000000,
+        "latency_p99_us": 70260.000000,
+        "error_rate_pct": 0.0000,
+        "total_requests": 3283743,
+        "total_errors": 0
+      }
+    },
+    {
+      "target_id": "spring-jdbc",
+      "maturity_level": "unknown",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "metrics": {
+        "throughput_rps": 12547.91,
+        "latency_p50_us": 9980.000000,
+        "latency_p75_us": 12420.000000,
+        "latency_p90_us": 14880.000000,
+        "latency_p95_us": 16390.000000,
+        "latency_p99_us": 19280.000000,
+        "error_rate_pct": 0.0000,
+        "total_requests": 11294304,
+        "total_errors": 0
+      }
+    }
+  ],
+  "fairness_index": {
+    "error_symmetry": 1.0000,
+    "latency_symmetry": 0.0000,
+    "throughput_confidence": 0.5000,
+    "db_config_symmetry": 1.0000,
+    "db_config": {
+      "status": "ok",
+      "a": {
+        "jdbc_base_url": "jdbc:postgresql://localhost:5432/benchmark_db",
+        "fairness_params": {
+          "preferQueryMode": "extended",
+          "prepareThreshold": "1",
+          "defaultRowFetchSize": "0",
+          "adaptiveFetch": "false"
+        },
+        "fairness_params_missing": [],
+        "fairness_params_complete": true,
+        "env_digest": "sha256:3097ca7eab00cb9cb4868fe1e17e0f782b935ba88a3dcbfedc3cbd6cc35da064",
+        "captured_at": "2026-08-10T19:19:01Z",
+        "note": "Fingerprint of the EXERIS_DB_* environment this harness passes down to both arms (secrets excluded). Both arms inherit one environment, so equality alone proves nothing — fairness_params_complete is the check that catches an un-normalized URL."
+      },
+      "b": {
+        "jdbc_base_url": "jdbc:postgresql://localhost:5432/benchmark_db",
+        "fairness_params": {
+          "preferQueryMode": "extended",
+          "prepareThreshold": "1",
+          "defaultRowFetchSize": "0",
+          "adaptiveFetch": "false"
+        },
+        "fairness_params_missing": [],
+        "fairness_params_complete": true,
+        "env_digest": "sha256:3097ca7eab00cb9cb4868fe1e17e0f782b935ba88a3dcbfedc3cbd6cc35da064",
+        "captured_at": "2026-08-10T19:19:01Z",
+        "note": "Fingerprint of the EXERIS_DB_* environment this harness passes down to both arms (secrets excluded). Both arms inherit one environment, so equality alone proves nothing — fairness_params_complete is the check that catches an un-normalized URL."
+      }
+    },
+    "composite_score": 0.4000,
+    "interpretation": "unsuitable",
+    "computed_at": "2026-08-10T19:19:01Z",
+    "targets": [
+      "entity-read-by-id-20260810-183828-000000",
+      "entity-read-by-id-20260810-183828-000000"
+    ],
+    "asymmetry_notes": []
+  },
+  "gate_status": {
+    "track_isolation": {
+      "pass_fail": "PASS",
+      "reason": "track_id=track-ab-01",
+      "rejection_code": "none"
+    },
+    "eligibility": {
+      "pass_fail": "PASS",
+      "reason": "both artifacts are comparison_eligible/success/complete/ok",
+      "rejection_code": "none"
+    },
+    "equivalence": {
+      "pass_fail": "PASS",
+      "reason": "scenario/contract/tier/protocol/mode/payload/concurrency/windows/jvm_class equivalent",
+      "rejection_code": "none"
+    },
+    "ab_ba": {
+      "pass_fail": "PASS",
+      "reason": "pair_id=entity-read-by-id-fixed_contract_cross_runtime_h1_v2-spring-hibernate__spring-jdbc; directional completion evidence present for order=ab",
+      "rejection_code": "none"
+    },
+    "drift": {
+      "pass_fail": "PASS",
+      "reason": "drift snapshot metadata present and within thresholds",
+      "rejection_code": "none"
+    },
+    "metadata": {
+      "pass_fail": "PASS",
+      "reason": "required reproducibility metadata complete",
+      "rejection_code": "none"
+    },
+    "pin_verification": {
+      "pass_fail": "PASS",
+      "reason": "all required pinned versions match actual versions",
+      "rejection_code": "none"
+    },
+    "schema": {
+      "pass_fail": "PASS",
+      "reason": "both artifacts validate against benchmark-result.schema.json",
+      "rejection_code": "none"
+    },
+    "quarantine": {
+      "pass_fail": "PASS",
+      "reason": "machine-readable rejection output enabled",
+      "rejection_code": "none"
+    },
+    "reporting_guard": {
+      "pass_fail": "PASS",
+      "reason": "reporting guard deferred (no --report-file provided)",
+      "rejection_code": "none"
+    }
+  },
+  "eligibility_gates": {
+    "track_isolation": {
+      "pass_fail": "PASS",
+      "reason": "track_id=track-ab-01",
+      "rejection_code": "none"
+    },
+    "eligibility": {
+      "pass_fail": "PASS",
+      "reason": "both artifacts are comparison_eligible/success/complete/ok",
+      "rejection_code": "none"
+    },
+    "equivalence": {
+      "pass_fail": "PASS",
+      "reason": "scenario/contract/tier/protocol/mode/payload/concurrency/windows/jvm_class equivalent",
+      "rejection_code": "none"
+    },
+    "ab_ba": {
+      "pass_fail": "PASS",
+      "reason": "pair_id=entity-read-by-id-fixed_contract_cross_runtime_h1_v2-spring-hibernate__spring-jdbc; directional completion evidence present for order=ab",
+      "rejection_code": "none"
+    },
+    "drift": {
+      "pass_fail": "PASS",
+      "reason": "drift snapshot metadata present and within thresholds",
+      "rejection_code": "none"
+    },
+    "metadata": {
+      "pass_fail": "PASS",
+      "reason": "required reproducibility metadata complete",
+      "rejection_code": "none"
+    },
+    "pin_verification": {
+      "pass_fail": "PASS",
+      "reason": "all required pinned versions match actual versions",
+      "rejection_code": "none"
+    },
+    "schema": {
+      "pass_fail": "PASS",
+      "reason": "both artifacts validate against benchmark-result.schema.json",
+      "rejection_code": "none"
+    },
+    "quarantine": {
+      "pass_fail": "PASS",
+      "reason": "machine-readable rejection output enabled",
+      "rejection_code": "none"
+    },
+    "reporting_guard": {
+      "pass_fail": "PASS",
+      "reason": "reporting guard deferred (no --report-file provided)",
+      "rejection_code": "none"
+    }
+  },
+  "rejection_codes": []
+}

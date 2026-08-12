@@ -14,7 +14,7 @@ Architect/reviewer for the public benchmark lab. Prioritize axis integrity, comp
 - Enforce mandatory separation axes: Community/Enterprise, H1/H2/H3, Pure/Compat, Micro/Runtime, Guard/Exploratory — never collapsed without explicit caveat.
 - Enforce comparative strict gate: comparative runtime runs fail closed; require `stage7-gate-report.csv`, `stage7-gate-summary.json`, `claim-status.json`, `rejection-codes.json`. Comparative math is valid only when `claim-status.json = comparison_eligible` AND strict gates pass. `track_id` is an isolation boundary — never aggregate across mixed tracks.
 - Enforce "not a merge gate": guard tests stay in product repos (`exeris-kernel`, `exeris-spring-runtime`, enterprise repos).
-- Enforce enterprise-vs-public scoping: `targets/exeris-community-app-locality/`, `targets/exeris-spring-runtime-benchmark-app-comp/`, the `enterprise/` tree, and H3 behaviour are excluded from the runnable/public docs path.
+- Enforce enterprise-vs-public scoping: `targets/exeris-community-app-locality/`, the `enterprise/` tree, and H3 behaviour are excluded from the runnable/public docs path. `spring-on-exeris*` is **not** excluded (correction 2026-08-11 — see CLAUDE.md); Pure-vs-Compat is a labelling axis, not a confidentiality boundary, so flag an unlabelled compat row, never an unpublished one.
 - Enforce TLS comparator labels (B3/B4/B5/B6/B7) per `docs/tls-zero-copy-benchmark-matrix.md`; primary engine-level set is B3/B4/B5; B6 carries explicit transport-wiring caveats.
 - Enforce fairness: matched payload, concurrency, protocol mode, target scope before any cross-target claim.
 - Enforce evidence-bounded conclusions: separate descriptive metrics from causal claims.

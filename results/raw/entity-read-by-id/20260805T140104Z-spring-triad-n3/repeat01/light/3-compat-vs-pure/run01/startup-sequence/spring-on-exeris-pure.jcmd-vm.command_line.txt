@@ -1,0 +1,6 @@
+3196269:
+VM Arguments:
+jvm_args: -Xms1280m -Xmx1280m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --enable-preview -Dspring.classformat.ignore=true 
+java_command: targets/exeris-spring-runtime-app-pure/target/spring-benchmark-app-pure-1.0.0-SNAPSHOT.jar
+java_class_path (initial): targets/exeris-spring-runtime-app-pure/target/spring-benchmark-app-pure-1.0.0-SNAPSHOT.jar
+Launcher Type: SUN_STANDARD

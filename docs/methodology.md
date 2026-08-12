@@ -274,6 +274,57 @@ It layers the matching host-net compose override and the chosen mode is recorded
 Default remains `bridge` (back-compatible); host mode is opt-in but **required** for
 cross-stack claims.
 
+### Ceilings that bound a result vs ceilings that replace it
+
+Every rig has resources that can run out. They are not equivalent, and the distinction decides
+what you may do with the run:
+
+- A **bounding ceiling** limits the number. The database is the standard case: when Postgres
+  saturates, throughput stops describing the stack and starts describing the database — but
+  `cpu/req` still describes the stack, the run is still evidence, and the correct response is
+  to declare the ceiling and switch comparator.
+- An **invalidating ceiling** replaces the measured object. The **load generator** is the case
+  that matters: a saturated driver means the number describes how fast the driver can *offer*
+  requests, not how fast the target can *serve* them. No comparator survives this. There is no
+  metric to fall back to, because the subject of the measurement changed. Discard the leaf.
+
+This is why `tools/aggregate-db-cpuset-mpstat.sh` emits `loadgen_saturated_RESULT_INVALID`
+rather than a descriptive label: the verdict is categorical, not a severity.
+
+**Sample the generator, do not assume it.** Until 2026-08-07 nothing in this lab sampled the
+load generator's own CPU, so "wrk was not the bottleneck" was an assumption underneath every
+result rather than a measurement — and no earlier campaign can be retro-checked, because the
+data was never captured. The first campaign that did sample it
+(`20260808T065528Z-purenative-vs-quarkustuned-n3`) measured a median of **7.0 %** busy with a
+maximum of **19.0 %** across 24 arm-windows, 24/24 with headroom. That closes the assumption
+for that campaign only.
+
+Rule: a runtime campaign records the load generator's cpuset utilisation alongside the target's
+and the database's, and any window at or above 95 % is discarded rather than caveated.
+
+### A confound excuses nothing until its SIGN is known
+
+Magnitude alone never licenses setting a result aside. A confound larger than the effect but
+pointing the *other way* does not obscure the effect — it **understates** it, and dismissing the
+result on size is then exactly backwards.
+
+The case that produced this rule: the Exeris arm was measured 3.7 % more expensive per request
+than Quarkus, and the write-up declined to attribute that because serialisation differs
+(Jackson 3 vs Jackson 2) and is roughly a fifth of on-CPU time — comfortably larger than 3.7 %.
+Correct arithmetic, wrong method: nobody checked the direction. This lab's own
+`JacksonVersionSerializationBenchmark` measures Jackson 3 at **15.77 µs/op against Jackson 2 at
+17.78** on the identical payload — Jackson 3 is ~11 % *faster*. The arm with the faster
+serialiser was still more expensive, so removing the confound **widens** the gap to ~6 %.
+
+Rule: before a confound is used to qualify, weaken or set aside a result, state its **direction**
+and the evidence for that direction. "Large enough to explain it" is not a finding; "large
+enough and pointing the right way" is. When the direction is genuinely unknown, say that — an
+unsigned confound bounds nothing in either direction, and it is not a licence to assume it
+favours the reading you prefer.
+
+This is the companion to *sample the generator, do not assume it*: both say do not assume what
+you have not measured, in either direction.
+
 ### Latency claim scope: JMH SampleTime vs E2E
 
 `Mode.SampleTime` measures the **distribution of individual operation cost** at maximum drive rate. Valid claims:
@@ -334,6 +385,46 @@ For every benchmark result the following must be present:
 Outlier runs (stddev > 15% of mean across forks) should be flagged and
 investigated before being stored as baselines.
 
+### An error budget needs a scope, or it misleads in both directions
+
+A tolerance you cannot re-derive is the same defect as a result you cannot re-derive — it just
+hides one level down, in the yardstick instead of in the measurement. Two rules follow.
+
+**1. A fence is not a budget row.** A *fence* says a comparison is invalid; a *budget* says a
+valid comparison is not resolving anything. Crossing a fence does not widen an error bar, it voids
+the result, so a fence must never appear as a budget line where it reads as absorbable.
+`scripts/compare-results.sh` enforces two — `backend_network_mode` and `db_cpuset` — by refusing
+the comparison outright.
+
+**2. State the layer the budget belongs to.** Run-to-run variance is layered, and the layers
+differ by more than an order of magnitude in what they admit:
+
+| layer | what varies | typical error if misapplied |
+|---|---|---|
+| ab vs ba inside one repeat | position in a counterbalanced sequence — **same JVM instances**, one warmup, one JIT state | **under-states**: omits restart variance entirely |
+| repeat | a full teardown and relaunch, direction held fixed | the applicable layer for "would this recur from scratch" |
+| an incomplete repeat | a smaller sample wearing a repeat's label | **over-states** |
+| a cross-campaign envelope imported from another configuration | conditions that are not present | **over-states**: can declare a resolvable effect unresolvable |
+
+Combine independent layers **in quadrature, not by summing**, and report the combination per
+contract — variance is not contract-independent, and a single pooled number will typically
+over-state the heavy contract while under-stating the light one.
+
+**Resolving power is arithmetic, not preference.** Whether a contract can measure an effect is the
+ratio of the effect to *that layer's* variance, not the repeat count. An effect that is 1 % of a
+heavy baseline and 20 % of a light one is unresolvable on heavy at any n, and settled on light at
+n=3.
+
+**A bound must be the one measured on the axis being claimed.** A cpu/req budget does not transfer
+to throughput (which a DB ceiling can bound independently) and emphatically not to percentiles.
+Measured on one runtime-snapshot pair in the `entity-read-by-id` series: cpu/req moved 0.20 % while
+p99 moved 16.9 % — an 83× sensitivity gap — on the light contract, against 2.1× on heavy.
+
+`tools/derive-error-budget.sh` computes both layers per contract from committed campaign
+artefacts; run it rather than quoting a budget forward. Worked example and the full
+retired-vs-derived comparison:
+[`results/reports/2026-08-11-entity-read-by-id-spring-hosting-and-orm-axis.md` §2](../results/reports/2026-08-11-entity-read-by-id-spring-hosting-and-orm-axis.md).
+
 ---
 
 ## Reproducibility checklist
@@ -378,7 +469,15 @@ Required gates:
 2. `G2 eligibility`: only rows with `claim_scope=comparison_eligible`, `runner_status=success`, `reproducibility_status=complete`, `final_reason=ok` are eligible.
 3. `G3 equivalence_strict`: hard-equal checks on scenario, contract, tier, protocol, mode, payload descriptor, concurrency, warmup/measurement windows, and JVM class.
 4. `G4 ab_ba_required`: directional completion evidence is mandatory (`run_config.pair_completion_evidence.*` must match `pair_order` and include completion marker), and `run_config.ab_ba_orders_completed` must include the invocation order for the same `pair_id`.
-5. `G5 drift_placeholder`: drift snapshot metadata is mandatory and fails if observed drift exceeds configured thresholds.
+5. `G5 drift_placeholder`: drift snapshot metadata is mandatory and fails if observed drift
+   exceeds configured thresholds. **Vacuous as currently wired — do not count it as a
+   load-bearing gate (verified 2026-08-11).** The comparison is real code, but the *observed*
+   values come from `BENCHMARK_DRIFT_OBS_LATENCY_PCT` / `BENCHMARK_DRIFT_OBS_THROUGHPUT_PCT`,
+   which nothing in the harness populates, and the thresholds from
+   `BENCHMARK_DRIFT_MAX_*_PCT`; all four default to `0`. Every leaf of every campaign therefore
+   evaluates `0 ≤ 0` and passes. The gate proves the field is present, not that drift is bounded.
+   A "10/10 gates passed" summary is really nine. Either wire an observed value or retire the
+   gate — leaving it passing is worse than either, because it inflates the count.
 6. `G6 metadata_completeness`: commit SHA, JDK/tool versions, JVM flags, hardware profile, scenario id, and target classification are mandatory.
 7. `G7 pin_verification`: pinned versions in run config must be present and match actual versions exactly.
 8. `G8 schema_validation`: artifact schema validation is required and fail-closed if validator support is unavailable.

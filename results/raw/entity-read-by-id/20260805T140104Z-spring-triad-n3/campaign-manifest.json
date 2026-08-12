@@ -1,0 +1,25 @@
+{
+  "campaign": "entity-read-by-id-spring-triad-n3",
+  "campaign_ts": "20260805T140104Z",
+  "commit_sha": "unknown",
+  "repeats": "01,02,03",
+  "contracts": "heavy,light",
+  "repeat_loop_position": "outer",
+  "runs_per_pair": 1,
+  "runs_per_pair_note": "1, not the runner's default of 20 — repetition is the outer repeat loop, matching C1. Expected leaf count = pairs x runs x directions x repeats x contracts = 3x1x2x3x2 = 36.",
+  "triad_pairs": "1-tomcat-vs-compat:spring-hibernate:spring-on-exeris:1:9001:9004;2-tomcat-vs-pure:spring-hibernate:spring-on-exeris-pure:2:9001:9005;3-compat-vs-pure:spring-on-exeris:spring-on-exeris-pure:3:9004:9005",
+  "iso_heap_mb": 1280,
+  "iso_heap_note": "All three arms read SPRING_JAVA_OPTS, so one setting binds the whole triad by construction.",
+  "server_cpu_affinity": "0-1,8-9",
+  "loadgen_cpu_affinity": "2-3,10-11",
+  "runtime_web_build": "exeris-spring-runtime-web-0.5.0-20260805.082205-27.jar",
+  "runtime_build_note": "The Exeris-hosted arms' behaviour depends on this build, not only on this repo. It carries the pure-mode query-strip fix (#50) that makes the light contract routable at all, and the max-pool fix without which no Exeris arm boots under 4-CPU pinning. Record it: a light-contract result from a pre-#50 build fails as a 404 that is indistinguishable from 'no such row'.",
+  "auth_axis": "Measured traffic is unauthenticated. The compat security filter's per-request cost was bounded at +0.14% against 1.48% run-to-run spread (tools/measure-auth-filter-confound.sh, 2026-08-05), so it does not materially flatter the pure arm. The Tomcat arm's servlet SecurityFilterChain is a heavier, UNMEASURED mechanism — do not borrow that bound for pairs involving spring-hibernate.",
+  "campaign_level_jfr": "disabled — three 'spring' arms share SPRING_JAVA_OPTS and would collide on one diagnostics filename; per-leaf recordings come from run-comparative.sh via jcmd JFR.start",
+  "db_client": {
+    "fetch_mode": "equalized",
+    "jdbc_url": "jdbc:postgresql://localhost:5432/benchmark_db?prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false&preferQueryMode=extended",
+    "username": "benchmark",
+    "note": "Pinned by this caller. The runner exports no DB credentials and the target env files default to a nonexistent postgres/postgres — triad bug 5."
+  }
+}

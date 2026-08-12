@@ -12,12 +12,17 @@ Spring-Boot-on-Tomcat + Axon Framework.
 
 - **Tier**: Community.
 - **Track**: benchmark target, not a host-runtime contract surface.
-- **Public docs path**: this target is **excluded** from the public docs path
-  per the repository's CLAUDE.md confidentiality / Enterprise-vs-public scoping
-  rule (alongside `targets/exeris-community-app-locality/`, the `enterprise/`
-  tree, and H3 behavior). Reports that surface measurements from this target
-  must be tagged Community + Compatibility + H1 — see "Reporting checklist"
-  below.
+- **Public docs path**: **included** — this target is publishable. It was previously
+  marked excluded under CLAUDE.md's Enterprise-vs-public scoping rule; that was
+  withdrawn on 2026-08-11. The rule named `exeris-spring-runtime-benchmark-app-comp/`,
+  a path that has never existed here, added incidentally in an unrelated PR with no
+  rationale recorded. Exeris Spring Runtime is a product repo, named in CLAUDE.md
+  separately from "enterprise repos", and has never been confidential.
+- **What still applies, and is a different thing**: reports must tag measurements from
+  this target Community + **Compatibility** + H1 — see "Reporting checklist" below.
+  Pure-vs-Compat is a mandatory *labelling* axis, so a compat row is never collapsed
+  into a pure one and compat overhead routes to the `compat/` track. That is a
+  labelling and aggregation constraint, not a reason to withhold publication.
 
 ## Runtime modes
 

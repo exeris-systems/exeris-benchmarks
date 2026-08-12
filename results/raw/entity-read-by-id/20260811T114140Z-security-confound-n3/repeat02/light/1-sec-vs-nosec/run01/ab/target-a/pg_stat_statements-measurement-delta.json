@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-08-11T14:45:33Z",
+  "phase": "measurement-delta",
+  "server_version_num": "160002",
+  "column_profile": "exec_time_cols",
+  "baseline_timestamp": "2026-08-11T14:30:31Z",
+  "final_timestamp": "2026-08-11T14:45:33Z",
+  "reset_detected": false,
+  "warning": null,
+  "note": "Per-target delta over this target's measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
+  "queries": [
+    {
+      "queryid": "-7810830194509815908",
+      "query": "select bue1_0.id,bue1_0.username from users bue1_0 where bue1_0.id=$1",
+      "calls": 24839004,
+      "total_time_ms": 88163.28078122593,
+      "mean_time_ms": 0.003549388726747092,
+      "max_time_ms_cumulative": 0.171871
+    },
+    {
+      "queryid": "1637407606667381779",
+      "query": "BEGIN READ ONLY",
+      "calls": 24839004,
+      "total_time_ms": 24982.943844164784,
+      "mean_time_ms": 0.0010057949120731565,
+      "max_time_ms_cumulative": 0.110196
+    },
+    {
+      "queryid": "-3136912395674931128",
+      "query": "SET application_name = 'PostgreSQL JDBC Driver'",
+      "calls": 16,
+      "total_time_ms": 0.07540100000000005,
+      "mean_time_ms": 0.004712562500000003,
+      "max_time_ms_cumulative": 0.011311
+    },
+    {
+      "queryid": "2064869707185898531",
+      "query": "COMMIT",
+      "calls": 1,
+      "total_time_ms": 0.0003510000000000006,
+      "mean_time_ms": 0.0003510000000000006,
+      "max_time_ms_cumulative": 0.001012
+    }
+  ]
+}

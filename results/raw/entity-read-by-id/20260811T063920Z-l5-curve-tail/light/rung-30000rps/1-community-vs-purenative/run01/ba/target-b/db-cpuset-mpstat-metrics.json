@@ -1,0 +1,44 @@
+{
+  "source_stream": "db-cpuset-mpstat.csv",
+  "samples": 121,
+  "cpus_in_set": 8,
+  "busy_pct_mean": 23.36,
+  "busy_pct_min": 13.36,
+  "busy_pct_p50": 23.39,
+  "busy_pct_p95": 24.61,
+  "busy_pct_max": 25.14,
+  "component_pct_mean": {
+    "usr": 10.51,
+    "sys": 9.24,
+    "iowait": 0.04,
+    "soft": 3.56,
+    "irq": 0.00,
+    "steal": 0.00,
+    "nice": 0.00,
+    "guest": 0.00,
+    "gnice": 0.00
+  },
+  "per_cpu_busy_pct_mean": {
+    "4": 23.70,
+    "5": 24.12,
+    "6": 23.33,
+    "7": 22.37,
+    "12": 23.55,
+    "13": 23.98,
+    "14": 23.30,
+    "15": 22.52
+  },
+  "role": "db",
+  "ceiling_reading": "db_headroom_available",
+  "ceiling_reading_threshold_note": "db_saturated at busy_pct_mean >= 95, db_near_saturation >= 80. When saturated, throughput ratios between arms read the Postgres ceiling and cpu/req is the sound comparator.",
+  "sampler_meta": {
+  "resolved_cpuset": "4-7,12-15",
+  "source": "env:BENCH_DB_CPUSET",
+  "cpuset_is_restricted": true,
+  "db_cpu_attributable": true,
+  "interval_seconds": 1,
+  "window": "measurement",
+  "target_id": "spring-on-exeris-pure-native",
+  "sampler_started": true
+}
+}

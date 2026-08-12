@@ -1,0 +1,33 @@
+{
+  "campaign": "entity-read-by-id-purenative-vs-compnative-n3",
+  "campaign_ts": "20260808T151608Z",
+  "commit_sha": "d4f840e76b6476b1f080cabba17fdf8cac1d1be9",
+  "repeats": "01,02,03",
+  "contracts": "heavy,light",
+  "repeat_loop_position": "outer",
+  "runs_per_pair": 1,
+  "expected_leaves": 12,
+  "triad_pairs": "1-purenative-vs-compnative:spring-on-exeris-pure-native:spring-on-exeris-comp-native:1:9006:9007",
+  "benchmark_family": "compat",
+  "expected_claim_status": "non_eligible",
+  "expected_rejection_code": "EQUIVALENCE_MISMATCH",
+  "expected_claim_status_note": "BY DESIGN, not a failure. G3 equivalence_strict rejects a pair whose arms differ in mode (pure vs compat). Pure-vs-Compat is a mandatory separation axis, so the gate refusing to license a cross-target comparative claim is correct behaviour. This is a compat-family overhead measurement per CLAUDE.md; the derived report belongs in compat/, stored and labelled separately from pure-mode results. A leaf that is non_eligible for a DIFFERENT reason is a real failure and this driver aborts on it.",
+  "single_variable_note": "spring-on-exeris-pure-native and spring-on-exeris-comp-native build from the same POM; the two jars' BOOT-INF/lib listings diff empty (verified on the perf box 2026-08-08). They differ by exactly one property, exeris.runtime.web.mode=compatibility. Persistence, kernel, Boot, Jackson, pool and heap are identical by construction.",
+  "iso_heap_mb": 1280,
+  "server_cpu_affinity": "0-1,8-9",
+  "loadgen_cpu_affinity": "2-3,10-11",
+  "db_cpuset": "4-7,12-15",
+  "backend_network_mode": "host",
+  "backend_network_mode_note": "Host networking, carried over from run B. Not required here — both arms are the same stack issuing identical SQL, so a bridge tax would fall symmetrically and could not manufacture a pure-vs-compat difference. Kept host because the DB is already in that state, it removes a confound, and it keeps this campaign comparable to run B rather than to the bridged ladder. FENCE: absolute levels do not cross to the 2026-08-06 ladder, which ran bridged.",
+  "runtime_web_build": "exeris-spring-runtime-web-0.5.0-20260808.110653-31.jar",
+  "runtime_build_note": "REQUIRES a published snapshot carrying exeris-spring-runtime PR #61 (merged 2026-08-08T07:57Z, commit c1650cb1, ADR-067 binary neutrality across the Spring Boot matrix). Before that fix the compat ResponseEntity return-value handler bound putAll(Map) — valid on Spring Framework 6 where HttpHeaders implemented MultiValueMap, an IncompatibleClassChangeError on Spring Framework 7 where it does not — so every ResponseEntity return value died and the light contract returned no response at all. The same PR fixed a second, latent instance of the same class in ExerisNativeWebRequest.getHeaderValues (HttpHeaders.get binds to get(Object) on SF6, get(String) on SF7 -> NoSuchMethodError); this benchmark never triggered it because the controller takes no @RequestHeader parameter. Both arms MUST be rebuilt from the SAME snapshot: they are only single-variable if their dependency sets are identical.",
+  "cross_campaign_fence": "Rebuilding onto the post-#61 snapshot means this campaign's pure-native arm carries a DIFFERENT runtime build from both the 2026-08-06 ladder (snapshot -29, bridged DB) and run B (snapshot -29, host-net DB). Absolute levels do not cross those boundaries.",
+  "free_control_note": "The two changed classes are compat-mode only, so pure mode should not load them and pure-native's behaviour should be unaffected by the rebuild. That is an EXPECTATION, not a measurement — but it is directly checkable and costs nothing: run B and this campaign both measure spring-on-exeris-pure-native under identical conditions (host-net DB, same pins, same heap, same contracts), differing only in the runtime snapshot. Agreement between the two pure-native arms is an external check on ADR-067's binary-neutrality claim; disagreement means the rebuild moved pure mode and this campaign's fences need widening.",
+  "informative_contract": "light",
+  "informative_contract_note": "The arms differ only in HTTP dispatch. On heavy, pure-native drove the pinned DB to 99.80 % mean utilisation with 26.7 % of its own CPU pin idle (ladder n=12), so a dispatch-layer difference is masked by the database ceiling; the earlier measurement of this axis showed +2.3 % heavy against +7.7 % light. Read light as the result and heavy as the control that demonstrates the masking.",
+  "db_client": {
+    "fetch_mode": "equalized",
+    "jdbc_url": "jdbc:postgresql://localhost:5432/benchmark_db?prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false&preferQueryMode=extended",
+    "username": "benchmark"
+  }
+}

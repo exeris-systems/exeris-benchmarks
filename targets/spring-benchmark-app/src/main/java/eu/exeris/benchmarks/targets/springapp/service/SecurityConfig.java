@@ -8,20 +8,22 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
-import org.springframework.security.web.SecurityFilterChain;
 
 import javax.sql.DataSource;
 
+/**
+ * JWT key material and codecs. Always loaded — {@code AuthTokenService} needs {@link JwtEncoder},
+ * and none of these beans costs anything on the request path.
+ *
+ * <p>The per-request servlet {@link org.springframework.security.web.SecurityFilterChain} lives in
+ * {@link SecurityFilterChainConfig}, which is switchable. Splitting them was forced by boot-verify:
+ * gating this whole class removed {@code JwtEncoder} and the application failed to start.
+ */
 @Configuration
-@EnableWebSecurity
 public class SecurityConfig {
 
     private static final RSAKey RSA_KEY;
@@ -49,30 +51,5 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder(RSAKey rsaKey) throws JOSEException {
         return NimbusJwtDecoder.withPublicKey(rsaKey.toRSAPublicKey()).build();
-    }
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder, DataSource dataSource) throws Exception {
-        return http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        // /db/ping is a DB-connectivity readiness probe (like /health), hit by the
-                        // comparative harness Stage-4 preflight. It is served unauthenticated by
-                        // exeris-community-app and quarkus-benchmark-app; permit it here too so the
-                        // entity-read-by-id readiness gate is apples-to-apples and Spring is not the
-                        // only runtime forcing an auth filter on an infra probe.
-                        .requestMatchers("/api/v1/auth/register", "/health", "/actuator/**", "/db/ping").permitAll()
-                        // GET /api/v1/users is unauthenticated in the reference exeris-community-app
-                        // (CommunityBenchmarkRouteHandler.handleUsers — no SecurityInterceptor) and in
-                        // quarkus-benchmark-app; permit it here so the entity-read-by-id read benchmark
-                        // is apples-to-apples across runtimes. Per-user / cart / order routes stay authenticated.
-                        .requestMatchers(HttpMethod.GET, "/api/v1/users").permitAll()
-                        .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt
-                                .decoder(jwtDecoder)
-                                .jwtAuthenticationConverter(new UserIdJwtAuthenticationConverter(dataSource))))
-                .build();
     }
 }

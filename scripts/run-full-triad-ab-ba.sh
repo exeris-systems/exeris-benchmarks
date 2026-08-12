@@ -64,6 +64,12 @@ BENCH_REQUIRE_PERF_STAT=${BENCH_REQUIRE_PERF_STAT:-${BENCHMARK_REQUIRE_PERF_STAT
 export BENCHMARK_REQUIRE_PERF_STAT="$BENCH_REQUIRE_PERF_STAT"
 
 STEP_COUNTER=0
+# Placeholder only — recomputed from the effective pair set once TRIAD_PAIRS is known (see
+# below). It was hardcoded to 120 and stayed 120 regardless of configuration, which is worse
+# than merely cosmetic: 120 is exactly 3 pairs x 20 runs x 2 directions, i.e. the signature of
+# the runs-per-pair misconfiguration that run-spring-triad-campaign.sh warns about by that
+# number. A correctly configured 4-pair run therefore printed the very figure that means
+# "you forgot to set BENCH_RUNS_PER_PAIR", defeating the diagnostic it was supposed to serve.
 TOTAL_STEPS=120
 
 triad_constrained_execution_profile_id() {
@@ -726,6 +732,17 @@ build_target_artifact() {
     spring-hibernate)
       module_path="targets/spring-benchmark-app"
       ;;
+    spring-jdbc)
+      # ORM-free counterpart of spring-hibernate: same Tomcat/Boot 4.1.0 web layer,
+      # plain JdbcTemplate instead of Hibernate. Isolates the ORM axis on a fixed web stack.
+      module_path="targets/spring-benchmark-app-jdbc"
+      ;;
+    spring-hibernate-nosec)
+      # SAME module and SAME jar as spring-hibernate — the arms differ only in the launch
+      # properties that disable the servlet SecurityFilterChain (see the env file). Building it
+      # from the same module is the point: one artifact_sha256 across both arms of the pair.
+      module_path="targets/spring-benchmark-app"
+      ;;
     quarkus-hibernate)
       module_path="targets/quarkus-benchmark-app"
       ;;
@@ -734,6 +751,42 @@ build_target_artifact() {
       ;;
     spring-on-exeris)
       module_path="targets/exeris-spring-runtime-app-comp"
+      ;;
+    spring-on-exeris-pure)
+      # Third arm of the Spring hosting comparison: same app, Exeris NATIVE web layer
+      # (@ExerisRoute) instead of the compatibility dispatcher. Must be rebuilt whenever
+      # spring-on-exeris is — the two are the arms of the compat-seam pair and share a
+      # runtime (and therefore a kernel) version; building one alone puts a kernel-version
+      # difference inside a measurement meant to isolate the dispatcher.
+      module_path="targets/exeris-spring-runtime-app-pure"
+      ;;
+    spring-on-exeris-pure-native)
+      # Pure on BOTH axes: native web layer AND kernel-native persistence (no JPA, no
+      # Hibernate, no Spring DataSource). Its pair with spring-on-exeris-pure is the only
+      # one in this manifest that moves the persistence layer alone.
+      #
+      # This module pins the kernel INLINE on its dependencies rather than via the kernel
+      # BOM, because exeris-spring-runtime-bom inherits a dependencyManagement section that
+      # wins over a later BOM import. The sibling arms carry no such pin and drift to
+      # whatever the runtime BOM's parent resolves, so after any rebuild verify all arms
+      # agree:  unzip -l <jar> | grep exeris-kernel
+      module_path="targets/exeris-spring-runtime-app-pure-native"
+      ;;
+    spring-on-exeris-comp-native)
+      # The grid's fourth cell: compat web layer (@RestController through
+      # ExerisCompatDispatcher) over kernel-native persistence. Built from the SAME POM as
+      # spring-on-exeris-pure-native — the two jars' BOOT-INF/lib listings diff empty — and
+      # separated by exactly one property, exeris.runtime.web.mode=compatibility.
+      #
+      # That is what makes their pair the only single-variable measurement of the
+      # Pure-vs-Compat web axis here, so the two MUST be rebuilt together. Building one alone
+      # would let a kernel or Boot line drift into a comparison that has nothing else in it.
+      # Verify after any rebuild:
+      #   diff <(unzip -l targets/exeris-spring-runtime-app-pure-native/target/*.jar \
+      #            | grep -oE 'BOOT-INF/lib/[^ ]*\.jar' | sort) \
+      #        <(unzip -l targets/exeris-spring-runtime-app-comp-native/target/*.jar \
+      #            | grep -oE 'BOOT-INF/lib/[^ ]*\.jar' | sort)
+      module_path="targets/exeris-spring-runtime-app-comp-native"
       ;;
     *)
       echo "ERROR: No Maven module mapping defined for target ${target_id}"
@@ -967,6 +1020,10 @@ else
     "2-spring-vs-quarkus:spring-hibernate:quarkus-hibernate:2:9001:9002"
   )
 fi
+
+# Now that the effective pair set is known, make the progress counter mean what it says.
+TOTAL_STEPS=$(( ${#TRIAD_PAIRS[@]} * ${BENCH_RUNS_PER_PAIR:-20} * 2 ))
+echo "Effective plan: ${#TRIAD_PAIRS[@]} pair(s) x ${BENCH_RUNS_PER_PAIR:-20} run(s) x 2 directions = ${TOTAL_STEPS} leaves"
 
 if ! prebuild_campaign_targets; then
   echo "ERROR: Campaign aborted due to prebuild failure"

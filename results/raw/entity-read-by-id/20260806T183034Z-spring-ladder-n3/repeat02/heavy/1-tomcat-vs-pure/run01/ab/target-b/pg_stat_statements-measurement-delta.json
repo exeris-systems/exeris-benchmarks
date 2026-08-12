@@ -1,0 +1,77 @@
+{
+  "timestamp": "2026-08-07T06:00:08Z",
+  "phase": "measurement-delta",
+  "server_version_num": "160002",
+  "column_profile": "exec_time_cols",
+  "baseline_timestamp": "2026-08-07T05:45:06Z",
+  "final_timestamp": "2026-08-07T06:00:08Z",
+  "reset_detected": false,
+  "warning": null,
+  "note": "Per-target delta over this target's measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
+  "queries": [
+    {
+      "queryid": "5642500616955608682",
+      "query": "SELECT ranked.user_id AS userId,\n          ranked.friend_user_id AS friendId,\n          ranked.friend_username AS friendUsername\nFROM (\nSELECT f.user_id,\n       f.friend_user_id,\n       u.username AS friend_username,\n       ROW_NUMBER() OVER (PARTITION BY f.user_id ORDER BY f.friend_user_id ASC) AS rn\nFROM friendships f\nJOIN users u ON u.id = f.friend_user_id\nWHERE f.user_id IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)\n) ranked\nWHERE ranked.rn <= $11\nORDER BY ranked.user_id ASC, ranked.friend_user_id ASC",
+      "calls": 3778763,
+      "total_time_ms": 979139.5692248566,
+      "mean_time_ms": 0.25911642757824627,
+      "max_time_ms_cumulative": 5.8039700000000005
+    },
+    {
+      "queryid": "5411875004500411312",
+      "query": "SELECT ranked.user_id AS userId,\n          ranked.interest_id AS interestId,\n          ranked.interest_name AS interestName,\n          ranked.interest_category AS interestCategory\nFROM (\nSELECT ui.user_id,\n       ui.interest_id,\n       i.name AS interest_name,\n       i.category AS interest_category,\n       ROW_NUMBER() OVER (PARTITION BY ui.user_id ORDER BY ui.interest_id ASC) AS rn\nFROM user_interests ui\nJOIN interests i ON i.id = ui.interest_id\nWHERE ui.user_id IN ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)\n) ranked\nWHERE ranked.rn <= $11\nORDER BY ranked.user_id ASC, ranked.interest_id ASC",
+      "calls": 3778763,
+      "total_time_ms": 429428.06456078426,
+      "mean_time_ms": 0.11364249744183064,
+      "max_time_ms_cumulative": 4.879919
+    },
+    {
+      "queryid": "-3796665954484366818",
+      "query": "select bue1_0.id,bue1_0.username from users bue1_0 order by bue1_0.id fetch first $1 rows only",
+      "calls": 3778763,
+      "total_time_ms": 41587.34108496709,
+      "mean_time_ms": 0.011005543635567272,
+      "max_time_ms_cumulative": 3.8586869999999998
+    },
+    {
+      "queryid": "1637407606667381779",
+      "query": "BEGIN READ ONLY",
+      "calls": 3778763,
+      "total_time_ms": 14612.089993966743,
+      "mean_time_ms": 0.003866897710697057,
+      "max_time_ms_cumulative": 1.706767
+    },
+    {
+      "queryid": "3826232417164544284",
+      "query": "SELECT c.oid, a.attnum, a.attname, c.relname, n.nspname, a.attnotnull OR (t.typtype = $1 AND t.typnotnull), a.attidentity != $2 OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE $3 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON (c.relnamespace = n.oid) JOIN pg_catalog.pg_attribute a ON (c.oid = a.attrelid) JOIN pg_catalog.pg_type t ON (a.atttypid = t.oid) LEFT JOIN pg_catalog.pg_attrdef d ON (d.adrelid = a.attrelid AND d.adnum = a.attnum) JOIN (SELECT $4 AS oid , $5 AS attnum UNION ALL SELECT $6, $7 UNION ALL SELECT $8, $9) vals ON (c.oid = vals.oid AND a.attnum = vals.attnum) where c.oid in ($10,$11)",
+      "calls": 11,
+      "total_time_ms": 0.7772870000000047,
+      "mean_time_ms": 0.07066245454545497,
+      "max_time_ms_cumulative": 2.459106
+    },
+    {
+      "queryid": "-616542317911091024",
+      "query": "SELECT c.oid, a.attnum, a.attname, c.relname, n.nspname, a.attnotnull OR (t.typtype = $1 AND t.typnotnull), a.attidentity != $2 OR pg_catalog.pg_get_expr(d.adbin, d.adrelid) LIKE $3 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON (c.relnamespace = n.oid) JOIN pg_catalog.pg_attribute a ON (c.oid = a.attrelid) JOIN pg_catalog.pg_type t ON (a.atttypid = t.oid) LEFT JOIN pg_catalog.pg_attrdef d ON (d.adrelid = a.attrelid AND d.adnum = a.attnum) JOIN (SELECT $4 AS oid , $5 AS attnum UNION ALL SELECT $6, $7 UNION ALL SELECT $8, $9 UNION ALL SELECT $10, $11) vals ON (c.oid = vals.oid AND a.attnum = vals.attnum) where c.oid in ($12,$13)",
+      "calls": 11,
+      "total_time_ms": 0.5925439999999984,
+      "mean_time_ms": 0.05386763636363622,
+      "max_time_ms_cumulative": 0.073868
+    },
+    {
+      "queryid": "-3136912395674931128",
+      "query": "SET application_name = 'PostgreSQL JDBC Driver'",
+      "calls": 32,
+      "total_time_ms": 0.22063499999999925,
+      "mean_time_ms": 0.0068948437499999765,
+      "max_time_ms_cumulative": 0.016471
+    },
+    {
+      "queryid": "2064869707185898531",
+      "query": "COMMIT",
+      "calls": 11,
+      "total_time_ms": 0.004138000000000017,
+      "mean_time_ms": 0.0003761818181818197,
+      "max_time_ms_cumulative": 0.001262
+    }
+  ]
+}

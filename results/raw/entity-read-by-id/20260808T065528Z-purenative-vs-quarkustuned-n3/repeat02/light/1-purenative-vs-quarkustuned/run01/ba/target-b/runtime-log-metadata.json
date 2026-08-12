@@ -1,0 +1,14 @@
+{
+  "launcher_mode": "external",
+  "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/quarkus-tuned.env",
+  "log_path": "/tmp/exeris-quarkus-tuned-9003.log",
+  "external_jar_path": "targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-1.0.0-SNAPSHOT-runner.jar",
+  "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/quarkus-benchmark-app-tuned/target/quarkus-benchmark-app-tuned-1.0.0-SNAPSHOT-runner.jar",
+  "jar_exists": true,
+  "jar_sha256": "9bf626e097afdd0b46091cbd5e285e44ffd32a965b5372b600ae1c5c02de2a6d",
+  "jar_size_bytes": 55463176,
+  "jar_mtime_utc": "2026-08-08T10:59:27Z",
+  "copied": true,
+  "output_file": "results/raw/entity-read-by-id/20260808T065528Z-purenative-vs-quarkustuned-n3/repeat02/light/1-purenative-vs-quarkustuned/run01/ba/target-b/target-runtime.log",
+  "note": "runtime log copied"
+}

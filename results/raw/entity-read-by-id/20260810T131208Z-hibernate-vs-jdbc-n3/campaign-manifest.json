@@ -1,0 +1,34 @@
+{
+  "campaign": "entity-read-by-id-hibernate-vs-jdbc-n3",
+  "campaign_ts": "20260810T131208Z",
+  "commit_sha": "unknown",
+  "commit_sha_note": "The perf box holds an rsynced tree, NOT a git checkout, so `git rev-parse` there returns nothing. Pass BENCH_COMMIT_SHA from the machine that holds the checkout. If this reads \"unknown\", the run cannot be tied to a source revision and must not be used for a baseline.",
+  "repeats": "01,02,03",
+  "contracts": "heavy,light",
+  "repeat_loop_position": "outer",
+  "runs_per_pair": 1,
+  "expected_leaves": 12,
+  "expected_leaves_note": "pairs x runs x directions x repeats x contracts = 1x1x2x3x2 = 12.",
+  "triad_pairs": "1-hibernate-vs-jdbc:spring-hibernate:spring-jdbc:1:9001:9008",
+  "benchmark_family": "runtime",
+  "axis_under_test": "orm-presence",
+  "axis_under_test_note": "Isolates docs/CLAIMS.md L3's load-bearing premise — that Hibernate costs the same under Tomcat as under Exeris — by measuring the ORM axis directly on Tomcat, without also moving the web layer. Both arms: Tomcat, Spring MVC, Boot 4.1.0, same SecurityConfig (spring-jdbc's is a copy), same default Jackson, same default HikariCP. spring-jdbc's SQL is hand-matched shape-for-shape to pure-native/quarkus-tuned (see targets/spring-benchmark-app-jdbc UserRepository.java javadoc).",
+  "iso_heap_mb": 1280,
+  "server_cpu_affinity": "0-1,8-9",
+  "loadgen_cpu_affinity": "2-3,10-11",
+  "db_cpuset": "4-7,12-15",
+  "backend_network_mode": "host",
+  "backend_network_mode_note": "Host networking, carried over from run A/B. Not required here — both arms are Tomcat behind the same NAT hop, so a bridge tax would fall symmetrically and could not manufacture an ORM-vs-no-ORM difference. Kept host because the DB is already in that state and switching back mid-series would be an unforced change. FENCE: absolute levels do not cross to the 2026-08-06 ladder, which ran bridged.",
+
+  "AXIS_FENCES": "This pair is not verified byte-identical dependency trees (unlike purenative-vs-compnative's same-POM guarantee). The following are known or suspected differences and none may be dropped from a claim derived here.",
+  "fence_dependency_tree": "spring-jdbc drops spring-boot-starter-data-jpa and its transitive Hibernate/ORM tree relative to spring-hibernate; not diffed BOOT-INF/lib to confirm everything else is identical the way purenative-vs-compnative was.",
+  "fence_transaction_manager": "spring-hibernate resolves @Transactional via Spring Data JPA's JpaTransactionManager; spring-jdbc now resolves it via an explicit @Primary DataSourceTransactionManager (JdbcTransactionConfig.java, added 2026-08-10 to fix a collision with the auto-configured Neo4jTransactionManager both arms carry for the unused e2e-shop-order-saga graph path). Different transaction-manager implementations, not just different persistence.",
+  "fence_boot_verify_gap": "Boot-verified live on 2026-08-10 (both contracts 200 with real data on both arms) but not campaign-run before this driver's first execution — read the first-iteration fail-fast output before trusting downstream leaves.",
+
+  "db_client": {
+    "fetch_mode": "equalized",
+    "jdbc_url": "jdbc:postgresql://localhost:5432/benchmark_db?prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false&preferQueryMode=extended",
+    "username": "benchmark",
+    "note": "Pinned by this caller. The runner exports no DB credentials and the target env files default to a nonexistent postgres/postgres."
+  }
+}

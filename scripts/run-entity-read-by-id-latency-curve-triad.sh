@@ -40,8 +40,14 @@ LIGHT_CONTRACT="${LATENCY_LIGHT_CONTRACT:-fixed_contract_p99_stable_h1_wrk2_sing
 # Offered-rate ladders (rps). Heavy bounded by ~11k (quarkus-hibernate closed-loop max).
 # Light default is a PLACEHOLDER — discover quarkus-hibernate's single-read saturation and
 # override LATENCY_LIGHT_RUNGS so the top rung stays sub-saturation.
-read -r -a HEAVY_RUNGS <<< "${LATENCY_HEAVY_RUNGS:-2000 4000 6000 8000 10000}"
-read -r -a LIGHT_RUNGS <<< "${LATENCY_LIGHT_RUNGS:-5000 10000 15000 20000 25000}"
+# ${VAR-default}, NOT ${VAR:-default}. The colon form substitutes the default for an
+# explicitly-empty value too, so LATENCY_HEAVY_RUNGS="" — the obvious way to ask for one
+# endpoint only — silently ran the full default heavy ladder instead of none. Caught live on
+# 2026-08-11 by a caller that wanted light-only and got five unrequested heavy rungs queued
+# ahead of the rungs it did want. Unset still means "use the default"; empty now means "skip
+# this endpoint", which is the only reading that lets a caller turn one off.
+read -r -a HEAVY_RUNGS <<< "${LATENCY_HEAVY_RUNGS-2000 4000 6000 8000 10000}"
+read -r -a LIGHT_RUNGS <<< "${LATENCY_LIGHT_RUNGS-5000 10000 15000 20000 25000}"
 
 # tuned-PG baseline (host-net + PG cpuset), matching 60707c4; the box already has it up.
 export BENCH_DB_TUNED="${BENCH_DB_TUNED:-1}"
@@ -120,7 +126,12 @@ run_rung() {
   BENCH_TRIAD_PAIRS="$TRIAD_PAIRS" \
   BENCH_CAMPAIGN_OUTPUT_DIR_OVERRIDE="$out" \
     bash "$TRIAD_HARNESS" || rc=$?
-  local eligible; eligible="$(find "$out" -name claim-status.json -exec jq -r '.final_status // .status // empty' {} \; 2>/dev/null | sort -u | tr '\n' ',')"
+  # The key is claim_status, and always has been — .final_status/.status matched nothing, so
+  # every rung of the 2026-07-22 curve reported claim_status={} and the per-rung health signal
+  # was silently blank for the whole run. Old spellings kept as fallbacks; empty is now visibly
+  # "no-claim-status-file" rather than indistinguishable from a rung that produced none.
+  local eligible; eligible="$(find "$out" -name claim-status.json -exec jq -r '.claim_status // .final_status // .status // empty' {} \; 2>/dev/null | sort -u | tr '\n' ',')"
+  [[ -z "$eligible" ]] && eligible="NO-CLAIM-STATUS-FILE"
   jq -cn --arg ep "$endpoint" --arg c "$contract" --argjson rps "$rps" --argjson rc "$rc" --arg elig "$eligible" --arg out "$out" \
     '{endpoint:$ep, offered_rps:$rps, contract:$c, rc:$rc, claim_status_values:$elig, out:$out}' >> "$STATUS_JSONL"
   echo "[curve] rung done: endpoint=${endpoint} rps=${rps} rc=${rc} claim_status={${eligible}}"

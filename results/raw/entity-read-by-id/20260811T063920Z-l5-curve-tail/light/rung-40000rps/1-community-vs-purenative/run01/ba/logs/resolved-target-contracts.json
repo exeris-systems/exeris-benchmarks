@@ -1,0 +1,26 @@
+{
+  "target_a_input": "exeris-community",
+  "target_b_input": "spring-on-exeris-pure-native",
+  "target_a_contract": {
+    "target_id": "exeris-community",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/exeris-community-runtime.env",
+    "profile_id": "exeris-community",
+    "compose_file": "",
+    "jar_path": "",
+    "health_url": "http://localhost:9000/health"
+  },
+  "target_b_contract": {
+    "target_id": "spring-on-exeris-pure-native",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-runtime-on-exeris-pure-native.env",
+    "profile_id": "spring-on-exeris-pure-native",
+    "compose_file": "",
+    "jar_path": "",
+    "health_url": "http://localhost:9006/health"
+  }
+}

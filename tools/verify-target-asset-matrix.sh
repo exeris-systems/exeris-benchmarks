@@ -64,6 +64,25 @@ contains_justified_unused() {
   return 1
 }
 
+# Extract the TCP port from an http(s) URL. Echoes nothing when the URL carries no
+# explicit port or is not a literal (contains a shell expansion).
+url_port() {
+  local url="$1"
+  [[ "${url}" == *'$'* ]] && return 0
+  [[ "${url}" =~ ^https?://[^/:]+:([0-9]+) ]] || return 0
+  echo "${BASH_REMATCH[1]}"
+}
+
+# The port a target's env file declares for its own health probe, if it declares one
+# literally. Quarkus env files carry no HEALTH_URL (the driver derives it), so absence
+# is normal and yields an empty result rather than a failure.
+env_health_port() {
+  local env_abs="$1" line
+  line="$(grep -E '^[[:space:]]*HEALTH_URL=' "${env_abs}" 2>/dev/null | tail -1)" || return 0
+  [[ -n "${line}" ]] || return 0
+  url_port "${line#*=}"
+}
+
 if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required" >&2
   exit 2
@@ -172,6 +191,22 @@ while IFS= read -r target_id; do
     fail "runnable target env_file does not exist: ${target_id} (${env_file})"
   else
     pass "runnable target env_file exists: ${target_id}"
+
+    # Port-drift guard. A matrix health_url pointing at a port the target does not serve is
+    # not a cosmetic defect: when the stale port belongs to the OTHER arm of a comparative
+    # pair, the readiness gate probes the wrong process and passes while the target under
+    # test is down — a false green that yields a published run measuring nothing.
+    # (Regression: spring-on-exeris carried 9001, spring-hibernate's port, while its env
+    # declares 9004.)
+    matrix_port="$(url_port "${health_url}")"
+    env_port="$(env_health_port "${env_abs}")"
+    if [[ -n "${matrix_port}" && -n "${env_port}" ]]; then
+      if [[ "${matrix_port}" == "${env_port}" ]]; then
+        pass "health_url port agrees with env_file: ${target_id} (${matrix_port})"
+      else
+        fail "health_url port drift: ${target_id} matrix=${matrix_port} but ${env_file} declares ${env_port}"
+      fi
+    fi
   fi
 
   case "${launcher_mode}" in
@@ -208,13 +243,56 @@ while IFS= read -r target_id; do
       fi
       ;;
     external)
-      pass "runnable external target has required launcher fields: ${target_id}"
+      # This branch used to assert the fields without reading them. It is now an
+      # actual check, because the omission it missed is expensive and silent:
+      # start-target.sh runs EXTERNAL_START_CMD through `bash -lc`, and every
+      # external env file ends that command with `echo $! > "$EXTERNAL_PID_FILE"`.
+      # With the variable undeclared the redirect targets an empty path, bash
+      # reports `line 1: : No such file or directory`, and start-target.sh calls
+      # the target failed — but the JVM has ALREADY launched, so an orphan keeps
+      # holding the port and the next attempt reports "port NNNN is occupied".
+      # Nothing in the campaign fails outright; the affected pairs are simply
+      # skipped and the run completes with fewer leaves than it should have.
+      # (Regression: spring-on-exeris-pure shipped without it and cost a
+      # four-hour campaign in which two of three pairs never ran.)
+      if [[ -n "${env_file}" && -f "${env_abs}" ]]; then
+        missing_launcher_fields=()
+        grep -qE '^[[:space:]]*EXTERNAL_START_CMD=' "${env_abs}" \
+          || missing_launcher_fields+=("EXTERNAL_START_CMD")
+        if grep -q 'EXTERNAL_PID_FILE' "${env_abs}"; then
+          grep -qE '^[[:space:]]*EXTERNAL_PID_FILE=' "${env_abs}" \
+            || missing_launcher_fields+=("EXTERNAL_PID_FILE (referenced but never assigned)")
+        else
+          missing_launcher_fields+=("EXTERNAL_PID_FILE")
+        fi
+        if [[ ${#missing_launcher_fields[@]} -eq 0 ]]; then
+          pass "runnable external target has required launcher fields: ${target_id}"
+        else
+          fail "runnable external target env_file is missing launcher fields: ${target_id} -> ${missing_launcher_fields[*]}"
+        fi
+      else
+        pass "runnable external target has required launcher fields: ${target_id}"
+      fi
       ;;
     *)
       fail "runnable target has unsupported launcher_mode: ${target_id} (${launcher_mode})"
       ;;
   esac
 done < <(jq -r '.targets[] | select(.asset_state == "runnable") | .target_id' "${MATRIX_PATH}")
+
+# Shared-port guard. Two runnable targets on the same health port cannot be launched
+# together, and a readiness probe against that port cannot tell them apart. This is a
+# warning rather than a failure: co-residency is only a problem for targets that some
+# scenario actually pairs, and the matrix alone cannot decide that.
+while IFS= read -r dup_port; do
+  [[ -n "${dup_port}" ]] || continue
+  dup_ids="$(jq -r --arg p ":${dup_port}/" \
+    '[.targets[] | select(.asset_state == "runnable") | select(.health_url | contains($p)) | .target_id] | join(", ")' \
+    "${MATRIX_PATH}")"
+  warn "health_url port ${dup_port} is shared by multiple runnable targets: ${dup_ids}"
+done < <(jq -r '[.targets[] | select(.asset_state == "runnable") | .health_url
+                | capture("^https?://[^/:]+:(?<port>[0-9]+)").port]
+               | group_by(.) | map(select(length > 1) | .[0]) | .[]' "${MATRIX_PATH}" 2>/dev/null)
 
 if [[ ${warn_count} -gt 0 ]]; then
   echo "Matrix verification emitted ${warn_count} warning(s)."

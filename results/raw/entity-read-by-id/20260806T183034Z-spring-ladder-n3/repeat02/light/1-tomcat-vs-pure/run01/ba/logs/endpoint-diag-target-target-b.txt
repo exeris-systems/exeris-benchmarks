@@ -1,0 +1,18 @@
+=== ENDPOINT DIAGNOSTIC ===
+Target: spring-on-exeris-pure
+URL: http://localhost:9005/api/v1/user?id=1
+Timestamp: 2026-08-07T11:25:12.065Z
+
+Attempting curl request...
+
+HTTP Status Code: 200
+Response (first 500 chars):
+---
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 30
+Connection: keep-alive
+
+{"id":"1","username":"user_1"}
+
+---

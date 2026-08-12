@@ -161,7 +161,23 @@
         "measurement_iterations": { "type": "integer", "description": "JMH -i" },
         "payload_file": { "type": "string" },
         "payload_size_bytes": { "type": "integer" },
-        "backend_network_mode": { "type": "string", "enum": ["host", "bridge"], "description": "Container network mode of stateful backends (Postgres/Neo4j/Axon). 'bridge' adds an asymmetric NAT tax across stacks of differing DB-chattiness; pin and record it for cross-stack comparisons. See docs/methodology.md." },
+        "backend_network_mode": { "type": "string", "enum": ["host", "bridge"], "description": "Container network mode of stateful backends (Postgres/Neo4j/Axon). 'bridge' adds an asymmetric NAT tax across stacks of differing DB-chattiness; pin and record it for cross-stack comparisons. See docs/methodology.md. NOTE: run-comparative.sh emits this under run_config.metadata, not here — readers must accept either location." },
+        "metadata": {
+          "type": "object",
+          "description": "Environment provenance written by run-comparative.sh. Declared 2026-08-08; before that this object was undeclared and therefore accepted unvalidated, including the two ENVIRONMENT FENCES below. A fence is a condition under which results are not comparable at all, as distinct from a regression threshold, which assumes they are.",
+          "properties": {
+            "jdk_vendor": { "type": "string" },
+            "jdk_version": { "type": "string" },
+            "benchmark_tool_version": { "type": "string" },
+            "jvm_flags": { "type": ["array", "string", "null"] },
+            "hardware_profile": { "type": "string" },
+            "backend_network_mode": { "type": "string", "enum": ["host", "bridge"], "description": "FENCE. Measured on this lab's perf box at +20.5% throughput host vs bridge with application cpu/req unchanged (0.357 -> 0.358 ms), target-thread %wait 265% -> 57% — see results/reports/2026-06-20-...-steady-state-and-cost-per-request.md section 2. That is twice the -10% blocking regression threshold, so an unnoticed bridge/host difference reads as a large regression or improvement. compare-results.sh refuses to compare across it." },
+            "db_cpuset": { "type": "string", "description": "FENCE. CPU set the benchmark database was confined to (e.g. \"4-7,12-15\"); empty string means unpinned. Unpinned, Postgres shares all cores with the measured target — verified 2026-08-06, postmaster Cpus_allowed_list=0-15 against a target pinned to 0-1,8-9 — so it both contends with the arm under measurement and makes DB CPU unattributable. Absolute levels do not cross this boundary. compare-results.sh refuses to compare across it." },
+            "db_cpuset_source": { "type": "string", "description": "Which probe resolved db_cpuset: env:BENCH_DB_CPUSET, docker-hostconfig, cgroup-effective, or unresolved. Provenance for the fence, not the fence itself — a correct cpuset with source 'unresolved' was the 2026-08-06 subshell defect." },
+            "scenario_id": { "type": "string" },
+            "target_classification": { "type": "string" }
+          }
+        },
         "endpoint_path": { "type": "string", "description": "HTTP path the load driver actually requested (e.g. /api/v1/users for the 10x10x10 aggregate read, or /api/v1/user?id=1 for the runtime-bound single-row read). Recorded so the run's endpoint is self-evident from the artifact rather than implied by scenario id + contract." },
         "execution_profile_id": { "type": "string", "description": "Execution profile identifier (e.g. runtime-constrained-128m-0p5vcpu-v1)." },
         "contract_id": { "type": "string", "description": "Fixed contract identifier from scenario.json fixed_contracts." },

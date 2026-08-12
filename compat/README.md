@@ -46,6 +46,35 @@ Then normalize and compare:
   results/normalized/compat-latest.json
 ```
 
+## Sourcing data from the comparative harness (entity-read-by-id)
+
+The sequential protocol above measures the two modes in **separate runs**, so drift
+between them lands inside the overhead figure. The `entity-read-by-id` comparative
+harness collects the same two arms in **one leaf**, under matched conditions, in both
+`ab` and `ba` order — which is strictly stronger. Two of its pairs exist for that
+reason and route their results here:
+
+| pair | what it isolates |
+|---|---|
+| `spring-on-exeris__spring-on-exeris-pure` | the compat layer alone — one app, one host runtime, one kernel, differing only in whether requests traverse `ExerisCompatDispatcher` |
+| `spring-hibernate__spring-on-exeris` | Tomcat hosting vs the Exeris compatibility ingress |
+
+**Their leaves are `non_eligible` and that is correct.** Strict gate G3
+(`equivalence_strict`) requires `mode_a == mode_b`, so any cross-mode pair fails with
+`EQUIVALENCE_MISMATCH`. The comparative runtime track compares targets *within* one
+side of the Pure-vs-Compat axis; these pairs deliberately cross it, because the
+crossing is the measurement. The harness is the right way to **collect** them and the
+wrong way to **claim** them.
+
+So: take the per-arm numbers out of those leaves, compute overhead by the formula
+below, and report it here as compatibility cost. Do **not** publish a leaf from those
+pairs as a comparative claim, and do not read `non_eligible` on them as a failed run —
+it is the declared expected outcome, recorded as `claim_track: "compat"` and
+`expected_claim_status` in `scenarios/entity-read-by-id/comparative-pair-manifest.json`.
+
+The third pair, `spring-hibernate__spring-on-exeris-pure`, is within-mode (both
+`pure`) and stays in the comparative track as a normal eligible claim.
+
 ## Reporting rules
 
 - Pure mode and compat mode results must always be stored separately.

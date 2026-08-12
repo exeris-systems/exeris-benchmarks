@@ -1,0 +1,8 @@
+359029:
+No available recordings.
+
+Use jcmd 359029 JFR.start to start a recording.
+359029:
+Started recording 2. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 359029 JFR.dump name=spring_on_exeris_pure_20260806_134224 filename=FILEPATH to copy recording data to file.

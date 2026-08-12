@@ -1,0 +1,30 @@
+
+                                           Java Methods that Execute the Most
+
+Method                                                                                                  Samples Percent
+------------------------------------------------------------------------------------------------------- ------- -------
+java.lang.invoke.Invokers$Holder.invokeExact_MT(Object, Object, Object)                                  17,065  12.65%
+tools.jackson.databind.ser.UnrolledBeanSerializer.serializeNonFiltered(...)                              11,401   8.45%
+org.postgresql.core.Encoding.decode(byte[], int, int)                                                     6,634   4.92%
+org.postgresql.core.VisibleBufferedInputStream.ensureBytes(int, boolean)                                  6,393   4.74%
+org.postgresql.core.v3.QueryExecutorImpl.processResults(ResultHandler, int, boolean)                      2,964   2.20%
+java.util.HashMap.computeIfAbsent(Object, Function)                                                       2,551   1.89%
+java.lang.String.ascii(byte[], int, int)                                                                  2,343   1.74%
+java.lang.invoke.DirectMethodHandle$Holder.invokeSpecial(Object, Object, Object)                          1,992   1.48%
+org.springframework.jdbc.core.JdbcTemplate$RowCallbackHandlerResultSetExtractor.extractData(ResultSet)    1,803   1.34%
+java.util.concurrent.ConcurrentHashMap.get(Object)                                                        1,608   1.19%
+org.springframework.boot.loader.net.protocol.jar.JarFileUrlKey.equalsIgnoringCase(String, String)         1,537   1.14%
+java.util.HashMap.hash(Object)                                                                            1,280   0.95%
+java.lang.StringLatin1.regionMatchesCI(byte[], int, byte[], int, int)                                     1,258   0.93%
+java.lang.String.hashCode()                                                                               1,193   0.88%
+jdk.internal.util.DecimalDigits.uncheckedGetCharsLatin1(long, int, byte[])                                1,179   0.87%
+eu.exeris.benchmarks.targets.springapp.UserRepository.lambda$findFriendsForUsers$0(Map, ResultSet)        1,114   0.83%
+eu.exeris.benchmarks.targets.springapp.UserRepository.lambda$findInterestsForUsers$0(Map, ResultSet)      1,110   0.82%
+java.lang.ThreadLocal$ThreadLocalMap.getEntryAfterMiss(...)                                               1,109   0.82%
+org.postgresql.jdbc.PgResultSet.getLong(int)                                                              1,094   0.81%
+jakarta.servlet.ServletRequestWrapper.getAttribute(String)                                                1,068   0.79%
+java.lang.ThreadLocal.getMap(Thread)                                                                      1,064   0.79%
+org.springframework.transaction.support.TransactionSynchronizationManager.doGetResource(Object)           1,056   0.78%
+java.util.concurrent.ConcurrentHashMap.replaceNode(Object, Object, Object)                                1,049   0.78%
+java.lang.String.equals(Object)                                                                           1,048   0.78%
+org.apache.coyote.http11.Http11OutputBuffer.write(MessageBytes)                                           1,041   0.77%

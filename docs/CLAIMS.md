@@ -9,6 +9,11 @@ has no schema for open items, retractions or track labels. A claim marked
 Classification follows the lab vocabulary: `comparison-eligible` / `exploratory` /
 `descriptive-only` / `fact`. Every entry states tier, contract, n, and the fences.
 
+**Before quoting anything from this file, read two sections: the
+[retraction register](#retraction-register-every-claim-this-series-has-withdrawn-and-whether-it-travelled)
+for what has been withdrawn, and the [citation canon](#citation-canon-what-to-quote-and-what-never-to-quote-alone)
+for how to quote what remains.**
+
 **Standing fence — bridge networking.** Every campaign up to and including
 `20260806T183034Z-spring-ladder-n3` ran with the DB on Docker **bridge** networking
 (`backend_network_mode: bridge` in all 48 leaves). The June measurement of that tax on
@@ -41,6 +46,65 @@ restriction on them.
 
 ---
 
+## Retraction register — every claim this series has withdrawn, and whether it travelled
+
+Added 2026-08-11. Retractions were previously appended to the entries they affected, which is
+right for the reader of an entry and useless for the reader who wants to know *what this lab has
+been wrong about*. They are collected here as well; the per-entry text stays where it is and
+remains authoritative for detail.
+
+**Why a register rather than a list of mistakes.** Fourteen withdrawals are recorded below.
+**Exactly one (#14) reached a published report**; the other thirteen were caught while the claim
+was still inside the registry or a draft. One of those thirteen (#1) had nonetheless reached the
+**EN copy string** — the line this file instructs consumers to copy verbatim — which is a
+distribution surface of a different kind and is flagged ⚠ rather than cleared.
+
+That ratio is not luck and it is not modesty: it is the measurable output of the review loop
+running ahead of the publication loop. A lab that never retracts anything is not more careful
+than one that retracts before publishing; it is only less observed.
+
+**The "travelled?" column, and what it can and cannot tell you.** Three exposure surfaces exist,
+and only two are checkable from inside this repo:
+
+- **Public git history.** `github.com/exeris-systems/exeris-benchmarks` is a **public** remote,
+  so every figure below was visible in commit history from the moment it was pushed. "Did not
+  travel" never means "was never visible" — it means no *reader-facing artefact* carried it.
+- **A published report** — anything in `results/reports/` not marked DRAFT. Checkable, and checked.
+- **The external portfolio registry** (`arkstack-dev/portfolio:CLAIMS.md`) **and outreach drafts.**
+  **Not verifiable from here.** The two planned foojay articles are drafted for Sept–Oct 2026 and
+  have not shipped, so the exposure window is small — but anything marked ⚠ below should be
+  checked against the portfolio registry before it is assumed contained.
+
+| # | what was claimed | withdrawn | what replaced it | travelled? |
+|---|---|---|---|---|
+| 1 | *"Hibernate is 67 % of the cost"* — the plain-"ORM" label on the L3 pool | 2026-08-11 | *"the Spring Data JPA + Hibernate repository layer"*; largest identified contributor is projection proxies, split **unmeasured** (L10) | ⚠ **the EN copy string in L3** — the one surface this registry tells consumers to copy verbatim. Old string kept struck-through and labelled DO NOT COPY. No published report carried it. |
+| 2 | **×1.127** hosting rung | 2026-08-11 | **≈ 89–96 µs, ×1.09–1.10** — 23.3 % of the step was Spring Security (L11) | no published report; canon says do not quote it at all |
+| 3 | **×1.488 / 67.2 %** Amdahl ceiling quoted for Tomcat | 2026-08-11 | **×1.338 / 74.7 %** measured directly on Tomcat; ×1.488 survives, *named to* the Exeris-hosted derivation | no |
+| 4 | **±2.80 %** cpu/req error budget (4 summed rows) | 2026-08-11 | **±2.52 % heavy / ±3.71 % light**, per contract, quadrature, derived by `tools/derive-error-budget.sh` | no — draft only |
+| 5 | a bare **"18×"** idle-CPU ratio | 2026-08-11 | absolute **~0.027 cores / ~0.67 % of a 4-core pin**; the ratio is 18.1–29.6× depending on the comparator | no |
+| 6 | L8's idle-RSS column read as a **footprint** | 2026-08-11 | a **rank**, not a footprint: it averages never-served and after-serving states, which differ 1.9×–5.5× | no |
+| 7 | *"the two arms' responses were byte-identical"* | 2026-08-11 | **bodies only**; never covered full responses on **any auth-crossing pair**, across all four ladder arms + `comp-native` | no |
+| 8 | light-contract DB busy **87–89 % = Postgres utilisation** | 2026-08-08 | **~37 %** on host — the bridged figure was Postgres *plus* container networking (55 of 87 points `sys`+`soft`) | no |
+| 9 | L2's first explanation of the contract difference: *"light does 4.3× more round-trips"* | 2026-08-08 | arithmetic error — heavy issues **three queries per request**, so the true ratio is **1.43×**. Mechanism left **open** rather than re-explained | no |
+| 10 | L4's prediction that overlapping rungs make the light gap exceed the heavy gap | 2026-08-06 | the axes compose; the residual is drift, not interaction | no — marked *never published* at the time |
+| 11 | L4's closure justification: *"+2.0 % is inside the counterbalanced arm-order control (≤ ~2 %)"* | 2026-08-11 | +2.0 % is inside the **±2.52 % combined** envelope but **not** the arm-order term alone (1.00 %). Claim stands, justification did not | no |
+| 12 | L5: *"worst p99 of all four arms"*, *"p99/p50 = 6.26× vs 5.05×"*, *"12.49 ms"* | 2026-08-11 | open-loop: tracks the native baseline within 5–22 % to 40 000 rps; **3.2× vs 2.4×**; **4.51–5.00 ms** — closed loop inflated it ~2.5× | no |
+| 13 | *"idle cores are state-invariant to three decimal places"* | 2026-08-11 | **to within ~2 %** — 0.0286 vs 0.0280 does not survive three decimals. Finding unaffected | no — corrected one commit after it landed |
+| 14 | the **agent-laden RSS profiles** (284/346/430 MiB light) | 2026-07-29 | agent-free medians, n=3: **233/276/352 MiB**; the agent tax is arm-dependent (~51/70/78 MiB) and **understated** Exeris's advantage | ✅ **yes — this one reached a published report** (2026-07-21 triad). Corrected in place, in the body, TL;DR and conclusions, with the superseded table left visible. |
+
+**Two entries are worth reading as a pair, because they run in opposite directions.** #14 is the
+only retraction that reached a reader-facing artefact — and it moved *in Exeris's favour*, which
+is the case where the incentive to leave it alone is strongest. Separately, the
+`spring-on-exeris*` `internal` mislabel at the top of this file is the inverse of a retraction:
+it did not release a wrong number, it **withheld eight correct ones** for a rule that never
+applied. Both directions cost something, and only one of them looks like carelessness.
+
+**Standing instruction.** When a retraction is added here, fill the travelled? column at the same
+time. It is the only column that decays — a claim that had not travelled when it was withdrawn
+can travel later if the register is not kept current.
+
+---
+
 ## Citation canon — what to quote, and what never to quote alone
 
 Added 2026-08-11, after the open-loop campaign changed which sentence is both the truest and the
@@ -60,9 +124,9 @@ is a cpu/req figure, so it survives the L2 ceiling rule that makes heavy through
 **Never quote these alone:**
 
 - **×3.95** without the contract it belongs to and without "it is not simply Hibernate". Both
-  omissions are things this registry has formally retracted (L10).
+  omissions are things this registry has formally retracted (L10, register #1).
 - **"×3.95 slower."** It is false on both contracts. The ratio is cost, not latency.
-- **×1.127** — **superseded, do not quote it at all.** The security term inside it is measured
+- **×1.127** — **superseded, do not quote it at all** (register #2). The security term inside it is measured
   (L11): 23.3 % of the step was Spring Security, not hosting. The current figure is
   **≈ 89–96 µs, ×1.09–1.10**, and it still travels with two fences — the cross-contract
   subtraction is an assumption, and 170 bytes of security response headers sit inside the

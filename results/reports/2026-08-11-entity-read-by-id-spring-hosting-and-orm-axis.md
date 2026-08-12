@@ -112,11 +112,14 @@ sooner.** Everything below is that sentence, qualified.
   assumption**: L3 measured the cost on the Exeris-hosted arm and carried it to Tomcat because no
   ORM-free Tomcat arm existed. Arm 2 is that arm; the direction holds.
 - **Hosting is the smaller effect, and 23.3 % of it was security.** The rung buys
-  **121.52 µs/req (×1.127)** against a repository layer worth **723.97 µs/req — 67.2 % of the
-  request** (L3, L4). The security term is now measured rather than feared — **+28.31 ± 3.25 µs**,
-  one jar with the filter chain off, 12/12 eligible — correcting the rung to **≈ 89–96 µs,
-  ×1.09–1.10** (§6). Two fences: the cross-contract subtraction is a supported *assumption*, and
-  170 bytes of response headers sit inside the figure rather than authorization work.
+  **121.52 µs/req (×1.127)** against a repository layer worth — **measured directly on Tomcat —
+  802.99 µs/req, 74.7 % of the request** (§4.1). L3 carried a *transferred* 723.97 µs / 67.2 %
+  from the Exeris-hosted pair; the direct measurement is 10.9 % larger, so the Amdahl ceiling on
+  runtime work is **×1.34 on Tomcat**, not the ×1.49 L3 assumed. The security term is now measured
+  rather than feared — **+28.31 ± 3.25 µs**, one jar with the filter chain off, 12/12 eligible —
+  correcting the rung to **≈ 89–96 µs, ×1.09–1.10** (§6). Two fences: the cross-contract
+  subtraction is a supported *assumption*, and 170 bytes of response headers sit inside the figure
+  rather than authorization work.
 - **L5 resolved — against both of its own hypotheses.** The light tail is neither a closed-loop
   artefact nor a flat service-time property: absent below ~30 000 rps, sharp above ~80 % of
   capacity (p99.9 1.34× → 2.85×), with the closed-loop figure overstating it ~2.5× (§7.3).
@@ -406,9 +409,8 @@ being report-local; this section is the worked example they point back to.
 
 ## 3. Which ceiling is binding — and therefore which numbers are quotable
 
-**Ladder campaign (bridge, n=12) and ORM campaign (host, n=6). Read the network-mode column first.**
-
-Mean DB-cpuset utilisation over each arm's own measurement window, heavy contract.
+Mean DB-cpuset utilisation over each arm's own measurement window, heavy contract. Ladder
+campaign (bridge, n=12) and ORM campaign (host, n=6).
 **The DB-busy column is not homogeneous — read the network-mode column first.**
 
 | arm | rps | own pin | DB busy | network | reading | bounded by |
@@ -476,12 +478,10 @@ bridge-mode, n=12.
 
 ## 4. The ORM axis, measured on Tomcat
 
-**Host networking, n=6 per arm (3 repeats × ab/ba), 12/12 `comparison_eligible`, 0 errors.**
-
 `spring-hibernate` vs `spring-jdbc`. Same Tomcat, same Boot 4.1.0, same `SecurityConfig`, same
 HikariCP, same normalised pgjdbc URL, same three-query SQL shapes, byte-identical response
 contracts. The only application-level difference is the repository layer.
-n=6 per arm (3 repeats × ab/ba), 12/12 `comparison_eligible`, 0 errors.
+Host networking, n=6 per arm (3 repeats × ab/ba), 12/12 `comparison_eligible`, 0 errors.
 
 | | `spring-hibernate` | `spring-jdbc` | ratio |
 |---|---:|---:|---:|
@@ -841,11 +841,13 @@ flattens `spring-hibernate`'s 1248/1679 contract split into a single 1464.
 
 **Three consequences, in order of how much they matter:**
 
-1. **The idle-CPU finding is untouched.** Idle cores are state-invariant to three decimal places —
-   `spring-on-exeris-pure` reads 0.0286 first-touch against 0.0280 after serving, pure-native
-   0.0274 / 0.0268, community 0.0020 / 0.0020. Whatever the Spring-hosted composition is doing
-   when idle, it starts doing it before the first request and does not change afterwards. L8's
-   **~0.027 cores** stands exactly as re-scoped in §6 above.
+1. **The idle-CPU finding is untouched.** Idle cores are state-invariant **to within ~2 %** —
+   `spring-on-exeris-pure` reads 0.0286 first-touch against 0.0280 after serving (−2.1 %),
+   pure-native 0.0274 / 0.0268 (−2.2 %), community 0.0020 / 0.0020 (flat). Against the 1.9×–5.5×
+   the RSS column moves, that is invariance; it is *not* equality, and an earlier draft of this
+   line claimed "three decimal places" — which 0.0286 against 0.0280 does not survive. Whatever
+   the Spring-hosted composition is doing when idle, it starts doing it before the first request
+   and does not change afterwards. L8's **~0.027 cores** stands exactly as re-scoped in §6 above.
 2. **Post-service idle RSS ≈ loaded RSS**, within ~1 % on every arm and both contracts (community
    1066 vs 1057, pure-native 1100 vs 1102, pure 1221 vs 1233, hibernate 1679 vs 1662 on heavy).
    **Memory is touched and kept, not released between windows.** A "what does an idle replica
@@ -1130,6 +1132,8 @@ stated where it belongs and none of them can move a claim made here:
 | **L9** — inter-pair drift is a per-request cost increase, not CPU starvation | explains a 1–3 % drift | No claim rests on it, and it is not addressable from any campaign: it needs per-core counters (LLC / memory bandwidth, SMT siblings) the rig does not sample. That is new instrumentation, not a new run. |
 | the split of L11's 28.31 µs between authorization work and 170 bytes of security headers | refines L11 | The full figure is correct for the question the rung asks (*what does removing Spring Security save*); the split only matters for a narrower question this report does not ask. |
 | the mechanism behind L5's ~30 000 rps onset | explains L5 | L5's claim is stated as a behaviour with a measured onset, not as a mechanism. |
+| **§6b — `spring-hibernate` has no never-served RSS reading**, so the four arms are not ranked on the same basis at idle | would let the idle footprint gap be quoted **before** first traffic, currently withheld at 6.4–8.7× | A *named and unexecuted* fix, not an unknown: alternating `target-a` across repeats exposes the state at no cost, because it is observable only in the first window of `ab`. Nothing in this report quotes the wider ratio — §6b withholds it explicitly — so the gap costs a number the report does not use. **It should be closed before any density campaign**, where instances-per-core is the headline. |
+| **§7.1 — the four single-leaf excursions need repeats at those rungs**, not a mechanism | would replace "predicted symptom of the missing restart layer" with a measured per-leaf variance | The campaign samples two *directions*, not two repeats (§2.4), so the layer that would name these was never run. No conclusion rests on the four cells and every §7 result is read off the shape across six rungs. Cheapest of the carried items: it is one re-run of an existing ladder with `n=3`, no new tooling. |
 
 **The one thing that did block publication was not an open question, and it is now closed.** §2's
 error budget carried numbers with no cited source; it is now derived from this report's own six
@@ -1286,7 +1290,7 @@ pattern is the point: the footer rule is not folklore, it is this list.*
   side: **whether a resident arm has ever served traffic changes its RSS by 1.9× to 5.5×**
   (community 194 → 1066 MB). That means **L8's single idle-RSS column averages two states**, and
   for `exeris-community` it reports 630 MB — exactly (194 + 1066)/2, a value the process is never
-  at. Two riders keep the damage contained: **idle CPU is state-invariant** to three decimals, so
+  at. Two riders keep the damage contained: **idle CPU is state-invariant to within ~2 %**, so
   everything L8 claims about idle *CPU* stands untouched; and post-service idle RSS ≈ loaded RSS
   within ~1 %, i.e. memory is touched and kept. Also recorded as a harness note:
   `spring-hibernate` has **no** first-touch reading because a never-served neighbour is observable

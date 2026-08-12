@@ -5,7 +5,10 @@ categories:
   - performance
   - benchmarking
   - jvm
-summary: "TODO — write LAST, after every section is final. Must not strengthen any quantifier the body uses, and every bound must be the one measured on the axis being claimed. See the four-surface sweep note at the bottom."
+summary: "One Spring application served five ways on dedicated bare metal, under two fixed contracts and two instruments. The repository layer costs headroom, not per-request latency: at 600 rps the heavy median gap is x1.43 and on the single-row contract the arms are indistinguishable up to 20 000 rps, but the Hibernate arm reaches 94 % of its capacity while the JDBC one stays flat. The cost is Spring Data interface projections rather than Hibernate itself, and the hosting swap is smaller than either — 23 % of it turned out to be Spring Security."
+# Written from 7.1 (service time), deliberately NOT from 4 (cost). x3.95 is the most quotable
+# number in this report and the body says it holds on neither contract, so it must not appear
+# here: this is the only surface that travels to aggregators, RSS and search without its fences.
 authors:
   - Arkadiusz Przychocki
 track: Community
@@ -74,49 +77,34 @@ Three things are new and none of them existed on 2026-07-21:
 
 <!-- Written after the body. One of the four summarizing surfaces; see the sweep note. -->
 
-- **The repository layer does not make a request slower — it makes the arm run out of headroom
-  sooner.** That is the one sentence that holds on both contracts, and it is what the two
-  instruments say together. In cost it is **×3.95 cpu/req on the DB-bound aggregate and ×1.17 on
-  the single-row read** (n=6 per arm, 12/12 leaves eligible, §4). In service time it is almost
-  nothing at low load — the heavy median gap at 600 rps is ×1.43, not ×3.95 — but `spring-jdbc`
-  stays flat from 600 to 3400 rps while `spring-hibernate` reaches 94 % of its capacity and its
-  p99.9 goes from ~4 ms to 15–22 ms; on light the arms are indistinguishable up to 20 000 rps
-  (§7). **"×3.95 slower" is true on neither contract and should not be written.**
-- **It is the Spring Data repository layer, not Hibernate — and this report retracts the plain
-  "ORM" label.** JFR puts Spring AOP and reflection *above* Hibernate's own tuple materialisation.
-  The arms differ by **two** things: Hibernate **and** Spring Data interface projections, which
-  proxy one object per returned row — which is also what produces the contract dependence, since
-  heavy returns ~200 rows and light returns a managed entity and no proxy at all (§5).
-  **Practical consequence:** the cheapest fix for a Spring team is not `JdbcTemplate` but dropping
-  interface projections for DTO constructor expressions, staying on JPA — a change of return
-  types, and an unmeasured first rung of the migration order L3 recommends.
-- **Until this campaign, that cost was an assumption on Tomcat.** L3 measured it on the
-  Exeris-hosted arm and applied it to Tomcat because no ORM-free Tomcat arm existed. Arm 2 is that
-  arm, and the direction holds.
-- **The hosting swap is the smaller effect, and a quarter of it turned out to be security.**
-  The raw rung buys **121.52 µs/req (×1.127)** against a repository layer worth **723.97 µs/req,
-  67.2 % of the request** (L3, L4), so runtime work is optimising the smaller third. But the two
-  arms also differ in per-request security work, and that term is now **measured rather than
-  feared**: **+28.31 ± 3.25 µs/req**, one jar with the servlet filter chain switched off, 12/12
-  leaves eligible — **23.3 % of the entire hosting gain** (§6). Corrected, the hosting step is
-  **≈ 89–96 µs, ×1.09–1.10**: same direction, about a quarter smaller. Two fences travel with it —
-  the subtraction across contracts is a supported *assumption* (heavy's own uncertainty is 29 %,
-  so it agrees without proving), and part of the 28.31 µs is 170 bytes of security response
-  headers rather than authorization work.
-- **L5 is resolved, and neither of its two hypotheses was right.**
-  `spring-on-exeris-pure-native`'s light tail is not a closed-loop artefact — it reproduces
-  open-loop — but neither is it a flat service-time property: it is absent below ~30 000 rps and
-  turns sharp above ~80 % of capacity (p99.9 1.34× → 2.18× → 2.85× over the last three rungs).
-  The closed-loop figure overstated it ~2.5× in absolute terms (12.49 → 4.51–5.00 ms). Restated
-  as *"the tail degrades earlier and faster than the native baseline's as either approaches
-  capacity"* (§7.3).
-- **Two reading rules govern what may be quoted at all.** On heavy the fast arms saturate the
-  Postgres cpuset and the slow ones do not, so a fast-vs-slow heavy *throughput* ratio reads the
-  database, not the stack — cpu/req survives it, throughput does not (§3). And percentiles are
-  given as **ab–ba ranges, never as points**: tail metrics here are far more order-sensitive than
-  throughput (5.25 vs 15.07 ms p99 in one cell at the same offered rate), and §2's arm-order term
-  (1.00 % heavy / 2.71 % light) is measured on cpu/req and does not transfer (§7). On one snapshot
-  pair a tail moved 83× harder than cpu/req (§2.3).
+**The repository layer does not make a request slower — it makes the arm run out of headroom
+sooner.** Everything below is that sentence, qualified.
+
+- **Cost and service time say it together.** Cost: **×3.95 cpu/req on the DB-bound aggregate,
+  ×1.17 on the single-row read** (n=6 per arm, 12/12 eligible, §4). Service time: the heavy median
+  gap at 600 rps is **×1.43**, and `spring-jdbc` stays flat to 3400 rps while `spring-hibernate`
+  reaches 94 % of capacity with p99.9 going ~4 → 15–22 ms; on light the arms are
+  indistinguishable to 20 000 rps (§7). **"×3.95 slower" holds on neither contract.**
+- **It is Spring Data interface projections, not Hibernate — the plain "ORM" label is retracted.**
+  JFR puts Spring AOP and reflection *above* Hibernate's tuple materialisation, and one proxy per
+  returned row explains the contract dependence (heavy ~200 rows, light none) (§5). Cheapest fix
+  is therefore DTO constructor expressions on JPA, not `JdbcTemplate`. This also **replaces an
+  assumption**: L3 measured the cost on the Exeris-hosted arm and carried it to Tomcat because no
+  ORM-free Tomcat arm existed. Arm 2 is that arm; the direction holds.
+- **Hosting is the smaller effect, and 23.3 % of it was security.** The rung buys
+  **121.52 µs/req (×1.127)** against a repository layer worth **723.97 µs/req — 67.2 % of the
+  request** (L3, L4). The security term is now measured rather than feared — **+28.31 ± 3.25 µs**,
+  one jar with the filter chain off, 12/12 eligible — correcting the rung to **≈ 89–96 µs,
+  ×1.09–1.10** (§6). Two fences: the cross-contract subtraction is a supported *assumption*, and
+  170 bytes of response headers sit inside the figure rather than authorization work.
+- **L5 resolved — against both of its own hypotheses.** The light tail is neither a closed-loop
+  artefact nor a flat service-time property: absent below ~30 000 rps, sharp above ~80 % of
+  capacity (p99.9 1.34× → 2.85×), with the closed-loop figure overstating it ~2.5× (§7.3).
+- **Two reading rules.** On heavy a fast-vs-slow *throughput* ratio reads the database, not the
+  stack — quote cpu/req (§3). Percentiles are **ab–ba ranges, never points**, because tails here
+  are far more order-sensitive than throughput (5.25 vs 15.07 ms p99 in one cell at the same
+  offered rate) — and those ranges still carry **no restart variance**, making them a lower bound
+  on uncertainty rather than an envelope (§2.4, §7).
 - **Footprint and idle cost** — §6. **[PENDING: consolidate L8 + RSS across the ladder]**
 
 **What this report will not claim:** any service-time comparison from the closed-loop campaigns;
@@ -224,17 +212,27 @@ never appear as a budget row, where it reads as something you can absorb.
 Both are enforced by `scripts/compare-results.sh`, which refuses the comparison outright; a
 difference is never overridable.
 
-| fence | measured magnitude | source |
+| fence | measured magnitude, **from this report's own campaigns** | source |
 |---|---|---|
-| `backend_network_mode` (bridge vs host) | **+20.5 % throughput at unchanged cpu/req** (0.357 → 0.358 ms), target-thread `%wait` 265 % → 57 % | [2026-06-20 report §2](2026-06-20-entity-read-by-id-steady-state-and-cost-per-request.md) |
+| `backend_network_mode` (bridge vs host) | **DB-cpuset busy 87.36 % → 37.34 %** on the light contract, *same arm, same delivered throughput* — ~50 points, 55 of the 87 being `sys`+`soft`, i.e. kernel networking. Heavy unaffected to within noise (99.80 → 99.84 %). | Setup above; `docs/CLAIMS.md` L2 (2026-08-08 correction) |
 | `db_cpuset` (pinned vs unpinned) | unpinned Postgres shares all 16 cores with a target pinned to 0-1,8-9 — contends with the arm *and* makes DB CPU unattributable | verified 2026-08-06 (`postmaster Cpus_allowed_list`) |
 
-> **Provenance caveat on the network-mode row.** The +20.5 % / 0.357 → 0.358 ms figures exist in
-> the June report's prose and nowhere else: every committed `results/raw/guided/*/result.json`
-> records `backend_network_mode: host`, so **the bridge leg is not in the repository** and the run
-> does not appear in that report's own run index. It is cited here as the origin of the fence, not
-> as a reproducible measurement. The fence itself does not depend on the number — all campaigns in
-> this report are host-net, so the fence is satisfied by construction rather than by tolerance.
+The network-mode row is deliberately quoted from **this** campaign set rather than from the
+historical figure, because the historical one cannot be re-derived — see below. A fence stated in
+a section about what may be trusted should lead with its strongest evidence.
+
+> **Historical origin of the network-mode fence, and why it is a footnote rather than the row.**
+> The fence entered the harness on a June measurement — `+20.5 %` throughput at unchanged
+> application cpu/req (0.357 → 0.358 ms), target-thread `%wait` 265 % → 57 %
+> ([2026-06-20 report §2](2026-06-20-entity-read-by-id-steady-state-and-cost-per-request.md)).
+> Those figures exist in that report's prose and nowhere else: every committed
+> `results/raw/guided/*/result.json` records `backend_network_mode: host`, so **the bridge leg is
+> not in the repository** and the run does not appear in that report's own run index. Cite it as
+> the origin of the rule, never as a reproducible measurement. Nothing rests on it — the row above
+> measures the same effect on committed artefacts, on a different axis (DB-cpuset occupancy rather
+> than throughput), and in the same direction. And the fence is satisfied by construction here
+> anyway: `scripts/compare-results.sh` refuses a mode-crossing comparison outright, and the
+> bridge/host split across this report's campaigns is stated per campaign in Setup.
 
 ### 2.2 The budget — two variance layers, per contract
 
@@ -537,8 +535,23 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 > here. For the question this rung asks — *what does removing Spring Security save* — the full
 > figure is correct, because `spring-on-exeris-pure` does not emit those headers either. For the
 > narrower question *what does the authorization decision cost*, 28.31 µs is an over-estimate by an
-> unmeasured amount. (An earlier note in this series called the two arms' responses byte-identical;
-> that was checked on **bodies** only and is corrected here.)
+> unmeasured amount.
+>
+> **The correction is wider than this pair, so state its real scope.** The response-checksum
+> control in this series (heavy `sha256/16 82f9bcdf2852bd5e`, 9105 bytes, reported as matching
+> across **all four ladder arms plus `comp-native`**) was used as a fairness control — evidence
+> that a cross-arm comparison is not a serialisation-volume comparison. That control was computed
+> on **response bodies only**. Ladder arms 1–3 carry Spring Security and emit the six headers
+> above; arms 4–5 do not. So the checksum **never covered full responses across the auth boundary
+> — for any pair that crosses it**, not merely for the `spring-hibernate` / `-nosec` pair. What it
+> establishes is unchanged and still load-bearing: the arms return **the same content**. What it
+> does **not** establish, and was previously read as establishing, is equal **bytes on the wire**
+> on any auth-crossing pair.
+>
+> **§4 is unaffected and this correction must not be stretched to it.** The ORM pair
+> (`spring-hibernate` × `spring-jdbc`) shares one `SecurityConfig`, so both arms emit the same six
+> headers; there the responses match on bodies *and* headers, and "byte-identical response
+> contracts" stands as written.
 >
 > **Also observed, unexplained:** on heavy the stock arm is far more reproducible across repeats
 > (sd 0.21 %) than the nosec arm (0.82 %, range 15 µs). The arm with *fewer* layers is the less
@@ -589,6 +602,15 @@ top rungs. That is the precondition for the whole section and it is met, not ass
 > bound must be the one measured on the axis being claimed" trap the report warns about elsewhere,
 > and this is where it bites hardest. §2.3 puts a number on the gap: on one snapshot pair the tail
 > moved 83× harder than cpu/req. With n=2 per cell, medians are solid and tails are indicative.
+>
+> **And the range itself is the layer §2.4 calls under-stating.** The 36 leaves are 6 rungs × two
+> directions × three ladders: **n=2 per cell is two directions, not two repeats**, so both leaves
+> share one JVM lifetime, one warmup and one JIT state. By this report's own scope rule an ab–ba
+> spread carries **no restart variance at all** — it is therefore a **lower bound on the
+> uncertainty, not an envelope of it**. Every conclusion in §7 is read off the *shape across six
+> rungs*, which is robust to that gap; no conclusion is read off a single cell. Where a single cell
+> does something unexpected (§7.1), the missing layer is the first explanation to reach for, not
+> the last.
 
 ### 7.1 The ORM axis, heavy: the arms do not diverge in cost, they diverge in *headroom*
 
@@ -606,16 +628,26 @@ top rungs. That is the precondition for the whole section and it is met, not ass
 **`spring-jdbc` is flat across the entire range.** From 600 to 3400 rps — 5.7× the load — its p50
 moves between 1.33 and 1.43 ms and its p99 sits at ~2.35 ms apart from two single-leaf excursions.
 
-> **Those two excursions are unexplained, and saying so is the honest option.** `spring-jdbc` reads
-> p99 4.04 at 600 rps (`ba`) and 4.09 at 1800 rps (`ab`) against ~2.35 everywhere else — a *worse*
-> tail at *lower* load, which is the opposite of the pattern the rest of the section describes.
+> **Those two excursions have no assigned cause — and that is what the design predicts, not a
+> surprise.** `spring-jdbc` reads p99 4.04 at 600 rps (`ba`) and 4.09 at 1800 rps (`ab`) against
+> ~2.35 everywhere else — a *worse* tail at *lower* load, which is the opposite of the pattern the
+> rest of the section describes.
+>
 > What was checked and ruled out: they are **not the same direction** (one `ba`, one `ab`), **not
 > the first leaf** of the campaign, and not a warmup-volume effect (the 1800 leaf saw 108 k warmup
 > requests, more than the clean 1200 leaf's 72 k). What they do share is a signature: p50 +12 % and
 > p99 +73 % against the arm's own baseline **with cpu/req, RSS and thread count unchanged**
 > (333/306 µs against 325/315 µs in clean leaves) — the arm was not doing more work, so this looks
-> like a transient stall from outside the process rather than anything about load. Neither
-> reproduced in the other direction at the same rung. Magnitude is 1.7×, well below the
+> like a transient stall from outside the process rather than anything about load.
+>
+> **That signature is exactly what the missing restart layer would produce.** A per-leaf disturbance
+> with no work attached to it is a relaunch-scale event, and this campaign has **no repeat to
+> compare against** — n=2 is two directions inside one JVM lifetime (see the note above). A single
+> outlying leaf with nothing to hold it against is the predicted symptom of a layer this campaign
+> does not sample, so "unexplained" over-states the mystery: the instrument that would name it was
+> not run. Resolving it needs repeats at these rungs, not a mechanism.
+>
+> Neither reproduced in the other direction at the same rung. Magnitude is 1.7×, well below the
 > near-capacity excursions in §7.3, and in the opposite load regime. **No claim in this report
 > rests on those two cells**, and the ranges are printed unsmoothed so a reader sees them.
 `spring-hibernate` rises: p50 +64 %, p99 roughly ×2.8, p99.9 from ~4 ms to 15–22 ms.
@@ -745,8 +777,13 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
   cross-contract subtraction remains an assumption (heavy agrees at +32.58 µs but with 29 %
   uncertainty, so it cannot prove constancy), and 170 bytes of security response headers — 567 %
   of the 30-byte light body — are inside the 28.31 µs and are not separated from authorization
-  work. A claim elsewhere in this series that the two arms' responses were byte-identical is
-  corrected: that held for **bodies**, not headers.
+  work. **The byte-identical claim is corrected at its real scope**, which is wider than this pair:
+  the response-checksum control (`82f9bcdf2852bd5e`, 9105 bytes, reported across **all four ladder
+  arms plus `comp-native`** and used as a fairness control against serialisation-volume effects)
+  was computed on **bodies only**. Arms 1–3 carry Spring Security and arms 4–5 do not, so it never
+  covered full responses on **any auth-crossing pair**. It remains valid as a *content* control.
+  §4's ORM pair is unaffected — one shared `SecurityConfig`, identical headers — and the correction
+  must not be stretched to it.
 - **2026-08-11 — §7 landed, and it changed two headline framings.** The open-loop campaign
   (36/36 eligible) replaced "the ORM costs ×3.95" with "the repository layer costs headroom, not
   per-request latency", which is the only form that holds on both contracts. And it **resolved
@@ -772,6 +809,38 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
   **the light contract only** (heavy: 2.1×) and to **closed-loop percentiles**, i.e. queue
   occupancy rather than service time (§2.3). No conclusion in the report is overturned; three are
   now stated more tightly.
+- **2026-08-11 — §7's own uncertainty measure was the one §2.4 disqualifies, and the fence for it
+  was already in the document.** §7's 36 leaves are 6 rungs × two *directions* × three ladders:
+  **n=2 per cell is two directions, not two repeats**, so both leaves share one JVM lifetime,
+  warmup and JIT state — precisely the layer §2.4 calls under-stating because it omits restart
+  variance. The ab–ba spread is therefore a **lower bound on uncertainty, not an envelope**, and
+  §7 now says so. Consequence for §7.1: the two `spring-jdbc` excursions (p99 4.04 at 600 rps,
+  4.09 at 1800, at unchanged cpu/req, RSS and thread count) are **no longer described as
+  unexplained anomalies** but as the predicted symptom of the missing layer — a relaunch-scale
+  disturbance in a campaign with no repeat to compare against. Resolving them needs repeats at
+  those rungs, not a mechanism. No conclusion moves: every §7 result is read off the shape across
+  six rungs, and none off a single cell.
+- **2026-08-11 — §2.1 was leading with its weakest evidence.** The network-mode fence row quoted
+  the June `+20.5 %` / 0.357 → 0.358 ms figures, whose own caveat concedes the bridge leg is not in
+  the repository — inside the section whose job is to establish what may be trusted. The row now
+  leads with the measurement from **this** report's campaigns (DB-cpuset busy **87.36 % → 37.34 %**
+  at identical delivered throughput, 55 of the 87 points `sys`+`soft`), and the June figure drops
+  to a footnote as the fence's historical origin. Same content, reversed weight.
+- **2026-08-11 — the byte-identical correction was scoped to half of what it affects.** It read
+  "the two arms' responses", meaning the security-confound pair. The underlying control — response
+  checksum `82f9bcdf2852bd5e`, 9105 bytes, reported across **all four ladder arms plus
+  `comp-native`** and used as a fairness control against serialisation-volume effects — was
+  computed on **bodies only**, and ladder arms 1–3 carry Spring Security where 4–5 do not. It
+  therefore never covered full responses on **any auth-crossing pair**. It stands as a *content*
+  control. §4's ORM pair is explicitly excluded from the correction: one shared `SecurityConfig`,
+  identical headers.
+- **2026-08-11 — TL;DR compressed and the frontmatter `summary:` written.** The TL;DR had grown to
+  seven bullets with a ~90-word opener; a summary that reads as long as a section stops
+  summarising, and every extra word is somewhere a quantifier can slip. Now a one-line lede plus
+  six bullets, same numbers. The `summary:` is written **from §7.1, deliberately not from §4** —
+  it is the only surface that reaches aggregators, RSS and search stripped of its fences, and
+  ×3.95 is both the most quotable number in the report and one the body says holds on neither
+  contract. It does not appear there.
 - **[TODO on publish]** record that this report retracts the plain-"ORM" label used for the
   L3 pool, and why.
 

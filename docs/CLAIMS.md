@@ -658,6 +658,17 @@ second.
    save"* the full figure is right, because `spring-on-exeris-pure` does not emit those headers
    either. For *"what does the authorization decision cost"* it is an over-estimate by an unknown
    amount.
+
+   **Scope correction, 2026-08-11 — this is wider than the nosec pair.** The response-checksum
+   control in this series (heavy `sha256/16 82f9bcdf2852bd5e`, 9105 bytes, reported as matching
+   across **all four ladder arms plus `comp-native`**, and used as a fairness control against
+   serialisation-volume effects) was computed on **response bodies only**. Ladder arms 1-3 carry
+   Spring Security and emit the six headers above; arms 4-5 do not. The checksum therefore
+   **never covered full responses on any auth-crossing pair** - not merely on
+   `spring-hibernate` / `-nosec`. It stands as a **content** control (the arms return the same
+   payload) and must no longer be cited as evidence of equal **bytes on the wire** wherever the
+   auth axis is crossed. The ORM pair (`spring-hibernate` x `spring-jdbc`) is unaffected: one
+   shared `SecurityConfig`, identical headers, so bodies *and* headers match there.
 3. **Not a general Spring Security figure.** This is one application's permitAll chain on Tomcat
    under one contract. The Exeris-side equivalent (`ExerisSecurityContextFilter`) is a different
    mechanism, separately measured at +0.14 %, and the two must not be swapped.

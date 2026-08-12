@@ -22,15 +22,19 @@ scenario: entity-read-by-id
 claim_scope: draft_not_for_publication
 reproducibility_status: incomplete
 claim_scope_note: >
-  Deliberately NOT comparison_eligible while this is a draft, even though the underlying
-  campaigns are. §2's error budget is now derived from this report's own campaigns
-  (tools/derive-error-budget.sh, 220 observations) and no longer blocks; the remaining
-  TODOs are prose in sections 1, 3, 4 and 5 (§6 closed 2026-08-11 with §6b). A file-level
-  comparison_eligible would also over-claim across the whole report: the ladder campaign's
-  48 leaves are not declared all-eligible anywhere, and the two pairs that cross the
-  Pure-vs-Compat axis are non_eligible BY DESIGN. Eligibility is a per-campaign, per-pair
-  property in this repo and is stated at each table; it is not a document attribute.
-  Flip both fields only when every TODO is closed and each table states its own gate status.
+  BOTH RELEASE CONDITIONS ARE NOW MET (2026-08-11); the fields are left as-is pending an
+  explicit publication decision, not pending work. This note previously read "flip both
+  fields only when every TODO is closed and each table states its own gate status".
+  (1) Every TODO is closed: §2's error budget is derived from this report's own campaigns
+  (tools/derive-error-budget.sh), §6 closed with §6b, and sections 1, 3, 4 and 5 are written.
+  (2) Every data table now names its campaign and its gate status, including §3 and §6b which
+  did not. What has NOT changed is the reason a file-level comparison_eligible would still
+  over-claim: the two pairs crossing the Pure-vs-Compat axis are non_eligible BY DESIGN, and
+  eligibility is a per-campaign, per-pair property in this repo, stated at each table. It is
+  not a document attribute, so claim_scope should become a publication state, never
+  comparison_eligible. reproducibility_status stays "incomplete" until someone other than the
+  author re-derives at least the headline figures from the committed artefacts; every number
+  here was re-derived once, by the person who wrote it.
 comparison_axis: within-tier
 hardware_profile: perf-box-amd64
 ---
@@ -39,16 +43,21 @@ hardware_profile: perf-box-amd64
 
 *One Spring application served five ways, plus a native baseline, under two fixed contracts on dedicated bare metal.*
 
-> **DRAFT STATUS.** The open-loop wrk2 campaign has **landed** (§7, 36/36 leaves
-> `comparison_eligible`), so no section is waiting on data any more, and **the last hard blocker is
-> closed**: §2's error budget is derived from this report's own six campaigns rather than quoted
-> forward (§2.2, `tools/derive-error-budget.sh`). What remains is prose. §6's security confound was
-> the last open experiment and it closed on 2026-08-11 at
-> +28.31 ± 3.25 µs/req. Two editorial questions are decided: the compat rung stays out of §6's pure
-> ladder and goes to the `compat/` track, and arm 3 publishes with its version-skew fence rather
-> than holding the report for an alignment campaign. Every number here is from a committed, gate-passing campaign
-> and was re-derived from its artefacts before being written down. **No number in this file is
-> provisional or estimated.**
+> **DRAFT STATUS — content complete as of 2026-08-11.** Every section is written, every TODO is
+> closed, and nothing is waiting on data or on a campaign. The last experiment (§6's security
+> confound) closed at **+28.31 ± 3.25 µs/req**; the last hard blocker (§2's unsourced error budget)
+> closed by deriving it from this report's own campaigns (§2.2, `tools/derive-error-budget.sh`);
+> the last section-level gap (§6b footprint) closed with a finding of its own. Three editorial
+> questions are decided: the compat rung stays out of §6's pure ladder and goes to the `compat/`
+> track, arm 3 publishes with its version-skew fence rather than holding the report for an
+> alignment campaign, and the open questions in §8 ship open with an argument for why none of them
+> moves a headline.
+>
+> It still says DRAFT for one reason: **every number here was re-derived from its artefacts
+> exactly once, by the person who wrote it.** That is enough to make the report honest and not
+> enough to make it reviewed. `reproducibility_status` stays `incomplete` until someone else
+> re-derives at least the headline figures. Every number is from a committed, gate-passing
+> campaign; **none is provisional or estimated.**
 
 ---
 
@@ -197,16 +206,54 @@ DB-busy figure with a host one**, and never read a bridge one as Postgres utilis
 
 ## 1. The strict gate, and what the load generator finally proved
 
-**[SECTION SKELETON]**
+Comparative runs in this repo **fail closed**: a directory without the four required artefacts is
+not a weak result, it is not a result. Across the five campaigns this report draws on — the
+ladder, the ORM axis, both wrk2 curves and the security confound — that is **108 gated units**
+(one per pair per direction), and every one of them carries all four:
 
-- 12/12 leaves `comparison_eligible` / `all_gates_passed` for the ORM campaign, zero rejection
+| artefact | present | says |
+|---|---:|---|
+| `stage7-gate-report.csv` | 108/108 | per-gate verdict rows — **1080 rows, every one `PASS`** |
+| `stage7-gate-summary.json` | 108/108 | the roll-up the runner writes at stage 7 |
+| `claim-status.json` | 108/108 | final status — **108/108 `comparison_eligible`** |
+| `rejection-codes.json` | 108/108 | **all 108 are empty arrays** |
+
+- 12/12 units `comparison_eligible` for the ORM campaign specifically, zero rejection
   codes, zero errors.
+- **`track_id` isolation holds by construction.** Every unit carries exactly one of two values —
+  **54 `track-ab-01` and 54 `track-ba-01`** — so gate evaluation is per-direction and no verdict
+  is ever borrowed across the counterbalancing axis. Where this report averages both directions
+  (arm means, "n=6 per arm = 3 repeats × ab/ba") it says so at the table, and the spread between
+  them is not smoothed away: it is the arm-order term of §2.2.
+- **Ten gates run per unit**, and they are named rather than counted: `G1 track_isolation`,
+  `G2 eligibility_only`, `G3 equivalence_strict`, `G4 ab_ba_required`, `G5 drift_placeholder`,
+  `G6 metadata_completeness`, `G7 pin_verification`, `G8 schema_validation`,
+  `G9 quarantine_transparency`, `G10 reporting_guard`.
+
+> **One of those ten cannot fail on these campaigns, and "10/10 PASS" should not be read as if it
+> could.** `G5 drift_placeholder` compares an *observed* drift against a *maximum* drift for
+> latency and throughput, and the check is real code — but the observed values are read from
+> `BENCHMARK_DRIFT_OBS_*_PCT`, which **nothing in the harness populates**, so they default to `0`;
+> the thresholds default to `0` as well. On all **216 leaves** of these five campaigns the gate
+> therefore evaluates `0.00 ≤ 0` and passes. It verifies that the field exists, not that drift is
+> bounded. The gate's own name is honest; `docs/methodology.md` describing it as *"fails if
+> observed drift exceeds configured thresholds"* is true of the code and vacuous in practice, and
+> is corrected there. **Nine gates are load-bearing here, not ten** — this is the same
+> silent-default family as the four defects in the revision history, caught by asking what a
+> passing check actually compared.
 - **The load-generator ceiling was checked for the first time on this data and passed:** 24/24
   windows `loadgen_headroom_available`, max 16.3 % busy. A saturated load generator does not
   bound a result, it *invalidates* it — the number would describe how fast wrk can offer
   requests. That check had never run on this campaign because the aggregation step was manual
   and nothing in the harness called it; it is now derived at window close (`879ac63f`).
-- **[TODO]** state the four fail-closed artefacts and the `track_id` isolation.
+
+**What this section is claiming, exactly.** Not that the numbers are right — that the runs were
+*allowed to produce numbers at all*. Every comparative figure in this report comes from a unit
+that cleared the four artefacts above with an empty rejection list, and the two checks that had
+never actually run on this data (the load-generator ceiling, and `--role`-correct mpstat
+aggregation) now do, and passed. What that does **not** cover is anything the gates do not
+measure: G5 above, the error budget of §2, and every fence stated in §2.1 and the fairness
+posture. **A passing gate is a floor, not a warrant.**
 
 ---
 
@@ -355,7 +402,7 @@ being report-local; this section is the worked example they point back to.
 
 ## 3. Which ceiling is binding — and therefore which numbers are quotable
 
-**[SECTION SKELETON — data present, prose to write]**
+**Ladder campaign (bridge, n=12) and ORM campaign (host, n=6). Read the network-mode column first.**
 
 Mean DB-cpuset utilisation over each arm's own measurement window, heavy contract.
 **The DB-busy column is not homogeneous — read the network-mode column first.**
@@ -368,9 +415,9 @@ Mean DB-cpuset utilisation over each arm's own measurement window, heavy contrac
 | `exeris-community` | 13 107 | 69.1 % | 99.8 % | bridge | upper bound, but *at the ceiling either way* | **the database** |
 | `spring-jdbc` | 12 664 | — | **97.4 %** | **host** | **Postgres utilisation** | **the database** |
 
-Sources: rows 1–4 `20260806T183034Z-spring-ladder-n3` (n=12, bridge); row 5
-`20260810T131208Z-hibernate-vs-jdbc-n3` (n=6, host). **A bridge figure and a host figure are not
-comparable** (see Setup). The two saturated bridge rows survive the caveat only because an upper
+Sources: rows 1–4 `20260806T183034Z-spring-ladder-n3` (n=12, bridge, **48/48 units
+`comparison_eligible`**); row 5 `20260810T131208Z-hibernate-vs-jdbc-n3` (n=6, host, **12/12
+`comparison_eligible`**). **A bridge figure and a host figure are not comparable** (see Setup). The two saturated bridge rows survive the caveat only because an upper
 bound pinned at 99.8 % still establishes saturation; the two low bridge rows establish *headroom
 exists*, not how much.
 
@@ -379,14 +426,53 @@ fast arm and a slow arm is a lower bound with one side capped**, so quote cpu/re
 every arm leaves the database with substantial headroom (37 % measured on host) and throughput is
 meaningful.
 
-- **[TODO]** the "≤ 1.3 % / +36 % / +45 %" headroom bounds from L2, restated with the bridge
-  caveat attached to whichever of them derive from bridge rows.
+### 3.1 What a faster database would be worth — and which of those bounds survive the bridge
+
+L2 turns the table above into a forward-looking bound: *how much would a better database buy each
+arm?* An arm pinned at 98.7 % of its own CPU cannot spend a faster database on anything, so its
+upside is its own idle time; an arm sitting at 99.8 % DB-busy with a third of its own pin free has
+upside equal to that free pin. Restated here with the network-mode provenance attached to each,
+which L2 does not carry inline:
+
+| arm | own-pin idle | DB busy | a faster DB is worth | measured on | does the bridge caveat bite? |
+|---|---:|---:|---:|---|---|
+| `spring-hibernate` | 1.3 % | 30.5 % | **≤ 1.3 %** | bridge | **no** — the bound comes from the *own-pin* column, which the bridge does not touch |
+| `spring-on-exeris-pure` | 1.3 % | 34.9 % | **≤ 1.3 %** | bridge | **no** — same reason |
+| `spring-on-exeris-pure-native` | 26.7 % | 99.8 % | **+36 %** | bridge | **partly** — see below |
+| `exeris-community` | 30.9 % | 99.8 % | **+45 %** | bridge | **partly** — see below |
+
+**The two `≤ 1.3 %` bounds are unaffected by the bridge, and this is not a technicality.** They
+are computed from the arms' *own-pin idle*, not from the DB-busy column: an arm with 1.3 % of its
+own CPU left has at most 1.3 % of upside no matter what the database does, and no matter whether
+the DB-busy figure beside it is inflated by container networking. The bridge inflates the *DB*
+reading; these two bounds never used it. **They are the strongest rows in this table** — a
+`spring-hibernate` deployment gains essentially nothing on this contract from a faster database,
+and that survives every caveat in this report.
+
+**The `+36 %` and `+45 %` bounds are directionally safe but their precision is not established.**
+They assume the arms are DB-bound, which the 99.8 % figure establishes — and here the bridge
+caveat is *benign in direction*: a bridged DB-busy figure is Postgres **plus** container
+networking, so it can only overstate database load. An overstated figure pinned at 99.8 % still
+proves saturation, because the true value cannot be higher and the arm is demonstrably not
+limited by its own pin (26.7 % / 30.9 % idle). What the bridge does undermine is the *quantity*:
+the headroom released by removing the DB as the limit is being read off a cpuset whose occupancy
+is partly the network stack, and §2.1 measures that deformation at ~50 points on the light
+contract. **Quote them as "up to", not as forecasts**, and note that both are single-campaign,
+bridge-mode, n=12.
+
+> **One row in this table is host-measured and it changes the sharpest reading.** `spring-jdbc` at
+> **97.4 % DB busy on host networking** is the only genuine Postgres-utilisation figure here —
+> `docker-proxy` is off the path, so there is no networking component inside it. It says that an
+> ORM-free Tomcat arm hits the same database wall the two fast Exeris arms hit, at almost the same
+> throughput (12 664 vs 12 645 rps). **The database wall is a property of the contract, not of the
+> stack that reaches it** — which is the cleanest available statement of L2's headline, and the
+> only one in this table that needs no caveat at all.
 
 ---
 
 ## 4. The ORM axis, measured on Tomcat
 
-**[SECTION SKELETON — data final, prose to write]**
+**Host networking, n=6 per arm (3 repeats × ab/ba), 12/12 `comparison_eligible`, 0 errors.**
 
 `spring-hibernate` vs `spring-jdbc`. Same Tomcat, same Boot 4.1.0, same `SecurityConfig`, same
 HikariCP, same normalised pgjdbc URL, same three-query SQL shapes, byte-identical response
@@ -413,15 +499,84 @@ tax.** §5 explains it.
 > half the leaves above it. Leaf-to-leaf spread within the arm is 2.8 % heavy / 3.5 % light, which
 > is itself inside the error budget below.
 
-- **[TODO]** relate to L3's ×1.488 Amdahl ceiling: this measurement is what L3 assumed.
-- **[TODO]** the honest commercial framing — this is the cheapest change a Spring team can make,
-  and it involves no Exeris at all. State the runtime's gain as the increment on top of it.
+### 4.1 This is the arm L3 assumed, and the assumption was optimistic
+
+L3 derives an Amdahl ceiling — *with the repository layer in the path, no runtime work can exceed
+×1.488 on this contract* — and states its load-bearing assumption without hiding it: **the
+repository component was measured on the Exeris-hosted arm and applied to Tomcat, because no
+ORM-free Tomcat arm existed.** This campaign is that arm. The assumption is now testable rather
+than assumed.
+
+| | measured on | repository layer | as % of Tomcat's request | ceiling |
+|---|---|---:|---:|---:|
+| **L3, transferred** | Exeris-hosted (`pure` − `pure-native`, 955.88 − 231.91) | 723.97 µs | 67.2 % | **×1.488** |
+| **§4, direct** | Tomcat (`spring-hibernate` − `spring-jdbc`, 1074.74 − 271.75) | **802.99 µs** | **74.7 %** | **×1.338** |
+| | | **+10.9 %** | +7.5 pt | −10 % |
+
+**The assumption holds in direction and misses in magnitude by about a tenth.** Hosted on Tomcat
+the repository layer costs **10.9 % more** than the figure L3 carried over, so it is **74.7 % of
+the request, not 67.2 %**, and the ceiling on runtime work is **×1.34, not ×1.49**.
+
+**The correction moves against the runtime, and that is worth saying plainly.** A directly
+measured ceiling that is *lower* than the assumed one means L3 overstated how much any runtime
+work can win on this contract. What it strengthens is L3's own conclusion: if the repository layer
+is three quarters of the request rather than two thirds, the migration-order advice — repositories
+first, runtime second — is more strongly supported, not less.
+
+> **Why a cross-campaign subtraction is legitimate here, with the control that makes it so.**
+> The two rows come from different campaigns and different network modes (ladder: bridge, n=12;
+> this campaign: host, n=6), which §2.2's budget does not cover. The join rests on the arm they
+> share: `spring-hibernate` reads **1077.40 µs** on the ladder and **1074.74 µs** here — **0.25 %
+> apart**, an order of magnitude inside even the heavy single-comparison envelope. That agreement
+> is the control, and it independently reproduces the network fence's own claim (§2.1) that
+> bridge-vs-host leaves application cpu/req alone. One caveat survives: both subtractions replace
+> JPA with a different hand-written data layer (`JdbcTemplate` here, the kernel-native repository
+> API there), and both keep pgjdbc and HikariCP in the path, so they measure the same *layer* but
+> not the same *implementation of its replacement*.
+
+**One interaction worth recording, because two corrections nearly cancel.** L3 tracks "share of
+the addressable pool already captured by the hosting rung". Its original figure was
+121.52 / 353.43 = **34.4 %**. L11's security correction cut the numerator to 93.21 µs, dropping it
+to **26.4 %**. This section cuts the denominator to 271.75 µs, which puts it back at **34.3 %**.
+Both terms fell by ~23 % independently and the ratio survived. Quote the ratio only with both
+corrections applied — and with the standing caveat that the rung is measured **on** the ORM stack
+while the remainder is measured **off** it, which is the same class of transfer L3 was doing.
+
+### 4.2 The commercial reading, stated in the order a customer should execute it
+
+**The largest single change available on this contract involves none of our software.** Measured
+on the customer's own Tomcat, replacing the Spring Data JPA repository layer is worth
+**802.99 µs of a 1074.74 µs request — ×3.95 cpu/req**. The runtime swap on top of it is worth
+**×1.09–1.10** (§6, security term removed). Those two numbers belong in that order, because it is
+the order the data supports and the order a team should execute in.
+
+Three things keep this honest rather than modest:
+
+- **×3.95 is the full rewrite, not the cheap rung.** It is `JdbcTemplate` — hand-written SQL,
+  hand-mapped rows. §5's finding is that the *largest identified contributor* is Spring Data's
+  projection proxies, which suggests a much cheaper first step (DTO constructor expressions,
+  staying on JPA) capturing an **unmeasured** share of the 802.99 µs. Nobody has built that arm
+  (L10, §8). A team should measure it before committing to either rewrite.
+- **The ordering is not a concession we are forced into, it is the finding.** A benchmark that
+  tells a customer *"do the cheap step first, the one that needs none of our software"* is the
+  same discipline as the retractions in this report, applied at product level. The runtime's
+  case does not rest on being the largest term; it rests on being the term that remains once
+  the customer has done everything they can do themselves.
+- **And after the repository layer goes, the hosting gap narrows sharply.** `spring-jdbc` on
+  Tomcat reads 271.75 µs against `spring-on-exeris-pure-native`'s 231.91 — **39.84 µs apart**,
+  of which the security term is an estimated 28.31 µs (§6, a light-contract figure applied to
+  heavy, so an assumption). Net of it the two ORM-free stacks sit within roughly **5–15 %** of
+  each other on cpu/req, against 12.4 % apart with the ORM in place. The runtime's advantage on
+  this contract is **substantially an advantage at hosting a heavy repository layer**, not a
+  uniform per-request edge. Stated as a range because the subtraction crosses campaigns, network
+  modes and two different hand-written data layers; a `tomcat-jdbc` × `exeris-native` pair in one
+  campaign would settle it and does not exist.
 
 ---
 
 ## 5. What the ×3.95 actually is — and why "the ORM" is the wrong name for it
 
-**[SECTION SKELETON — data final, prose to write. This is the report's most important correction.]**
+**This is the report's most important correction. Heavy contract, JFR on the ORM pair.**
 
 JFR `hot-methods` and `allocation-by-class` on the heavy leaves. repeat01 and repeat03 agree to
 0.05 pp on the top frame, so this is not profiler noise. Derived views committed under
@@ -472,7 +627,10 @@ list: it is the difference between telling a team "rewrite your repositories" an
 "change your return types first, then measure again."
 
 **What would settle it:** that one arm, against the existing `spring-hibernate`, same contract.
-Not built; no campaign pending. **[TODO: propose it as the next campaign after the wrk2 curve.]**
+Not built; no campaign pending. It is carried as **L10 in §8**, with the reason it does not block
+this report — the plain-"ORM" label is already retracted, and an answer refines the split rather
+than restoring the label. The specification lives here; the decision not to wait for it lives
+there. **Do not count this as a second open item.**
 
 **Instrumentation caveats.** JFR `ExecutionSample` is Java-frames-only and says nothing about the
 `%sys`+`%soft` half of the budget. The two arms' recordings have different denominators — 874 s
@@ -609,7 +767,8 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 
 All four ladder arms ran a pinned **`-Xms1280m -Xmx1280m`** with `AlwaysPreTouch` off, so every
 figure here is *pages actually touched at a common committed heap*, not memory required. Ladder
-campaign, bridge (`20260806T183034Z-spring-ladder-n3`), n=12 per arm per contract. RSS is not
+campaign, bridge (`20260806T183034Z-spring-ladder-n3`, **48/48 units `comparison_eligible`**),
+n=12 per arm per contract. RSS is not
 network-mode sensitive — `spring-hibernate` reads 1662 MB heavy on bridge here and 1668 MB heavy
 on host in the ORM campaign, a 0.4 % difference — so this table transfers across the Setup split
 that governs the throughput tables.
@@ -1016,6 +1175,23 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
   on which quiet arm it is taken against. Mirrored into CLAIMS L8. §6b's TODO is
   now prose-only; the data question inside it is closed.
 
+- **2026-08-11 — RETRACTION: the plain-"ORM" label on the L3 pool.** Recorded here as a standing
+  retraction rather than as an edit, per house style. **What was said:** *"Hibernate is 67 % of
+  the cost"* (L3), with the 723.97 µs pool called the ORM component. **Why it was wrong:** the
+  subtraction that produces the pool is between an arm using Spring Data JPA repositories **with
+  interface projections** and one using none, so it contains the Spring Data projection-proxy cost
+  as well as Hibernate's — and JFR on the new `spring-hibernate` × `spring-jdbc` pair puts Spring
+  AOP and reflection frames *above* Hibernate's own tuple materialisation (§5). The label named
+  one of two things the arms move together. **What survives unchanged:** the pool is real, it is
+  that large, and it does leave with the repositories — so the ×1.488 ceiling and the
+  migration-order conclusion stand. **What replaces it:** *"the Spring Data JPA + Hibernate
+  repository layer"*, and where a contributor must be named, *"the largest identified contributor
+  is Spring Data's projection proxies rather than Hibernate's own row mapping — the pair moves
+  both and the split is unmeasured"* (L10, §8). **Consumers who copied the old form should
+  restate it**; the number did not change, the attribution did. §4.1 additionally shows the pool
+  is **larger** than L3 carried — 74.7 % of the request measured directly on Tomcat against the
+  67.2 % transferred — so the retraction narrows what may be *named*, not what may be *claimed*.
+
 ### Editorial corrections — found in review, changed nothing in the data
 
 *All four were defects living **only** on a summarizing surface or in the ordering of evidence, in
@@ -1085,9 +1261,6 @@ pattern is the point: the footer rule is not folklore, it is this list.*
   only in the first window of `ab`, which samples `target-b`, and hibernate is `target-a` in both
   its pairs — alternating `target-a` across repeats would close that at no cost. Mirrored into
   CLAIMS L8. TL;DR's `[PENDING]` footprint bullet is written.
-- **[TODO on publish]** record that this report retracts the plain-"ORM" label used for the
-  L3 pool, and why.
-
 ---
 
 <!--

@@ -469,7 +469,15 @@ Required gates:
 2. `G2 eligibility`: only rows with `claim_scope=comparison_eligible`, `runner_status=success`, `reproducibility_status=complete`, `final_reason=ok` are eligible.
 3. `G3 equivalence_strict`: hard-equal checks on scenario, contract, tier, protocol, mode, payload descriptor, concurrency, warmup/measurement windows, and JVM class.
 4. `G4 ab_ba_required`: directional completion evidence is mandatory (`run_config.pair_completion_evidence.*` must match `pair_order` and include completion marker), and `run_config.ab_ba_orders_completed` must include the invocation order for the same `pair_id`.
-5. `G5 drift_placeholder`: drift snapshot metadata is mandatory and fails if observed drift exceeds configured thresholds.
+5. `G5 drift_placeholder`: drift snapshot metadata is mandatory and fails if observed drift
+   exceeds configured thresholds. **Vacuous as currently wired — do not count it as a
+   load-bearing gate (verified 2026-08-11).** The comparison is real code, but the *observed*
+   values come from `BENCHMARK_DRIFT_OBS_LATENCY_PCT` / `BENCHMARK_DRIFT_OBS_THROUGHPUT_PCT`,
+   which nothing in the harness populates, and the thresholds from
+   `BENCHMARK_DRIFT_MAX_*_PCT`; all four default to `0`. Every leaf of every campaign therefore
+   evaluates `0 ≤ 0` and passes. The gate proves the field is present, not that drift is bounded.
+   A "10/10 gates passed" summary is really nine. Either wire an observed value or retire the
+   gate — leaving it passing is worse than either, because it inflates the count.
 6. `G6 metadata_completeness`: commit SHA, JDK/tool versions, JVM flags, hardware profile, scenario id, and target classification are mandatory.
 7. `G7 pin_verification`: pinned versions in run config must be present and match actual versions exactly.
 8. `G8 schema_validation`: artifact schema validation is required and fail-closed if validator support is unavailable.

@@ -179,9 +179,10 @@ Postgres *plus* container networking and overstates database load — materially
 high-rps/low-work contracts. The slow arms' bridged heavy figures (30.5 %, 34.9 %) are
 inflated too, though not enough to change their reading: they had ample headroom either way.
 
-## L3 — Amdahl ceiling on runtime work while the ORM stays
+## L3 — Amdahl ceiling on runtime work while the repository layer stays
 
-- **EN:** `With Hibernate in the request path, no runtime work can exceed ×1.49 on this contract — Hibernate is 67% of the cost`
+- **EN:** `With the Spring Data JPA + Hibernate repository layer in the request path, no runtime work can exceed ×1.34 on this contract — that layer is 75% of the cost (measured directly on Tomcat)`
+- **SUPERSEDED EN, do not copy:** ~~`With Hibernate in the request path, no runtime work can exceed ×1.49 on this contract — Hibernate is 67% of the cost`~~ — wrong on both halves. The attribution to Hibernate alone is retracted (L10), and ×1.49 / 67 % came from transferring the component across hosts; measured on Tomcat it is ×1.34 / 75 %. Keep quoting ×1.49 / 67 % **only** for the Exeris-hosted derivation, and say so.
 - Class: exploratory · Tier: Community · Track: **public-eligible** (was: internal, on the void `spring-on-exeris*` exclusion). Publish as *exploratory* — the gate here is the evidence class and the L10 attribution caveat, not confidentiality.
 - Derivation, heavy contract, cpu/req arm-means (n=12):
   - ORM component = `pure − pure-native` = 955.88 − 231.91 = **723.97 µs** = **67.20 %** of Tomcat's 1077.40 µs
@@ -194,6 +195,38 @@ inflated too, though not enough to change their reading: they had ample headroom
   host-independence of the Hibernate cost is assumed. It is supported, not proven, by **L4**:
   the axes compose to +2.0 % on the ceiling-free metric, which is what host-independent
   layer costs would produce.
+
+- **THAT ASSUMPTION IS NOW MEASURED, AND IT WAS OPTIMISTIC (2026-08-11).** The arm this entry
+  says does not exist was built: `spring-jdbc` is ORM-free **on Tomcat**
+  (`20260810T131208Z-hibernate-vs-jdbc-n3`, host, 12/12 `comparison_eligible`), so the
+  repository component no longer has to be transferred across hosts.
+
+  | | measured on | repository layer | % of Tomcat's request | ceiling |
+  |---|---|---:|---:|---:|
+  | transferred (above) | Exeris-hosted, `pure − pure-native` | 723.97 µs | 67.20 % | **×1.488** |
+  | **direct** | **Tomcat, `spring-hibernate − spring-jdbc`** (1074.74 − 271.75) | **802.99 µs** | **74.71 %** | **×1.338** |
+
+  The transfer was **low by 10.9 %**. Hosted on Tomcat the repository layer is **three quarters**
+  of the request, not two thirds, and the ceiling on runtime work is **×1.34, not ×1.49**.
+
+  **Quote ×1.34 for a Tomcat deployment and ×1.49 only for the Exeris-hosted derivation**, naming
+  which. The correction moves *against* the runtime — L3 overstated how much runtime work can win
+  — and *strengthens* this entry's own migration-order conclusion: a repository layer that is 75 %
+  of the request goes first even more clearly than one that is 67 %.
+
+  The cross-campaign join is validated by the arm both campaigns share: `spring-hibernate` reads
+  **1077.40 µs** on the bridged ladder and **1074.74 µs** on the host ORM campaign — **0.25 %
+  apart**, which also reproduces the network fence's own claim that bridge-vs-host leaves cpu/req
+  alone. Residual caveat: both subtractions replace JPA with a *different* hand-written data layer
+  (`JdbcTemplate` vs the kernel-native repository API) and both keep pgjdbc + HikariCP, so they
+  measure the same layer, not the same replacement.
+
+  **Interaction with the security correction below — the two nearly cancel.** "Share of the
+  addressable pool already captured" was 121.52/353.43 = **34.4 %**; L11 cuts the numerator to
+  93.21 µs giving **26.4 %**; this correction cuts the denominator to 271.75 µs, returning it to
+  **34.3 %**. Both terms fell ~23 % independently. Quote the ratio only with **both** corrections
+  applied, and note it recombines a rung measured *on* the ORM stack with a remainder measured
+  *off* it. Full derivation: the 2026-08-11 report §4.1.
 - **SECURITY-TERM CORRECTION 2026-08-11 — the hosting step is ×1.09–1.10, not ×1.127.** The
   measured hosting rung (Tomcat → pure, 121.52 µs) contained an unmeasured servlet
   `SecurityFilterChain` difference: the Tomcat arm runs a per-request authorization decision, the
@@ -661,10 +694,13 @@ second.
   `spring-on-exeris-pure` declares the **same four projection interfaces**, and
   `spring-on-exeris-pure-native` declares **none**. So L3's subtraction carries the identical
   confound — its "67 % is Hibernate" is really "67 % is Hibernate + Spring Data projection
-  proxies". The ×1.49 Amdahl ceiling and the migration-order conclusion ("the repositories go
+  proxies". The Amdahl ceiling and the migration-order conclusion ("the repositories go
   first") are **unaffected in direction** — that pool of cost is real and it does leave the path
   when the repositories do — but the *attribution to Hibernate specifically* is not established by
-  the current arms.
+  the current arms. (The ceiling itself moved for an unrelated reason: measured directly on Tomcat
+  rather than transferred, it is **×1.34 against 75 %**, not ×1.49 against 67 % — see L3. Both
+  corrections point the same way: the repository layer matters more, and is less exclusively
+  Hibernate, than the original claim said.)
 - **What would settle it:** one arm of Hibernate/JPA driven through `EntityManager` (or a
   constructor-expression / DTO query) with no Spring Data repository proxy, against the existing
   `spring-hibernate`. That splits the pool into ORM row-mapping vs Spring Data abstraction. Not

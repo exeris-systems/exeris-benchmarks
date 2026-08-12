@@ -19,22 +19,26 @@ authors:
 track: Community
 benchmark_family: Runtime
 scenario: entity-read-by-id
-claim_scope: draft_not_for_publication
 reproducibility_status: incomplete
-claim_scope_note: >
-  BOTH RELEASE CONDITIONS ARE NOW MET (2026-08-11); the fields are left as-is pending an
-  explicit publication decision, not pending work. This note previously read "flip both
-  fields only when every TODO is closed and each table states its own gate status".
-  (1) Every TODO is closed: §2's error budget is derived from this report's own campaigns
-  (tools/derive-error-budget.sh), §6 closed with §6b, and sections 1, 3, 4 and 5 are written.
-  (2) Every data table now names its campaign and its gate status, including §3 and §6b which
-  did not. What has NOT changed is the reason a file-level comparison_eligible would still
-  over-claim: the two pairs crossing the Pure-vs-Compat axis are non_eligible BY DESIGN, and
-  eligibility is a per-campaign, per-pair property in this repo, stated at each table. It is
-  not a document attribute, so claim_scope should become a publication state, never
-  comparison_eligible. reproducibility_status stays "incomplete" until someone other than the
-  author re-derives at least the headline figures from the committed artefacts; every number
-  here was re-derived once, by the person who wrote it.
+# NO claim_scope FIELD, DELIBERATELY — removed 2026-08-11.
+#
+# A whole-file claim scope is the wrong shape for a report, and for this one it would be false
+# in every available value. The file mixes: 108 gated units that are comparison_eligible, two
+# pairs that are non_eligible BY DESIGN because they cross the Pure-vs-Compat axis, an
+# exploratory-class Amdahl derivation (L3), and descriptive footprint data. "comparison_eligible"
+# would over-claim the compat pairs; "exploratory" would under-claim 108 gated units; any single
+# value erases the axis separation the report exists to maintain.
+#
+# Eligibility in this repo is a per-campaign, per-pair property, and it is now stated at EVERY
+# data table with its campaign id and unit count. That is where a reader should look, and a
+# frontmatter field that contradicts or flattens those statements is worse than no field.
+#
+# Nothing consumes it either: publish-report.sh reads claim_scope from the RESULT JSON, not from
+# report frontmatter, and 2026-06-20-entity-read-by-id-artifacts.md already carries none.
+#
+# reproducibility_status STAYS, because it is a genuine file-level property and it is honest:
+# every number here was re-derived from committed artefacts exactly once, by the person who
+# wrote it. Flip it when someone else re-derives the headline figures.
 comparison_axis: within-tier
 hardware_profile: perf-box-amd64
 ---
@@ -604,9 +608,12 @@ a cold `AdvisedSupport` `methodCache`, which is why the *cache-miss* frame tops 
    RowMapper"* — a real and idiomatic stack choice — never *"the cost of the ORM"*.
 2. **L3 inherits this.** Its ORM component is `spring-on-exeris-pure − spring-on-exeris-pure-native`,
    and (verified 2026-08-11) the first declares the same four projection interfaces while the
-   second declares none. The 723.97 µs pool, the ×1.488 ceiling and the migration-order
+   second declares none. The 723.97 µs pool, the ceiling and the migration-order
    conclusion are unaffected in direction — that cost is real and does leave with the
    repositories — but the attribution to Hibernate specifically is not established by these arms.
+   (The ceiling moved for a separate reason: measured on Tomcat rather than transferred it is
+   **×1.338 against 74.7 %**, not ×1.488 against 67.2 % — §4.1. Both corrections point the same
+   way, the layer matters *more* and is *less* exclusively Hibernate than the original claim.)
 
 ### The consequence nobody has priced — and it changes the migration order
 
@@ -748,20 +755,27 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
   and it closes on cpu/req, not on rps (+3.8 %), which is the DB ceiling seen a third way (L4).
   Note the closure does **not** clear the security confound above: a term present in one rung and
   in the end-to-end pair alike cancels in the closure check while remaining in both numbers.
-- **Amdahl consequence — and it is a softer ceiling than it first reads.** With the repository
-  layer in the path at **723.97 µs of a 1077.40 µs request (67.2 %)**, no amount of runtime work
-  can exceed **×1.488** on this contract. Against that ceiling the hosting rung has actually
-  delivered **×1.09–1.10** (§6 above, security term removed), so the runtime is working inside a
-  third of the request and has taken about a fifth of that third.
+- **Amdahl consequence — and it is a softer ceiling than it first reads, in two different ways.**
+  On *this* ladder, with the repository layer at **723.97 µs of a 1077.40 µs request (67.2 %)**,
+  no amount of runtime work can exceed **×1.488**. Against it the hosting rung has actually
+  delivered **×1.09–1.10** (§6 above, security term removed).
 
-  **Restated with §5's corrected label, which changes what the ceiling *is*.** The denominator is
-  not "the ORM" and not Hibernate — it is the **Spring Data repository layer**, whose largest
+  **First softening: that figure is the transferred one, and §4.1 measures it directly.** The
+  723.97 µs comes from the Exeris-hosted pair and is applied to Tomcat because this ladder has no
+  ORM-free Tomcat arm. §4's campaign is that arm, and measured there the repository layer is
+  **802.99 µs — 74.7 % of the request, ceiling ×1.338.** For a Tomcat deployment **quote ×1.34**;
+  ×1.488 belongs to the Exeris-hosted derivation and should be named as such.
+
+  **Second softening — restated with §5's corrected label, which changes what the ceiling *is*.**
+  The denominator is not "the ORM" and not Hibernate — it is the **Spring Data repository layer**, whose largest
   identified component is projection proxies rather than row mapping (§5; the split is unmeasured,
   L10). That matters because **a ceiling set by a replaceable component is not a property of JPA.**
   A team that swaps interface projections for DTO constructor expressions shrinks the denominator
   without touching persistence or runtime, which *raises* the ceiling for any runtime work layered
-  on top. So ×1.488 bounds runtime work **given this repository implementation**, not given JPA —
-  and the cheapest way to move the bound is the change that involves none of our software (§4).
+  on top. So the ceiling — ×1.34 measured, ×1.49 transferred — bounds runtime work **given this
+  repository implementation**, not given JPA, and the cheapest way to move it is the change that
+  involves none of our software (§4.2). Both softenings point the same way: the number is smaller
+  than L3 said *and* less fixed than it sounds.
 
 ### 6b. Footprint — and why "idle RSS" is not one number per arm
 
@@ -1183,7 +1197,7 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
   as well as Hibernate's — and JFR on the new `spring-hibernate` × `spring-jdbc` pair puts Spring
   AOP and reflection frames *above* Hibernate's own tuple materialisation (§5). The label named
   one of two things the arms move together. **What survives unchanged:** the pool is real, it is
-  that large, and it does leave with the repositories — so the ×1.488 ceiling and the
+  that large, and it does leave with the repositories — so the Amdahl ceiling and the
   migration-order conclusion stand. **What replaces it:** *"the Spring Data JPA + Hibernate
   repository layer"*, and where a contributor must be named, *"the largest identified contributor
   is Spring Data's projection proxies rather than Hibernate's own row mapping — the pair moves

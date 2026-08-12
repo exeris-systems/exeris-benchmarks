@@ -54,10 +54,23 @@ been wrong about*. They are collected here as well; the per-entry text stays whe
 remains authoritative for detail.
 
 **Why a register rather than a list of mistakes.** Fourteen withdrawals are recorded below.
-**Exactly one (#14) reached a published report**; the other thirteen were caught while the claim
-was still inside the registry or a draft. One of those thirteen (#1) had nonetheless reached the
-**EN copy string** — the line this file instructs consumers to copy verbatim — which is a
-distribution surface of a different kind and is flagged ⚠ rather than cleared.
+**Exactly one (#14) was ever carried by a finished report** — one not marked DRAFT, stamped
+`claim_scope: comparison_eligible` and `reproducibility_status: complete`. The other thirteen
+were caught while the claim was still in this registry or in a draft. One of those thirteen (#1)
+had nonetheless reached the **EN copy string** — the line this file instructs consumers to copy
+verbatim — which is a distribution surface of a different kind and is flagged ⚠ rather than
+cleared.
+
+> **"Carried by a finished report" is not the same as "released", and this column only claims the
+> first.** Whether any report in this repo was ever distributed outside it — a post, a deck, the
+> portfolio registry — is **not checkable from here**, for any of the fourteen. What is checkable
+> is whether a non-DRAFT report ever contained the figure, and that is what the column reports.
+> Read a clear cell as *"no finished artefact in this repo carried it"*, never as *"nobody saw
+> it"*: the remote is public, so git history carried everything.
+>
+> This distinction was itself wrong on first writing — the register said "reached a published
+> report", conflating the two — and is corrected here. #13 in the table below is the same class
+> of error, two days apart.
 
 That ratio is not luck and it is not modesty: it is the measurable output of the review loop
 running ahead of the publication loop. A lab that never retracts anything is not more careful
@@ -69,7 +82,9 @@ and only two are checkable from inside this repo:
 - **Public git history.** `github.com/exeris-systems/exeris-benchmarks` is a **public** remote,
   so every figure below was visible in commit history from the moment it was pushed. "Did not
   travel" never means "was never visible" — it means no *reader-facing artefact* carried it.
-- **A published report** — anything in `results/reports/` not marked DRAFT. Checkable, and checked.
+- **A finished report** — anything in `results/reports/` not marked DRAFT. Checkable, and checked
+  across all six. This is the column's actual subject; see the caveat above on why that is weaker
+  than "released".
 - **The external portfolio registry** (`arkstack-dev/portfolio:CLAIMS.md`) **and outreach drafts.**
   **Not verifiable from here.** The two planned foojay articles are drafted for Sept–Oct 2026 and
   have not shipped, so the exposure window is small — but anything marked ⚠ below should be
@@ -77,8 +92,8 @@ and only two are checkable from inside this repo:
 
 | # | what was claimed | withdrawn | what replaced it | travelled? |
 |---|---|---|---|---|
-| 1 | *"Hibernate is 67 % of the cost"* — the plain-"ORM" label on the L3 pool | 2026-08-11 | *"the Spring Data JPA + Hibernate repository layer"*; largest identified contributor is projection proxies, split **unmeasured** (L10) | ⚠ **the EN copy string in L3** — the one surface this registry tells consumers to copy verbatim. Old string kept struck-through and labelled DO NOT COPY. No published report carried it. |
-| 2 | **×1.127** hosting rung | 2026-08-11 | **≈ 89–96 µs, ×1.09–1.10** — 23.3 % of the step was Spring Security (L11) | no published report; canon says do not quote it at all |
+| 1 | *"Hibernate is 67 % of the cost"* — the plain-"ORM" label on the L3 pool | 2026-08-11 | *"the Spring Data JPA + Hibernate repository layer"*; largest identified contributor is projection proxies, split **unmeasured** (L10) | ⚠ **the EN copy string in L3** — the one surface this registry tells consumers to copy verbatim. Old string kept struck-through and labelled DO NOT COPY. No finished report carried it. |
+| 2 | **×1.127** hosting rung | 2026-08-11 | **≈ 89–96 µs, ×1.09–1.10** — 23.3 % of the step was Spring Security (L11) | no finished report; canon says do not quote it at all |
 | 3 | **×1.488 / 67.2 %** Amdahl ceiling quoted for Tomcat | 2026-08-11 | **×1.338 / 74.7 %** measured directly on Tomcat; ×1.488 survives, *named to* the Exeris-hosted derivation | no |
 | 4 | **±2.80 %** cpu/req error budget (4 summed rows) | 2026-08-11 | **±2.52 % heavy / ±3.71 % light**, per contract, quadrature, derived by `tools/derive-error-budget.sh` | no — draft only |
 | 5 | a bare **"18×"** idle-CPU ratio | 2026-08-11 | absolute **~0.027 cores / ~0.67 % of a 4-core pin**; the ratio is 18.1–29.6× depending on the comparator | no |
@@ -90,10 +105,10 @@ and only two are checkable from inside this repo:
 | 11 | L4's closure justification: *"+2.0 % is inside the counterbalanced arm-order control (≤ ~2 %)"* | 2026-08-11 | +2.0 % is inside the **±2.52 % combined** envelope but **not** the arm-order term alone (1.00 %). Claim stands, justification did not | no |
 | 12 | L5: *"worst p99 of all four arms"*, *"p99/p50 = 6.26× vs 5.05×"*, *"12.49 ms"* | 2026-08-11 | open-loop: tracks the native baseline within 5–22 % to 40 000 rps; **3.2× vs 2.4×**; **4.51–5.00 ms** — closed loop inflated it ~2.5× | no |
 | 13 | *"idle cores are state-invariant to three decimal places"* | 2026-08-11 | **to within ~2 %** — 0.0286 vs 0.0280 does not survive three decimals. Finding unaffected | no — corrected one commit after it landed |
-| 14 | the **agent-laden RSS profiles** (284/346/430 MiB light) | 2026-07-29 | agent-free medians, n=3: **233/276/352 MiB**; the agent tax is arm-dependent (~51/70/78 MiB) and **understated** Exeris's advantage | ✅ **yes — this one reached a published report** (2026-07-21 triad). Corrected in place, in the body, TL;DR and conclusions, with the superseded table left visible. |
+| 14 | the **agent-laden RSS profiles** (284/346/430 MiB light) | 2026-07-30 | agent-free medians, n=3: **233/276/352 MiB**; the agent tax is arm-dependent (~51/70/78 MiB) and **understated** Exeris's advantage | ⚠ **the only one carried by a finished report.** It sat in the 2026-07-21 triad — non-DRAFT, `comparison_eligible`, `reproducibility_status: complete` — for **~1.6 days across four PRs** (`cf7f4df9` → `ae333638`, 28–30 Jul), in the body, TL;DR **and** conclusions. Corrected in place with the superseded table left visible. Whether that report travelled outside the repo in those two days is not checkable from here. |
 
 **Two entries are worth reading as a pair, because they run in opposite directions.** #14 is the
-only retraction that reached a reader-facing artefact — and it moved *in Exeris's favour*, which
+only retraction that reached a finished artefact — and it moved *in Exeris's favour*, which
 is the case where the incentive to leave it alone is strongest. Separately, the
 `spring-on-exeris*` `internal` mislabel at the top of this file is the inverse of a retraction:
 it did not release a wrong number, it **withheld eight correct ones** for a rule that never

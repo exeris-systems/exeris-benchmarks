@@ -385,6 +385,46 @@ For every benchmark result the following must be present:
 Outlier runs (stddev > 15% of mean across forks) should be flagged and
 investigated before being stored as baselines.
 
+### An error budget needs a scope, or it misleads in both directions
+
+A tolerance you cannot re-derive is the same defect as a result you cannot re-derive — it just
+hides one level down, in the yardstick instead of in the measurement. Two rules follow.
+
+**1. A fence is not a budget row.** A *fence* says a comparison is invalid; a *budget* says a
+valid comparison is not resolving anything. Crossing a fence does not widen an error bar, it voids
+the result, so a fence must never appear as a budget line where it reads as absorbable.
+`scripts/compare-results.sh` enforces two — `backend_network_mode` and `db_cpuset` — by refusing
+the comparison outright.
+
+**2. State the layer the budget belongs to.** Run-to-run variance is layered, and the layers
+differ by more than an order of magnitude in what they admit:
+
+| layer | what varies | typical error if misapplied |
+|---|---|---|
+| ab vs ba inside one repeat | position in a counterbalanced sequence — **same JVM instances**, one warmup, one JIT state | **under-states**: omits restart variance entirely |
+| repeat | a full teardown and relaunch, direction held fixed | the applicable layer for "would this recur from scratch" |
+| an incomplete repeat | a smaller sample wearing a repeat's label | **over-states** |
+| a cross-campaign envelope imported from another configuration | conditions that are not present | **over-states**: can declare a resolvable effect unresolvable |
+
+Combine independent layers **in quadrature, not by summing**, and report the combination per
+contract — variance is not contract-independent, and a single pooled number will typically
+over-state the heavy contract while under-stating the light one.
+
+**Resolving power is arithmetic, not preference.** Whether a contract can measure an effect is the
+ratio of the effect to *that layer's* variance, not the repeat count. An effect that is 1 % of a
+heavy baseline and 20 % of a light one is unresolvable on heavy at any n, and settled on light at
+n=3.
+
+**A bound must be the one measured on the axis being claimed.** A cpu/req budget does not transfer
+to throughput (which a DB ceiling can bound independently) and emphatically not to percentiles.
+Measured on one runtime-snapshot pair in the `entity-read-by-id` series: cpu/req moved 0.20 % while
+p99 moved 16.9 % — an 83× sensitivity gap — on the light contract, against 2.1× on heavy.
+
+`tools/derive-error-budget.sh` computes both layers per contract from committed campaign
+artefacts; run it rather than quoting a budget forward. Worked example and the full
+retired-vs-derived comparison:
+[`results/reports/2026-08-11-entity-read-by-id-spring-hosting-and-orm-axis.md` §2](../results/reports/2026-08-11-entity-read-by-id-spring-hosting-and-orm-axis.md).
+
 ---
 
 ## Reproducibility checklist

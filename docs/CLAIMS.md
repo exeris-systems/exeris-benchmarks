@@ -19,6 +19,14 @@ The tax is charged per DB round-trip, so the faster arm — which issues 2.8× (
 3.6× (heavy) more round-trips per second — pays proportionally more of it. **Every
 Exeris-favourable number below is therefore a floor, not a point estimate.**
 
+> **Provenance caveat, added 2026-08-11.** The `+20.5 %` / `0.357 → 0.358 ms` figures exist in the
+> June report's prose and nowhere else. Every committed `results/raw/guided/*/result.json` records
+> `backend_network_mode: host`, so **the bridge leg is not in the repository**, and the run does not
+> appear in that report's own run index. Quote it as the origin of the fence, not as a reproducible
+> measurement. The fence itself does not depend on the magnitude: `scripts/compare-results.sh`
+> refuses a mode-crossing comparison outright, and the direction (bridge penalises the chattier arm)
+> is what the "floor, not a point estimate" reading rests on.
+
 **Correction 2026-08-11 — `spring-on-exeris*` was never confidential, and eight entries below
 were mislabelled `Track: internal` because of it.** The stamp traced to a CLAUDE.md scoping line
 naming `targets/exeris-spring-runtime-benchmark-app-comp/`, a path that has never existed in this
@@ -218,10 +226,17 @@ inflated too, though not enough to change their reading: they had ample headroom
   | light cpu/req | 3.016 | 2.890 | +4.4 % |
   | light rps | 2.891 | 2.773 | +4.3 % |
 
-- The ceiling-free metric closes at +2.0 %, inside the counterbalanced arm-order control
-  (≤ ~2 %). The decomposition is therefore sound as an **attribution instrument**, not merely
-  a heuristic. Drift is systematically larger on rps than on cpu/req (3.8 vs 2.0 on heavy) —
-  the same ceiling seen a third way. **Check ladder closure on cpu/req.**
+- The ceiling-free metric closes at +2.0 %, inside the **±2.52 % heavy single-comparison
+  envelope** (`tools/derive-error-budget.sh`, 2026-08-11). The decomposition is therefore sound as
+  an **attribution instrument**, not merely a heuristic. Drift is systematically larger on rps than
+  on cpu/req (3.8 vs 2.0 on heavy) — the same ceiling seen a third way.
+  **Check ladder closure on cpu/req.**
+  - **CORRECTION 2026-08-11.** This previously read "inside the counterbalanced arm-order control
+    (≤ ~2 %)". That control was an n=1 exploratory cell on another configuration; re-derived over
+    six `-n3` campaigns the arm-order term is **1.00 % heavy / 2.71 % light (p95)**, so +2.0 % is
+    **not** inside the arm-order layer alone. It is inside the combined envelope once the
+    restart layer is included — i.e. the residual is the size of a relaunch, not of a reordering.
+    The closure claim stands; its justification was wrong.
 - **RETRACTED** (never published): the prediction that overlapping rungs would make the light
   gap exceed the heavy gap. Light drift (+4.3 %) exceeds heavy (+2.0 %), but on the
   ceiling-free metric the axes compose; the residual is drift, not interaction.
@@ -285,8 +300,11 @@ in the current artefacts distinguishes the candidates.
 
 **Fence for anyone quoting this entry:** percentiles here are **ab-ba ranges, not points**. Tail
 metrics in this campaign proved far more order-sensitive than throughput (the sibling ORM phase
-read p99 5.25 against 15.07 ms in one cell at the same offered rate), and the +/-2.00 % arm-order
-term in the cpu/req error budget is measured on cpu/req and **does not transfer to tails**.
+read p99 5.25 against 15.07 ms in one cell at the same offered rate), and the arm-order term in the
+cpu/req error budget (**1.00 % heavy / 2.71 % light**, p95) is measured on cpu/req and **does not
+transfer to tails**. Measured size of the gap: on one runtime-snapshot pair p99 moved 16.9 % where
+cpu/req moved 0.20 % — **83×** — on the light contract (heavy: 2.1×), and both percentiles were
+closed-loop, i.e. queue occupancy rather than service time.
 
 ## L6 — PRE-REGISTERED PREDICTION: what host networking does to the heavy ceiling
 
@@ -619,9 +637,12 @@ second.
   | heavy (transferability check) | +40.40 | +21.99 | +35.35 | +32.58 us | 9.52 (29 %) | 26.8 % |
 
 - **Light is the measurement by design.** A 10-30 us effect is 0.93-2.78 % of heavy's 1077 us
-  baseline (at or below the +/-2.80 % budget) and 6.8-20.5 % of light's 147 us. Heavy could never
-  have resolved it, and its 29 % relative uncertainty confirms that the limit is the ratio of
-  effect to layer variance, not the repeat count.
+  baseline against a **+/-2.52 % heavy envelope** — straddling the floor, i.e. unresolvable — and
+  6.8-20.5 % of light's 147 us against **+/-3.71 %**, clear of it across almost the whole range.
+  Heavy could never have resolved it, and its 29 % relative uncertainty confirms that the limit is
+  the ratio of effect to layer variance, not the repeat count. (Envelopes re-derived 2026-08-11 by
+  `tools/derive-error-budget.sh` over six `-n3` campaigns; they replace a `+/-2.80 %` figure that
+  had been quoted forward from an n=1 cell on another configuration.)
 
 ### Fences — three, and none is optional
 

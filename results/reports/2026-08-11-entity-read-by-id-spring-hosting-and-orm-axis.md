@@ -15,8 +15,9 @@ claim_scope: draft_not_for_publication
 reproducibility_status: incomplete
 claim_scope_note: >
   Deliberately NOT comparison_eligible while this is a draft, even though the underlying
-  campaigns are. §2's error budget carries numbers with no cited source and says in its own
-  text that it blocks publication; two sections still carry TODOs. A file-level
+  campaigns are. §2's error budget is now derived from this report's own campaigns
+  (tools/derive-error-budget.sh, 220 observations) and no longer blocks; the remaining
+  TODOs are prose in sections 1, 3, 4 and 6. A file-level
   comparison_eligible would also over-claim across the whole report: the ladder campaign's
   48 leaves are not declared all-eligible anywhere, and the two pairs that cross the
   Pure-vs-Compat axis are non_eligible BY DESIGN. Eligibility is a per-campaign, per-pair
@@ -31,9 +32,10 @@ hardware_profile: perf-box-amd64
 *One Spring application served five ways, plus a native baseline, under two fixed contracts on dedicated bare metal.*
 
 > **DRAFT STATUS.** The open-loop wrk2 campaign has **landed** (§7, 36/36 leaves
-> `comparison_eligible`), so no section is waiting on data any more. What remains open is prose,
-> **one hard blocker**: §2's error budget carries numbers with no cited source. Everything else is
-> settled — §6's security confound was the last open experiment and it closed on 2026-08-11 at
+> `comparison_eligible`), so no section is waiting on data any more, and **the last hard blocker is
+> closed**: §2's error budget is derived from this report's own six campaigns rather than quoted
+> forward (§2.2, `tools/derive-error-budget.sh`). What remains is prose. §6's security confound was
+> the last open experiment and it closed on 2026-08-11 at
 > +28.31 ± 3.25 µs/req. Two editorial questions are decided: the compat rung stays out of §6's pure
 > ladder and goes to the `compat/` track, and arm 3 publishes with its version-skew fence rather
 > than holding the report for an alignment campaign. Every number here is from a committed, gate-passing campaign
@@ -112,8 +114,9 @@ Three things are new and none of them existed on 2026-07-21:
   Postgres cpuset and the slow ones do not, so a fast-vs-slow heavy *throughput* ratio reads the
   database, not the stack — cpu/req survives it, throughput does not (§3). And percentiles are
   given as **ab–ba ranges, never as points**: tail metrics here are far more order-sensitive than
-  throughput (5.25 vs 15.07 ms p99 in one cell at the same offered rate), and §2's ±2.00 %
-  arm-order term is measured on cpu/req and does not transfer (§7).
+  throughput (5.25 vs 15.07 ms p99 in one cell at the same offered rate), and §2's arm-order term
+  (1.00 % heavy / 2.71 % light) is measured on cpu/req and does not transfer (§7). On one snapshot
+  pair a tail moved 83× harder than cpu/req (§2.3).
 - **Footprint and idle cost** — §6. **[PENDING: consolidate L8 + RSS across the ladder]**
 
 **What this report will not claim:** any service-time comparison from the closed-loop campaigns;
@@ -207,42 +210,109 @@ DB-busy figure with a host one**, and never read a bridge one as Postgres utilis
 
 ## 2. The error budget — what counts as a difference
 
-**[SECTION SKELETON — numbers carried from the prior error-budget analysis. PROVENANCE TODO
-before publish: each row must cite the campaign it was derived from. These were computed in
-earlier work and are NOT re-derived from artefacts in this draft; a report may not carry an
-error budget without a citation, so this section blocks publication until the sources are
-attached.]**
+Several claims in this report would otherwise argue tolerance ad hoc ("+2.0 % closure, inside the
+≤ 2 % control"). Stated once, as a budget on **cpu/req** — and derived from this report's own
+campaigns rather than quoted forward from memory.
 
-Several claims in this report currently argue tolerance ad hoc ("+2.0 % closure, inside the
-≤ 2 % control"). Stated once, as a budget on **cpu/req**:
+**Two things are being separated here, and the earlier version of this table conflated them.** A
+**fence** says a comparison is *invalid*; a **budget** says a valid comparison is *not resolving*
+anything. Crossing a fence does not widen an error bar, it voids the result — so a fence must
+never appear as a budget row, where it reads as something you can absorb.
 
-| source | cpu/req |
-|---|---:|
-| harness noise | ± 0.30 % |
-| arm order (ab vs ba) | ± 2.00 % |
-| DB network mode | ± 0.30 % |
-| runtime snapshot | ± 0.20 % |
-| **total** | **± 2.80 %** |
+### 2.1 Fences — conditions under which no budget applies
 
-This turns §3's reading rule from prose into arithmetic: a cpu/req difference below **±2.80 %** is
-not a difference. Both ORM-axis results clear it by a wide margin (×3.95 and ×1.17 are
-+295 % and +17 %), and so does the ladder closure (+2.0 %, inside the budget — which is what makes
-the decomposition an attribution instrument rather than a coincidence).
+Both are enforced by `scripts/compare-results.sh`, which refuses the comparison outright; a
+difference is never overridable.
 
-**The budget does not transfer across metrics, and that is the point of stating it.** On the same
-snapshot pair, **p99 moved 16.9 % where cpu/req moved 0.20 % — roughly 85× the sensitivity to an
-identical fence.** That is the strongest available argument for why §7 waits for wrk2 instead of
-recycling closed-loop percentiles: a tail metric that reacts 85× harder to a change the throughput
-metric barely registers cannot be quoted from a run that was not designed to isolate it.
+| fence | measured magnitude | source |
+|---|---|---|
+| `backend_network_mode` (bridge vs host) | **+20.5 % throughput at unchanged cpu/req** (0.357 → 0.358 ms), target-thread `%wait` 265 % → 57 % | [2026-06-20 report §2](2026-06-20-entity-read-by-id-steady-state-and-cost-per-request.md) |
+| `db_cpuset` (pinned vs unpinned) | unpinned Postgres shares all 16 cores with a target pinned to 0-1,8-9 — contends with the arm *and* makes DB CPU unattributable | verified 2026-08-06 (`postmaster Cpus_allowed_list`) |
 
-### 2.1 A budget needs a scope, or it misleads in both directions
+> **Provenance caveat on the network-mode row.** The +20.5 % / 0.357 → 0.358 ms figures exist in
+> the June report's prose and nowhere else: every committed `results/raw/guided/*/result.json`
+> records `backend_network_mode: host`, so **the bridge leg is not in the repository** and the run
+> does not appear in that report's own run index. It is cited here as the origin of the fence, not
+> as a reproducible measurement. The fence itself does not depend on the number — all campaigns in
+> this report are host-net, so the fence is satisfied by construction rather than by tolerance.
 
-**The table above is an envelope for CROSS-CAMPAIGN, cross-arm comparisons. Applying it to a
-tighter comparison over-states uncertainty; substituting a looser proxy under-states it.** Three of
-its four rows are inapplicable to a same-jar A/B run inside one campaign: the runtime-snapshot term
-is *zero* when both arms launch a byte-identical artefact, the network-mode term does not apply
-within one campaign, and the arm-order term is measured rather than assumed once both directions
-are run.
+### 2.2 The budget — two variance layers, per contract
+
+Derived by `tools/derive-error-budget.sh` over the **six `-n3` campaigns** under
+`results/raw/entity-read-by-id/` (2026-08-05 … 2026-08-11), 220 observations, output committed at
+[`assets/2026-08-11-error-budget-derivation.csv`](assets/2026-08-11-error-budget-derivation.csv).
+`cpu/req = cpu_time_seconds / total_requests`, the formula the campaign runners and
+`tools/aggregate-matrix.sh` use.
+
+| layer | what varies | n | heavy p95 | light p95 |
+|---|---|---:|---:|---:|
+| arm order (ab vs ba) | position in the counterbalanced sequence — **same JVM instances**, one warmup, one JIT state | 66 + 66 | 1.00 % | 2.71 % |
+| repeat | a full teardown and relaunch, direction held fixed | 44 + 44 | 2.31 % | 2.54 % |
+| **combined** (quadrature) | **a single leaf-to-leaf comparison** | — | **± 2.52 %** | **± 3.71 %** |
+
+This turns §3's reading rule from prose into arithmetic: **a cpu/req difference below ±2.52 %
+(heavy) or ±3.71 % (light) is not a difference.** Both ORM-axis results clear it by a wide margin
+(×3.95 and ×1.17 are +295 % and +17 %), and so does the ladder closure (+2.0 % on heavy, inside
+the budget — which is what makes the decomposition an attribution instrument rather than a
+coincidence). Claims built on the mean of n=3 repeats resolve finer than this; the table is the
+conservative single-comparison envelope, not the precision of an averaged result.
+
+> **What the previous version of this table got wrong**, recorded because the failure mode is
+> reusable. It read: harness noise ±0.30 %, arm order ±2.00 %, DB network mode ±0.30 %, runtime
+> snapshot ±0.20 %, total ±2.80 %. Four defects. (1) Three of the four rows traced to a **single
+> n=1 exploratory cell** (`results/raw/20260724-entity-read-by-id-3way-kernel-profile-LIGHT/counterbalanced-cell/`)
+> on an older heap/GC/pool configuration — not to any campaign in this report. (2) The arm-order
+> row **under-stated its own source**: that cell's largest measured cpu/req move was +2.14 %, and
+> its text says "≈2 %", not "±2.00 %". (3) The DB-network row was a fence miscast as a budget line
+> (§2.1). (4) The rows were **summed**, which both mixes terms that do not apply simultaneously
+> and is the wrong combination rule for independent ones. The replacement is measured on the arms
+> this report actually compares.
+
+### 2.3 The budget does not transfer across metrics
+
+On one snapshot pair — the same `spring-on-exeris-pure-native` arm measured under two consecutive
+runtime-web snapshots, `-29` in `20260808T065528Z-purenative-vs-quarkustuned-n3` and `-31` in
+`20260808T151608Z-purenative-vs-compnative-n3`, identical pins, heap, DB mode and contracts, n=6
+leaves each — **cpu/req moved +0.20 % while p99 moved +16.9 %: roughly 83× the sensitivity to an
+identical change.**
+
+**That figure is light-contract only, and it is a closed-loop percentile.** Two fences on it, both
+of which the earlier one-line version of this claim omitted:
+
+| contract | Δ cpu/req | Δ p99 | magnitude ratio |
+|---|---:|---:|---:|
+| **light** | +0.20 % | **+16.9 %** | **83×** |
+| heavy | −0.15 % | +0.30 % | 2.1× |
+
+The heavy arm shows no such amplification, so "tails are ~85× more sensitive" is **not** a general
+property of this harness — it is what the light contract did on this pair. And both p99 values come
+from `wrk` leaves carrying `run_config.driver.mode: closed`, whose own recorded note reads
+*"closed = wrk at saturation: throughput and resource metrics valid, percentiles are
+queue-depth/throughput"* — so the 16.9 % is a move in **queue occupancy, not service time**.
+
+> **Harness gap found while sourcing this.** The `-29` campaign stamps
+> `latency_percentile_eligibility: {publishable: false, reason: closed_loop_driver_at_saturation}`
+> in every `claim-status.json`; the `-31` campaign **emits no such block at all** — 0 files against
+> 12, the only one of the six `-n3` campaigns missing it. The percentiles are equally unpublishable
+> in both; only the stamp is absent. `run_config.driver.mode` is present on both and is what the
+> classification above rests on. Worth fixing so the gate does not depend on which runner version
+> wrote the campaign.
+
+Both caveats *strengthen* the reason §7 waits for wrk2 rather than recycling closed-loop
+percentiles: a metric that can move 83× harder than cpu/req on a change neither arm intended, and
+that is not even measuring service time when it does, cannot be quoted from a run that was not
+designed to isolate it.
+
+### 2.4 A budget needs a scope, or it misleads in both directions
+
+**The §2.2 table is the envelope for a single leaf-to-leaf comparison. Applying it to a tighter
+comparison over-states uncertainty; substituting a looser proxy under-states it.** A same-jar A/B
+run inside one campaign is tighter on every axis at once: no snapshot term (both arms launch a
+byte-identical artefact), no network-mode term (one campaign, one mode), and an arm-order term
+that is *measured on that pair* rather than taken from the pooled p95.
+
+This is not an abstract worry — it is how the retired table went wrong. Its rows came from a
+different configuration than the arms it was being applied to, and nothing in the number said so.
 
 The security-confound campaign (`20260811T114140Z-security-confound-n3`, §6) supplied three
 counter-examples in a single run, and they point in opposite directions — which is why the rule is
@@ -250,7 +320,7 @@ worth stating as scope rather than as a number:
 
 | candidate yardstick | what it actually measures | on this pair | error |
 |---|---|---|---|
-| imported ±2.80 % budget | cross-campaign envelope | ±29 µs on a heavy arm | **over-states** — declared a resolvable effect unresolvable |
+| the retired ±2.80 % budget | an envelope imported from an n=1 cell on another configuration | ±29 µs on a heavy arm | **over-states** — declared a resolvable effect unresolvable |
 | ab vs ba inside one repeat | stability *within* one JVM lifetime — both directions share the same instances, warmup and JIT state | 0.02–0.11 % | **under-states** — omits the restart variance entirely |
 | an incomplete repeat | a smaller sample wearing a repeat's label | inflated the light spread ~10× | **over-states** |
 | **repeat-to-repeat, complete repeats only** | **would this difference recur if I ran it again from scratch** | see §6 | the applicable one |
@@ -265,8 +335,9 @@ not the repeat count that decides — it is the ratio of the effect to the layer
 the light contract that ratio is large and n=3 settles it; on heavy the arms' restart variance is
 comparable to the effect itself, so no number of repeats would settle it (§6).
 
-**[TODO]** promote both the table and this scope rule to `docs/methodology.md` once sourced, so
-they stop being report-local. The scope rule is arguably the more portable of the two.
+Both the layering rule and the fence-is-not-a-budget-row rule are now in
+[`docs/methodology.md` → *An error budget needs a scope*](../../docs/methodology.md), so they stop
+being report-local; this section is the worked example they point back to.
 
 ---
 
@@ -439,11 +510,12 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 > | **light** (the measurement) | +26.23 | +26.64 | +32.06 | **+28.31 µs** | 3.25 (11 %) | **23.3 %** |
 > | heavy (transferability check) | +40.40 | +21.99 | +35.35 | +32.58 µs | 9.52 (29 %) | 26.8 % |
 >
-> **Light is the measurement by design, not by preference.** Against the ±2.80 % budget of §2 a
-> 10–30 µs effect is 0.93–2.78 % of heavy's 1077 µs baseline — at or below the noise floor — and
-> 6.8–20.5 % of light's 147 µs. Heavy could never have resolved this, and its 29 % relative
-> uncertainty confirms it: the limit is not repeat count but the ratio of the effect to that
-> layer's own variance (§2.1).
+> **Light is the measurement by design, not by preference.** Against the per-contract budget of
+> §2.2 a 10–30 µs effect is **0.93–2.78 % of heavy's 1077 µs baseline against a ±2.52 % heavy
+> envelope** — straddling the floor, i.e. unresolvable — and **6.8–20.5 % of light's 147 µs against
+> ±3.71 %**, clear of it across almost the whole range. Heavy could never have resolved this, and
+> its 29 % relative uncertainty confirms it: the limit is not repeat count but the ratio of the
+> effect to that layer's own variance (§2.4).
 >
 > **Contract-dependence is NOT established.** The two intervals overlap ([25.1, 31.6] against
 > [23.1, 42.1]), so the data are consistent with a constant absolute per-request cost but do not
@@ -473,8 +545,10 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 > stable one. n=3, no mechanism proposed.
 
 - The decomposition **closes**: product of the rungs vs the directly-measured end-to-end pair is
-  **+2.0 % on heavy cpu/req**, inside the ±2.80 % budget of §2 (and inside the ≤ 2 %
-  counterbalanced arm-order term specifically). It is an attribution instrument, not a heuristic —
+  **+2.0 % on heavy cpu/req**, inside the **±2.52 %** heavy envelope of §2.2. Note it is *not*
+  inside the heavy arm-order term alone (1.00 %) — closure at this size needs the restart layer,
+  which is the honest reading: the residual is the size of a relaunch, not of a reordering. It is
+  an attribution instrument, not a heuristic —
   and it closes on cpu/req, not on rps (+3.8 %), which is the DB ceiling seen a third way (L4).
   Note the closure does **not** clear the security confound above: a term present in one rung and
   in the end-to-end pair alike cancels in the closure check while remaining in both numbers.
@@ -510,10 +584,11 @@ top rungs. That is the precondition for the whole section and it is met, not ass
 
 > **Percentiles are given as an ab–ba range, never as a point.** Tail metrics in this campaign are
 > far more order-sensitive than throughput: at heavy 3000 rps `spring-hibernate` read p99 5.25 in
-> one direction and 15.07 in the other, at the same offered rate. §2's arm-order term (±2.00 %) is
-> **measured on cpu/req and does not transfer here** — that is the same "a bound must be the one
-> measured on the axis being claimed" trap the report warns about elsewhere, and this is where it
-> bites hardest. With n=2 per cell, medians are solid and tails are indicative.
+> one direction and 15.07 in the other, at the same offered rate. §2.2's arm-order term (1.00 %
+> heavy, 2.71 % light) is **measured on cpu/req and does not transfer here** — that is the same "a
+> bound must be the one measured on the axis being claimed" trap the report warns about elsewhere,
+> and this is where it bites hardest. §2.3 puts a number on the gap: on one snapshot pair the tail
+> moved 83× harder than cpu/req. With n=2 per cell, medians are solid and tails are indicative.
 
 ### 7.1 The ORM axis, heavy: the arms do not diverge in cost, they diverge in *headroom*
 
@@ -645,9 +720,11 @@ stated where it belongs and none of them can move a claim made here:
 | the split of L11's 28.31 µs between authorization work and 170 bytes of security headers | refines L11 | The full figure is correct for the question the rung asks (*what does removing Spring Security save*); the split only matters for a narrower question this report does not ask. |
 | the mechanism behind L5's ~30 000 rps onset | explains L5 | L5's claim is stated as a behaviour with a measured onset, not as a mechanism. |
 
-**The one thing that does block publication is not an open question:** §2's error budget carries
-numbers with no cited source and says so in its own text. Sourcing it is bookkeeping, not
-research.
+**The one thing that did block publication was not an open question, and it is now closed.** §2's
+error budget carried numbers with no cited source; it is now derived from this report's own six
+campaigns by `tools/derive-error-budget.sh` (§2.2). That was bookkeeping, not research — but the
+bookkeeping found three real defects, which is the argument for doing it rather than attaching
+citations to the numbers that were already there (§2.2, retired-table note).
 
 *(Arm 3's version skew is no longer listed here — it is a decision, taken on 2026-08-11 to publish
 with the fence rather than hold the report, and it lives in fairness posture 5.)*
@@ -677,6 +754,24 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
   capacity-approach behaviour, with the closed-loop magnitude overstated ~2.5×. Percentile
   reporting switched to ab–ba ranges after tail metrics proved far more order-sensitive than the
   cpu/req arm-order term covers.
+- **2026-08-11 — the error budget was re-derived, and the old one turned out to be wrong in four
+  ways.** §2's table had been quoted forward from earlier work with no citation. Tracing it found
+  every row: harness noise and arm order came from **one n=1 exploratory cell**
+  (`20260724-…-3way-kernel-profile-LIGHT/counterbalanced-cell/`) on a different heap/GC/pool
+  configuration; DB network mode came from the 2026-06-20 report's prose, whose **bridge leg is not
+  committed anywhere**; runtime snapshot had no written derivation at all. Rather than attach
+  citations to numbers measured on other arms, the budget is now **derived from this report's own
+  six campaigns** — `tools/derive-error-budget.sh`, 220 observations,
+  [CSV committed](assets/2026-08-11-error-budget-derivation.csv). Consequences: the single
+  ±2.00 % arm-order row **split by contract** (1.00 % heavy / 2.71 % light — the old figure
+  over-stated heavy ~2× and under-stated light); the total **±2.80 % became ±2.52 % heavy /
+  ±3.71 % light**, combined in quadrature rather than summed; the DB-network row was **removed from
+  the budget entirely** because it is a fence, not a tolerance (§2.1). Two claims changed: the
+  ladder closure's +2.0 % is inside the heavy envelope but **not** inside the arm-order term alone,
+  as previously written; and the "p99 is ~85× more sensitive than cpu/req" figure is fenced to
+  **the light contract only** (heavy: 2.1×) and to **closed-loop percentiles**, i.e. queue
+  occupancy rather than service time (§2.3). No conclusion in the report is overturned; three are
+  now stated more tightly.
 - **[TODO on publish]** record that this report retracts the plain-"ORM" label used for the
   L3 pool, and why.
 

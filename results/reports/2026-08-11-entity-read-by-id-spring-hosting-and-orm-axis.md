@@ -1,5 +1,5 @@
 ---
-title: "DRAFT — Where the request actually goes: a Spring hosting ladder and the ORM axis, measured on both hosts"
+title: "Where the request actually goes: a Spring hosting ladder and the ORM axis, measured on both hosts"
 date: 2026-08-11 00:00:00 UTC
 categories:
   - performance
@@ -56,32 +56,29 @@ comparison_axis: within-tier
 hardware_profile: perf-box-amd64
 ---
 
-# DRAFT — Where the request actually goes: a Spring hosting ladder and the ORM axis, measured on both hosts
+# Where the request actually goes: a Spring hosting ladder and the ORM axis, measured on both hosts
 
 *One Spring application served five ways, plus a native baseline, under two fixed contracts on dedicated bare metal.*
 
-> **DRAFT STATUS — content complete as of 2026-08-11.** Every section is written, every TODO is
-> closed, and nothing is waiting on data or on a campaign. The last experiment (§6's security
-> confound) closed at **+28.31 ± 3.25 µs/req**; the last hard blocker (§2's unsourced error budget)
-> closed by deriving it from this report's own campaigns (§2.2, `tools/derive-error-budget.sh`);
-> the last section-level gap (§6b footprint) closed with a finding of its own. Three editorial
-> questions are decided: the compat rung stays out of §6's pure ladder and goes to the `compat/`
-> track, arm 3 publishes with its version-skew fence rather than holding the report for an
-> alignment campaign, and the open questions in §8 ship open with an argument for why none of them
-> moves a headline.
+> **How to read this, and what it is not.** Every number here comes from a committed,
+> gate-passing campaign under `results/raw/entity-read-by-id/` and was re-derived from its
+> artefacts before being written down; **none is provisional or estimated.** Three editorial
+> decisions are on the record rather than silent: the compat rung stays out of §6's pure ladder
+> and goes to the `compat/` track, arm 3 publishes with its version-skew fence rather than
+> holding the report for an alignment campaign, and §8's open questions ship open with an
+> argument for why none of them moves a headline.
 >
-> **A second derivation has happened, and `reproducibility_status` is now `complete` — with the
-> word "independent" meaning something specific, so here is what it meant.** Every headline figure
-> was rebuilt directly from `results/raw/entity-read-by-id/` **without reading this report's
-> text**, by queries written against the artefacts. It was done on the author's side, independent
-> of the pass that wrote the prose — **it is not third-party review, and `complete` should not be
-> read as one.** With that stated: **every headline number survived** — §4's cpu/req to two decimals,
-> §3's ladder, §1's 108/1080/216 gate counts, §2's budget, §5's JFR shares, §6's confound and its
-> 170 header bytes, §6b's footprint states, and all 36 percentile cells of §7. What did *not*
-> survive was bookkeeping: one derivation error in §6, one mislabelled column in §7.1, and a
-> handful of scope and unit slips — fixed, and recorded in the editorial list below and in
-> `docs/CLAIMS.md`'s retraction register (#18–#21). Every number is from a committed,
-> gate-passing campaign; **none is provisional or estimated.**
+> **`reproducibility_status: complete` means one specific thing.** Every headline figure was
+> rebuilt a second time directly from the artefacts, **without reading this report's text** — a
+> pass that found one derivation error in §6, one mislabelled column in §7.1 and a set of scope
+> and unit slips, all fixed and all recorded in the revision history and in `docs/CLAIMS.md`'s
+> retraction register. **Every headline number survived it.** That pass was run on the author's
+> side: it is a second derivation, **not third-party review**, and `complete` should not be read
+> as one.
+>
+> **There is no file-level `claim_scope`, deliberately** — this report mixes 108 gated units that
+> are `comparison_eligible` with two pairs that are `non_eligible` by design, so any single value
+> would be false. Eligibility is stated at every table with its campaign id and unit count.
 
 ---
 

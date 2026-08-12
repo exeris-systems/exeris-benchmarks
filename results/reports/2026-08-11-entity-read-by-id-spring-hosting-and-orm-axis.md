@@ -98,8 +98,11 @@ Three things are new and none of them existed on 2026-07-21:
 **The repository layer does not make a request slower — it makes the arm run out of headroom
 sooner.** Everything below is that sentence, qualified.
 
-- **Cost and service time say it together.** Cost: **×3.95 cpu/req on the DB-bound aggregate,
-  ×1.17 on the single-row read** (n=6 per arm, 12/12 eligible, §4). Service time: the heavy median
+- **Cost and service time say it together.** Cost: **×3.95 cpu/req on the ~200-row aggregate,
+  ×1.17 on the single-row read** (n=6 per arm, 12/12 eligible, §4). *Not* "the DB-bound
+  aggregate": on heavy `spring-hibernate` sits at **98.7 % of its own pin with the database at
+  26.4 %** — it is CPU-bound on its own repository work, and heavy is DB-bound only for the fast
+  arms (§3, L2). Service time: the heavy median
   gap at 600 rps is **×1.43**, and `spring-jdbc` stays flat to 3400 rps while `spring-hibernate`
   reaches 94 % of capacity with p99.9 going ~4 → 15–22 ms; on light the arms are
   indistinguishable to 20 000 rps (§7). **"×3.95 slower" holds on neither contract.**
@@ -576,6 +579,21 @@ Three things keep this honest rather than modest:
   modes and two different hand-written data layers; a `tomcat-jdbc` × `exeris-native` pair in one
   campaign would settle it and does not exist.
 
+> **On heavy throughput, staying entirely in Spring gets you to noise distance of the native
+> runtime — and that should be said before anyone else says it.** `spring-jdbc` — still Spring,
+> still Tomcat, still Spring MVC — does **12 664 rps** against `exeris-community`'s **13 107**:
+> **3.5 % apart**. Not because the stacks converged, but because **both are at the same database
+> wall** (97.4 % and 99.8 % DB-busy), and §3's reading rule says a heavy throughput ratio between
+> two arms that are both there measures Postgres. The rule cuts this way too: it forbids reading
+> the 3.5 % as "the runtime is worth 3.5 %" exactly as it forbids the inverse.
+>
+> **What the runtime still holds on heavy is what throughput cannot show:** cpu/req **271.75 vs
+> 210.85 µs (×1.29)** and RSS **1168 vs 1057 MB (×1.11)** — headroom and footprint, not requests
+> per second. That is the same distinction the report's flagship sentence makes about the
+> repository layer, applied to the runtime itself, and it is the honest form of the runtime's
+> heavy-contract case. (Cross-campaign and cross-network-mode, as everywhere the ladder meets the
+> ORM campaign; the shared `spring-hibernate` arm agreeing to 0.25 % is the control — §4.1.)
+
 ---
 
 ## 5. What the ×3.95 actually is — and why "the ORM" is the wrong name for it
@@ -632,10 +650,24 @@ fix available to a Spring team is not moving to `JdbcTemplate`.** It is dropping
 projections and returning DTOs through constructor expressions — *staying on JPA*. That is a
 change of return types, not a rewrite of the persistence layer.
 
-This matters beyond tidiness, because L3's migration-order conclusion ("on a DB-bound workload the
-repositories go first") is currently priced as one large step. If a change of return types
-captures a substantial share of the ×3.95, that step has a **much cheaper first rung that nobody
-has measured** — and the ordering advice changes with it.
+This matters beyond tidiness, because L3's migration-order conclusion is currently priced as one
+large step. If a change of return types captures a substantial share of the ×3.95, that step has a
+**much cheaper first rung that nobody has measured** — and the ordering advice changes with it.
+
+> **And the ordering rule itself should be restated, because L3's phrasing inverts its own
+> mechanism.** L3 says *"on a DB-bound workload the repositories go first"*. But the workload where
+> the repository layer dominates is precisely the one that is **not yet** DB-bound: `spring-hibernate`
+> on heavy runs at **98.7 % of its own pin against a database at 26.4 %** (§3). DB-bound is where
+> you *arrive* once the layer is gone — `spring-jdbc` reaches 97.4 % DB-busy — not the regime in
+> which it is the bottleneck. Written the other way round it becomes the sentence L2 explicitly
+> forbids.
+>
+> **The precise form needs no reference to the database at all, and no reference to Hibernate:**
+> the repository layer is **74.7 % of a heavy request and 14.7 % of a light one** (802.99/1074.74
+> against 21.1/143.6) — *the same code, a 5.1× different share*. **Migration order is not a
+> property of the stack; it is a property of the row count in the contract.** On a ~200-row
+> aggregate the repositories go first by a wide margin. On a single-row read they are the third
+> thing to look at, and the runtime rung — ×1.09–1.10 — is comparable to them.
 
 **So the missing arm has two jobs, not one.** The same experiment §5 names as decisive for
 attribution — JPA through `EntityManager` or DTO/constructor-expression queries, no Spring Data
@@ -664,11 +696,23 @@ asymmetry, but no cross-arm share is quoted here as like-for-like. Exploratory: 
 
 Heavy cpu/req arm-means, ladder campaign (n=12):
 
-| rung | step | µs/req | × | clean? |
-|---|---|---:|---:|---|
-| Tomcat → Exeris native web | hosting | 121.52 | ×1.127 | **no — see below** |
-| JPA → kernel-native persistence | repository layer | 723.97 | — | attribution corrected in §5 |
-| **whole stack** | Tomcat+JPA → native+native | — | ×5.118 direct | |
+| rung | step | from → to | µs/req | × | clean? |
+|---|---|---|---:|---:|---|
+| 1 | hosting | `spring-hibernate` → `spring-on-exeris-pure` | 121.52 | ×1.127 | **no — see below** |
+| 2 | repository layer | `spring-on-exeris-pure` → `spring-on-exeris-pure-native` (955.88 → 231.91) | 723.97 | ×4.122 | attribution corrected in §5 |
+| 3 | leaving Spring | `spring-on-exeris-pure-native` → `exeris-community` (231.91 → 210.85) | 21.06 | ×1.100 | — |
+| | **product of the three** | | | **×5.109** | |
+| | **directly measured** | `spring-hibernate` → `exeris-community` (1077.40 → 210.85) | | **×5.118** | closes to **+0.2 %** |
+
+> **The third rung used to be missing, and the table did not add up without it.** An earlier
+> version showed rungs 1 and 2 against a "whole stack ×5.118 direct" row: a reader multiplying
+> what was on the page got **×4.646** and no footnote explained the missing **10.2 %**. The gap
+> was the rung above — dropping Spring itself, `spring-on-exeris-pure-native` → `exeris-community`,
+> worth ×1.100. It is shown now, and the decomposition closes to +0.2 % on cpu/req against the
+> direct pair. **Note what rung 3 is**: the two arms share the Exeris runtime and the native
+> repository API, and differ by the Spring context around them — so ×1.10 is the cost of hosting
+> the application in Spring at all, *after* both the servlet container and the ORM are already
+> gone. It is the smallest rung of the three.
 
 > **The compat rung is deliberately absent from this table.** An earlier draft carried a
 > `Tomcat → Exeris compat` row here, which would have put arm 3 — the only compat arm — inside a

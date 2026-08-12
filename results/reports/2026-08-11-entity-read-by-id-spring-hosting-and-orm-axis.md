@@ -586,6 +586,16 @@ JFR `hot-methods` and `allocation-by-class` on the heavy leaves. repeat01 and re
 0.05 pp on the top frame, so this is not profiler noise. Derived views committed under
 [`jfr-views/`](../raw/entity-read-by-id/20260810T131208Z-hibernate-vs-jdbc-n3/jfr-views/).
 
+![Top on-CPU Java methods for both arms of the ORM pair; Spring AOP and reflection frames highlighted on the hibernate side](assets/chart-2026-08-11-hot-methods.svg)
+
+> **That chart is deliberately not a flamegraph, and the reason is this section's own argument.**
+> Frame width in a flame reads as a *complete cost decomposition*, and the whole point below is
+> that the pair moves **two** things at once whose split is **unmeasured** (L10). A ranked list
+> shows the same frames without implying the share. The raw `.jfr` is on the perf box, not in this
+> repo — 24 recordings for this campaign, ~250 MB each, full 874 s window, not rotated — so a
+> flamegraph *can* be produced on request; it is withheld for what it would imply, not for want of
+> data.
+
 | | `spring-hibernate` | `spring-jdbc` |
 |---|---|---|
 | top CPU frame | `DefaultAdvisorAdapterRegistry.getInterceptors` **9.6 %** | pgjdbc `ensureBytes` 5.3 % |
@@ -787,6 +797,8 @@ network-mode sensitive — `spring-hibernate` reads 1662 MB heavy on bridge here
 on host in the ORM campaign, a 0.4 % difference — so this table transfers across the Setup split
 that governs the throughput tables.
 
+![Footprint by traffic history: never-served, after-serving and under-load RSS for the four ladder arms against a common 1280 MB committed heap](assets/chart-2026-08-11-footprint-states.svg)
+
 **Under load, in each arm's own measurement window:**
 
 | arm | light | heavy | heavy vs light | heavy as % of committed heap |
@@ -938,6 +950,12 @@ top rungs. That is the precondition for the whole section and it is met, not ass
 > the last.
 
 ### 7.1 The ORM axis, heavy: the arms do not diverge in cost, they diverge in *headroom*
+
+![Service-time latency across six rungs on both contracts: spring-jdbc flat, spring-hibernate rising, p99 shown as an ab-ba band with the four single-leaf excursions ringed](assets/chart-2026-08-11-latency-ladder.svg)
+
+*Both contracts in one view, because the finding is the **shape** and the shape is the same at two
+scales. Note the two y-axes differ — heavy tops out at 16 ms, light at 4.5. Bands are ab–ba, never
+points (§7); rings are the four single-leaf excursions of §7.1, printed rather than smoothed.*
 
 **p50 mean, p99 and p99.9 as ab–ba range (n=2 per cell), ms**
 

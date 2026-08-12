@@ -5,10 +5,15 @@ categories:
   - performance
   - benchmarking
   - jvm
-summary: "One Spring application served five ways on dedicated bare metal, under two fixed contracts and two instruments. The repository layer costs headroom, not per-request latency: at 600 rps the heavy median gap is x1.43 and on the single-row contract the arms are indistinguishable up to 20 000 rps, but the Hibernate arm reaches 94 % of its capacity while the JDBC one stays flat. The cost is Spring Data interface projections rather than Hibernate itself, and the hosting swap is smaller than either — 23 % of it turned out to be Spring Security."
+summary: "One Spring application served five ways on dedicated bare metal, under two fixed contracts and two instruments. The repository layer costs headroom, not per-request latency: at 600 rps the heavy median gap is x1.43 and on the single-row contract the arms are indistinguishable up to 20 000 rps, but the Hibernate arm reaches 94 % of its capacity while the JDBC one stays flat. The largest identified contributor is Spring Data's projection proxies rather than Hibernate's own row mapping — the pair moves both and the split is unmeasured. The hosting swap is smaller than either, and 23 % of it turned out to be Spring Security."
 # Written from 7.1 (service time), deliberately NOT from 4 (cost). x3.95 is the most quotable
 # number in this report and the body says it holds on neither contract, so it must not appear
 # here: this is the only surface that travels to aggregators, RSS and search without its fences.
+#
+# Second trap, caught 2026-08-11: this line must not resolve L10. Section 5 says the attribution
+# to Hibernate specifically "is not established by these arms" and section 8 carries the split as
+# an open item. "Largest identified contributor ... split is unmeasured" is the strongest form the
+# data supports; "it is X rather than Y" is not, however quotable it reads.
 authors:
   - Arkadiusz Przychocki
 track: Community
@@ -20,7 +25,7 @@ claim_scope_note: >
   Deliberately NOT comparison_eligible while this is a draft, even though the underlying
   campaigns are. §2's error budget is now derived from this report's own campaigns
   (tools/derive-error-budget.sh, 220 observations) and no longer blocks; the remaining
-  TODOs are prose in sections 1, 3, 4 and 6. A file-level
+  TODOs are prose in sections 1, 3, 4, 5 and 6. A file-level
   comparison_eligible would also over-claim across the whole report: the ladder campaign's
   48 leaves are not declared all-eligible anywhere, and the two pairs that cross the
   Pure-vs-Compat axis are non_eligible BY DESIGN. Eligibility is a per-campaign, per-pair
@@ -85,10 +90,12 @@ sooner.** Everything below is that sentence, qualified.
   gap at 600 rps is **×1.43**, and `spring-jdbc` stays flat to 3400 rps while `spring-hibernate`
   reaches 94 % of capacity with p99.9 going ~4 → 15–22 ms; on light the arms are
   indistinguishable to 20 000 rps (§7). **"×3.95 slower" holds on neither contract.**
-- **It is Spring Data interface projections, not Hibernate — the plain "ORM" label is retracted.**
-  JFR puts Spring AOP and reflection *above* Hibernate's tuple materialisation, and one proxy per
-  returned row explains the contract dependence (heavy ~200 rows, light none) (§5). Cheapest fix
-  is therefore DTO constructor expressions on JPA, not `JdbcTemplate`. This also **replaces an
+- **The largest identified contributor is Spring Data's projection proxies, not Hibernate's own row
+  mapping — and the plain "ORM" label is retracted.** JFR puts Spring AOP and reflection *above*
+  Hibernate's tuple materialisation, and one proxy per returned row explains the contract
+  dependence (heavy ~200 rows, light none) (§5). **The pair moves both, so the split is unmeasured**
+  and stays open as L10 (§8) — what is retracted is the label, not the pool. Cheapest fix is
+  therefore DTO constructor expressions on JPA, not `JdbcTemplate`. This also **replaces an
   assumption**: L3 measured the cost on the Exeris-hosted arm and carried it to Tomcat because no
   ORM-free Tomcat arm existed. Arm 2 is that arm; the direction holds.
 - **Hosting is the smaller effect, and 23.3 % of it was security.** The rung buys
@@ -553,6 +560,17 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 > headers; there the responses match on bodies *and* headers, and "byte-identical response
 > contracts" stands as written.
 >
+> **Where the control is cited, and what each carrier needs.** A fairness control used across a
+> series leaves stale copies behind unless the propagation is named, so: `docs/CLAIMS.md` (L11)
+> carries the correction as of 2026-08-11. `runtime/drivers/target-asset-matrix.json` and
+> `scenarios/entity-read-by-id/comparative-pair-manifest.json` **need no change** — both already
+> say *body* ("body byte-identical to all four ladder arms", "confirmed equal by response-body
+> checksum"), and the manifest's pair (`pure-native` × `comp-native`) does not cross the auth axis
+> at all, since neither arm carries Spring Security. The defect was never in the artefacts; it was
+> in prose that dropped the word *body* when quoting them. Anyone citing
+> `82f9bcdf2852bd5e` as evidence of wire-equal responses across an auth-crossing pair is
+> over-reading it, and no committed artefact ever said that.
+>
 > **Also observed, unexplained:** on heavy the stock arm is far more reproducible across repeats
 > (sd 0.21 %) than the nosec arm (0.82 %, range 15 µs). The arm with *fewer* layers is the less
 > stable one. n=3, no mechanism proposed.
@@ -765,7 +783,12 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
 
 ## Revision history
 
-<!-- One of the four summarizing surfaces. Every retraction stays visible, per house style. -->
+<!-- One of the four summarizing surfaces. Every retraction stays visible, per house style.
+     Split into two lists on 2026-08-11: at seven flat entries the two that actually moved a
+     claim were sitting among five notes about paragraph order and TL;DR length, which is the
+     opposite of what this section is for. -->
+
+### Findings and retractions — each changed a number or a claim
 
 - **2026-08-11 — draft opened.** Skeleton with §2–§6 data from committed campaigns; §7 pending.
 - **2026-08-11 — the security confound closed, and it cost the hosting rung a quarter of its
@@ -809,6 +832,13 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
   **the light contract only** (heavy: 2.1×) and to **closed-loop percentiles**, i.e. queue
   occupancy rather than service time (§2.3). No conclusion in the report is overturned; three are
   now stated more tightly.
+
+### Editorial corrections — found in review, changed nothing in the data
+
+*All four were defects living **only** on a summarizing surface or in the ordering of evidence, in
+a report that carries a footer note warning about exactly that. Recorded together because the
+pattern is the point: the footer rule is not folklore, it is this list.*
+
 - **2026-08-11 — §7's own uncertainty measure was the one §2.4 disqualifies, and the fence for it
   was already in the document.** §7's 36 leaves are 6 rungs × two *directions* × three ladders:
   **n=2 per cell is two directions, not two repeats**, so both leaves share one JVM lifetime,
@@ -826,14 +856,6 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
   leads with the measurement from **this** report's campaigns (DB-cpuset busy **87.36 % → 37.34 %**
   at identical delivered throughput, 55 of the 87 points `sys`+`soft`), and the June figure drops
   to a footnote as the fence's historical origin. Same content, reversed weight.
-- **2026-08-11 — the byte-identical correction was scoped to half of what it affects.** It read
-  "the two arms' responses", meaning the security-confound pair. The underlying control — response
-  checksum `82f9bcdf2852bd5e`, 9105 bytes, reported across **all four ladder arms plus
-  `comp-native`** and used as a fairness control against serialisation-volume effects — was
-  computed on **bodies only**, and ladder arms 1–3 carry Spring Security where 4–5 do not. It
-  therefore never covered full responses on **any auth-crossing pair**. It stands as a *content*
-  control. §4's ORM pair is explicitly excluded from the correction: one shared `SecurityConfig`,
-  identical headers.
 - **2026-08-11 — TL;DR compressed and the frontmatter `summary:` written.** The TL;DR had grown to
   seven bullets with a ~90-word opener; a summary that reads as long as a section stops
   summarising, and every extra word is somewhere a quantifier can slip. Now a one-line lede plus
@@ -841,6 +863,14 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
   it is the only surface that reaches aggregators, RSS and search stripped of its fences, and
   ×3.95 is both the most quotable number in the report and one the body says holds on neither
   contract. It does not appear there.
+- **2026-08-11 — and the `summary:` promptly failed the other half of its own rule.** The first
+  version read *"the cost is Spring Data interface projections rather than Hibernate itself"* —
+  which **resolves L10**, an item §8 carries as open and §5 declines twice ("the attribution to
+  Hibernate specifically is not established by these arms"). The guard comment above `summary:`
+  had been written against ×3.95 and caught it; this walked past. Both `summary:` and TL;DR bullet
+  2 now read *largest identified contributor … the pair moves both and the split is unmeasured*,
+  and the guard comment carries the second trap explicitly. **What is retracted is the label, not
+  the pool** — that distinction is the whole of the correction.
 - **[TODO on publish]** record that this report retracts the plain-"ORM" label used for the
   L3 pool, and why.
 

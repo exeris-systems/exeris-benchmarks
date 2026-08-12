@@ -669,6 +669,15 @@ second.
    payload) and must no longer be cited as evidence of equal **bytes on the wire** wherever the
    auth axis is crossed. The ORM pair (`spring-hibernate` x `spring-jdbc`) is unaffected: one
    shared `SecurityConfig`, identical headers, so bodies *and* headers match there.
+
+   **Propagation — this entry is the only carrier that needed changing.**
+   `runtime/drivers/target-asset-matrix.json` and
+   `scenarios/entity-read-by-id/comparative-pair-manifest.json` both already say *body*
+   ("body byte-identical to all four ladder arms", "confirmed equal by response-body checksum"),
+   and the manifest's pair (`pure-native` x `comp-native`) does not cross the auth axis at all -
+   neither arm carries Spring Security. The defect was in prose that dropped the word *body* when
+   quoting the artefacts, not in the artefacts. Anyone citing `82f9bcdf2852bd5e` as evidence of
+   wire-equal responses across an auth-crossing pair is over-reading it.
 3. **Not a general Spring Security figure.** This is one application's permitAll chain on Tomcat
    under one contract. The Exeris-side equivalent (`ExerisSecurityContextFilter`) is a different
    mechanism, separately measured at +0.14 %, and the two must not be swapped.

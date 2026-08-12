@@ -53,7 +53,7 @@ right for the reader of an entry and useless for the reader who wants to know *w
 been wrong about*. They are collected here as well; the per-entry text stays where it is and
 remains authoritative for detail.
 
-**Why a register rather than a list of mistakes.** Seventeen withdrawals are recorded below, and
+**Why a register rather than a list of mistakes.** Twenty-one withdrawals are recorded below, and
 **none of them was ever carried by a distributed artefact in its wrong form.** Two came close and
 are flagged ⚠ rather than cleared:
 
@@ -66,10 +66,17 @@ are flagged ⚠ rather than cleared:
 - **#1** had reached the **EN copy string** — the line this file instructs consumers to copy
   verbatim. No report carried it, but a copy string is a distribution surface of a different kind.
 
-**#15–#17 were found after the 2026-08-11 Spring report reached what was then its final shape.**
+**#15–#21 were found after the 2026-08-11 Spring report reached what was then its final shape.**
 That report is still DRAFT and has **not** been distributed, so they are caught-before-shipping
 like the other thirteen — but they are a useful warning about this column: *"has not travelled"*
 is a fact about a moment, not a property of a claim. It is the only column here that decays.
+
+**#18–#21 came from an independent re-derivation** that rebuilt every headline figure from
+`results/raw/entity-read-by-id/` without reading the report — the second derivation
+`reproducibility_status: incomplete` was waiting for. **Every headline number survived it**; what
+did not survive were one derivation error (#18), two over-stated scopes (#19, #20) and one
+internally contradictory constant (#21). That is the distribution you want from a second pass:
+the findings hold, the bookkeeping does not.
 
 > **"Carried by a finished report" is not the same as "released", and this column only claims the
 > first.** Whether any report in this repo was ever distributed outside it — a post, a deck, the
@@ -114,11 +121,15 @@ and only two are checkable from inside this repo:
 | 10 | L4's prediction that overlapping rungs make the light gap exceed the heavy gap | 2026-08-06 | the axes compose; the residual is drift, not interaction | no — marked *never published* at the time |
 | 11 | L4's closure justification: *"+2.0 % is inside the counterbalanced arm-order control (≤ ~2 %)"* | 2026-08-11 | +2.0 % is inside the **±2.52 % combined** envelope but **not** the arm-order term alone (1.00 %). Claim stands, justification did not | no |
 | 12 | L5: *"worst p99 of all four arms"*, *"p99/p50 = 6.26× vs 5.05×"*, *"12.49 ms"* | 2026-08-11 | open-loop: tracks the native baseline within 5–22 % to 40 000 rps; **3.2× vs 2.4×**; **4.51–5.00 ms** — closed loop inflated it ~2.5× | no |
-| 13 | *"idle cores are state-invariant to three decimal places"* | 2026-08-11 | **to within ~2 %** — 0.0286 vs 0.0280 does not survive three decimals. Finding unaffected | no — corrected one commit after it landed |
+| 13 | *"idle cores are state-invariant to three decimal places"* | 2026-08-11 | **to within ~2 %** — 0.0286 vs 0.0278 does not survive three decimals. Finding unaffected. (The `0.0280` first quoted alongside it was the heavy-only served figure against a pooled first-touch; pooled on both sides it is 0.0278, −2.8 %.) | no — corrected one commit after it landed |
 | 14 | the **agent-laden RSS profiles** (284/346/430 MiB light) | 2026-07-30 | agent-free medians, n=3: **233/276/352 MiB**; the agent tax is arm-dependent (~51/70/78 MiB) and **understated** Exeris's advantage | ⚠ **the closest call.** It sat in the 2026-07-21 triad — non-DRAFT, `comparison_eligible`, `reproducibility_status: complete` — for **~1.6 days across four PRs** (`cf7f4df9` → `ae333638`, 28–30 Jul), in the body, TL;DR **and** conclusions. **The triad was later distributed outside this repo — but after `ae333638`, its last commit, which is the correction.** So the wrong figures never left in a distributed artefact; the corrected report did, with the retraction visible in it. |
 | 15 | *"×3.95 cpu/req on the **DB-bound aggregate**"* (report TL;DR) | 2026-08-12 | *"on the **~200-row aggregate**"*. On heavy `spring-hibernate` runs at **98.7 % of its own pin against a database at 26.4 %** — CPU-bound on its own repository work. Heavy is DB-bound for the **fast** arms only (L2) | no — the Spring report is still DRAFT and undistributed. Caught in review after it reached what was then final shape; precisely the inversion L2 forbids, and it was in the TL;DR |
 | 16 | L3's *"on a **DB-bound workload** the repositories go first"* | 2026-08-12 | the layer dominates where the arm is **not yet** DB-bound; DB-bound is where you *arrive* once it is gone. Restated without either term: the layer is **74.7 % of a heavy request and 14.7 % of a light one** — same code, **5.1× different share**. **Migration order is a property of the row count in the contract, not of the stack** | ⚠ **this file** — L3 has carried the inverted phrasing since 2026-08-06 and the draft report quoted it. No distributed artefact carried it |
 | 17 | §6's ladder table: two rungs shown against a *"whole stack ×5.118 direct"* row | 2026-08-12 | the third rung was missing — `pure-native` → `exeris-community`, **×1.100**, dropping Spring itself. Shown rungs multiplied to **×4.646**, a silent **10.2 %** gap. All three now shown; closes to **+0.2 %** | no — draft only. But a reader multiplying the visible rows got a different number from the one printed beside them, with no footnote |
+| 18 | §6's decomposition *"product ×5.109 vs directly measured ×5.118 — closes to +0.2 %"* | 2026-08-12 | **there was no check.** The three rungs are consecutive ratios of the same four pooled arm-means, so they **telescope**: their product *is* the end ratio, ×5.110, identically. The ×5.118 came from **L4**, a different derivation. §6 now presents the table as an accounting identity and points at L4 for the real, non-tautological closure — rungs measured in their own pair runs, **×5.222 product vs ×5.118 direct, +2.0 %** | no — draft only |
+| 19 | *"the artefacts stamp `latency_percentile_eligibility.publishable=false`"* | 2026-08-12 | **42 of the ladder's 48 units** do; the other **6** stamp `true` with reason `below_saturation` (heavy `purenative-vs-native`, neither arm at its knee). No claim rested on those six | no — draft only |
+| 20 | §4.2's *"the two ORM-free stacks sit within roughly **5–15 %**"* | 2026-08-12 | the upper bound had no source. Derivable: **5.0 %** net of the light security term, **3.1 %** using its heavy variant, **17.2 %** unsubtracted — a **3–17 % band whose width is entirely the security assumption**, not a measurement spread | no — draft only |
+| 21 | Setup's light contract *"~125 B"* | 2026-08-12 | the measured body is **30 B** (`{"id":"1","username":"user_1"}`) — 144 B on the wire without Spring Security's headers, 314 B with them. The figure contradicted §6 inside the same document and matched neither the body nor either full response | no — draft only |
 
 **Two entries are worth reading as a pair, because they run in opposite directions.** #14 moved
 *in Exeris's favour*, which
@@ -654,7 +665,7 @@ So **the 630 MB quoted for exeris-community above is (194 + 1066) / 2 — a valu
 never at.** The 1464 MB for spring-hibernate likewise averages a 1248/1679 contract split. Read
 the column as a rank, never as a footprint.
 
-Two riders. (a) **Idle CPU is state-invariant to within ~2 %** (pure 0.0286 vs 0.0280, pure-native 0.0274 vs
+Two riders. (a) **Idle CPU is state-invariant to within ~2 %** (pure 0.0286 vs 0.0278, pure-native 0.0274 vs
 0.0268, community 0.0020 vs 0.0020), so everything this entry claims about idle *CPU* is
 unaffected — the composition starts burning cycles before the first request. (b)
 `spring-hibernate` has no first-touch figure because a never-served neighbour is observable only

@@ -19,7 +19,7 @@ authors:
 track: Community
 benchmark_family: Runtime
 scenario: entity-read-by-id
-reproducibility_status: incomplete
+reproducibility_status: complete
 # NO claim_scope FIELD, DELIBERATELY — removed 2026-08-11.
 #
 # A whole-file claim scope is the wrong shape for a report, and for this one it would be false
@@ -36,9 +36,13 @@ reproducibility_status: incomplete
 # Nothing consumes it either: publish-report.sh reads claim_scope from the RESULT JSON, not from
 # report frontmatter, and 2026-06-20-entity-read-by-id-artifacts.md already carries none.
 #
-# reproducibility_status STAYS, because it is a genuine file-level property and it is honest:
-# every number here was re-derived from committed artefacts exactly once, by the person who
-# wrote it. Flip it when someone else re-derives the headline figures.
+# reproducibility_status FLIPPED to complete on 2026-08-12, on exactly the condition this comment
+# used to set: an independent re-derivation rebuilt every headline figure from
+# results/raw/entity-read-by-id/ without reading the report. Every headline number survived. It
+# found one derivation error (§6 presented a telescoping identity as a closure check), one
+# mislabelled column (§7.1) and a set of scope/unit slips -- all fixed, all recorded in
+# CLAIMS.md's retraction register (#18-#21) and in the editorial list at the bottom. Flip it back
+# if the report gains a section that pass did not cover.
 comparison_axis: within-tier
 hardware_profile: perf-box-amd64
 ---
@@ -57,11 +61,15 @@ hardware_profile: perf-box-amd64
 > alignment campaign, and the open questions in §8 ship open with an argument for why none of them
 > moves a headline.
 >
-> It still says DRAFT for one reason: **every number here was re-derived from its artefacts
-> exactly once, by the person who wrote it.** That is enough to make the report honest and not
-> enough to make it reviewed. `reproducibility_status` stays `incomplete` until someone else
-> re-derives at least the headline figures. Every number is from a committed, gate-passing
-> campaign; **none is provisional or estimated.**
+> **The second derivation has happened, and `reproducibility_status` is now `complete`.** An
+> independent pass rebuilt every headline figure from `results/raw/entity-read-by-id/` **without
+> reading this report**, and **every headline number survived** — §4's cpu/req to two decimals,
+> §3's ladder, §1's 108/1080/216 gate counts, §2's budget, §5's JFR shares, §6's confound and its
+> 170 header bytes, §6b's footprint states, and all 36 percentile cells of §7. What did *not*
+> survive was bookkeeping: one derivation error in §6, one mislabelled column in §7.1, and a
+> handful of scope and unit slips — fixed, and recorded in the editorial list below and in
+> `docs/CLAIMS.md`'s retraction register (#18–#21). Every number is from a committed,
+> gate-passing campaign; **none is provisional or estimated.**
 
 ---
 
@@ -132,7 +140,7 @@ sooner.** Everything below is that sentence, qualified.
   offered rate) — and those ranges still carry **no restart variance**, making them a lower bound
   on uncertainty rather than an envelope (§2.4, §7).
 - **Footprint: the Exeris-hosted arms hold less memory under load, and only Tomcat's grows with the
-  contract.** At an equal 1280 MB committed heap the loaded spread is **1.58×** — community
+  contract.** At an equal 1280 MB committed heap the loaded spread is **1.57×** — community
   1057 MB, pure-native 1102, pure 1233, Tomcat **1662** on heavy — and `spring-hibernate` is the
   only arm that responds to the contract (+31.8 % light→heavy against ≤ 2.7 % for the rest), which
   is §5's row materialisation showing up in memory. **Idle RSS, though, is not one number per
@@ -160,15 +168,28 @@ attribution of the repository-layer cost to Hibernate specifically (§5).
 | **DB pool** | min 16 / max 256, identical on all arms |
 | **Windows** | 300 s warmup + 900 s measurement per arm (wrk2 phase: 60 s + 120 s) |
 | **Notation** | `±` on a mean is the **sample standard deviation** across that arm's leaves (n stated per table), never standard error or min–max spread. For n=6, SE is ~0.41× the quoted SD and the min–max spread ~2.5× it, so the choice changes the apparent tightness by a factor of six — which is why it is named rather than assumed. Percentiles are **not** given as mean ± anything: they appear as ab–ba ranges (§7) |
-| **Contracts** | heavy `fixed_contract_cross_runtime_h1_v2` (3 queries, ~9.2 KB) · light `fixed_contract_cross_runtime_h1_single_read_v1` (1 PK row, ~125 B) |
+| **Contracts** | heavy `fixed_contract_cross_runtime_h1_v2` (3 queries, ~9.2 KB) · light `fixed_contract_cross_runtime_h1_single_read_v1` (1 PK row; **body 30 B** — `{"id":"1","username":"user_1"}` — 144 B on the wire without Spring Security's headers, 314 B with them, §6) |
+
+**Reproducibility metadata** — the one pre-publish checklist item this report was failing in its
+own text, though it was in the artefacts all along:
+
+| | |
+|---|---|
+| target commit SHA | **`be2330ffa80abd27c6da34df31bc6c19146aa6de`** — *identical across all five campaigns*, so every arm in every table is the same source tree |
+| JDK | **26.0.1**, Eclipse Adoptium |
+| JVM flags | `-Dspring.classformat.ignore=true` on the Spring arms; heap pinned **`-Xms1280m -Xmx1280m`**, `AlwaysPreTouch` off, on every arm (§6b) |
+| driver | `wrk` debian/4.1.0-4build2 [epoll] (closed-loop campaigns) · `wrk2` (§7) |
+| hardware profile | `perf-box-amd64` (`docs/hardware-profiles.md`) |
+| harness commit | recorded per campaign in `campaign-manifest.json` where present (`ded0145f` for the security confound); **absent for the older campaigns**, which is a harness gap, not a lost value |
 
 **Campaigns behind this report** (all committed under `results/raw/entity-read-by-id/`):
 
 | campaign | arms | n | DB network | status |
 |---|---|---|---|---|
-| `20260806T183034Z-spring-ladder-n3` | the four-arm ladder | 3 × ab/ba × 2 contracts | **bridge** | 48 leaves |
-| `20260810T131208Z-hibernate-vs-jdbc-n3` | ORM axis on Tomcat | 3 × ab/ba × 2 contracts | **host** | **12/12 `comparison_eligible`** |
-| `20260811T063920Z-l5-curve-orm` / `-tail` | open-loop wrk2 service time | 6 rungs × ab/ba × 3 ladders | host | **36/36 `comparison_eligible`** |
+| `20260806T183034Z-spring-ladder-n3` | the four-arm ladder | 3 × ab/ba × 2 contracts | **bridge** | **48/48 units** (96 leaves) |
+| `20260810T131208Z-hibernate-vs-jdbc-n3` | ORM axis on Tomcat | 3 × ab/ba × 2 contracts | **host** | **12/12 units** `comparison_eligible` (24 leaves) |
+| `20260811T063920Z-l5-curve-orm` / `-tail` | open-loop wrk2 service time | 6 rungs × ab/ba × 3 ladders | host | **36/36 units** `comparison_eligible` (72 leaves) |
+| `20260811T114140Z-security-confound-n3` | the security term of the hosting rung (§6) | 3 × ab/ba × 2 contracts | host | **12/12 units** `comparison_eligible` (24 leaves) |
 
 **The bridge/host split is load-bearing and is not cosmetic.** Under bridge the DB-cpuset figure
 is Postgres *plus* container networking plus a userspace `docker-proxy` relay, so it is an **upper
@@ -209,7 +230,10 @@ DB-busy figure with a host one**, and never read a bridge one as Postgres utilis
    blocking dependency on a report whose other five arms are aligned and whose one skewed arm is
    measured, disclosed and fenced. The alignment runs separately as a compat-track campaign.
 6. **Closed-loop driver.** Percentiles from the wrk campaigns are queue occupancy, not service
-   time; the artefacts stamp `latency_percentile_eligibility.publishable=false` saying so. §7 is
+   time; **42 of the ladder's 48 units** stamp `latency_percentile_eligibility.publishable=false`
+   (`closed_loop_driver_at_saturation`) saying so — the other **6** stamp `true` with reason
+   `below_saturation`, all on the heavy `purenative-vs-native` pair, where neither arm reached its
+   own knee. No claim here rests on those six. §7 is
    the service-time axis and carries `publishable=true` on all 36 of its leaves.
 
 ---
@@ -422,7 +446,7 @@ campaign (bridge, n=12) and ORM campaign (host, n=6).
 | `spring-on-exeris-pure` | 4 131 | 98.7 % | 34.9 % | bridge | **upper bound** | its own CPU |
 | `spring-on-exeris-pure-native` | 12 645 | 73.3 % | 99.8 % | bridge | upper bound, but *at the ceiling either way* | **the database** |
 | `exeris-community` | 13 107 | 69.1 % | 99.8 % | bridge | upper bound, but *at the ceiling either way* | **the database** |
-| `spring-jdbc` | 12 664 | — | **97.4 %** | **host** | **Postgres utilisation** | **the database** |
+| `spring-jdbc` | 12 664 | **86.0 %** | **97.4 %** | **host** | **Postgres utilisation** | the database, **relatively** — see below |
 
 Sources: rows 1–4 `20260806T183034Z-spring-ladder-n3` (n=12, bridge, **48/48 units
 `comparison_eligible`**); row 5 `20260810T131208Z-hibernate-vs-jdbc-n3` (n=6, host, **12/12
@@ -469,7 +493,14 @@ is partly the network stack, and §2.1 measures that deformation at ~50 points o
 contract. **Quote them as "up to", not as forecasts**, and note that both are single-campaign,
 bridge-mode, n=12.
 
-> **One row in this table is host-measured and it changes the sharpest reading.** `spring-jdbc` at
+> **`spring-jdbc` is the one arm bounded by the database only *relatively*.** Its own pin is at
+> **86.0 %** — not the 98.7 % of the two slow arms, but not the 69–73 % of the two saturating ones
+> either. With the DB at 97.4 % it is *closer* to the database wall than to its own, so "bounded
+> by the database" is the right reading; but it has ~14 % of its own pin in reserve, so a faster
+> database would buy it something rather than nothing. An earlier version left this cell blank
+> when the data was in the artefacts, which made an absolute reading of a relative one.
+>
+> **That row is also host-measured, and it changes the sharpest reading in the table.** `spring-jdbc` at
 > **97.4 % DB busy on host networking** is the only genuine Postgres-utilisation figure here —
 > `docker-proxy` is off the path, so there is no networking component inside it. It says that an
 > ORM-free Tomcat arm hits the same database wall the two fast Exeris arms hit, at almost the same
@@ -572,8 +603,12 @@ Three things keep this honest rather than modest:
 - **And after the repository layer goes, the hosting gap narrows sharply.** `spring-jdbc` on
   Tomcat reads 271.75 µs against `spring-on-exeris-pure-native`'s 231.91 — **39.84 µs apart**,
   of which the security term is an estimated 28.31 µs (§6, a light-contract figure applied to
-  heavy, so an assumption). Net of it the two ORM-free stacks sit within roughly **5–15 %** of
-  each other on cpu/req, against 12.4 % apart with the ORM in place. The runtime's advantage on
+  heavy, so an assumption). Net of it the two ORM-free stacks sit **5.0 %** apart on cpu/req
+  (11.53 µs on 231.91) — against **17.2 %** if the security term is not subtracted at all, and
+  **3.1 %** if the heavy-measured variant of it is used instead. So the honest statement is a
+  **3–17 % band whose width is entirely the security assumption**, not a measurement spread; an
+  earlier version wrote "roughly 5–15 %", whose upper bound came from nowhere. Compare 12.4 %
+  apart with the ORM in place. The runtime's advantage on
   this contract is **substantially an advantage at hosting a heavy repository layer**, not a
   uniform per-request edge. Stated as a range because the subtraction crosses campaigns, network
   modes and two different hand-written data layers; a `tomcat-jdbc` × `exeris-native` pair in one
@@ -701,18 +736,27 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 | 1 | hosting | `spring-hibernate` → `spring-on-exeris-pure` | 121.52 | ×1.127 | **no — see below** |
 | 2 | repository layer | `spring-on-exeris-pure` → `spring-on-exeris-pure-native` (955.88 → 231.91) | 723.97 | ×4.122 | attribution corrected in §5 |
 | 3 | leaving Spring | `spring-on-exeris-pure-native` → `exeris-community` (231.91 → 210.85) | 21.06 | ×1.100 | — |
-| | **product of the three** | | | **×5.109** | |
-| | **directly measured** | `spring-hibernate` → `exeris-community` (1077.40 → 210.85) | | **×5.118** | closes to **+0.2 %** |
+| | **end to end** | `spring-hibernate` → `exeris-community` (1077.40 → 210.85) | 866.55 | **×5.110** | |
 
-> **The third rung used to be missing, and the table did not add up without it.** An earlier
-> version showed rungs 1 and 2 against a "whole stack ×5.118 direct" row: a reader multiplying
-> what was on the page got **×4.646** and no footnote explained the missing **10.2 %**. The gap
-> was the rung above — dropping Spring itself, `spring-on-exeris-pure-native` → `exeris-community`,
-> worth ×1.100. It is shown now, and the decomposition closes to +0.2 % on cpu/req against the
-> direct pair. **Note what rung 3 is**: the two arms share the Exeris runtime and the native
-> repository API, and differ by the Spring context around them — so ×1.10 is the cost of hosting
-> the application in Spring at all, *after* both the servlet container and the ORM are already
-> gone. It is the smallest rung of the three.
+> **This table is an accounting identity, not a check — and an earlier version presented it as
+> one.** The three rungs are consecutive ratios of the same four pooled arm-means, so they
+> *telescope*: 1077.40/955.88 × 955.88/231.91 × 231.91/210.85 **is** 1077.40/210.85, exactly, by
+> construction. Multiplying them and comparing to the end-to-end row can only ever agree. The
+> earlier version made that worse in two ways — it omitted rung 3 entirely (so a reader
+> multiplying the visible rows got ×4.646 against a stated ×5.118, a silent 10.2 % gap), and it
+> labelled the last row with **L4's** ×5.118, which comes from a *different* derivation. Both are
+> corrected: all three rungs are shown, and the end-to-end row is this table's own ×5.110.
+>
+> **The real closure check is L4's, and it is not a tautology.** There each rung is measured in
+> **its own ab/ba pair run** rather than read off pooled means, so the product is free to
+> disagree with the direct pair — and it does, by a measurable amount: **×5.222 product against
+> ×5.118 direct, +2.0 % on heavy cpu/req**, inside the ±2.52 % envelope of §2.2. That is what
+> makes the decomposition an attribution instrument. This table is the breakdown; L4 is the
+> validation.
+>
+> **Note what rung 3 is**: the two arms share the Exeris runtime and the native repository API and
+> differ by the Spring context around them — so ×1.10 is the cost of hosting the application in
+> Spring at all, *after* both the servlet container and the ORM are gone. Smallest of the three.
 
 > **The compat rung is deliberately absent from this table.** An earlier draft carried a
 > `Tomcat → Exeris compat` row here, which would have put arm 3 — the only compat arm — inside a
@@ -731,8 +775,10 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 > until 2026-08-11 and is now measured.
 >
 > **Campaign `20260811T114140Z-security-confound-n3`**, 12/12 leaves `comparison_eligible`:
-> `spring-hibernate` against `spring-hibernate-nosec` — **one jar, byte-identical
-> `artifact_sha256`**, the arms separated only by the launch properties that disable the filter
+> `spring-hibernate` against `spring-hibernate-nosec` — **the same jar within every unit,
+> byte-identical `artifact_sha256` in all 12** (the jar is rebuilt per repeat × contract, so the
+> campaign spans 6 distinct SHAs; the invariant that matters is that both arms of a *comparison*
+> always share one), the arms separated only by the launch properties that disable the filter
 > chain, so classpath, loaded classes and metaspace stay constant. Complete repeats only (full JVM
 > restart, both directions):
 >
@@ -852,7 +898,7 @@ that governs the throughput tables.
 | `spring-on-exeris-pure` | 1201 MB | 1233 MB | +2.7 % | 96 % |
 | `spring-hibernate` | 1261 MB | **1662 MB** | **+31.8 %** | **130 %** |
 
-Two things fall out. The loaded spread is **1.58×** at equal heap, ordered
+Two things fall out. The loaded spread is **1.57×** at equal heap, ordered
 community < pure-native < pure < Tomcat. And **only `spring-hibernate` responds to the contract**
 — +31.8 % from light to heavy where the other three move ≤ 2.7 %, which is the same ~200-row
 materialisation §5 attributes the cpu/req gap to, showing up in memory. Its 130 % of committed
@@ -886,10 +932,10 @@ flattens `spring-hibernate`'s 1248/1679 contract split into a single 1464.
 **Three consequences, in order of how much they matter:**
 
 1. **The idle-CPU finding is untouched.** Idle cores are state-invariant **to within ~2 %** —
-   `spring-on-exeris-pure` reads 0.0286 first-touch against 0.0280 after serving (−2.1 %),
+   `spring-on-exeris-pure` reads 0.0286 first-touch against 0.0278 after serving (−2.8 %),
    pure-native 0.0274 / 0.0268 (−2.2 %), community 0.0020 / 0.0020 (flat). Against the 1.9×–5.5×
    the RSS column moves, that is invariance; it is *not* equality, and an earlier draft of this
-   line claimed "three decimal places" — which 0.0286 against 0.0280 does not survive. Whatever
+   line claimed "three decimal places" — which 0.0286 against 0.0278 does not survive. Whatever
    the Spring-hosted composition is doing when idle, it starts doing it before the first request
    and does not change afterwards. L8's **~0.027 cores** stands exactly as re-scoped in §6 above.
 2. **Post-service idle RSS ≈ loaded RSS**, within ~1 % on every arm and both contracts (community
@@ -1031,7 +1077,7 @@ therefore described by range and trend, not by end-point quotients.
 > far outside their neighbours', and they are **not confined to one arm**. Quoting them by the
 > same within-cell p99 ratio, against each arm's own baseline:
 >
-> | cell | clean leaf | outlying leaf | p99 ratio | p50 | cpu/req | threads | load vs own ceiling |
+> | cell | p99 clean leaf | p99 outlying leaf | p99 ratio | Δp50 | cpu/req, clean → outlying | threads | load vs own ceiling |
 > |---|---:|---:|---:|---|---|---|---:|
 > | jdbc 600 | 2.30 (`ab`) | 4.04 (`ba`) | 1.76× | +9.6 % | 348.1 → 333.2 µs (**−4.3 %**) | 43.0 → 43.0 | 5 % |
 > | jdbc 1800 | 2.36 (`ba`) | 4.09 (`ab`) | 1.73× | +14.3 % | 321.1 → 306.4 µs (**−4.6 %**) | 43.0 → 42.9 | 14 % |
@@ -1328,7 +1374,7 @@ pattern is the point: the footer rule is not folklore, it is this list.*
   ba share one JVM lifetime, and a reason RSS must never be read off an ab–ba range.
 - **2026-08-11 — §6b written, and "idle RSS" turned out not to be one number per arm.** The
   footprint sub-section was the last section-level gap. Loaded RSS across the ladder at an equal
-  1280 MB committed heap spans **1.58×** (community 1057 → Tomcat 1662 on heavy), and **only
+  1280 MB committed heap spans **1.57×** (community 1057 → Tomcat 1662 on heavy), and **only
   `spring-hibernate` responds to the contract** (+31.8 % light→heavy against ≤ 2.7 % for the other
   three) — §5's ~200-row materialisation appearing in memory. The finding, though, is on the idle
   side: **whether a resident arm has ever served traffic changes its RSS by 1.9× to 5.5×**
@@ -1341,6 +1387,29 @@ pattern is the point: the footer rule is not folklore, it is this list.*
   only in the first window of `ab`, which samples `target-b`, and hibernate is `target-a` in both
   its pairs — alternating `target-a` across repeats would close that at no cost. Mirrored into
   CLAIMS L8. TL;DR's `[PENDING]` footprint bullet is written.
+- **2026-08-12 — an independent re-derivation, and what it cost.** A second pass rebuilt every
+  headline figure from the artefacts without reading this report. **Every headline number
+  survived**, including all 36 percentile cells, the gate counts and the error budget. Four
+  substantive corrections went to the retraction register (**#18–#21**: §6's telescoping
+  "closure", the over-stated `publishable=false`, §4.2's sourceless "5–15 %", and the "~125 B"
+  light payload that contradicted §6's own 30 B). The presentation slips it also found, fixed
+  here: **§7.1's excursion table headed a column `p50` when it held Δp50 percentages**, and its
+  `cpu/req` column mixed absolutes with a delta — both now named for what they contain.
+  **"Leaves" meant two things** — §1 defines a leaf as one arm-measurement (216 = 108 units × 2),
+  while Setup, §6 and §7 used it for gated *units*; every campaign row now gives both. **§3 left
+  `spring-jdbc`'s own-pin cell blank** when the artefacts hold **86.0 %**, which turns out to
+  matter: 86 % own pin against 97.4 % DB makes "bounded by the database" a *relative* reading, and
+  it now says so. **§6's "one jar, byte-identical `artifact_sha256`"** holds within each of the 12
+  units but the campaign spans **6 SHAs** (rebuild per repeat × contract); reworded to the
+  invariant that matters — both arms of a *comparison* always share one. **§6b quoted
+  0.0280 / −2.1 %** for the pure arm's served idle CPU, a heavy-only figure against a pooled
+  first-touch; pooled on both sides it is **0.0278 / −2.8 %**. And the footprint spread is
+  **×1.57**, not ×1.58, on all three surfaces.
+- **2026-08-12 — the reproducibility metadata was in the artefacts and nowhere in the prose.** The
+  only pre-publish checklist item genuinely unmet. Setup now carries the target commit SHA
+  (**`be2330ff…`, identical across all five campaigns**), JDK 26.0.1 Adoptium, the JVM flags and
+  the pinned heap, driver versions and the hardware profile — plus the honest note that the
+  harness commit exists per campaign only where `campaign-manifest.json` records it.
 ---
 
 <!--
@@ -1361,7 +1430,7 @@ PRE-PUBLISH CHECKLIST
   [ ] tier / protocol mode / benchmark family / comparison axis labelled on every table
   [ ] pure and compat separated; arm 3 never blended into a pure row
   [ ] claim-status.json = comparison_eligible and strict gates pass for every comparative row
-  [ ] reproducibility metadata cited (SHA, JDK, tool versions, flags, hardware profile, scenario)
+  [x] reproducibility metadata cited (Setup, added 2026-08-12)  -- (SHA, JDK, tool versions, flags, hardware profile, scenario)
   [ ] confidentiality: raw .jfr NOT in the publish set (derived views only); note that
       spring-on-exeris* is publishable as of the 2026-08-11 correction
   [ ] publish-report.sh --publication-mode public

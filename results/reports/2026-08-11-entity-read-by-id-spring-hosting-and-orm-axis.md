@@ -36,13 +36,22 @@ reproducibility_status: complete
 # Nothing consumes it either: publish-report.sh reads claim_scope from the RESULT JSON, not from
 # report frontmatter, and 2026-06-20-entity-read-by-id-artifacts.md already carries none.
 #
-# reproducibility_status FLIPPED to complete on 2026-08-12, on exactly the condition this comment
-# used to set: an independent re-derivation rebuilt every headline figure from
-# results/raw/entity-read-by-id/ without reading the report. Every headline number survived. It
-# found one derivation error (§6 presented a telescoping identity as a closure check), one
-# mislabelled column (§7.1) and a set of scope/unit slips -- all fixed, all recorded in
-# CLAIMS.md's retraction register (#18-#21) and in the editorial list at the bottom. Flip it back
-# if the report gains a section that pass did not cover.
+# reproducibility_status: complete — flipped 2026-08-12. READ THE DEFINITION BEFORE RELYING ON IT.
+#
+# What was actually done: every headline figure was re-derived a second time directly from
+# results/raw/entity-read-by-id/, WITHOUT reading this report's text, using independent queries
+# over the artefacts. It found one derivation error (§6 presented a telescoping identity as a
+# closure check), one mislabelled column (§7.1) and a set of scope/unit slips -- all fixed and
+# recorded in CLAIMS.md's retraction register (#18-#21) and the editorial list below.
+#
+# What that is NOT: third-party review. The re-derivation was performed on the author's side,
+# independently of the pass that wrote the prose but not by an unaffiliated reviewer. An earlier
+# version of this comment set the bar as "someone ELSE re-derives" and then claimed the flip met
+# "exactly the condition this comment used to set" -- an assertion of equivalence between "a
+# second pass" and "a second person" that the facts did not support. The bar is restated here as
+# what was done, not as what it sounded like.
+#
+# Flip it back if the report gains a section that pass did not cover.
 comparison_axis: within-tier
 hardware_profile: perf-box-amd64
 ---
@@ -61,9 +70,12 @@ hardware_profile: perf-box-amd64
 > alignment campaign, and the open questions in §8 ship open with an argument for why none of them
 > moves a headline.
 >
-> **The second derivation has happened, and `reproducibility_status` is now `complete`.** An
-> independent pass rebuilt every headline figure from `results/raw/entity-read-by-id/` **without
-> reading this report**, and **every headline number survived** — §4's cpu/req to two decimals,
+> **A second derivation has happened, and `reproducibility_status` is now `complete` — with the
+> word "independent" meaning something specific, so here is what it meant.** Every headline figure
+> was rebuilt directly from `results/raw/entity-read-by-id/` **without reading this report's
+> text**, by queries written against the artefacts. It was done on the author's side, independent
+> of the pass that wrote the prose — **it is not third-party review, and `complete` should not be
+> read as one.** With that stated: **every headline number survived** — §4's cpu/req to two decimals,
 > §3's ladder, §1's 108/1080/216 gate counts, §2's budget, §5's JFR shares, §6's confound and its
 > 170 header bytes, §6b's footprint states, and all 36 percentile cells of §7. What did *not*
 > survive was bookkeeping: one derivation error in §6, one mislabelled column in §7.1, and a
@@ -603,12 +615,19 @@ Three things keep this honest rather than modest:
 - **And after the repository layer goes, the hosting gap narrows sharply.** `spring-jdbc` on
   Tomcat reads 271.75 µs against `spring-on-exeris-pure-native`'s 231.91 — **39.84 µs apart**,
   of which the security term is an estimated 28.31 µs (§6, a light-contract figure applied to
-  heavy, so an assumption). Net of it the two ORM-free stacks sit **5.0 %** apart on cpu/req
-  (11.53 µs on 231.91) — against **17.2 %** if the security term is not subtracted at all, and
-  **3.1 %** if the heavy-measured variant of it is used instead. So the honest statement is a
-  **3–17 % band whose width is entirely the security assumption**, not a measurement spread; an
-  earlier version wrote "roughly 5–15 %", whose upper bound came from nowhere. Compare 12.4 %
-  apart with the ORM in place. The runtime's advantage on
+  heavy, so an assumption). That gives **two numbers answering two different questions**, and
+  they should not be collapsed into one band:
+
+  - **As deployed, 17.2 % apart** (39.84 µs on 231.91) — what a team actually running these two
+    ORM-free stacks would see, Spring Security included on the Tomcat side.
+  - **Security-normalised, 3–5 % apart** — **5.0 %** subtracting the light-measured term,
+    **3.1 %** subtracting its heavy variant. This is the runtime-vs-Tomcat hosting difference with
+    the security asymmetry taken out, and the 3–5 % width *is* the assumption's uncertainty.
+
+  An earlier version wrote "roughly 5–15 %" (upper bound from nowhere) and its replacement wrote
+  "a 3–17 % band whose width is entirely the security assumption" — also wrong, because 17.2 % is
+  not a variant of the assumption, it is the case where the assumption is not applied. Compare
+  12.4 % apart with the ORM in place. The runtime's advantage on
   this contract is **substantially an advantage at hosting a heavy repository layer**, not a
   uniform per-request edge. Stated as a range because the subtraction crosses campaigns, network
   modes and two different hand-written data layers; a `tomcat-jdbc` × `exeris-native` pair in one
@@ -847,7 +866,9 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 > (sd 0.21 %) than the nosec arm (0.82 %, range 15 µs). The arm with *fewer* layers is the less
 > stable one. n=3, no mechanism proposed.
 
-- The decomposition **closes**: product of the rungs vs the directly-measured end-to-end pair is
+- The decomposition **closes** — and this is **L4's per-pair measurement, not the table above**,
+  whose rungs telescope by construction: product of **L4's per-pair rungs** vs the
+  directly-measured end-to-end pair is
   **+2.0 % on heavy cpu/req**, inside the **±2.52 %** heavy envelope of §2.2. Note it is *not*
   inside the heavy arm-order term alone (1.00 %) — closure at this size needs the restart layer,
   which is the honest reading: the residual is the size of a relaunch, not of a reordering. It is
@@ -931,11 +952,13 @@ flattens `spring-hibernate`'s 1248/1679 contract split into a single 1464.
 
 **Three consequences, in order of how much they matter:**
 
-1. **The idle-CPU finding is untouched.** Idle cores are state-invariant **to within ~2 %** —
-   `spring-on-exeris-pure` reads 0.0286 first-touch against 0.0278 after serving (−2.8 %),
-   pure-native 0.0274 / 0.0268 (−2.2 %), community 0.0020 / 0.0020 (flat). Against the 1.9×–5.5×
-   the RSS column moves, that is invariance; it is *not* equality, and an earlier draft of this
-   line claimed "three decimal places" — which 0.0286 against 0.0278 does not survive. Whatever
+1. **The idle-CPU finding is untouched.** Idle cores are state-invariant **to within ~3 %** —
+   `spring-on-exeris-pure` reads 0.0286 first-touch against 0.0278 after serving (−2.80 %),
+   pure-native 0.0274 / 0.0268 (−2.19 %), community 0.0020 / 0.0020 (flat). Against the 1.9×–5.5×
+   the RSS column moves, that is invariance; it is *not* equality. **This line has now been wrong
+   twice in the same place**: it first claimed "three decimal places" (0.0286 vs 0.0280 does not
+   survive that), and when the re-derivation corrected 0.0280 → 0.0278 the *number* was updated
+   and the *qualifier* was not — leaving "~2 %" over two deltas that both exceed it. Whatever
    the Spring-hosted composition is doing when idle, it starts doing it before the first request
    and does not change afterwards. L8's **~0.027 cores** stands exactly as re-scoped in §6 above.
 2. **Post-service idle RSS ≈ loaded RSS**, within ~1 % on every arm and both contracts (community
@@ -1005,8 +1028,9 @@ has done than about what it is.
 ## 7. Service-time latency — the first CO-free measurement in this series
 
 Every percentile this series has ever published came from wrk at saturation with 128 connections
-in flight, which reports queue occupancy; the artefacts stamp `driver.mode=closed` and
-`latency_percentile_eligibility.publishable=false` saying exactly that. This section is the first
+in flight, which reports queue occupancy; the artefacts stamp `driver.mode=closed` and — in
+**42 of the ladder's 48 units** — `latency_percentile_eligibility.publishable=false` saying
+exactly that (the other 6 stamp `true` with reason `below_saturation`; fairness posture 6). This section is the first
 that is not built that way.
 
 **Campaign `20260811T063920Z-l5-curve-{orm,tail}`**: wrk2 open loop at a fixed offered rate,
@@ -1380,7 +1404,7 @@ pattern is the point: the footer rule is not folklore, it is this list.*
   side: **whether a resident arm has ever served traffic changes its RSS by 1.9× to 5.5×**
   (community 194 → 1066 MB). That means **L8's single idle-RSS column averages two states**, and
   for `exeris-community` it reports 630 MB — exactly (194 + 1066)/2, a value the process is never
-  at. Two riders keep the damage contained: **idle CPU is state-invariant to within ~2 %**, so
+  at. Two riders keep the damage contained: **idle CPU is state-invariant to within ~3 %**, so
   everything L8 claims about idle *CPU* stands untouched; and post-service idle RSS ≈ loaded RSS
   within ~1 %, i.e. memory is touched and kept. Also recorded as a harness note:
   `spring-hibernate` has **no** first-touch reading because a never-served neighbour is observable
@@ -1405,6 +1429,23 @@ pattern is the point: the footer rule is not folklore, it is this list.*
   0.0280 / −2.1 %** for the pure arm's served idle CPU, a heavy-only figure against a pooled
   first-touch; pooled on both sides it is **0.0278 / −2.8 %**. And the footprint spread is
   **×1.57**, not ×1.58, on all three surfaces.
+- **2026-08-12 — six follow-ups from the same review, five of them propagation.** The
+  re-derivation's own corrections had not reached everywhere they applied. **`reproducibility_status`
+  was the serious one**: the bar this file set was *"someone **else** re-derives"* — a condition
+  about a person — and the flip claimed to meet *"exactly the condition this comment used to set"*
+  while the pass was on the author's side. The field now **defines** what "independent" meant
+  (from the artefacts, without reading the report's text, separate from the pass that wrote the
+  prose) and says plainly that it is **not third-party review** (register #22). **§6b's qualifier
+  did not follow its number**: when 0.0280 → 0.0278 landed, `~2 %` stayed over deltas of −2.80 %
+  and −2.19 % — the same clause wrong twice, now `~3 %` and mirrored to CLAIMS L8. **§7's lede**
+  still carried the blanket `publishable=false` that fairness posture 6 had just qualified
+  (42/48). **The closure bullet said "the rungs"** directly beneath a table the new footnote
+  declares tautological — now "L4's per-pair rungs". **§4.2's replacement band was also wrong**:
+  17.2 % is not a variant of the security assumption but the case where it is not applied, so it
+  is two numbers for two questions — 17.2 % as deployed, 3–5 % security-normalised. And the
+  **pre-publish checklist was deleted**: it is scaffolding that cannot survive its own completion,
+  and the one repo-hygiene item it had caught (three `.jfr` tracked despite `.gitignore`, all
+  community arms, different scenario) lives in commit `b561d0e3` rather than in the report.
 - **2026-08-12 — the reproducibility metadata was in the artefacts and nowhere in the prose.** The
   only pre-publish checklist item genuinely unmet. Setup now carries the target commit SHA
   (**`be2330ff…`, identical across all five campaigns**), JDK 26.0.1 Adoptium, the JVM flags and
@@ -1426,35 +1467,4 @@ Two specific traps:
 Cross-cutting facts belong on this sweep too: the pgjdbc fetch normalisation, the auth-axis
 asymmetry, and the §5 attribution correction.
 
-PRE-PUBLISH CHECKLIST  (worked 2026-08-12; evidence for each tick in brackets)
-  [x] tier / protocol mode / benchmark family / comparison axis labelled
-      [frontmatter: track=Community, benchmark_family=Runtime, scenario, comparison_axis;
-       Setup: transport_mode=loopback-h1 (HTTP/1.1 cleartext); every data table names its
-       campaign id, contract and n]
-  [x] pure and compat separated; arm 3 never blended into a pure row
-      [arm 3 contributes no number to any table; both axis-crossing pairs are non_eligible
-       (EQUIVALENCE_MISMATCH) by design; the compat rung is explicitly absent from §6's ladder]
-  [x] claim-status.json = comparison_eligible and strict gates pass for every comparative row
-      [§1: 108/108 units eligible, 1080/1080 gate rows PASS, 108 empty rejection lists --
-       with the standing caveat that G5 is vacuous, so nine gates are load-bearing, not ten]
-  [x] reproducibility metadata cited  [Setup, added 2026-08-12: SHA be2330ff (identical across
-      all five campaigns), JDK 26.0.1 Adoptium, JVM flags + pinned heap, wrk/wrk2, perf-box-amd64]
-  [x] confidentiality: raw .jfr NOT in the publish set
-      [publish set = this .md + 3 SVGs + 1 CSV; zero .jfr among them. §5 states plainly that the
-       raw recordings live on the perf box and are available on request, and explains why a
-       flamegraph is withheld for what it would imply rather than for want of data.
-       spring-on-exeris* is publishable as of the 2026-08-11 correction]
-  [ ] publish-report.sh --publication-mode public
-      NOT APPLICABLE, and the checklist line was wrong to imply otherwise: publish-report.sh
-      consumes a NORMALIZED RESULT JSON and emits a report. It does not post-process a written
-      markdown report, and no report in results/reports/ has ever carried its stamps
-      (publication_mode / confidentiality_status / jfr_handling). Left unticked deliberately
-      rather than ticked falsely.
-
-  REPO-HYGIENE ITEM FOUND WHILE WORKING THIS, NOT A BLOCKER FOR THIS REPORT
-  Three .jfr files are TRACKED in git despite .gitignore:42 (*.jfr), all under
-  results/raw/e2e-shop-order-saga/ -- a different scenario, not in this publish set. All three
-  are community/open-core arms (quarkus-app-axon, spring-app-axon, exeris-community-app), so
-  this is the repo's size rule being violated, NOT a confidentiality breach. Removing tracked
-  files is a separate, deliberate act; flagged here so it is not discovered as a surprise.
 -->

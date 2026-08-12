@@ -1426,12 +1426,35 @@ Two specific traps:
 Cross-cutting facts belong on this sweep too: the pgjdbc fetch normalisation, the auth-axis
 asymmetry, and the §5 attribution correction.
 
-PRE-PUBLISH CHECKLIST
-  [ ] tier / protocol mode / benchmark family / comparison axis labelled on every table
-  [ ] pure and compat separated; arm 3 never blended into a pure row
-  [ ] claim-status.json = comparison_eligible and strict gates pass for every comparative row
-  [x] reproducibility metadata cited (Setup, added 2026-08-12)  -- (SHA, JDK, tool versions, flags, hardware profile, scenario)
-  [ ] confidentiality: raw .jfr NOT in the publish set (derived views only); note that
-      spring-on-exeris* is publishable as of the 2026-08-11 correction
+PRE-PUBLISH CHECKLIST  (worked 2026-08-12; evidence for each tick in brackets)
+  [x] tier / protocol mode / benchmark family / comparison axis labelled
+      [frontmatter: track=Community, benchmark_family=Runtime, scenario, comparison_axis;
+       Setup: transport_mode=loopback-h1 (HTTP/1.1 cleartext); every data table names its
+       campaign id, contract and n]
+  [x] pure and compat separated; arm 3 never blended into a pure row
+      [arm 3 contributes no number to any table; both axis-crossing pairs are non_eligible
+       (EQUIVALENCE_MISMATCH) by design; the compat rung is explicitly absent from §6's ladder]
+  [x] claim-status.json = comparison_eligible and strict gates pass for every comparative row
+      [§1: 108/108 units eligible, 1080/1080 gate rows PASS, 108 empty rejection lists --
+       with the standing caveat that G5 is vacuous, so nine gates are load-bearing, not ten]
+  [x] reproducibility metadata cited  [Setup, added 2026-08-12: SHA be2330ff (identical across
+      all five campaigns), JDK 26.0.1 Adoptium, JVM flags + pinned heap, wrk/wrk2, perf-box-amd64]
+  [x] confidentiality: raw .jfr NOT in the publish set
+      [publish set = this .md + 3 SVGs + 1 CSV; zero .jfr among them. §5 states plainly that the
+       raw recordings live on the perf box and are available on request, and explains why a
+       flamegraph is withheld for what it would imply rather than for want of data.
+       spring-on-exeris* is publishable as of the 2026-08-11 correction]
   [ ] publish-report.sh --publication-mode public
+      NOT APPLICABLE, and the checklist line was wrong to imply otherwise: publish-report.sh
+      consumes a NORMALIZED RESULT JSON and emits a report. It does not post-process a written
+      markdown report, and no report in results/reports/ has ever carried its stamps
+      (publication_mode / confidentiality_status / jfr_handling). Left unticked deliberately
+      rather than ticked falsely.
+
+  REPO-HYGIENE ITEM FOUND WHILE WORKING THIS, NOT A BLOCKER FOR THIS REPORT
+  Three .jfr files are TRACKED in git despite .gitignore:42 (*.jfr), all under
+  results/raw/e2e-shop-order-saga/ -- a different scenario, not in this publish set. All three
+  are community/open-core arms (quarkus-app-axon, spring-app-axon, exeris-community-app), so
+  this is the repo's size rule being violated, NOT a confidentiality breach. Removing tracked
+  files is a separate, deliberate act; flagged here so it is not discovered as a surprise.
 -->

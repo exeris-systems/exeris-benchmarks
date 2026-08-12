@@ -585,9 +585,46 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
   in the end-to-end pair alike cancels in the closure check while remaining in both numbers.
 - **Amdahl consequence:** with the repository layer in the path, no amount of runtime work can
   exceed **×1.488** on this contract. **[TODO]** restate with §5's corrected label.
-- **[TODO]** §6b footprint: RSS across the ladder, and L8's idle-cost finding (an idle
-  Spring-on-Exeris process is ~18× less idle than Tomcat or the native runtime) with its
-  threshold and the directional-only caveat on instances-per-core.
+- **[TODO — prose only; the data question inside it is now closed, see below]** §6b footprint:
+  RSS across the ladder, and L8's idle-cost finding with its threshold and the directional-only
+  caveat on instances-per-core.
+
+> **L8's bridge confound, checked and cleared — with a correction to how the finding should be
+> quoted.** L8 (an idle Spring-on-Exeris process burns ~18× what Tomcat or the native runtime
+> does) came from the **bridge** ladder, where an unpinned `docker-proxy` can land on either
+> cpuset. The test that cleared `docker-proxy` for L9 — cycle-stealing predicts *fewer cores at
+> constant cpu/req*, and we observed flat cores with higher cpu/req — **cannot** be run on an idle
+> arm: it serves nothing, so there is no denominator, and stolen cycles would look exactly like
+> signal. The co-resident sampler (`neighbour-resource-metrics.json`, `role: resident-idle`)
+> however runs on **every** campaign, host-net ones included, so this was a read rather than a run.
+> `tools/extract-idle-coresidence.sh`, **264 idle windows over seven campaigns and both network
+> modes** (96 bridge, 168 host), avg cores while launched-but-not-driven against a 4-core pin:
+>
+> | idle arm | hosting model | bridge | host |
+> |---|---|---:|---:|
+> | `spring-on-exeris-pure` | Spring-on-Exeris | 0.0280 | — |
+> | `spring-on-exeris-pure-native` | Spring-on-Exeris | 0.0270 | **0.0252 / 0.0271 / 0.0276** |
+> | `spring-on-exeris-comp-native` | Spring-on-Exeris | — | 0.0267 |
+> | `spring-hibernate` | Tomcat | 0.0015 | **0.0015** / 0.0053 / 0.0078 |
+> | `spring-hibernate-nosec` | Tomcat | — | 0.0075 |
+> | `spring-jdbc` | Tomcat | — | 0.0012 / 0.0048 |
+> | `exeris-community` | native Exeris | 0.0020 | 0.0041 |
+> | `quarkus-tuned` | Quarkus | — | **0.0009** |
+>
+> **The confound is ruled out.** A `docker-proxy` sitting next to the Spring-on-Exeris arm under
+> bridge would have to inflate its **bridge** figure specifically. It does not move at all:
+> 0.0270–0.0280 on bridge against 0.0252–0.0276 on host — a 5 % spread across seven campaigns and
+> both modes, with the *lowest* value on host. On the matched `-n3` designs the ratio **reproduces
+> on host-net**: 0.0271 against `spring-hibernate`'s 0.0015 is **18.1×**, 22.6× against
+> `spring-jdbc`, and **29.6× against `quarkus-tuned`**, which is the quietest arm measured.
+>
+> **The correction matters more than the confirmation.** The *numerator* is invariant
+> (0.0252–0.0280, 5 % spread, every campaign, both modes); the *denominator* is not — quiet arms
+> read **0.0009–0.0078 depending on campaign design**, an 8.7× range, with the six-rung curve and
+> the security campaign well above the `-n3` pairs. The **ratio therefore inherits a variability
+> the finding itself does not have**. Quote the absolute figure — **~0.027 cores, ~0.67 % of a
+> 4-core pin** — which is the reproducible quantity, and give a ratio only with the pair and
+> campaign attached. **§6b must not print a bare "18×".**
 
 ---
 
@@ -644,31 +681,67 @@ top rungs. That is the precondition for the whole section and it is met, not ass
 | 3400 | 3.34 | 8.50–9.01 | 15.30–21.97 | 1.34 | 2.38–2.40 | 2.67–2.69 |
 
 **`spring-jdbc` is flat across the entire range.** From 600 to 3400 rps — 5.7× the load — its p50
-moves between 1.33 and 1.43 ms and its p99 sits at ~2.35 ms apart from two single-leaf excursions.
+moves between 1.33 and 1.43 ms and its p99 sits at ~2.35 ms apart from single-leaf excursions.
 
-> **Those two excursions have no assigned cause — and that is what the design predicts, not a
-> surprise.** `spring-jdbc` reads p99 4.04 at 600 rps (`ba`) and 4.09 at 1800 rps (`ab`) against
-> ~2.35 everywhere else — a *worse* tail at *lower* load, which is the opposite of the pattern the
-> rest of the section describes.
+**`spring-hibernate` rises, and the rise is in the tail rather than the median.** Its p50 mean
+holds between **2.04 and 2.18 ms through the first four rungs**, then steps to **3.49 at 3000 and
+3.34 at 3400** — the peak is the fifth rung, not the last, and the series dips at 2400 and again
+at 3400. End-to-end that ratio is +64 %, and it is deliberately *not* quoted that way here: a
+quotient of two cells hides both dips, implies a smoothness the ladder does not show, and is
+exactly the single-cell reading the note above forbids. The tail is the cleaner signal — on
+excursion-free leaves **p99 goes 3.1 → 3.1 → 3.6 → 3.6 → 5.3 → 8.8 ms**: two flat pairs and then
+a step, with no reversal larger than 0.03 ms — and p99.9 from ~3.9 to 15–22 ms. Both arms are
+therefore described by range and trend, not by end-point quotients.
+
+> **The excursions — all of them, on one measure.** Four cells in this table have an ab–ba spread
+> far outside their neighbours', and they are **not confined to one arm**. Quoting them by the
+> same within-cell p99 ratio, against each arm's own baseline:
 >
-> What was checked and ruled out: they are **not the same direction** (one `ba`, one `ab`), **not
-> the first leaf** of the campaign, and not a warmup-volume effect (the 1800 leaf saw 108 k warmup
-> requests, more than the clean 1200 leaf's 72 k). What they do share is a signature: p50 +12 % and
-> p99 +73 % against the arm's own baseline **with cpu/req, RSS and thread count unchanged**
-> (333/306 µs against 325/315 µs in clean leaves) — the arm was not doing more work, so this looks
-> like a transient stall from outside the process rather than anything about load.
+> | cell | clean leaf | outlying leaf | p99 ratio | p50 | cpu/req | threads | load vs own ceiling |
+> |---|---:|---:|---:|---|---|---|---:|
+> | jdbc 600 | 2.30 (`ab`) | 4.04 (`ba`) | 1.76× | +9.6 % | 348.1 → 333.2 µs (**−4.3 %**) | 43.0 → 43.0 | 5 % |
+> | jdbc 1800 | 2.36 (`ba`) | 4.09 (`ab`) | 1.73× | +14.3 % | 321.1 → 306.4 µs (**−4.6 %**) | 43.0 → 42.9 | 14 % |
+> | **hibernate 1200** | 3.09 (`ab`) | **11.52** (`ba`) | **3.73×** | +11.1 % | 935.7 → 922.2 µs (**−1.4 %**) | 43.0 → 42.9 | 33 % |
+> | hibernate 3000 | 5.25 (`ab`) | 15.07 (`ba`) | 2.87× | +75 % | 1000.3 → 1000.9 µs (+0.1 %) | 43.0 → 43.0 | 83 % |
 >
-> **That signature is exactly what the missing restart layer would produce.** A per-leaf disturbance
-> with no work attached to it is a relaunch-scale event, and this campaign has **no repeat to
-> compare against** — n=2 is two directions inside one JVM lifetime (see the note above). A single
-> outlying leaf with nothing to hold it against is the predicted symptom of a layer this campaign
-> does not sample, so "unexplained" over-states the mystery: the instrument that would name it was
-> not run. Resolving it needs repeats at these rungs, not a mechanism.
+> *Ceilings measured at saturation on the same arms, `20260810T131208Z-hibernate-vs-jdbc-n3`:
+> `spring-jdbc` **12 664 rps**, `spring-hibernate` **3 680** (n=6 each); the curve campaign's own
+> top-rung attainment gives 3 628 for hibernate. The paragraph after this note reads 3400 rps as
+> 27 % of jdbc's capacity — 3400/12 664 = 26.8 % — from the same numbers.*
 >
-> Neither reproduced in the other direction at the same rung. Magnitude is 1.7×, well below the
-> near-capacity excursions in §7.3, and in the opposite load regime. **No claim in this report
-> rests on those two cells**, and the ranges are printed unsmoothed so a reader sees them.
-`spring-hibernate` rises: p50 +64 %, p99 roughly ×2.8, p99.9 from ~4 ms to 15–22 ms.
+> **The largest excursion on this table is in the arm the section characterises as *rising*, at the
+> second rung** — 11.52 ms against a ~3.1 ms neighbourhood. It damages the growth story more than
+> anything on the `spring-jdbc` side, and an earlier draft of this section gave three paragraphs to
+> the two 1.7× cells and none to it. That asymmetry was not intentional and it is not defensible:
+> attention unevenly distributed across one table reads as selection whatever produced it.
+>
+> **Three of the four share one signature, and it is the predicted one.** jdbc 600, jdbc 1800 and
+> hibernate 1200 all sit **at or below a third of their arm's ceiling**, all move p50 by ~10 % and
+> the tail by 1.7–3.7×, and all do it with **cpu/req flat or slightly *lower* and thread count
+> unchanged** — the arm was not doing more work. A per-leaf disturbance with no work attached to it
+> is a
+> **relaunch-scale event**, and this campaign has no repeat to hold it against: n=2 is two
+> directions inside one JVM lifetime (see the note above). So these are the predicted symptom of a
+> layer this campaign does not sample, not an anomaly — "unexplained" over-states the mystery,
+> because the instrument that would name it was not run. Resolving them needs repeats at these
+> rungs, not a mechanism. What was separately checked and ruled out: not the same direction (two
+> `ba`, one `ab`), not the first leaf of the campaign, and not a warmup-volume effect (the 1800
+> leaf saw 108 k warmup requests against the clean 1200 leaf's 72 k).
+>
+> **The fourth is probably a different thing and is not claimed as the same.** hibernate 3000 sits
+> at **83 % of its own ceiling**, in the regime where §7.3 shows tails growing for real, and its p50
+> moves **+75 %** against ~10 % for the other three. Capacity-approach behaviour is the more
+> economical reading there. It is the cell quoted in §7's preamble as evidence of order-sensitivity.
+>
+> **No claim in this report rests on any of the four**, every conclusion here is read off the shape
+> across six rungs, and the ranges are printed unsmoothed so a reader sees them.
+>
+> **One systematic effect visible in the same leaves, recorded because it is a fence not a finding:**
+> idle RSS is higher in `ba` than in `ab` for *every* hibernate rung (1312/1365, 1328/1396,
+> 1336/1423, 1346/1436, 1352/1456, 1345/1465 MB) and weakly for jdbc too. Both arms hold more
+> memory in whichever direction runs them second — which is direct confirmation that ab and ba
+> share one JVM lifetime (§2.4) rather than being independent samples, and a reason **RSS must
+> never be read off an ab–ba range**.
 
 **This is the result that makes §4's ×3.95 legible.** At 600 rps the median gap is 1.43× — nothing
 like ×3.95. The cpu/req ratio does **not** appear as a proportional latency penalty, because at low
@@ -833,6 +906,19 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
   occupancy rather than service time (§2.3). No conclusion in the report is overturned; three are
   now stated more tightly.
 
+- **2026-08-11 — L8's bridge confound cleared by reading, and the finding re-scoped.** L8 (idle
+  Spring-on-Exeris ≈ 18× Tomcat) came from the **bridge** ladder, where an unpinned `docker-proxy`
+  can sit on either cpuset — and the test that cleared `docker-proxy` for L9 cannot run on an idle
+  arm, which has no denominator. The co-resident sampler runs on every campaign, so this needed no
+  new run: **264 idle windows (96 bridge, 168 host), seven campaigns.** The confound is ruled out —
+  the Spring-on-Exeris figure does not move (0.0252–0.0280 across both modes, 5 %
+  spread) — and the ratio **reproduces on host-net at 18.1×** on matched `-n3` designs. But the
+  *denominator* turns out to vary **8.7× by campaign design** (quiet arms 0.0009–0.0078) while the
+  numerator does not, so **the reproducible quantity is the absolute figure — ~0.027 cores, ~0.67 %
+  of a 4-core pin — and a bare "18×" is not citable.** The ratio ranges 18.1–29.6× depending
+  on which quiet arm it is taken against. Mirrored into CLAIMS L8. §6b's TODO is
+  now prose-only; the data question inside it is closed.
+
 ### Editorial corrections — found in review, changed nothing in the data
 
 *All four were defects living **only** on a summarizing surface or in the ordering of evidence, in
@@ -871,6 +957,22 @@ pattern is the point: the footer rule is not folklore, it is this list.*
   2 now read *largest identified contributor … the pair moves both and the split is unmeasured*,
   and the guard comment carries the second trap explicitly. **What is retracted is the label, not
   the pool** — that distinction is the whole of the correction.
+- **2026-08-11 — §7.1 described its two arms with two different measures, and gave its attention
+  unevenly across one table.** `spring-jdbc` was quoted as a *range* ("p50 moves between 1.33 and
+  1.43") and `spring-hibernate` as an *end-point quotient* ("+64 %") — and the hibernate series is
+  not monotonic: 2.04, 2.09, 2.18, 2.09, 3.49, 3.34, peaking at the fifth rung with dips at 2400
+  and 3400. A quotient of two cells hid both, implied a smoothness the ladder does not show, and
+  was itself the single-cell reading §7's own note forbids. Both arms now use range and trend.
+  Separately, three paragraphs went to `spring-jdbc`'s two 1.7× excursions while the **largest
+  excursion on the table — hibernate 11.52 ms at 1200 rps, 3.73×** — got none, in the arm the
+  section characterises as rising. Unintentional, but attention distributed unevenly across one
+  table reads as selection. All four excursions are now tabulated on one measure. The payoff:
+  **three of them share the low-load signature** (≤ ⅓ of ceiling, p50 +~10 %, tail 1.7–3.7×,
+  cpu/req flat or *lower*, threads unchanged), so the phenomenon is **not a property of either
+  arm**; the fourth (hibernate 3000, 83 % of ceiling, p50 +75 %) is more economically read as
+  capacity-approach and is **not** claimed as the same thing. Also recorded from the same leaves:
+  idle RSS is higher in `ba` than `ab` at every hibernate rung — direct confirmation that ab and
+  ba share one JVM lifetime, and a reason RSS must never be read off an ab–ba range.
 - **[TODO on publish]** record that this report retracts the plain-"ORM" label used for the
   L3 pool, and why.
 

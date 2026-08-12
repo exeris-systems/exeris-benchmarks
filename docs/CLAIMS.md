@@ -402,6 +402,40 @@ The prediction was right about heavy and silent about light, where the effect wa
   ~18× what either Tomcat *or* the native Exeris arm does. exeris-community runs the same kernel
   as pure-native and is as quiet as Tomcat, so this is not "Exeris spins" — it is something in
   the Spring-hosted composition. Not diagnosed here.
+
+- **BRIDGE CONFOUND CLEARED, AND THE RATIO RE-SCOPED (2026-08-11).** The table above is from the
+  **bridge** ladder, where an unpinned `docker-proxy` can land on either cpuset. The test that
+  cleared `docker-proxy` for L9 — cycle-stealing predicts *fewer cores at constant cpu/req*,
+  observed flat cores at higher cpu/req — **cannot run on an idle arm**: it serves nothing, so
+  there is no denominator and stolen cycles would look exactly like signal. The co-resident
+  sampler runs on every campaign, so this was answered by reading, not by a new run —
+  `tools/extract-idle-coresidence.sh`, **264 idle windows over seven campaigns and both network
+  modes** (96 bridge, 168 host):
+
+  | idle arm | hosting model | bridge | host |
+  |---|---|---:|---:|
+  | spring-on-exeris-pure | Spring-on-Exeris | 0.0280 | — |
+  | spring-on-exeris-pure-native | Spring-on-Exeris | 0.0270 | **0.0252 / 0.0271 / 0.0276** |
+  | spring-on-exeris-comp-native | Spring-on-Exeris | — | 0.0267 |
+  | spring-hibernate | Tomcat | 0.0015 | **0.0015** / 0.0053 / 0.0078 |
+  | spring-hibernate-nosec | Tomcat | — | 0.0075 |
+  | spring-jdbc | Tomcat | — | 0.0012 / 0.0048 |
+  | exeris-community | native Exeris | 0.0020 | 0.0041 |
+  | quarkus-tuned | Quarkus | — | **0.0009** |
+
+  **Confound ruled out.** A `docker-proxy` next to the Spring-on-Exeris arm would inflate its
+  *bridge* figure specifically. It does not move: 0.0270–0.0280 bridge against 0.0252–0.0276
+  host — a 5 % spread across seven campaigns and both modes, with the *lowest* value on host. On
+  the matched `-n3` designs the ratio **reproduces on host-net**: 0.0271 against
+  spring-hibernate's 0.0015 is **18.1×**, 22.6× against spring-jdbc, and **29.6× against
+  quarkus-tuned**, the quietest arm measured.
+
+  **RE-SCOPE THE RATIO, NOT THE FINDING.** The numerator is invariant (0.0252-0.0280, 5 %
+  spread); the denominator is not — quiet arms read **0.0009-0.0078 depending on campaign
+  design**, an 8.7× range, unrelated to network mode. The ratio therefore inherits a variability
+  the finding does not have. **Quote `~0.027 cores / ~0.67 % of a 4-core pin`, which is the
+  reproducible quantity; give a ratio only with the pair and campaign it was measured against.**
+  A bare "18×" is not citable.
 - **In density terms — which is how the platform is sold — 0.028 cores is not small:**
 
   | idle arm | cores | threads | idle RSS | **idle instances per core** |

@@ -503,6 +503,30 @@ ratios spanning 49–114 % the **ordering itself could move**. Instances-per-cor
 only from a per-rung floor campaign, which does not exist yet. Until it does, this table shows
 the *ordering* of idle cost, not its magnitude.
 
+**MECHANISM FOUND, 2026-08-11 — and the idle-RSS column above averages two different states.**
+Whether the resident arm has **ever served traffic** changes its idle RSS by up to 5.5×:
+
+| idle arm | first touch (never served) | after serving | ratio |
+|---|---:|---:|---:|
+| exeris-community | **194 MB** | 1066 MB | **5.5×** |
+| spring-on-exeris-pure-native | **312 MB** | 1100 MB | **3.5×** |
+| spring-on-exeris-pure | **629 MB** | 1221 MB | **1.9×** |
+| spring-hibernate | *not observable in this campaign* | 1248 (light) / 1679 (heavy) | — |
+
+So **the 630 MB quoted for exeris-community above is (194 + 1066) / 2 — a value the process is
+never at.** The 1464 MB for spring-hibernate likewise averages a 1248/1679 contract split. Read
+the column as a rank, never as a footprint.
+
+Two riders. (a) **Idle CPU is state-invariant** (pure 0.0286 vs 0.0280, pure-native 0.0274 vs
+0.0268, community 0.0020 vs 0.0020), so everything this entry claims about idle *CPU* is
+unaffected — the composition starts burning cycles before the first request. (b)
+`spring-hibernate` has no first-touch figure because a never-served neighbour is observable only
+in the first window of the `ab` direction, which samples `target-b`, and spring-hibernate is
+`target-a` in both pairs it appears in. **Alternating `target-a` across repeats would close that
+gap at no cost** — worth doing before any density campaign.
+
+Full derivation and the loaded-RSS counterpart: the 2026-08-11 report §6b.
+
 ### Same structural condition as L5
 
 | | condition | symptom |

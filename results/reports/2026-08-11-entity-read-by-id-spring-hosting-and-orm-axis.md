@@ -25,7 +25,7 @@ claim_scope_note: >
   Deliberately NOT comparison_eligible while this is a draft, even though the underlying
   campaigns are. §2's error budget is now derived from this report's own campaigns
   (tools/derive-error-budget.sh, 220 observations) and no longer blocks; the remaining
-  TODOs are prose in sections 1, 3, 4, 5 and 6. A file-level
+  TODOs are prose in sections 1, 3, 4 and 5 (§6 closed 2026-08-11 with §6b). A file-level
   comparison_eligible would also over-claim across the whole report: the ladder campaign's
   48 leaves are not declared all-eligible anywhere, and the two pairs that cross the
   Pure-vs-Compat axis are non_eligible BY DESIGN. Eligibility is a per-campaign, per-pair
@@ -112,7 +112,14 @@ sooner.** Everything below is that sentence, qualified.
   are far more order-sensitive than throughput (5.25 vs 15.07 ms p99 in one cell at the same
   offered rate) — and those ranges still carry **no restart variance**, making them a lower bound
   on uncertainty rather than an envelope (§2.4, §7).
-- **Footprint and idle cost** — §6. **[PENDING: consolidate L8 + RSS across the ladder]**
+- **Footprint: the Exeris-hosted arms hold less memory under load, and only Tomcat's grows with the
+  contract.** At an equal 1280 MB committed heap the loaded spread is **1.58×** — community
+  1057 MB, pure-native 1102, pure 1233, Tomcat **1662** on heavy — and `spring-hibernate` is the
+  only arm that responds to the contract (+31.8 % light→heavy against ≤ 2.7 % for the rest), which
+  is §5's row materialisation showing up in memory. **Idle RSS, though, is not one number per
+  arm:** it depends on whether the process has ever served, by **1.9× to 5.5×**, so L8's single
+  idle figure averages two states — for `exeris-community` it reports 630 MB, the mean of 194 and
+  1066, a value the process never holds. Idle *CPU* is unaffected by that and stands (§6b).
 
 **What this report will not claim:** any service-time comparison from the closed-loop campaigns;
 any transfer of the heavy ranking to a setup where the database is not the bottleneck; any
@@ -478,7 +485,7 @@ asymmetry, but no cross-arm share is quoted here as like-for-like. Exploratory: 
 
 ## 6. The hosting ladder, and where each rung's cost lives
 
-**[SECTION SKELETON — data present in L3/L4, prose to write]**
+**Ladder campaign, n=12 per arm per contract. Prose complete; see §6b for footprint.**
 
 Heavy cpu/req arm-means, ladder campaign (n=12):
 
@@ -583,11 +590,101 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
   and it closes on cpu/req, not on rps (+3.8 %), which is the DB ceiling seen a third way (L4).
   Note the closure does **not** clear the security confound above: a term present in one rung and
   in the end-to-end pair alike cancels in the closure check while remaining in both numbers.
-- **Amdahl consequence:** with the repository layer in the path, no amount of runtime work can
-  exceed **×1.488** on this contract. **[TODO]** restate with §5's corrected label.
-- **[TODO — prose only; the data question inside it is now closed, see below]** §6b footprint:
-  RSS across the ladder, and L8's idle-cost finding with its threshold and the directional-only
-  caveat on instances-per-core.
+- **Amdahl consequence — and it is a softer ceiling than it first reads.** With the repository
+  layer in the path at **723.97 µs of a 1077.40 µs request (67.2 %)**, no amount of runtime work
+  can exceed **×1.488** on this contract. Against that ceiling the hosting rung has actually
+  delivered **×1.09–1.10** (§6 above, security term removed), so the runtime is working inside a
+  third of the request and has taken about a fifth of that third.
+
+  **Restated with §5's corrected label, which changes what the ceiling *is*.** The denominator is
+  not "the ORM" and not Hibernate — it is the **Spring Data repository layer**, whose largest
+  identified component is projection proxies rather than row mapping (§5; the split is unmeasured,
+  L10). That matters because **a ceiling set by a replaceable component is not a property of JPA.**
+  A team that swaps interface projections for DTO constructor expressions shrinks the denominator
+  without touching persistence or runtime, which *raises* the ceiling for any runtime work layered
+  on top. So ×1.488 bounds runtime work **given this repository implementation**, not given JPA —
+  and the cheapest way to move the bound is the change that involves none of our software (§4).
+
+### 6b. Footprint — and why "idle RSS" is not one number per arm
+
+All four ladder arms ran a pinned **`-Xms1280m -Xmx1280m`** with `AlwaysPreTouch` off, so every
+figure here is *pages actually touched at a common committed heap*, not memory required. Ladder
+campaign, bridge (`20260806T183034Z-spring-ladder-n3`), n=12 per arm per contract. RSS is not
+network-mode sensitive — `spring-hibernate` reads 1662 MB heavy on bridge here and 1668 MB heavy
+on host in the ORM campaign, a 0.4 % difference — so this table transfers across the Setup split
+that governs the throughput tables.
+
+**Under load, in each arm's own measurement window:**
+
+| arm | light | heavy | heavy vs light | heavy as % of committed heap |
+|---|---:|---:|---:|---:|
+| `exeris-community` | 1050 MB | 1057 MB | +0.7 % | 83 % |
+| `spring-on-exeris-pure-native` | 1098 MB | 1102 MB | +0.4 % | 86 % |
+| `spring-on-exeris-pure` | 1201 MB | 1233 MB | +2.7 % | 96 % |
+| `spring-hibernate` | 1261 MB | **1662 MB** | **+31.8 %** | **130 %** |
+
+Two things fall out. The loaded spread is **1.58×** at equal heap, ordered
+community < pure-native < pure < Tomcat. And **only `spring-hibernate` responds to the contract**
+— +31.8 % from light to heavy where the other three move ≤ 2.7 %, which is the same ~200-row
+materialisation §5 attributes the cpu/req gap to, showing up in memory. Its 130 % of committed
+heap is off-heap plus metaspace plus Tomcat's own buffers; the number is RSS, not heap occupancy.
+
+**Resident and idle — and here the single number in L8 turns out to average two different
+states.** The co-resident sampler records an arm that is launched but not driven. Whether that arm
+has *ever served traffic* changes its RSS by up to 5.5×:
+
+| idle arm | first touch (never served) | after serving | ratio |
+|---|---:|---:|---:|
+| `exeris-community` | **194 MB** | 1066 MB | **5.5×** |
+| `spring-on-exeris-pure-native` | **312 MB** | 1100 MB | **3.5×** |
+| `spring-on-exeris-pure` | **629 MB** | 1221 MB | **1.9×** |
+| `spring-hibernate` | *not measured — see below* | 1248 (light) / 1679 (heavy) | — |
+
+> **Why `spring-hibernate` has no first-touch reading, recorded as a harness note.** Warmup is
+> per-target and runs immediately before that target's own window, and the two arms are *not*
+> relaunched between `ab` and `ba` (§2.4). A never-served neighbour is therefore observable in
+> exactly one position — during the **first** window of the `ab` direction — which samples
+> whichever arm is `target-b`. `spring-hibernate` is `target-a` in both pairs it appears in
+> (`1-tomcat-vs-pure`, `4-tomcat-vs-native`), so it never occupies that slot. Nothing is wrong
+> with the data; the pair layout simply does not expose that state for it. Alternating `target-a`
+> across repeats would fix it at no cost.
+
+**L8's idle-RSS column is the mean of these two states, and for one arm it names a value the
+process never holds.** L8 reports `exeris-community` at 630 MB — which is (194 + 1066) / 2. The
+arm is at 194 MB before it serves and ~1066 MB after; it is never at 630. The same averaging
+flattens `spring-hibernate`'s 1248/1679 contract split into a single 1464.
+
+**Three consequences, in order of how much they matter:**
+
+1. **The idle-CPU finding is untouched.** Idle cores are state-invariant to three decimal places —
+   `spring-on-exeris-pure` reads 0.0286 first-touch against 0.0280 after serving, pure-native
+   0.0274 / 0.0268, community 0.0020 / 0.0020. Whatever the Spring-hosted composition is doing
+   when idle, it starts doing it before the first request and does not change afterwards. L8's
+   **~0.027 cores** stands exactly as re-scoped in §6 above.
+2. **Post-service idle RSS ≈ loaded RSS**, within ~1 % on every arm and both contracts (community
+   1066 vs 1057, pure-native 1100 vs 1102, pure 1221 vs 1233, hibernate 1679 vs 1662 on heavy).
+   **Memory is touched and kept, not released between windows.** A "what does an idle replica
+   cost" figure is therefore a *history* question, not a steady-state one.
+3. **Density remains legitimately an RSS claim, and instances-per-core remains directional only —
+   but now with a mechanism rather than a caveat.** L8 computes the memory-per-core at which idle
+   CPU would bind before RAM: 32.7 GB/core for the leanest Spring-on-Exeris arm against 953 for
+   Tomcat. Commodity servers run 2–8 GB/core and memory-optimised shapes 8–16, so **RAM binds
+   first by an order of magnitude on all four arms** and the reflex to say "quoting only RSS picks
+   the flattering axis" is wrong on these numbers. What *is* not citable is instances-per-core,
+   and the reason is now measured: the touch ratio is a function of traffic history spanning
+   **1.9× to 5.5× depending on the arm**, so the arms are not ranked on the same basis at all.
+   `exeris-community` sits at 194 MB before it serves and ~1066 MB after, against Tomcat's
+   1248–1679 — so the community-vs-Tomcat idle gap reads **1.2–1.6× after serving** and would read
+   **6.4–8.7× before**, *if* Tomcat's own first-touch matched its post-service figure. That
+   condition is plausible (it is already at 114–130 % of committed heap) but **unmeasured**, for
+   the layout reason above, so the wider ratio is not claimed. A per-rung floor campaign is what
+   would settle it, and it does not exist.
+
+**What §6's headline keeps.** The hosting ladder's memory story is the loaded table: at equal
+committed heap the Exeris-hosted arms hold 1098–1233 MB against Tomcat's 1261–1662, and the gap
+*widens with the contract* because only the Tomcat arm's footprint tracks row count. The idle
+story is the CPU one (§6 above), not the RSS one — RSS at idle says more about what the process
+has done than about what it is.
 
 > **L8's bridge confound, checked and cleared — with a correction to how the finding should be
 > quoted.** L8 (an idle Spring-on-Exeris process burns ~18× what Tomcat or the native runtime
@@ -973,6 +1070,21 @@ pattern is the point: the footer rule is not folklore, it is this list.*
   capacity-approach and is **not** claimed as the same thing. Also recorded from the same leaves:
   idle RSS is higher in `ba` than `ab` at every hibernate rung — direct confirmation that ab and
   ba share one JVM lifetime, and a reason RSS must never be read off an ab–ba range.
+- **2026-08-11 — §6b written, and "idle RSS" turned out not to be one number per arm.** The
+  footprint sub-section was the last section-level gap. Loaded RSS across the ladder at an equal
+  1280 MB committed heap spans **1.58×** (community 1057 → Tomcat 1662 on heavy), and **only
+  `spring-hibernate` responds to the contract** (+31.8 % light→heavy against ≤ 2.7 % for the other
+  three) — §5's ~200-row materialisation appearing in memory. The finding, though, is on the idle
+  side: **whether a resident arm has ever served traffic changes its RSS by 1.9× to 5.5×**
+  (community 194 → 1066 MB). That means **L8's single idle-RSS column averages two states**, and
+  for `exeris-community` it reports 630 MB — exactly (194 + 1066)/2, a value the process is never
+  at. Two riders keep the damage contained: **idle CPU is state-invariant** to three decimals, so
+  everything L8 claims about idle *CPU* stands untouched; and post-service idle RSS ≈ loaded RSS
+  within ~1 %, i.e. memory is touched and kept. Also recorded as a harness note:
+  `spring-hibernate` has **no** first-touch reading because a never-served neighbour is observable
+  only in the first window of `ab`, which samples `target-b`, and hibernate is `target-a` in both
+  its pairs — alternating `target-a` across repeats would close that at no cost. Mirrored into
+  CLAIMS L8. TL;DR's `[PENDING]` footprint bullet is written.
 - **[TODO on publish]** record that this report retracts the plain-"ORM" label used for the
   L3 pool, and why.
 

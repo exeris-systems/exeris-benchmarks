@@ -1449,19 +1449,3 @@ pattern is the point: the footer rule is not folklore, it is this list.*
   the pinned heap, driver versions and the hardware profile — plus the honest note that the
   harness commit exists per campaign only where `campaign-manifest.json` records it.
 ---
-
-<!--
-FOUR-SURFACE SWEEP — required before publishing, per CLAUDE.md.
-Three consecutive review rounds on the triad report found every remaining defect living ONLY here:
-  1. frontmatter `summary:`
-  2. TL;DR
-  3. revision history
-  4. conclusions
-Two specific traps:
-  - a summary must not strengthen the body's quantifier ("rises to 39-59%" is not "dominates");
-  - a bound must be the one measured on the axis being claimed (a <=2% throughput order-effect
-    says nothing about RSS, where the same control read +13.5%).
-Cross-cutting facts belong on this sweep too: the pgjdbc fetch normalisation, the auth-axis
-asymmetry, and the §5 attribution correction.
-
--->

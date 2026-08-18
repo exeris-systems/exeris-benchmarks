@@ -1,3 +1,15 @@
+> # ⛔ RETIRED — 2026-07-31. No figure below may be cited forward.
+>
+> Kept as the defect trail, not as results. Five independent invalidators: nothing
+> parked (not a saga); Exeris's graph traversal matched nothing and was served from a
+> Postgres fallback (42 % of its whole-deployment CPU, 76 % of the gap to Quarkus);
+> container CPU understated ~3×; Quarkus persists no saga state, so the comparison
+> crossed durability tiers that §8 forbids; and the run was taken while a third party
+> held Postgres superuser.
+>
+> Disposition and the work before the next campaign:
+> [`REMEDIATION-PLAN.md`](../../../../scenarios/e2e-shop-order-saga/REMEDIATION-PLAN.md).
+
 # e2e-shop-order-saga — v2 comparison-set campaign, 50 sessions/s
 
 First campaign under the corrected v2 contracts. Three
@@ -77,13 +89,32 @@ the workload data was intact.
 
 **4. CPU is not a clean win for any stack.** quarkus uses the least target-JVM
 CPU (0.24 cores) and the least whole-deployment CPU per saga, despite carrying
-Axon Server. A large part of exeris's higher figure is the Neo4j N+1 traversal
-forced by the graph SPI (2.6× the Neo4j CPU, ~2.4 ms of the gap) — API
-expressiveness, not runtime efficiency.
+Axon Server. exeris's higher figure is dominated by Neo4j — 8.74 vs 1.10 ms per
+saga, **7.9×**, i.e. 7.64 ms of the 10.05 ms gap.
+
+> **Corrected 2026-07-30.** This note previously said "2.6× the Neo4j CPU,
+> ~2.4 ms of the gap … the Neo4j N+1 traversal forced by the graph SPI". Both
+> halves were wrong. The 2.6× is CONTRACT-v2 §2's figure and does not hold under
+> this load model (measured 7.9×); the ~2.4 ms was the 3×-understated container
+> CPU above. **And the N+1 never executed:** `GraphShopAdapter` traverses a
+> `BOUGHT` edge type the Neo4j seed never creates, and keys nodes by UUID where
+> the seed keys by integer — so hop 1 returns empty, the N loop never starts, and
+> a swallowed-exception fallback serves the recommendation from Postgres. The
+> measured mechanism is instead an unlabelled traversal anchor that cannot use
+> Neo4j's label-scoped indexes: **35 742 db hits vs 6** for the label-scoped
+> equivalent. Evidence: `graph-path-defect-probe.json`.
 
 **5. Not through the comparative strict gate.** No `stage7-*` artifacts here;
-this is per-run v2 evidence, not a gated comparative claim. Per-step scope also
-applies: `recommend_latency_ms` is platform-natural only.
+this is per-run v2 evidence, not a gated comparative claim.
+
+**6. The graph steps do not measure the graph.** `recommend` is a genuine graph
+read for quarkus/spring and a **broken** one for exeris (note 4). `cart add` /
+`cart get` are decorative on **every** stack: each writes an `IN_CART` edge and
+reads it back only to **discard the result**, then serves the view from Postgres
+(`RepositoryBackedBenchmarkUseCaseService.getCart`,
+`ShopSagaStateService.getOrCreateCart`). So two of the three graph touchpoints are
+synthetic load, not a modelled use case, and `recommend_latency_ms` /
+`cart_get_latency_ms` carry no graph-performance claim for anyone.
 
 ## Excluded from the repo
 

@@ -38,13 +38,11 @@ public class ProductCatalogService {
     GraphShopService graphShopService;
 
     public List<ProductView> recommendedProducts(long userId, int limit) {
-        List<Long> graphIds = graphShopService.recommendedProductIds(userId, limit);
-        if (!graphIds.isEmpty()) {
-            List<ProductView> graphProducts = fetchProductsByIdsFromDb(graphIds, limit);
-            if (!graphProducts.isEmpty()) {
-                return graphProducts;
-            }
-        }
+        // CONTRACT-v2 §2 (2026-07-31): graph removed from the saga scenario. It
+        // confounded the only comparison the scenario exists to make — on the Exeris
+        // arm the traversal matched nothing for an entire campaign while accounting
+        // for 42% of that stack's whole-deployment CPU per saga. Recommendations are
+        // served from Postgres, which is exactly what the fallback below already did.
         List<ProductView> products = fetchProductsFromDb(limit);
         if (!products.isEmpty()) {
             return products;

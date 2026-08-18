@@ -320,11 +320,14 @@ _apply_process_cgroup_limits() {
 configure_target_runtime_overrides() {
   local declared_protocol_mode
 
-  # shop-order-saga is the only scenario that needs Flow (saga orchestration),
-  # Graph (product recommendations) and Events. The Exeris community target boots a lean
+  # shop-order-saga needs Flow (saga orchestration) and Events. Graph was removed
+  # from this scenario on 2026-07-31 (CONTRACT-v2 §2): it confounded the only
+  # comparison the scenario exists to make, and on the Exeris arm the traversal
+  # matched nothing for an entire campaign. Booting the subsystem anyway would make
+  # this stack pay RSS for a capability the workload no longer uses. The Exeris community target boots a lean
   # http,persistence,crypto set by default; opt the full set in here. (Ignored by the
   # Spring/Quarkus targets, which read this env var not at all.)
-  export EXERIS_SUBSYSTEMS="http,persistence,graph,flow,events,crypto"
+  export EXERIS_SUBSYSTEMS="http,persistence,flow,events,crypto"
 
   # CONTRACT-v2 fault-injection knobs, exported BEFORE target start so every stack
   # sees the same declared configuration (s4 fault-class label + s5 pinned retry
@@ -725,7 +728,10 @@ START_TARGET_SCRIPT="$REPO_ROOT/runtime/drivers/start-target.sh"
 STOP_TARGET_SCRIPT="$REPO_ROOT/runtime/drivers/stop-target.sh"
 BENCHMARK_COMPOSE_REF="runtime/compose/e2e-shop-order-saga.yml"
 BENCHMARK_COMPOSE_FILE="$REPO_ROOT/$BENCHMARK_COMPOSE_REF"
-GRAPH_TRACK="postgres"
+# Graph removed from this scenario 2026-07-31 (CONTRACT-v2 §2). "none" keeps Neo4j
+# out of the §1 deployment unit entirely — not started, not seeded, not sampled.
+# --graph-track is still accepted so the separate graph benchmark can drive it.
+GRAPH_TRACK="none"
 # CONTRACT-v2 s4 fault-class label: 'terminal' (deterministic per-orderId business
 # decline, s4.1) or 'transient' (retryable infra fault, s4.2). MUST NOT be mixed
 # within a run; headline latency/throughput claims come from terminal runs only.
@@ -1398,7 +1404,9 @@ _start_container_stats_sampler() {
 _capture_backend_idle_baseline() {
   local _c _cpu _mem _line
   local _json="{}"
-  for _c in exeris-e2e-saga-postgres exeris-e2e-saga-neo4j; do
+  local _idle_containers=(exeris-e2e-saga-postgres)
+  [[ "$GRAPH_TRACK" == "neo4j" ]] && _idle_containers+=(exeris-e2e-saga-neo4j)
+  for _c in "${_idle_containers[@]}"; do
     _line="$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}}' "$_c" 2>/dev/null || true)"
     [[ -z "$_line" ]] && continue
     _cpu="${_line%%,*}"; _cpu="${_cpu//%/}"
@@ -1662,7 +1670,7 @@ _write_deployment_footprint() {
 
   _comps="$(printf '%s\n' \
     "$(_component_json exeris-e2e-saga-postgres "$POSTGRES_STATS_CSV" shared-backend "$(_csv_span_seconds "$POSTGRES_STATS_CSV")")" \
-    "$(_component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend "$(_csv_span_seconds "$NEO4J_STATS_CSV")")" \
+    "$(if [[ "$GRAPH_TRACK" == "neo4j" ]]; then _component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend "$(_csv_span_seconds "$NEO4J_STATS_CSV")"; fi)" \
     "$(_component_json exeris-e2e-saga-axonserver "$AXON_STATS_CSV" stack-specific "$(_csv_span_seconds "$AXON_STATS_CSV")")" \
     "$(_component_json exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV" stack-specific "$(_csv_span_seconds "$RESTATE_STATS_CSV")")" \
     "$(_component_json exeris-e2e-saga-payment-gateway "$PAYMENT_GATEWAY_STATS_CSV" shared-external "$(_csv_span_seconds "$PAYMENT_GATEWAY_STATS_CSV")")" \

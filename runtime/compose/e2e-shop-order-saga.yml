@@ -88,7 +88,16 @@ services:
       "
     restart: "no"
 
+  # Behind a profile since 2026-07-31: the graph was removed from the saga scenario
+  # (CONTRACT-v2 §2), so Neo4j is NOT part of the §1 deployment unit for saga runs.
+  # A plain `docker compose up -d` must not start it — it idles at ~2.1 GB RSS next
+  # to the measurement, which is exactly the kind of unaccounted process the §1
+  # deployment-unit definition exists to prevent.
+  #
+  # Start it explicitly for the separate graph benchmark:
+  #   docker compose --profile graph up -d benchmark-neo4j
   benchmark-neo4j:
+    profiles: ["graph"]
     image: neo4j:5.16-community
     container_name: exeris-e2e-saga-neo4j
     environment:

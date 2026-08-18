@@ -126,15 +126,14 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
 
     @Override
     public List<ProductView> getRecommendedProducts(long userId, int limit) {
+        // CONTRACT-v2 §2 (2026-07-31): graph removed from the saga scenario. On THIS
+        // stack the traversal matched nothing for an entire campaign — wrong edge type,
+        // wrong direction, wrong key type — and the empty result was absorbed by the
+        // catch below and served from Postgres anyway. It accounted for 42% of this
+        // stack's whole-deployment CPU per saga, scanning for rows that could not match.
+        // The adapter is kept for the separate graph benchmark (blocked on the kernel
+        // 0.12 dialect fixes); it is simply not on the saga path.
         int boundedLimit = Math.max(1, limit);
-        try {
-            List<UUID> graphNodeIds = graphShopAdapter.recommendProductNodeIdsFromGraph(userId, boundedLimit);
-            List<Long> ids = productRepository.resolveProductIdsFromGraphNodeIds(graphNodeIds, boundedLimit);
-            if (!ids.isEmpty()) {
-                return productRepository.findByIdsPreserveOrder(ids, boundedLimit);
-            }
-        } catch (RuntimeException ignored) {
-        }
         return productRepository.findRecommendedForUser(userId, boundedLimit);
     }
 
@@ -149,19 +148,15 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
         }
         long cartId = cartRepository.getOrCreateCart(userId);
         cartRepository.addOrUpdateItem(cartId, productId, quantity, price);
-        try {
-            graphShopAdapter.upsertCartEdge(userId, productId, quantity);
-        } catch (RuntimeException ignored) {
-        }
+        // Graph edge write removed with the rest of the graph path: written, never read
+        // back into any response, on any stack.
         return cartRepository.getCart(userId);
     }
 
     @Override
     public CartView getCart(long userId) {
-        try {
-            graphShopAdapter.readCartProductNodeIds(userId);
-        } catch (RuntimeException ignored) {
-        }
+        // Graph read removed: the result was DISCARDED here and on every other stack,
+        // so it was synthetic load rather than a modelled use case.
         return cartRepository.getCart(userId);
     }
 

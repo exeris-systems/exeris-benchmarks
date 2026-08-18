@@ -85,8 +85,39 @@ So swapping to JDBC variants does **not** change the saga writes. It changes:
 - the `register` step, which is per-iteration in the current k6 flow.
 
 Available today: `quarkus-benchmark-app-tuned` is already JDBC-only (Agroal, no
-Panache). **There is no Spring JDBC variant** — it would have to be built (strip JPA,
-reimplement the user endpoints on `JdbcTemplate`).
+Panache).
+
+**Updated 2026-07-31 after merging `origin/main` (`77f17ef0`).** The estimate above
+("there is no Spring JDBC variant — it would have to be built") is **withdrawn**:
+`targets/spring-benchmark-app-jdbc` already exists **and already carries the saga**
+(28 files under `axon/`). What it does not carry is the parking work — its
+`PaymentService` still decides the decline inline via `PaymentDeclineRule` and it has
+no `PaymentGatewayClient` / `PaymentCallbackController`. So D2 is no longer "build a
+target", it is "port the same three-file change already made to
+`spring-benchmark-app`".
+
+Upstream also **measured the ORM axis** on entity-read
+(`results/reports/2026-08-11-entity-read-by-id-spring-hosting-and-orm-axis.md`,
+12/12 units `comparison_eligible`), and its findings constrain what we should expect
+here:
+
+- the repository layer costs **headroom, not per-request latency** — heavy median gap
+  ×1.43 at 600 rps, the arms indistinguishable on the single-row contract up to
+  20 000 rps, but the Hibernate arm reaches 94 % of capacity while the JDBC one stays
+  flat;
+- the largest identified contributor is **Spring Data's projection proxies rather
+  than Hibernate's own row mapping** — the pair moves both and the split is unmeasured;
+- **23 % of the hosting swap turned out to be Spring Security**, which is why the
+  filter chain is now switchable (`SecurityFilterChainConfig`).
+
+That third point applies directly to this scenario: the saga arms run a filter chain
+that reaches an authorization decision on every request, and the Exeris arm carries no
+Spring Security at all. It is the same confound, on the same rung, and it should be
+handled the same way rather than rediscovered.
+
+Also arrived and relevant to the roster: `exeris-spring-runtime-app-pure`,
+`-comp-native`, `-pure-native`. None carries flow/saga code — they are entity-read
+variants, so they do not join this scenario without the same porting work.
 
 ### 2.3 Saga-engine parity
 
@@ -197,7 +228,8 @@ Ordered by how much has to be built.
 | exeris-community | Exeris kernel | JDBC | Flow SPI | yes | ready |
 | spring-on-exeris | Spring + Exeris compat | **JPA today** | Flow SPI | yes | JDBC variant needed |
 | restate | plain JVM | JDBC | Restate journal | yes | ready |
-| spring-axon | Spring Boot | **JPA today** | Axon starter | yes | JDBC variant needed |
+| spring-axon-**jdbc** | Spring Boot | **JDBC** | Axon starter | yes | target exists with saga; needs the parking port only |
+| spring-axon (JPA) | Spring Boot | JPA | Axon starter | yes | ready, but retire as a peer — ORM axis, not saga axis |
 | quarkus-tuned | Quarkus | **JDBC already** | **none** | **no** | needs an engine (§2.3) |
 
 `quarkus-hibernate` and `spring-hibernate` are retired from the comparison set as
@@ -245,9 +277,17 @@ P0–P3 are independent of every build decision and can start immediately.
   Axon extension if quarkus must be a peer; otherwise label it out — it is a valid
   and interesting reference point as "what a stack with no orchestration engine
   costs", provided it is never tabulated as one.
-- **D2 — Spring JDBC variants.** Build them (real work, better RSS parity) or keep
-  JPA and caveat the footprint. Recommendation: build, since RSS is a headline metric
-  and the saga path is already JDBC, so the change is confined to the user endpoints.
+- **D2 — Spring JDBC variants.** *Cost revised down after the merge:*
+  `spring-benchmark-app-jdbc` already exists with the saga, so this is the
+  three-file parking port, not a new target. Recommendation: do it — RSS is a
+  headline metric, and upstream's ORM axis shows the repository layer costs
+  headroom, which is exactly what a 50/s arrival-rate scenario is sensitive to.
+  `spring-on-exeris` still needs its own JDBC variant.
+- **D2b — the Spring Security filter chain.** Upstream measured it at **23 % of the
+  hosting rung** and made it switchable. The saga arms have the same confound and the
+  Exeris arm carries no Spring Security at all. Decide whether the saga comparison
+  runs with the chain on (realistic) or off (isolates the runtime) — but decide it,
+  rather than inheriting the default and rediscovering the term later.
 - **D3 — does `register` stay per-iteration?** It is the main remaining ORM-sensitive
   step; moving it to setup would shrink the ORM's influence without building
   anything.

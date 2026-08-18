@@ -2030,6 +2030,19 @@ else
   if grep -q 'saga_unresolved_total' "$K6_SCRIPT" 2>/dev/null; then
     GATE_O0_CAPABLE="true"
   fi
+
+  # The identity is necessary but NOT sufficient, and seeing why matters: a detector
+  # that cannot recognise a stack's COMPENSATED token classifies those sagas as
+  # UNRESOLVED, and the sum still balances. O0 alone would pass while the compensation
+  # count is exactly as wrong as it was in v1.
+  #
+  # An unresolved saga is an OBSERVATION failure, not an outcome — whatever caused it,
+  # the compensation figure cannot be trusted in either direction. Bound is the same 2%
+  # the k6 saga_status_resolved threshold uses, so the two agree rather than conflict.
+  GATE_O0_UNRESOLVED_PCT=0   # basis points
+  if [[ "${GATE_ISSUED%%.*}" -gt 0 ]]; then
+    GATE_O0_UNRESOLVED_PCT=$(( ${GATE_O0_UNRESOLVED%%.*} * 10000 / ${GATE_ISSUED%%.*} ))
+  fi
   if [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_UNRESOLVED_PCT" -gt 200 ]]; then
     GATE_STATUS="detector_fault"
     GATE_REASON="O0: ${GATE_O0_UNRESOLVED} of ${GATE_ISSUED} issued sagas ($(( GATE_O0_UNRESOLVED_PCT / 100 )).$(( GATE_O0_UNRESOLVED_PCT % 100 ))%) reached no terminal outcome the detector recognises, above the 2% bound. An unresolved saga is an observation failure, not an outcome, so the compensation count cannot be trusted in either direction. First thing to check: this stack's declared terminal_tokens (CONTRACT-v2 §3.1) against what it actually emits."

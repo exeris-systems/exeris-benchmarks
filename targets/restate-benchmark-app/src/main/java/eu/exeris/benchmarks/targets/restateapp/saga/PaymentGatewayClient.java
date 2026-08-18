@@ -32,12 +32,20 @@ public final class PaymentGatewayClient {
             .getOrDefault("EXERIS_PAYMENT_GATEWAY_URL", "http://localhost:9300/payments");
 
     /**
-     * Base of the Restate ingress as reachable FROM THE GATEWAY CONTAINER, which is
-     * why it defaults to host.docker.internal: the ingress port is published on the
-     * host, and "localhost" inside the gateway container would be the gateway itself.
+     * Base of the Restate ingress as reachable FROM THE GATEWAY CONTAINER — a different
+     * address from the one this JVM would use, and getting it wrong is silent.
+     *
+     * <p>It is the compose SERVICE NAME, not host.docker.internal. The other arms' callback
+     * URLs point at the host because their targets are host processes; the Restate ingress
+     * is a container whose port compose publishes as 127.0.0.1:8080, i.e. bound to the
+     * host's loopback only. From the gateway container that address answers
+     * "Connection refused", the awakeable is never resolved, the workflow stays parked, and
+     * the ingress call eventually fails with HttpTimeoutException — which reads as a slow or
+     * broken target, not as a wrong callback address. Both containers sit on
+     * compose_default, so the service name resolves and skips the host hop entirely.
      */
     private static final String RESTATE_INGRESS_URL = System.getenv()
-            .getOrDefault("EXERIS_RESTATE_INGRESS_CALLBACK_URL", "http://host.docker.internal:8080");
+            .getOrDefault("EXERIS_RESTATE_INGRESS_CALLBACK_URL", "http://benchmark-restate-server:8080");
 
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))

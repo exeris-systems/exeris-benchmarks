@@ -464,7 +464,7 @@ configure_target_runtime_overrides() {
     # back to the target JVM on the HOST. Same wiring reason as restate-server's
     # advertised SDK URL.
     export EXERIS_PAYMENT_CALLBACK_URL="${EXERIS_PAYMENT_CALLBACK_URL:-http://host.docker.internal:${_callback_port}/api/v1/payments/callback}"
-    export EXERIS_RESTATE_INGRESS_CALLBACK_URL="${EXERIS_RESTATE_INGRESS_CALLBACK_URL:-http://host.docker.internal:8080}"
+    export EXERIS_RESTATE_INGRESS_CALLBACK_URL="${EXERIS_RESTATE_INGRESS_CALLBACK_URL:-http://benchmark-restate-server:8080}"
     # The stub speaks plaintext HTTP/1.1 only. Under a TLS protocol mode the callback
     # would be dispatched to a port that answers TLS, every settle would fail, and
     # every saga would strand — so refuse the run instead of producing a directory

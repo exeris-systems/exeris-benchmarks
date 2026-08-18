@@ -119,6 +119,18 @@
       "deprecated": true,
       "alias_of": "pgq_pure",
       "notes": "Use pgq_pure or age_compat; do not aggregate alias with new tracks"
+    },
+    "none": {
+      "track_id": "track_c_no_graph",
+      "backend_family": "none",
+      "backend_mode": "none",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "_note": "CONTRACT-v2 §2.1 shape A. The graph was removed from this scenario (§2) because it confounded the only comparison the scenario exists to make, so this track has no graph backend at all — Neo4j is not in the §1 deployment unit and is not started. track_id is an isolation boundary: results here MUST NOT be aggregated with track_a_neo4j.",
+      "required_contracts": [
+        "exeris_community_h1_park1_v3",
+        "quarkus_lra_h1_park1_v3",
+        "spring_axon_h1_park1_v3"
+      ]
     }
   },
   "target_backend_support": {

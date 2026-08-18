@@ -165,3 +165,47 @@ terms Spring gets for free:
 That is a real ecosystem asymmetry, and it is a more interesting result than any
 latency number this scenario has produced so far. It should be reported as such,
 not buried in a deviation register.
+
+## Blocker found when wiring it for real — 2026-08-18
+
+D1 was decided on the LRA route and it was implemented (`0ce0a2e4`): coordinator in
+compose, `lra_id` on the orders row, single participant, LIFO unwind in application
+code. The coordinator starts and answers. The build passes. **The first request
+fails.**
+
+```
+NoClassDefFoundError: org/jboss/resteasy/concurrent/ContextualExecutors
+  at io.narayana.lra.client.NarayanaLRAClient.createCoordinatorClient(:1310)
+  at io.narayana.lra.filter.ServerLRAFilter.startLRA(:790)
+```
+
+`quarkus-narayana-lra` reaches for **RESTEasy Classic** at runtime. This target runs
+**Quarkus REST** (`quarkus-rest-jackson`, formerly RESTEasy Reactive). The build step
+is satisfied by either client — its own message says
+*"can only work if 'quarkus-rest-client' or 'quarkus-resteasy-client' is present"* —
+so the mismatch is not caught until a request actually starts an LRA.
+
+Two things this establishes, neither of them cosmetic:
+
+1. The extension's **preview** support level is not a formality. A first-party
+   extension that build-passes and then throws `NoClassDefFoundError` on the first
+   request is exactly what preview means.
+2. Making it work means putting **RESTEasy Classic** into this target — i.e. changing
+   its whole REST layer, which is the layer under measurement. That is not a
+   dependency tweak; every resource in the app is on Quarkus REST, and a stack whose
+   HTTP layer differs from the one all the other arms use is a different measurement.
+
+**This reopens D1** and the options are now:
+
+- **swap the quarkus arm to RESTEasy Classic** — LRA works, but the arm's HTTP layer
+  is no longer the same one the other Quarkus-family measurements used, and that has
+  to be declared and probably re-baselined;
+- **community Axon extension** (`0.1.0-RC29`) — pre-1.0 and single-maintainer, but it
+  targets Quarkus 3.34.3 exactly and does not touch the REST layer;
+- **leave quarkus engineless** and label it out of the durable comparison, as §2.1
+  already permits — a valid reference point for "what a stack with no orchestration
+  engine costs", never tabulated against the durable arms.
+
+The work done is not wasted under any of these: the participant, the `lra_id` binding,
+the coordinator wiring and the LIFO unwind are all reusable if the REST-layer swap is
+chosen.

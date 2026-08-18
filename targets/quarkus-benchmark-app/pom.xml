@@ -52,6 +52,17 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-hibernate-orm-panache</artifactId>
     </dependency>
+    <!-- CONTRACT-v2 §9(a) — the saga engine for this arm, decided in REMEDIATION-PLAN D1.
+         First-party (io.quarkus, platform BOM, Red Hat & IBM), support level PREVIEW,
+         which goes into the reproducibility metadata. The saga is enrolled as a SINGLE
+         participant: the MicroProfile LRA spec guarantees NO ordering across
+         participants ("makes no guarantees about when Compensate method will be
+         invoked"), and §2 requires LIFO, so the unwind is done in application code. -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-narayana-lra</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-narayana-jta</artifactId>

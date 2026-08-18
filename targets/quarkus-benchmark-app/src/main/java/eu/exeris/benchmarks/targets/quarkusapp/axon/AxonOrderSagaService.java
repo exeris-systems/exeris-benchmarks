@@ -117,7 +117,7 @@ public class AxonOrderSagaService {
      * for both populations (the previous lockstep order/saga sequences produced the same
      * derivation for sequence-based ids).
      */
-    public Optional<OrderAcceptedView> createOrder(String userId, String clientOrderId, String cartId, String paymentMethod) {
+    public Optional<OrderAcceptedView> createOrder(String userId, String clientOrderId, String cartId, String paymentMethod, String lraId) {
         if (!shopSagaStateService.cartBelongsToUser(userId, cartId)) {
             return Optional.empty();
         }
@@ -126,7 +126,7 @@ public class AxonOrderSagaService {
                 ? Long.toString(orderSequence.getAndIncrement())
                 : clientOrderId.trim();
         String sagaId = "saga-" + orderId;
-        CreateOrderCommand command = new CreateOrderCommand(orderId, sagaId, userId, cartId, paymentMethod);
+        CreateOrderCommand command = new CreateOrderCommand(orderId, sagaId, userId, cartId, paymentMethod, lraId);
 
         // Registered BEFORE dispatch: with a ~1 ms gateway delay the callback can settle the
         // saga while sendAndWait is still returning, and a late registration would miss it.
@@ -174,7 +174,10 @@ public class AxonOrderSagaService {
         if (dbOrderId.isEmpty()) {
             return false;
         }
-        String terminal = commandHandler.settle(orderId, sagaId, dbOrderId.getAsLong(), authorized);
+        // The LRA id comes off the ROW, not from the caller: the gateway callback carries
+        // no LRA context, and after a restart there is no caller left to carry it either.
+        String lraId = stepService.readLraId(dbOrderId.getAsLong());
+        String terminal = commandHandler.settle(orderId, sagaId, dbOrderId.getAsLong(), authorized, lraId);
         CompletableFuture<String> waiting = terminalOutcome.get(sagaId);
         if (waiting != null) {
             waiting.complete(terminal);

@@ -62,6 +62,15 @@ public class OrderSagaStepService {
     private static final String UPDATE_ORDER_SQL =
             "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
 
+    private static final String RECORD_LRA_SQL =
+            "UPDATE orders SET lra_id = ? WHERE id = ?";
+
+    private static final String FIND_ORDER_BY_LRA_SQL =
+            "SELECT id FROM orders WHERE lra_id = ?";
+
+    private static final String SELECT_ORDER_STATUS_SQL =
+            "SELECT status FROM orders WHERE id = ?";
+
     private static final String SETTLE_PARKED_PAYMENT_SQL =
             "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP "
             + "WHERE saga_id = ? AND status = 'PAYMENT_PROCESSING' "
@@ -285,6 +294,61 @@ public class OrderSagaStepService {
         } catch (Exception e) {
             LOG.errorf(e, "markOrderFailed could not persist FAILED for order %d; "
                     + "polled status may never reach FAILED_UNRECOVERED", dbOrderId);
+        }
+    }
+
+    /**
+     * Binds the coordinator-minted LRA id to the order row. On the row rather than in
+     * a map because the coordinator may call back after this JVM has restarted, which
+     * is the only reason this arm has a durable engine at all.
+     */
+    public void recordLraId(long dbOrderId, String lraId) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(RECORD_LRA_SQL)) {
+            ps.setString(1, lraId);
+            ps.setLong(2, dbOrderId);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException("recordLraId failed for order " + dbOrderId, e);
+        }
+    }
+
+    /** @return the order id carrying this LRA, or null — used by the participant callbacks. */
+    public Long findOrderIdByLraId(String lraId) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(FIND_ORDER_BY_LRA_SQL)) {
+            ps.setString(1, lraId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : null;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("findOrderIdByLraId failed for " + lraId, e);
+        }
+    }
+
+    /** @return the LRA id bound to this order, or null when the arm runs without LRA. */
+    public String readLraId(long dbOrderId) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT lra_id FROM orders WHERE id = ?")) {
+            ps.setLong(1, dbOrderId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("readLraId failed for order " + dbOrderId, e);
+        }
+    }
+
+    /** Current persisted status, for the LRA @Status callback. */
+    public String readOrderStatus(long dbOrderId) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_ORDER_STATUS_SQL)) {
+            ps.setLong(1, dbOrderId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("readOrderStatus failed for order " + dbOrderId, e);
         }
     }
 

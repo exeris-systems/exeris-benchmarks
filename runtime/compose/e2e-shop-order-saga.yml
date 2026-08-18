@@ -168,6 +168,20 @@ services:
       # previous run can never replay into the next one.
       - /restate-data
 
+  # CONTRACT-v2 §4 / §9(a): MicroProfile LRA coordinator, the saga engine for the
+  # quarkus arm. Started only for that arm, exactly like axonserver for spring and
+  # restate-server for restate, and counted in its §1 deployment unit.
+  #
+  # Port 8090 deliberately: 8080 is restate's ingress, and a silent clash would make
+  # one arm's coordinator answer the other's requests.
+  benchmark-lra-coordinator:
+    image: quay.io/jbosstm/lra-coordinator:latest
+    container_name: exeris-e2e-saga-lra-coordinator
+    environment:
+      QUARKUS_HTTP_PORT: "8090"
+    ports:
+      - "127.0.0.1:8090:8090"
+
   # CONTRACT-v2 §4 (parking workload): external payment gateway.
   #
   # S_pay does not answer inline — the target dispatches here, gets 202, and the

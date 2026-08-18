@@ -29,10 +29,19 @@ import jakarta.inject.Inject;
  * it is what makes this stack's parked-capacity behaviour worth measuring in shape C
  * rather than trivially bounded by a map.
  *
- * <p>What this stack still does NOT have is a saga engine: there is no persisted
- * saga instance, no scheduler, and no resumption after a restart. A park here is
- * "a row in PAYMENT_PROCESSING that some future callback may complete", and if the
- * callback never arrives, nothing ever reconsiders it. Registered under §9(a).
+ * <p><strong>Saga engine (changed 2026-08-18):</strong> this arm now runs
+ * MicroProfile LRA via {@code quarkus-narayana-lra} — first-party, support level
+ * PREVIEW — with the saga enrolled as a SINGLE participant
+ * ({@link OrderSagaLraParticipant}). The coordinator persists open LRAs and drives
+ * compensate/complete afterwards, including after a restart, so the park is durable
+ * rather than "a row in PAYMENT_PROCESSING that some future callback may complete".
+ *
+ * <p>Until this landed the arm had NO engine at all, and CONTRACT-v2 §8 forbids
+ * comparing across durability tiers — so its CPU and RSS were not comparable with the
+ * durable arms and should never have been tabulated against them.
+ *
+ * <p>Axon remains present only as a command bus; it has never run an Axon saga here.
+ * Registered under §9(a).
  */
 @ApplicationScoped
 public class AxonOrderSagaCommandHandler {
@@ -52,6 +61,9 @@ public class AxonOrderSagaCommandHandler {
     @Inject
     PaymentGatewayClient paymentGateway;
 
+    @Inject
+    LraClient lraClient;
+
     /**
      * Forward half. Returns a {@link #PARKED} view once the payment request is in
      * flight; returns a terminal view only when the saga could not get as far as
@@ -62,6 +74,12 @@ public class AxonOrderSagaCommandHandler {
         // nothing to recover backward from, so it propagates as an infrastructure failure.
         long dbOrderId = retryPolicy.get("insert-order",
                 () -> stepService.insertOrder(command.userId(), command.cartId(), command.sagaId()));
+        // Bind the coordinator LRA id to the row immediately: from here on any failure
+        // path may end with the coordinator calling @Compensate, and it identifies the
+        // saga by this id alone — including after a restart.
+        if (command.lraId() != null && !command.lraId().isBlank()) {
+            stepService.recordLraId(dbOrderId, command.lraId());
+        }
 
         try {
             retryPolicy.run("reserve-inventory", () -> stepService.reserveInventory(dbOrderId));
@@ -93,18 +111,36 @@ public class AxonOrderSagaCommandHandler {
      * @param authorized the gateway's §4.1 verdict for this order
      * @return the terminal outcome (COMPLETED | COMPENSATED | FAILED_UNRECOVERED)
      */
-    public String settle(String orderId, String sagaId, long dbOrderId, boolean authorized) {
+    public String settle(String orderId, String sagaId, long dbOrderId, boolean authorized, String lraId) {
+        boolean lraDriven = lraId != null && !lraId.isBlank();
         if (!authorized) {
             // CONTRACT-v2 §4.1: business-terminal decline — straight to backward recovery
             // with zero retries (§5). The payment-requested writes committed before the
             // park, so the refund compensation applies exactly as it did inline.
+            //
+            // Under the LRA engine the unwind is driven by the COORDINATOR: cancel()
+            // makes it invoke @Compensate, which performs the LIFO unwind. Compensating
+            // here as well would run every compensation twice — the O1 duplicate-effect
+            // oracle exists to catch that, so it must not be introduced deliberately.
+            if (lraDriven) {
+                return lraClient.cancel(lraId) ? "COMPENSATED" : "FAILED_UNRECOVERED";
+            }
             return compensate(orderId, sagaId, dbOrderId, true, true).status();
         }
         try {
             retryPolicy.run("confirm-order", () -> stepService.confirmOrder(dbOrderId));
             retryPolicy.run("complete-order", () -> stepService.completeOrder(dbOrderId));
         } catch (OrderSagaRetryPolicy.RetryExhaustedException forwardExhausted) {
+            if (lraDriven) {
+                return lraClient.cancel(lraId) ? "COMPENSATED" : "FAILED_UNRECOVERED";
+            }
             return compensate(orderId, sagaId, dbOrderId, true, true).status();
+        }
+        // Closing releases the coordinator's record. An LRA left open would be recovered
+        // and compensated later — a COMPLETED order silently rolled back minutes after
+        // the client was told it succeeded.
+        if (lraDriven && !lraClient.close(lraId)) {
+            return "FAILED_UNRECOVERED";
         }
         return "COMPLETED";
     }

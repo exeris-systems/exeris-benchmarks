@@ -209,3 +209,55 @@ Two things this establishes, neither of them cosmetic:
 The work done is not wasted under any of these: the participant, the `lra_id` binding,
 the coordinator wiring and the LIFO unwind are all reusable if the REST-layer swap is
 chosen.
+
+## RETRACTED — the blocker was mine, not the stack's (2026-08-18, later)
+
+The section above concluded that `quarkus-narayana-lra` requires RESTEasy Classic and
+that D1 was reopened. **That conclusion was wrong**, and the maintainer said so: the
+extension works with the reactive Quarkus REST stack. Verified end to end on the perf
+box.
+
+Two things were actually wrong, neither of them the stack:
+
+1. **Version.** On Quarkus 3.34.3 the runtime threw
+   `NoClassDefFoundError: org/jboss/resteasy/concurrent/ContextualExecutors`. On
+   **3.38.2** it does not. The dependency set that works is
+   `quarkus-rest-jackson` (reactive server) + `quarkus-rest-client` +
+   `quarkus-rest-client-jackson`. Both client artifacts are needed: the LRA build step
+   checks for `quarkus-rest-client` **by name** and a transitive copy via `-jackson`
+   does not satisfy it, while `-jackson` is what supplies the reactive client with JSON.
+2. **My configuration.** After the version bump the failure became
+   `Connection refused: localhost/127.0.0.1:50000` — the extension's built-in default
+   coordinator port. I had set `mp.lra.coordinator.url` (the MicroProfile name) but the
+   extension reads `quarkus.lra.coordinator-url`. Both are now pinned, because a
+   coordinator URL that silently falls back to a default is indistinguishable from a
+   coordinator outage.
+
+**Result, measured:**
+
+```
+vocabulary preflight decline: observed 'COMPENSATED' on 'status' as declared.
+vocabulary preflight success: observed 'COMPLETED' on 'status' as declared.
+saga_issued_total: 568        correctness gate: pass
+```
+
+The decline case is compensated by the **coordinator** invoking `@Compensate`, which is
+the point: this arm now has a durable saga engine, and §8's cross-tier prohibition no
+longer excludes it from the comparison.
+
+**Why keeping the reactive stack matters here**, and it is not incidental: `@Compensate`
+and `@Complete` run on the Vert.x event loop rather than pinning a worker thread per
+in-flight coordinator round trip. A parking saga benchmark at a fixed arrival rate is
+built to expose exactly that exhaustion mode, so measuring the arm on RESTEasy Classic
+would have understated it by construction.
+
+**Carried cost:** this arm is now on **Quarkus 3.38.2**, not 3.34.3. That is a change to
+the runtime under measurement and must be recorded in the reproducibility metadata; the
+JDBC variant (`quarkus-benchmark-app-tuned`) needs the same bump in P5, or the two
+Quarkus arms are not comparable with each other.
+
+**Method note.** I called it a blocker after two failed builds and one runtime error,
+and recommended reopening a settled decision. The evidence at that moment was real but
+the conclusion outran it — the untested variable was the version, and the maintainer
+named it immediately. Worth recording next to the other direction-of-error notes in this
+file: I have been quick to escalate an integration failure to an architectural verdict.

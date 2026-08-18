@@ -63,14 +63,19 @@
       <artifactId>quarkus-narayana-lra</artifactId>
     </dependency>
 
-    <!-- Required BY quarkus-narayana-lra, which fails its build step without it:
-         "'quarkus-narayana-lra' can only work if 'quarkus-rest-client' or
-         'quarkus-resteasy-client' is present". It is how the participant talks to the
-         coordinator. Noted here because it is a real footprint difference this arm
-         carries and the others do not — §9(a). -->
+    <!-- The REST client quarkus-narayana-lra uses to reach the coordinator.
+         quarkus-rest-client-jackson, i.e. the REACTIVE client, deliberately: it pairs
+         with quarkus-rest-jackson so the whole arm stays on Quarkus REST. The plain
+         quarkus-rest-client satisfied the LRA build step but left the runtime reaching
+         for a RESTEasy Classic class (ContextualExecutors) on the first request that
+         started an LRA — build-passes, then throws.
+         Keeping the reactive stack is not only about making it start: @Compensate and
+         @Complete then run on the Vert.x event loop instead of pinning a worker thread
+         per in-flight coordinator round trip, which is exactly the exhaustion mode a
+         parking saga benchmark at a fixed arrival rate is built to expose. -->
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-rest-client</artifactId>
+      <artifactId>quarkus-rest-client-jackson</artifactId>
     </dependency>
 
     <dependency>

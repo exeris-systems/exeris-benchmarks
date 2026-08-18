@@ -416,10 +416,10 @@ Per-stack park mechanism:
 
 | stack | how it parks | what holds the saga while parked |
 |---|---|---|
-| exeris-community | `FlowOutcome.PARK`, woken via `scheduler().wake(lookupParked(..))` | kernel flow instance + `FlowSnapshotStore` (v5 tables) |
+| exeris-community | `request-payment` (CONTINUE) → `await-payment` (PARK) → `settle-payment` | kernel flow instance + `FlowSnapshotStore` (v5 tables) |
 | spring-axon | publishes no event; the Axon saga has nothing to advance on | Axon saga store (persisted saga instance) |
-| spring-on-exeris | `FlowOutcome.PARK`, woken via `ExerisFlowTemplate.wake(lookupParked(..))` | same kernel flow instance as exeris-community |
-| quarkus-hibernate | handler split in two halves that share no heap state | **the `orders` row only — no saga engine is wired** |
+| spring-on-exeris | same three-step split as exeris-community | same kernel flow instance as exeris-community |
+| quarkus | handler split at the pivot; LRA open across the park | **MicroProfile LRA coordinator** (persisted LRA + enrolment) |
 | restate | `Restate.awakeable(..)` + `await()`; the gateway resolves it directly at the Restate ingress | Restate journal (invocation suspended) |
 
 **quarkus-hibernate was restructured** (PROPOSAL decision 4). It was a
@@ -429,10 +429,19 @@ split at the pivot: the forward half commits through the payment-requested write
 dispatches, and returns `PARKED`; the callback drives the continuation. The two
 halves are joined by the `orders` row alone — the callback's compare-and-set
 returns the db order id — so nothing about an in-flight saga is held in heap.
-**It still has no saga engine wired**: no persisted saga instance, no scheduler, no
-resumption after restart. A park here is "a row in `PAYMENT_PROCESSING` that some
-future callback may complete". That is a real architectural difference and shape C
-is where it should become visible, not something to paper over.
+**It now HAS a saga engine** (added 2026-08-18, P4): `quarkus-narayana-lra` — a
+first-party `io.quarkus` extension, support level **preview**, with the saga enrolled
+as a SINGLE participant. The coordinator persists open LRAs and enrolments and drives
+compensate/complete afterwards, including after a restart. Until this landed the arm
+persisted nothing about a saga, and CONTRACT-v2 §8 forbids comparing across durability
+tiers — so its CPU and RSS were never comparable with the durable arms, and were
+tabulated against them anyway in the retired campaign.
+
+One participant, not one per step, because the LRA spec guarantees no ordering across
+participants and §2 requires LIFO; the unwind therefore lives in application code. It
+is a durable saga **envelope**, never "full LRA". Compensation is driven ONLY by the
+coordinator — keeping the inline unwind as well would run every compensation twice,
+which is what the O1 duplicate-effect oracle exists to catch.
 
 **Precision this table originally got wrong.** "No saga engine" was first written
 as if it were a platform limitation. It is not: `axon-modelling:4.10.3` — `@Saga`,
@@ -444,46 +453,51 @@ this is a wiring gap, not a capability gap, and PROPOSAL decision 4 is therefore
 only **half** satisfied: the handler is now genuinely asynchronous, but it is
 still Axon-as-command-bus with a hand-rolled saga.
 
-Consequence for labelling, which must be fixed before any shape-A report: this
-target is not "Quarkus + Axon". It is **Quarkus + a hand-rolled async saga, with
-Axon used as a command bus**, and §9(a) must say so.
+Consequence for labelling, now applied: this target was never "Quarkus + Axon" —
+Axon is present only as a command bus and has never run an Axon saga here. Under
+v2.1 it is **Quarkus + MicroProfile LRA**, contract id `quarkus_lra_h1_park1_v3`.
 
-The obvious candidate for closing the gap the Quarkus-native way — MicroProfile
-LRA, directly or through Camel — was investigated and **rejected**: the LRA
-specification guarantees no compensation ordering, which conflicts with §2's LIFO
-requirement on exactly the axis §4.1/§7 measure. See `LRA-SPIKE.md`. The remaining
-route is wiring Axon's own saga engine through the `Configurer` API; it is worth
-doing before shape C (where the current target has nothing to recover) and is not
-a blocker for shape A.
+**LRA was first rejected, then adopted — the rejection was wrong and the record is in
+`LRA-SPIKE.md`.** The ordering objection stands (the spec guarantees none, which is why
+the arm enrols one participant), but the follow-up conclusion that the extension needs
+RESTEasy Classic did not: it works on the reactive stack with Quarkus **3.38.2** and
+`quarkus-rest-client` + `quarkus-rest-client-jackson`. That version bump is a change to
+the runtime under measurement and is stamped on the contract; `quarkus-benchmark-app-tuned`
+needs the same bump before the two Quarkus arms are comparable with each other.
 
-**Idempotent settlement, all four callback-driven stacks.** Every settle is a
-compare-and-set on `status = 'PAYMENT_PROCESSING'`, so a duplicate callback
-updates no row and can never wake a saga twice. exeris-community previously wrote
-the outcome unconditionally; that is now a CAS too.
+## Shape-A campaign readiness — 2026-08-18
 
-**Ordering that is load-bearing:** the payment-requested writes commit *before*
-the gateway dispatch in every stack. They establish the `PAYMENT_PROCESSING` state
-the CAS matches on, and at shape A's ~1 ms delay a callback arriving before them
-is not hypothetical — it would find no parked row and be dropped as a duplicate,
-stranding the saga.
+Four arms verified under the §3.1 forced-decline/forced-success preflight before the
+campaign was allowed to start. This is the gate, not a formality: **it stopped five
+things in this series**, every one of which would otherwise have entered a campaign as
+a number.
 
-**Corrected while implementing this: spring-on-exeris reported terminal states
-early.** Its status mapping sent `CONFIRMED → COMPLETED` and
-`PAYMENT_REFUNDED → COMPENSATED`. Both are mid-path states (complete-order and
-restore-inventory respectively still pending), so a poller could observe a
-terminal outcome that later regresses to the opposite one — and the §7 oracles
-count terminal observations. quarkus-hibernate already mapped them to the
-non-terminal `COMPLETING`/`COMPENSATING` for this reason; the stacks now agree.
-This target was never in a campaign, so no published number is affected.
+| arm | contract id | preflight | gate |
+|---|---|---|---|
+| exeris-community | `exeris_community_h1_park1_v3` | decline→COMPENSATED, success→COMPLETED | pass, 13 == 13 of 566 |
+| quarkus + LRA | `quarkus_lra_h1_park1_v3` | as declared | pass, 568 issued |
+| spring-axon | `spring_axon_h1_park1_v3` | as declared | pass, 567 issued |
+| restate | `restate_saga_h1_park1_v3` | as declared | pass, 72 issued |
 
-**Also brought to §3 compliance: spring-on-exeris** now awaits the terminal
-outcome instead of returning `202 ACCEPTED`, matching the other four. Its saga id
-is now derived from the flow instance id (`saga-<instance-uuid>`), which is what
-lets a callback carrying only the saga id find the parked flow through
-`lookupParked` — the same coupling `exeris-community` already had.
+NOT in the campaign, and why: **spring-on-exeris** (park fix made by inspection, never
+run) and **quarkus-tuned** (still pre-parking, still on 3.34.3).
 
-Not yet done: shape-A contract ids and `workload_profile_key`s
-(`…-park1-v3`), the scenario.json entries, and any shape-A run.
+What the preflight caught, in order:
+
+1. **exeris-community / spring-on-exeris** — the parked step was never re-entered on
+   wake, so a DECLINED payment completed successfully.
+2. **the negative control itself** — falsified declaration rejected before the window
+   (`preflight` mode), and a blind detector caught as `detector_fault` rather than a
+   compensation figure (`detector` mode).
+3. **quarkus LRA** — coordinator URL set under a property the extension does not read,
+   so it dialled the built-in default and failed with `Connection refused`.
+4. **restate packaging** — uber-jar missing `Multi-Release: true`.
+5. **restate callback address** — ingress dialled through the host loopback,
+   unreachable from the gateway container.
+
+Windows are 300 s warmup / 900 s measurement / 30 s cooldown, aligned with the
+entity-read fixed contracts. The previous 120/180 gave ~270 compensations per window —
+a thin denominator for an oracle whose whole claim is an exact integer.
 
 ## Appendix A — §9 per-stack deviation register (stubs)
 
@@ -577,7 +591,11 @@ per stack; these stubs do not satisfy that requirement by themselves.
 
 ### quarkus-tuned (`targets/quarkus-benchmark-app-tuned`)
 
-- (a) TODO.
+- (a) **NOT shape-A capable yet.** This target still carries the pre-parking saga: no
+  `PaymentGatewayClient`, no callback resource, and its `PaymentService` decides the
+  §4.1 decline inline. It is also still on Quarkus 3.34.3 while the measured quarkus arm
+  moved to 3.38.2 for LRA, so the two Quarkus arms are NOT comparable with each other
+  until both are ported (P5). Not in the shape-A campaign.
 - (b) TODO.
 - (c) §5 retry configuration (code-verified): same mechanism as quarkus
   baseline (`OrderSagaRetryPolicy`, no Axon RetryScheduler).
@@ -586,7 +604,20 @@ per stack; these stubs do not satisfy that requirement by themselves.
 
 ### spring-on-exeris (`targets/exeris-spring-runtime-app-comp`)
 
-- (a) TODO.
+- (a) Idiom deviations (2026-08-18): same three-step park as exeris-community —
+  `request-payment` (CONTINUE) → `await-payment` (PARK) → `settle-payment`. The split
+  is forced by the engine: `beginScheduleAfterWake()` returns `currentStep + 1`, so a
+  woken flow resumes at the step AFTER the parked one and never re-enters it. The
+  dispatch step must return CONTINUE rather than PARK because `applyParkOutcome` pushes
+  no compensation, so parking there would drop `refund-payment` from the LIFO unwind.
+  Also brought to §3 (was returning 202 ACCEPTED) and its saga id is now derived from
+  the flow instance id so a callback carrying only the saga id can find the parked flow.
+  **NOT YET RUN under shape A** — the fix was made by inspection after the same defect
+  was measured on exeris-community, so this arm's park is unverified and it is NOT in
+  the shape-A campaign.
+  Corrected while there: its status mapping reported `CONFIRMED → COMPLETED` and
+  `PAYMENT_REFUNDED → COMPENSATED`, both mid-path, so a poller could observe a terminal
+  outcome that later regresses. Now `COMPLETING`/`COMPENSATING`, matching the others.
 - (b) TODO.
 - (c) §5 retry configuration (code-verified): `ShopOrderFlowDefinition` pins
   `maxRetries(2)`; same exeris-kernel-spi 0.10.0 limitation as
@@ -601,7 +632,24 @@ per stack; these stubs do not satisfy that requirement by themselves.
   are a user-space pattern per the official Restate sagas guide — a
   compensation list unwound LIFO in the handler's `TerminalException` catch
   block, not a framework-level unwind; satisfies G2, difference recorded as a
-  finding, not a violation. The §4.1 decline is an *exception*
+  finding, not a violation.
+  **Park (2026-08-18):** `Restate.awakeable(..)` created OUTSIDE the journaled run
+  block (creating it is itself journaled, so replay yields the same id) with the
+  dispatch INSIDE it (so it happens exactly once across replays). The gateway resolves
+  the awakeable at the Restate INGRESS — the callback never enters the target JVM,
+  which is platform-natural since Restate owns durable execution, but means this arm's
+  per-callback cost lands in restate-server. The whole-deployment footprint captures
+  it; a target-JVM-only comparison would not.
+  **Two defects found by the §3.1 preflight before this arm could run at all:**
+  (1) the shaded uber-jar lacked `Multi-Release: true`, so the SDK's FFM classes under
+  `META-INF/versions/23/` were present in the jar but invisible to the classloader —
+  every saga submission failed at runtime, which read as a broken target rather than a
+  packaging defect; (2) the gateway dialled the ingress via `host.docker.internal:8080`,
+  which compose publishes on the host loopback only, so from the gateway container it
+  was `Connection refused` — the awakeable was never resolved, the workflow stayed
+  parked, and the ingress call failed with `HttpTimeoutException`. Every visible symptom
+  pointed at a slow target; none pointed at an address. Now dialled by compose service
+  name. The §4.1 decline is an *exception*
   (`TerminalException`) rather than a value/event as on the other five stacks;
   equivalent because Restate never retries terminal exceptions at either
   layer. v2 request-response model: terminal outcome returned in the order

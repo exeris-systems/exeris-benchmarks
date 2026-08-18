@@ -19,7 +19,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
-    <quarkus.platform.version>3.34.3</quarkus.platform.version>
+    <quarkus.platform.version>3.38.2</quarkus.platform.version>
     <quarkus.plugin.version>${quarkus.platform.version}</quarkus.plugin.version>
   </properties>
 
@@ -73,21 +73,6 @@
          @Complete then run on the Vert.x event loop instead of pinning a worker thread
          per in-flight coordinator round trip, which is exactly the exhaustion mode a
          parking saga benchmark at a fixed arrival rate is built to expose. -->
-
-    <!-- The CLASSIC client, and only the client. The SERVER stays on Quarkus REST
-         (quarkus-rest-jackson) so every endpoint this benchmark measures is still on
-         the reactive path — the point of the arm is unchanged.
-         Needed because quarkus-narayana-lra 3.34.3 pulls lra-client 1.1.0.Final, which
-         pulls org.jboss.resteasy.microprofile:microprofile-rest-client (the CLASSIC MP
-         REST Client). NarayanaLRAClient.createCoordinatorClient builds its client down
-         that path regardless of which reactive client is present, and then fails on
-         org.jboss.resteasy.concurrent.ContextualExecutors from resteasy-core. Evidence:
-         mvn dependency:tree, and the NoClassDefFoundError on the first request that
-         starts an LRA. -->
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-resteasy-client</artifactId>
-    </dependency>
 
     <dependency>
       <groupId>io.quarkus</groupId>

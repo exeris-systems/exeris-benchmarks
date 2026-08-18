@@ -1,0 +1,11 @@
+{
+  "resolved_cpuset": "2-3,10-11",
+  "source": "env:LOADGEN_CPU_AFFINITY",
+  "cpuset_is_restricted": true,
+  "loadgen_cpu_attributable": true,
+  "interval_seconds": 1,
+  "window": "measurement",
+  "target_id": "spring-jdbc",
+  "sampler_started": true,
+  "note": "Load generator (wrk) CPU over the measurement window. Read it as a CEILING CHECK, not as a cost: a closed-loop throughput number is an application measurement only while the generator has headroom. If busy cores approach the pin width, the arm was generator-bound and the rps figure is a floor, not a result."
+}

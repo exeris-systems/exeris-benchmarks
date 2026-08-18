@@ -1,0 +1,6 @@
+731917:
+VM Arguments:
+jvm_args: --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Xms1280m -Xmx1280m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary --add-opens=java.base/jdk.internal.module=ALL-UNNAMED --enable-preview 
+java_command: targets/exeris-community-app/target/exeris-community-app-1.0.0-SNAPSHOT.jar
+java_class_path (initial): targets/exeris-community-app/target/exeris-community-app-1.0.0-SNAPSHOT.jar
+Launcher Type: SUN_STANDARD

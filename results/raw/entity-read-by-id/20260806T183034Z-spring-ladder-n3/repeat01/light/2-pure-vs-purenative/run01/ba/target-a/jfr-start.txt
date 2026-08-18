@@ -1,0 +1,8 @@
+1502743:
+No available recordings.
+
+Use jcmd 1502743 JFR.start to start a recording.
+1502743:
+Started recording 2. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 1502743 JFR.dump name=spring_on_exeris_pure_20260807_015712 filename=FILEPATH to copy recording data to file.

@@ -1,0 +1,24 @@
+=== ENDPOINT DIAGNOSTIC ===
+Target: spring-hibernate
+URL: http://localhost:9001/api/v1/user?id=1
+Timestamp: 2026-08-07T14:47:11.047Z
+
+Attempting curl request...
+
+HTTP Status Code: 200
+Response (first 500 chars):
+---
+HTTP/1.1 200 
+X-Content-Type-Options: nosniff
+X-XSS-Protection: 0
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Pragma: no-cache
+Expires: 0
+X-Frame-Options: DENY
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Fri, 07 Aug 2026 14:47:11 GMT
+
+{"id":"1","username":"user_1"}
+
+---

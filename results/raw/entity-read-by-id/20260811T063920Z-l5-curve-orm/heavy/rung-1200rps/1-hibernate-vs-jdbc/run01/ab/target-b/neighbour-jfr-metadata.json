@@ -1,0 +1,10 @@
+{
+  "measured_target_id": "spring-jdbc",
+  "neighbour_port": "9001",
+  "neighbour_pid": "1116706",
+  "jfr_file": "results/raw/entity-read-by-id/20260811T063920Z-l5-curve-orm/heavy/rung-1200rps/1-hibernate-vs-jdbc/run01/ab/target-b/neighbour-idle.jfr",
+  "dumped": true,
+  "window": "measurement",
+  "role": "resident-idle",
+  "note": "JFR of the co-resident target that was launched but NOT driven during this window. With no traffic on it, the profile is the whole answer to what an idle instance spends CPU on — the companion to neighbour-resource-metrics.json, which says how much rather than what. READ WITH A NOISE FLOOR: settings=profile costs the same absolute overhead on an idle process as on a busy one, and contributes its own periodic events, so an idle profile partly contains JFR. The quiet arms recorded under identical settings (exeris-community 0.0020 cores, spring-hibernate 0.0015) are that floor; anything not also present in them is signal. READING ORDER: repeated exact park durations first (a fixed interval names a timer and a thread — cf. triad report section 7, which identified Agroal housekeeping from exactly-2000 ms ThreadPark on agroal-* threads), hot-methods second, because ~32 CPU-seconds of periodic wakeups smear across frames in an execution profile."
+}

@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-08-11T08:08:10Z",
+  "phase": "measurement-delta",
+  "server_version_num": "160002",
+  "column_profile": "exec_time_cols",
+  "baseline_timestamp": "2026-08-11T08:06:08Z",
+  "final_timestamp": "2026-08-11T08:08:10Z",
+  "reset_detected": false,
+  "warning": null,
+  "note": "Per-target delta over this target's measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
+  "queries": [
+    {
+      "queryid": "-7810830194509815908",
+      "query": "select bue1_0.id,bue1_0.username from users bue1_0 where bue1_0.id=$1",
+      "calls": 479754,
+      "total_time_ms": 1478.9396959999613,
+      "mean_time_ms": 0.0030827042525960412,
+      "max_time_ms_cumulative": 0.172964
+    },
+    {
+      "queryid": "1637407606667381779",
+      "query": "BEGIN READ ONLY",
+      "calls": 479754,
+      "total_time_ms": 433.9722180009803,
+      "mean_time_ms": 0.0009045723808472266,
+      "max_time_ms_cumulative": 0.076594
+    }
+  ]
+}

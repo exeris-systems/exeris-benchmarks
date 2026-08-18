@@ -1,0 +1,6 @@
+1228428:
+VM Arguments:
+jvm_args: -Xms1280m -Xmx1280m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Xlog:safepoint=debug:file=results/raw/entity-read-by-id/20260811T063920Z-l5-curve-orm/heavy/rung-3000rps/diagnostics/spring-hibernate.safepoint.log:time,level,tags -XX:StartFlightRecording=filename=results/raw/entity-read-by-id/20260811T063920Z-l5-curve-orm/heavy/rung-3000rps/diagnostics/spring-hibernate.jfr,settings=profile,maxsize=6144m,dumponexit=true 
+java_command: targets/spring-benchmark-app-jdbc/target/spring-benchmark-app-jdbc-1.0.0-SNAPSHOT.jar
+java_class_path (initial): targets/spring-benchmark-app-jdbc/target/spring-benchmark-app-jdbc-1.0.0-SNAPSHOT.jar
+Launcher Type: SUN_STANDARD

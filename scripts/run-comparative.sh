@@ -2003,6 +2003,38 @@ for target in "$TARGET_A_CANONICAL" "$TARGET_B_CANONICAL"; do
   fi
 done
 
+# Per-target contract scoping. A compatible_targets entry MAY carry an
+# `eligible_contracts` array; when present, that target participates only in
+# runs whose --contract-id appears in it. Absent means unrestricted, so every
+# target declared before this check existed is unaffected.
+#
+# This exists because eligibility is not always uniform across a scenario's
+# contract family. spring-on-exeris-pure serves the heavy aggregate endpoint but
+# cannot serve the light single-read one: its path carries a query string, and
+# the Exeris pure-mode dispatcher resolves routes by exact match on the full
+# request target (BudgetHQ DEC-046). Listing the target against every entry in
+# required_contracts would assert a capability it does not have, and the run
+# would fail later and less legibly at endpoint preflight.
+TARGET_CONTRACT_SCOPE_PASS=true
+TARGET_CONTRACT_SCOPE_REASON="no per-target contract restriction applies"
+for target in "$TARGET_A_CANONICAL" "$TARGET_B_CANONICAL"; do
+  if ! jq -e --arg t "$target" \
+      '([.compatible_targets[]? | select(.target_id == $t)][0].eligible_contracts // null) | type == "array"' \
+      "$PAIR_MANIFEST" >/dev/null 2>&1; then
+    continue
+  fi
+  if ! jq -e --arg t "$target" --arg c "$CONTRACT_ID" \
+      '[.compatible_targets[]? | select(.target_id == $t)][0].eligible_contracts | index($c) != null' \
+      "$PAIR_MANIFEST" >/dev/null 2>&1; then
+    TARGET_CONTRACT_SCOPE_ALLOWED="$(jq -r --arg t "$target" \
+      '[.compatible_targets[]? | select(.target_id == $t)][0].eligible_contracts | join(", ")' \
+      "$PAIR_MANIFEST")"
+    TARGET_CONTRACT_SCOPE_PASS=false
+    TARGET_CONTRACT_SCOPE_REASON="target '${target}' is declared eligible only for contracts [${TARGET_CONTRACT_SCOPE_ALLOWED}] but --contract-id=${CONTRACT_ID}"
+    break
+  fi
+done
+
 ALLOWED_PAIR_PASS=true
 ALLOWED_PAIR_REASON="pair declared in allowed_pairs"
 ALLOWED_PAIR_ID=""
@@ -2156,6 +2188,10 @@ if [[ "$RUNNABLE_PASS" != true ]]; then
   PAIR_ELIGIBLE=false
   PAIR_FAILURE_REASONS+=("runnable: ${RUNNABLE_REASON}")
 fi
+if [[ "$TARGET_CONTRACT_SCOPE_PASS" != true ]]; then
+  PAIR_ELIGIBLE=false
+  PAIR_FAILURE_REASONS+=("target_contract_scope: ${TARGET_CONTRACT_SCOPE_REASON}")
+fi
 if [[ "$ALLOWED_PAIR_PASS" != true ]]; then
   PAIR_ELIGIBLE=false
   PAIR_FAILURE_REASONS+=("allowed_pairs: ${ALLOWED_PAIR_REASON}")
@@ -2188,6 +2224,8 @@ jq -n \
   --arg same_protocol_reason "$SAME_PROTOCOL_REASON" \
   --argjson runnable_pass "$RUNNABLE_PASS" \
   --arg runnable_reason "$RUNNABLE_REASON" \
+  --argjson target_contract_scope_pass "$TARGET_CONTRACT_SCOPE_PASS" \
+  --arg target_contract_scope_reason "$TARGET_CONTRACT_SCOPE_REASON" \
   --argjson allowed_pair_pass "$ALLOWED_PAIR_PASS" \
   --arg allowed_pair_reason "$ALLOWED_PAIR_REASON" \
   --arg allowed_pair_id "$ALLOWED_PAIR_ID" \
@@ -2221,6 +2259,10 @@ jq -n \
     same_protocol_mode: {
       pass: $same_protocol_pass,
       reason: $same_protocol_reason
+    },
+    target_contract_scope: {
+      pass: $target_contract_scope_pass,
+      reason: $target_contract_scope_reason
     },
     runnable_targets: {
       pass: $runnable_pass,
@@ -2851,27 +2893,88 @@ AB_BA_ORDERS_COMPLETED_JSON="$(printf '%s' "$AB_BA_ORDERS_COMPLETED_RAW" | tr ',
 # --- DB measurement-window diagnostics (BUG 1 pg_stat delta + BUG 3 DB-CPU sampler) --------
 # The Postgres cpuset is discoverable via BENCH_DB_CPUSET, else docker-inspect of the
 # benchmark-db container, else empty (mpstat then falls back to -P ALL). Echoes the core list.
+# Set as a side effect of resolve_db_cpuset so the label reports which probe actually answered.
+#
+# BOTH results are returned through globals, and the function prints NOTHING. It used to print
+# the cpuset and set the source as a side effect, which meant the only way to call it was
+# `x="$(resolve_db_cpuset)"` — a command substitution, i.e. a SUBSHELL. The assignment to
+# DB_CPUSET_SOURCE died with that subshell, so every meta file recorded source "unresolved"
+# while carrying a correctly resolved cpuset (observed on the first 15 leaves of the
+# 2026-08-06 ladder: resolved_cpuset "4-7,12-15", source "unresolved"). The measurement was
+# fine; only its provenance was lost, which is exactly the field that says whether to trust it.
+DB_CPUSET_SOURCE="unresolved"
+DB_CPUSET_RESOLVED=""
+
 resolve_db_cpuset() {
+  local db_container="${DB_CONTAINER_NAME:-exeris-benchmark-db}"
+  local resolved=""
+  DB_CPUSET_RESOLVED=""
+
   if [[ -n "${BENCH_DB_CPUSET:-}" ]]; then
-    printf '%s' "$BENCH_DB_CPUSET"
+    DB_CPUSET_SOURCE="env:BENCH_DB_CPUSET"
+    DB_CPUSET_RESOLVED="$BENCH_DB_CPUSET"
     return 0
   fi
-  local inspected=""
+
   if command -v docker >/dev/null 2>&1; then
-    inspected="$(docker inspect -f '{{.HostConfig.CpusetCpus}}' "${DB_CONTAINER_NAME:-exeris-benchmark-db}" 2>/dev/null || true)"
+    # HostConfig.CpusetCpus is populated only when the container was started with an explicit
+    # --cpuset-cpus. The compose stack does not set one, so this probe returned empty on every
+    # run to date and the sampler silently fell back to -P ALL — producing an all-core mpstat
+    # capture filed under the name db-cpuset-mpstat.csv. Campaign
+    # 20260805T140104Z-spring-triad-n3 recorded 'all-cores-fallback' in 58 of 58 meta files,
+    # i.e. it has no DB-CPU measurement at all despite carrying a well-formed artifact.
+    resolved="$(docker inspect -f '{{.HostConfig.CpusetCpus}}' "$db_container" 2>/dev/null || true)"
+    if [[ -n "$resolved" ]]; then
+      DB_CPUSET_SOURCE="docker-hostconfig"
+      DB_CPUSET_RESOLVED="$resolved"
+      return 0
+    fi
+
+    # The cgroup the container actually runs under. Answers even when no explicit cpuset was
+    # requested — in that case it reports every online CPU, which is the honest answer and is
+    # distinguished downstream by cpuset_is_restricted rather than by pretending to be narrower.
+    resolved="$(docker exec "$db_container" cat /sys/fs/cgroup/cpuset.cpus.effective 2>/dev/null | tr -d '[:space:]' || true)"
+    if [[ -n "$resolved" ]]; then
+      DB_CPUSET_SOURCE="cgroup-effective"
+      DB_CPUSET_RESOLVED="$resolved"
+      return 0
+    fi
+
+    # Last resort: the postmaster's own allowed-CPU mask, read from the host.
+    local dbpid
+    dbpid="$(docker inspect -f '{{.State.Pid}}' "$db_container" 2>/dev/null || true)"
+    if [[ -n "$dbpid" && "$dbpid" != "0" && -r "/proc/${dbpid}/status" ]]; then
+      resolved="$(awk '/^Cpus_allowed_list:/{print $2}' "/proc/${dbpid}/status" 2>/dev/null || true)"
+      if [[ -n "$resolved" ]]; then
+        DB_CPUSET_SOURCE="proc-cpus-allowed"
+        DB_CPUSET_RESOLVED="$resolved"
+        return 0
+      fi
+    fi
   fi
-  printf '%s' "$inspected"
+
+  DB_CPUSET_SOURCE="all-cores-fallback"
+  DB_CPUSET_RESOLVED=""
+  return 0
 }
 
 # Records how the cpuset was resolved (for reproducibility of the DB-CPU attribution).
 db_cpuset_source_label() {
+  printf '%s' "${DB_CPUSET_SOURCE:-unresolved}"
+}
+
+# Whether the resolved set is actually narrower than the host's online CPUs. A resolved-but-
+# unrestricted cpuset still yields no DB-CPU attribution: the sampler measures every core and
+# the DB's share is not separable. Reported so a reader cannot mistake "resolved" for "usable".
+db_cpuset_is_restricted() {
   local resolved="$1"
-  if [[ -n "${BENCH_DB_CPUSET:-}" ]]; then
-    printf 'env:BENCH_DB_CPUSET'
-  elif [[ -n "$resolved" ]]; then
-    printf 'docker-inspect'
+  [[ -n "$resolved" ]] || { printf 'false'; return 0; }
+  local online
+  online="$(cat /sys/devices/system/cpu/online 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ -n "$online" && "$resolved" == "$online" ]]; then
+    printf 'false'
   else
-    printf 'all-cores-fallback'
+    printf 'true'
   fi
 }
 
@@ -2894,6 +2997,9 @@ pgss_compute_delta_best_effort() {
     ($b[0].queries // []) as $bq
     | ($f[0].queries // []) as $fq
     | ($bq | map({ (.queryid): {calls: (.calls // 0), total_time_ms: (.total_time_ms // 0)} }) | add // {}) as $bmap
+    | ([ $fq[]
+         | select($bmap[.queryid] != null)
+         | select((.calls // 0) < ($bmap[.queryid].calls // 0)) ] | length > 0) as $reset_detected
     | {
         timestamp: ($f[0].timestamp // null),
         phase: "measurement-delta",
@@ -2901,6 +3007,10 @@ pgss_compute_delta_best_effort() {
         column_profile: ($f[0].column_profile // null),
         baseline_timestamp: ($b[0].timestamp // null),
         final_timestamp: ($f[0].timestamp // null),
+        reset_detected: $reset_detected,
+        warning: (if $reset_detected then
+            "pg_stat_statements was RESET inside this measurement window (final call counts fall below baseline for at least one queryid). The delta below is NOT window-scoped and MUST NOT be used for query-shape equivalence or query-cost comparison. Without this flag the artifact is an empty-but-well-formed queries:[] and reads as a valid measurement of nothing."
+          else null end),
         note: "Per-target delta over this target'"'"'s measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
         queries: [
           $fq[]
@@ -2945,6 +3055,27 @@ run_wrk_target() {
   # BUG 3: fine-grained DB-CPU sampler (Postgres cpuset) bracketed to the measurement window.
   local db_cpu_mpstat_pid="" db_cpu_mpstat_csv="${outdir}/db-cpuset-mpstat.csv"
   local db_cpuset_resolved=""
+  # Load generator CPU, on the same window and cadence as the DB sampler.
+  #
+  # This was the LAST unmeasured ceiling in the harness. A closed-loop result is only an
+  # application measurement while every resource other than the application has headroom, and
+  # until 2026-08-07 we sampled the measured arm, the idle neighbour and the DB cpuset — but
+  # never wrk itself. The ladder run of 2026-08-06 made that gap concrete: on light the fastest
+  # arm reached 74.6k rps on a 4-CPU loadgen pin, and nothing in the artefacts could confirm the
+  # generator was not the thing capping it. The spread across arms (26.7k/42k/56k/74.6k) proves
+  # there was no cap BELOW 74.6k, which is weaker than knowing the top arm had headroom.
+  #
+  # Cheap and symmetric with the DB sampler, so a leaf now carries all four consumers of the
+  # host: measured arm, neighbour, database, generator.
+  local loadgen_cpu_mpstat_pid="" loadgen_cpu_mpstat_csv="${outdir}/loadgen-cpuset-mpstat.csv"
+  # Idle co-resident neighbour. Both targets are launched and stay resident while only one is
+  # driven, but sampling covered the measured arm alone — so the cost of the idle JVM beside it
+  # was never recorded. That is the missing evidence for two open findings: the heavy-10k
+  # co-residence contamination, and the Spring ladder's 2.3-3.9 % between-leaf penalty that
+  # appears whenever the resident neighbour is the other Exeris arm.
+  local neighbour_sampler_pid="" neighbour_pid="" neighbour_port=""
+  local neighbour_jfr_name="" neighbour_jfr_file="" neighbour_jfr_started=0
+  local neighbour_csv="${outdir}/neighbour-resource-samples.csv"
   # BUG 1: per-target pg_stat_statements measurement-window delta artifacts.
   local pgss_baseline="${outdir}/pg_stat_statements-measurement-baseline.json"
   local pgss_final="${outdir}/pg_stat_statements-measurement-final.json"
@@ -2991,11 +3122,88 @@ run_wrk_target() {
     sampler_pid=$!
   fi
 
+  # Sample the idle neighbour over the SAME window, so its CPU and RSS are directly comparable
+  # with the measured arm's. Best-effort: absent when the pair shares a port or the neighbour is
+  # not up, in which case no artifact is written rather than an empty one.
+  if [[ "$port" == "$TARGET_A_PORT" ]]; then
+    neighbour_port="$TARGET_B_PORT"
+  elif [[ "$port" == "$TARGET_B_PORT" ]]; then
+    neighbour_port="$TARGET_A_PORT"
+  fi
+  if [[ -n "$neighbour_port" && "$neighbour_port" != "$port" ]]; then
+    neighbour_pid="$(detect_pid_for_port "$neighbour_port" 2>/dev/null || true)"
+    if [[ -n "$neighbour_pid" && -d "/proc/$neighbour_pid" ]]; then
+      start_resource_sampler "$neighbour_pid" "$neighbour_csv" 1 &
+      neighbour_sampler_pid=$!
+
+      # IDLE PROFILE of the co-resident target. The sampler above says HOW MUCH an idle arm
+      # costs; this says WHAT it is doing. Both are needed, and only this half was missing.
+      #
+      # Measured on the 2026-08-06 ladder: an idle spring-on-exeris process burns 0.67-0.70 %
+      # of the 4-core server pin, against 0.04-0.05 % for Tomcat and for exeris-community —
+      # ~18x, split by hosting model rather than runtime family. Actuator, Micrometer, Quartz,
+      # spring-integration and every management/task/jmx property were ruled out statically,
+      # and thread count is flat (36.7 vs 43.9 against an 18x CPU difference), so the cause is
+      # in the composition and cannot be narrowed further from counters.
+      #
+      # An idle process is the ideal profiling subject: with no traffic, whatever appears in
+      # the profile IS the answer, because nothing else is running. That is why this is worth a
+      # recording rather than more sampling.
+      #
+      # Per-target JFR (jfr-start.json) brackets only that target's OWN window — verified from
+      # the ladder's sidecar timestamps: target-a recorded 23:13:44-23:33:47 and target-b
+      # 23:33:47-23:53:51, back to back, never overlapping. So the idle arm was never recorded
+      # and this data did not already exist in the campaign's ~23 GB of JFR.
+      #
+      # maxsize is deliberately small: the subject is idle, so the recording is tiny, and a cap
+      # keeps this from adding meaningfully to a campaign whose JFR volume is already the
+      # dominant artefact cost. settings=profile matches the driven recordings so the two are
+      # readable with the same views.
+      #
+      # THE PROFILE WILL PARTLY CONTAIN JFR ITSELF, AND THAT IS HANDLED BY DESIGN.
+      # On a loaded application JFR's overhead is ~1-2 % and vanishes into the background. On a
+      # process burning 0.027 cores the same absolute overhead is proportionally enormous, and
+      # `profile` adds its own periodic work (jdk.CPULoad every second, the sampler thread,
+      # chunk rotation) which shows up in the profile AS work. Read naively, an idle profile
+      # therefore reports JFR.
+      #
+      # The floor comes free from this very change: exeris-community (0.0020 cores) and
+      # spring-hibernate (0.0015) are recorded as neighbours under IDENTICAL settings. Their
+      # profiles ARE the instrument's noise floor. Anything in a spring-on-exeris idle profile
+      # that is not also in theirs is signal. Do not skip the quiet arms as "nothing
+      # interesting" — they are the control, and without them the noisy profile cannot be read.
+      #
+      # READING ORDER: park intervals BEFORE hot-methods.
+      # 0.027 cores over a 20-minute window is ~32 CPU-seconds arriving as periodic wakeups.
+      # ExecutionSample will catch it but smear it across many frames; a periodic wakeup is far
+      # more legible in PARK DURATION, because a thread parking on a fixed interval is the
+      # signature of a timer rather than of work. This lab has the precedent: the triad report
+      # §7 identified Agroal pool housekeeping from "ThreadPark/JavaMonitorWait on agroal-*
+      # threads with 2-minute and exactly-2000 ms timers". "Exactly 2000 ms" is what names a
+      # timer; an averaged CPU figure never could. So: repeated exact park durations first (they
+      # yield a thread name and a period), hot-methods second.
+      if [[ "${BENCH_PROFILE_IDLE_NEIGHBOUR:-1}" == "1" ]] && command -v jcmd >/dev/null 2>&1; then
+        neighbour_jfr_name="idle_neighbour_$(date -u +%Y%m%d_%H%M%S)"
+        neighbour_jfr_file="${outdir}/neighbour-idle.jfr"
+        if jcmd "$neighbour_pid" \
+             "JFR.start name=${neighbour_jfr_name} settings=profile disk=true maxsize=64m" \
+             > "${outdir}/neighbour-jfr-start.txt" 2>&1; then
+          neighbour_jfr_started=1
+        else
+          neighbour_jfr_started=0
+        fi
+      fi
+    fi
+  fi
+
   # BUG 3: start a fine-grained (1s) DB-CPU sampler over the Postgres cpuset, bracketed to
   # THIS target's measurement window (after warmup, stopped right after measurement). This
   # replaces reliance on the system sar cron (10-min cadence, uselessly coarse for a
   # 120/300/900s window). Falls back to all cores when the cpuset is not discoverable.
-  db_cpuset_resolved="$(resolve_db_cpuset)"
+  # No command substitution: resolve_db_cpuset returns through globals precisely so the
+  # source label survives. See the note on the function.
+  resolve_db_cpuset
+  db_cpuset_resolved="$DB_CPUSET_RESOLVED"
   if command -v bench_start_mpstat_sampler_for_cpus >/dev/null 2>&1; then
     db_cpu_mpstat_pid="$(bench_start_mpstat_sampler_for_cpus "$db_cpu_mpstat_csv" "$db_cpuset_resolved" 1 2>/dev/null || true)"
   fi
@@ -3004,13 +3212,40 @@ run_wrk_target() {
     --arg source "$(db_cpuset_source_label "$db_cpuset_resolved")" \
     --arg target_id "$target_id" \
     --arg started "$([[ -n "$db_cpu_mpstat_pid" ]] && echo true || echo false)" \
-    '{resolved_cpuset: $cpuset, source: $source, interval_seconds: 1, window: "measurement", target_id: $target_id, sampler_started: ($started == "true")}' \
+    --arg restricted "$(db_cpuset_is_restricted "$db_cpuset_resolved")" \
+    '{resolved_cpuset: $cpuset, source: $source, cpuset_is_restricted: ($restricted == "true"), db_cpu_attributable: ($restricted == "true"), interval_seconds: 1, window: "measurement", target_id: $target_id, sampler_started: ($started == "true")}' \
     > "${outdir}/db-cpuset-mpstat.meta.json" 2>/dev/null || true
+
+  # Same window, same cadence, for the load generator's pin. Unlike the DB cpuset there is
+  # nothing to discover: LOADGEN_CPU_AFFINITY is what this script itself passes to taskset for
+  # wrk, so when it is set the attribution is exact. When it is UNSET the generator is not
+  # pinned at all, its CPU cannot be separated from everything else on the host, and no sampler
+  # is started — recorded honestly as loadgen_cpu_attributable:false rather than filed as an
+  # all-core capture under a name that implies the generator. That mislabelling is precisely
+  # what bit the DB sampler before its cpuset was resolved properly.
+  if [[ -n "$LOADGEN_CPU_AFFINITY" ]] && command -v bench_start_mpstat_sampler_for_cpus >/dev/null 2>&1; then
+    loadgen_cpu_mpstat_pid="$(bench_start_mpstat_sampler_for_cpus "$loadgen_cpu_mpstat_csv" "$LOADGEN_CPU_AFFINITY" 1 2>/dev/null || true)"
+  fi
+  jq -n \
+    --arg cpuset "${LOADGEN_CPU_AFFINITY:-}" \
+    --arg target_id "$target_id" \
+    --arg started "$([[ -n "$loadgen_cpu_mpstat_pid" ]] && echo true || echo false)" \
+    '{resolved_cpuset: $cpuset, source: (if ($cpuset | length) > 0 then "env:LOADGEN_CPU_AFFINITY" else "unpinned" end), cpuset_is_restricted: (($cpuset | length) > 0), loadgen_cpu_attributable: (($cpuset | length) > 0), interval_seconds: 1, window: "measurement", target_id: $target_id, sampler_started: ($started == "true"), note: "Load generator (wrk) CPU over the measurement window. Read it as a CEILING CHECK, not as a cost: a closed-loop throughput number is an application measurement only while the generator has headroom. If busy cores approach the pin width, the arm was generator-bound and the rps figure is a floor, not a result."}' \
+    > "${outdir}/loadgen-cpuset-mpstat.meta.json" 2>/dev/null || true
 
   # BUG 1: pg_stat_statements baseline at measurement-start (after warmup). The matching
   # final+delta are taken at measurement-end below, both strictly inside this run-comparative
   # invocation — so the delta reflects only THIS target's measurement window and cannot be
   # clobbered by the next leaf's reset (robust for both ab and ba order).
+  #
+  # Being inside this invocation is necessary but not sufficient. The defect that emptied 34 of
+  # 58 arm-windows in campaign 20260805T140104Z-spring-triad-n3 was the DB container's own
+  # healthcheck resetting pg_stat_statements every 5 s (fixed in the compose file) — a caller
+  # no ordering here could reach. The exported inhibit flag closes the remaining shell-side
+  # hole: this script nests copies of itself, so a nested invocation can reach the scenario
+  # diagnostics hook mid-window. Every descendant inherits the flag; it is released only after
+  # the final snapshot.
+  export BENCH_PGSS_RESET_INHIBIT=1
   pgss_snapshot_best_effort "$pgss_baseline" "measurement-baseline"
 
   if [[ "$PERF_STAT_REQUIRED" == "1" || "$PERF_STAT_CAPTURE_REQUESTED" == "1" ]]; then
@@ -3079,13 +3314,82 @@ run_wrk_target() {
     wait "$sampler_pid" 2>/dev/null || true
   fi
 
+  if [[ -n "$neighbour_sampler_pid" ]]; then
+    kill "$neighbour_sampler_pid" 2>/dev/null || true
+    wait "$neighbour_sampler_pid" 2>/dev/null || true
+  fi
+
+  # Dump and stop the idle-neighbour recording, bracketed to the same window as its sampler so
+  # the profile and the 0.0x-cores figure describe the same interval. Best-effort throughout:
+  # the neighbour is not the measured target, so nothing here may fail a leaf.
+  if [[ "${neighbour_jfr_started:-0}" == "1" && -n "$neighbour_pid" && -d "/proc/$neighbour_pid" ]]; then
+    jcmd "$neighbour_pid" "JFR.dump name=${neighbour_jfr_name} filename=${neighbour_jfr_file}" \
+      >> "${outdir}/neighbour-jfr-stop.txt" 2>&1 || true
+    jcmd "$neighbour_pid" "JFR.stop name=${neighbour_jfr_name}" \
+      >> "${outdir}/neighbour-jfr-stop.txt" 2>&1 || true
+    jq -n \
+      --arg measured "$target_id" \
+      --arg neighbour_port "${neighbour_port:-}" \
+      --arg neighbour_pid "$neighbour_pid" \
+      --arg file "$neighbour_jfr_file" \
+      --argjson present "$([[ -f "$neighbour_jfr_file" ]] && echo true || echo false)" \
+      '{measured_target_id: $measured, neighbour_port: $neighbour_port, neighbour_pid: $neighbour_pid,
+        jfr_file: $file, dumped: $present, window: "measurement", role: "resident-idle",
+        note: "JFR of the co-resident target that was launched but NOT driven during this window. With no traffic on it, the profile is the whole answer to what an idle instance spends CPU on — the companion to neighbour-resource-metrics.json, which says how much rather than what. READ WITH A NOISE FLOOR: settings=profile costs the same absolute overhead on an idle process as on a busy one, and contributes its own periodic events, so an idle profile partly contains JFR. The quiet arms recorded under identical settings (exeris-community 0.0020 cores, spring-hibernate 0.0015) are that floor; anything not also present in them is signal. READING ORDER: repeated exact park durations first (a fixed interval names a timer and a thread — cf. triad report section 7, which identified Agroal housekeeping from exactly-2000 ms ThreadPark on agroal-* threads), hot-methods second, because ~32 CPU-seconds of periodic wakeups smear across frames in an execution profile."}' \
+      > "${outdir}/neighbour-jfr-metadata.json" 2>/dev/null || true
+  fi
+  if [[ -f "$neighbour_csv" ]]; then
+    summarize_resource_samples "$neighbour_csv" "${outdir}/neighbour-resource-metrics.json" "$MEASUREMENT_SECONDS"
+    jq -n \
+      --arg measured "$target_id" \
+      --arg neighbour_port "$neighbour_port" \
+      --arg neighbour_pid "$neighbour_pid" \
+      '{measured_target_id: $measured, neighbour_port: $neighbour_port, neighbour_pid: $neighbour_pid, window: "measurement", role: "resident-idle", note: "Resource samples for the co-resident target that was launched but NOT driven during this window. Its CPU and RSS are the cost of co-residence, not of serving traffic."}' \
+      > "${outdir}/neighbour-resource-metrics.meta.json" 2>/dev/null || true
+  fi
+
   # BUG 3: stop the DB-CPU sampler at measurement-end (converts its raw capture to CSV).
   if [[ -n "$db_cpu_mpstat_pid" ]] && command -v bench_stop_mpstat_sampler >/dev/null 2>&1; then
     bench_stop_mpstat_sampler "$db_cpu_mpstat_pid" "$db_cpu_mpstat_csv" || true
   fi
+  # Load generator sampler, stopped on the same boundary so both cover one identical window.
+  if [[ -n "$loadgen_cpu_mpstat_pid" ]] && command -v bench_stop_mpstat_sampler >/dev/null 2>&1; then
+    bench_stop_mpstat_sampler "$loadgen_cpu_mpstat_pid" "$loadgen_cpu_mpstat_csv" || true
+  fi
+
+  # Aggregate both mpstat streams HERE, at window close, not at campaign end.
+  #
+  # Both CSVs are git-ignored for size (.gitignore: results/**/db-cpuset-mpstat.csv), so the
+  # committable evidence is the derived -metrics.json and nothing else. Until 2026-08-11 the
+  # aggregation was a manual post-hoc step that nothing in the harness called: campaign
+  # 20260810T131208Z-hibernate-vs-jdbc-n3 finished with 24 raw streams and ZERO aggregates,
+  # which left its DB-ceiling reading (97.4 % under spring-jdbc vs 26.4 % under
+  # spring-hibernate — the fact that decides whether heavy throughput may be quoted at all)
+  # citable only from a perf-box file that disk reclaim is free to delete.
+  #
+  # Deriving it per window rather than per campaign also bounds the blast radius: a stream
+  # that never gets aggregated costs one arm-window, not every leaf behind it.
+  #
+  # Best-effort by design. A missing or malformed stream must not fail a measured leaf that
+  # is otherwise complete — the aggregate is evidence ABOUT the leaf, and its absence is
+  # visible as a missing file plus this warning.
+  if [[ -x "${REPO_ROOT}/tools/aggregate-db-cpuset-mpstat.sh" ]]; then
+    for _mpstat_csv in "$db_cpu_mpstat_csv" "$loadgen_cpu_mpstat_csv"; do
+      [[ -n "$_mpstat_csv" && -s "$_mpstat_csv" ]] || continue
+      if ! "${REPO_ROOT}/tools/aggregate-db-cpuset-mpstat.sh" "$_mpstat_csv" >/dev/null 2>&1; then
+        echo "  WARN: mpstat aggregation failed for $(basename "$_mpstat_csv") — raw stream kept, aggregate missing" >&2
+      fi
+    done
+    unset _mpstat_csv
+  else
+    echo "  WARN: tools/aggregate-db-cpuset-mpstat.sh not executable — cpuset ceiling readings will be missing" >&2
+  fi
 
   # BUG 1: pg_stat_statements final at measurement-end, then emit the per-target window delta.
+  # The inhibit flag is released only after the final snapshot — a reset between the two would
+  # reproduce exactly the defect it guards against.
   pgss_snapshot_best_effort "$pgss_final" "measurement-final"
+  unset BENCH_PGSS_RESET_INHIBIT
   pgss_compute_delta_best_effort "$pgss_baseline" "$pgss_final" "$pgss_delta"
 
   if [[ -f "${outdir}/resource-samples.csv" ]]; then
@@ -3407,6 +3711,8 @@ parse_wrk_to_result() {
     --arg benchmark_tool_version "$WRK_VERSION_DETECTED" \
     --arg hardware_profile    "$HARDWARE_PROFILE_REF" \
     --arg backend_network_mode "$BACKEND_NETWORK_MODE" \
+    --arg db_cpuset           "${DB_CPUSET_RESOLVED:-}" \
+    --arg db_cpuset_source    "${DB_CPUSET_SOURCE:-unresolved}" \
     --arg target_classification "$TARGET_CLASSIFICATION" \
     --arg pinned_jdk_version "${PINNED_JDK_VERSION:-${JDK_VERSION_DETECTED:-unknown}}" \
     --arg pinned_tool_version "${PINNED_BENCH_TOOL_VERSION:-${WRK_VERSION_DETECTED:-unknown}}" \
@@ -3507,6 +3813,8 @@ parse_wrk_to_result() {
         jvm_flags: $jvm_flags,
         hardware_profile: $hardware_profile,
         backend_network_mode: $backend_network_mode,
+        db_cpuset: $db_cpuset,
+        db_cpuset_source: $db_cpuset_source,
         scenario_id: $scenario,
         target_classification: $target_classification
       },

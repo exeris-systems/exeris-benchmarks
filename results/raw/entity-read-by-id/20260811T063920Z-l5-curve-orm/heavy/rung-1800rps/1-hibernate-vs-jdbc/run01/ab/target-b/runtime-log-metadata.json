@@ -1,0 +1,14 @@
+{
+  "launcher_mode": "external",
+  "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-jdbc.env",
+  "log_path": "/tmp/exeris-spring-jdbc-9008.log",
+  "external_jar_path": "targets/spring-benchmark-app-jdbc/target/spring-benchmark-app-jdbc-1.0.0-SNAPSHOT.jar",
+  "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/spring-benchmark-app-jdbc/target/spring-benchmark-app-jdbc-1.0.0-SNAPSHOT.jar",
+  "jar_exists": true,
+  "jar_sha256": "8ed42b4d7788287e6a628a8d93a5b7a03df446b46a8ca51870a53fb0e7c2dbe6",
+  "jar_size_bytes": 64378484,
+  "jar_mtime_utc": "2026-08-11T07:06:54Z",
+  "copied": true,
+  "output_file": "results/raw/entity-read-by-id/20260811T063920Z-l5-curve-orm/heavy/rung-1800rps/1-hibernate-vs-jdbc/run01/ab/target-b/target-runtime.log",
+  "note": "runtime log copied"
+}

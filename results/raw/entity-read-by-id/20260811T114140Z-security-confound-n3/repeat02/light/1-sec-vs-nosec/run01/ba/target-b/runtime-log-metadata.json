@@ -1,0 +1,14 @@
+{
+  "launcher_mode": "external",
+  "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-hibernate-nosec.env",
+  "log_path": "/tmp/exeris-spring-nosec-9009.log",
+  "external_jar_path": "targets/spring-benchmark-app/target/spring-benchmark-app-1.0.0-SNAPSHOT.jar",
+  "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/spring-benchmark-app/target/spring-benchmark-app-1.0.0-SNAPSHOT.jar",
+  "jar_exists": true,
+  "jar_sha256": "d7c9bf1eb699cdc964b8404182d51fbb2381cad02231f25fae20c58667b7b14f",
+  "jar_size_bytes": 91231543,
+  "jar_mtime_utc": "2026-08-11T14:25:01Z",
+  "copied": true,
+  "output_file": "results/raw/entity-read-by-id/20260811T114140Z-security-confound-n3/repeat02/light/1-sec-vs-nosec/run01/ba/target-b/target-runtime.log",
+  "note": "runtime log copied"
+}

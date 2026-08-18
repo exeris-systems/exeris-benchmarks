@@ -1,0 +1,8 @@
+1951589:
+No available recordings.
+
+Use jcmd 1951589 JFR.start to start a recording.
+1951589:
+Started recording 2. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 1951589 JFR.dump name=quarkus_tuned_20260808_142213 filename=FILEPATH to copy recording data to file.

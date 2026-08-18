@@ -36,6 +36,18 @@ public class UserRepository {
         return summaries;
     }
 
+    // Single-row PK read through the ORM (entity load + map) — the Hibernate counterpart of the
+    // pure-JDBC target's WHERE id=? read; the ORM entity-hydration cost is the point. Kept
+    // shape-identical to quarkus-benchmark-app UserPanacheRepository.findUserById so the light
+    // contract (fixed_contract_cross_runtime_h1_single_read_v1) stays apples-to-apples across
+    // the ORM targets. Do not "optimize" this into a projection query: that would silently
+    // change the measured path relative to the other ORM arm.
+    public UserSummary findUserById(long id) {
+        return benchmarkUserJpaRepository.findById(id)
+                .map(user -> new UserSummary(Long.toString(user.getId()), user.getUsername()))
+                .orElse(null);
+    }
+
     public List<FriendSummary> findFriendsForUser(String userId, int limit) {
         if (limit <= 0) {
             return List.of();

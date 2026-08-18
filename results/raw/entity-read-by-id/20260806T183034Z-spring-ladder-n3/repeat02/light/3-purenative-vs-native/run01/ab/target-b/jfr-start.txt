@@ -1,0 +1,8 @@
+3213233:
+No available recordings.
+
+Use jcmd 3213233 JFR.start to start a recording.
+3213233:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 3213233 JFR.dump name=exeris_community_20260807_132624 filename=FILEPATH to copy recording data to file.

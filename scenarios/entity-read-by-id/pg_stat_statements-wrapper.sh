@@ -64,6 +64,28 @@ _resolve_timing_column_profile() {
 }
 
 pg_stat_statements_reset() {
+  # A reset that lands inside an open measurement window destroys that window's delta: the
+  # final snapshot's call counts fall below the baseline's, every queryid fails the
+  # `$dcalls > 0` filter, and the delta artifact is emitted as an empty-but-well-formed
+  # `queries: []` — valid-looking evidence of nothing. Measured on campaign
+  # 20260805T140104Z-spring-triad-n3: resets fired every 5-10 s and 34 of 58 arm-windows
+  # came out empty.
+  #
+  # The guard is an inherited environment flag rather than call-site ordering on purpose:
+  # run-comparative.sh nests copies of itself, so any single call site can be re-entered at
+  # a depth the ordering does not control. While a window is open no shell caller can reset,
+  # whatever invoked it.
+  #
+  # SCOPE: this covers shell-side callers only. The 5 s reset storm that produced the empty
+  # deltas came from the Postgres container's own healthcheck, which never enters this
+  # function — that is fixed in runtime/compose/entity-read-by-id-db.yml. Anything resetting
+  # from inside the DB, or over a connection this wrapper did not open, is likewise invisible
+  # here. Treat the flag as defence in depth, not as the guarantee.
+  if [[ "${BENCH_PGSS_RESET_INHIBIT:-0}" == "1" ]]; then
+    echo "INFO: pg_stat_statements_reset() suppressed — a measurement window is open (BENCH_PGSS_RESET_INHIBIT=1)" >&2
+    return 0
+  fi
+
   if ! _check_extension_available; then
     echo "INFO: pg_stat_statements not available (not in shared_preload_libraries or extension not installed); reset skipped" >&2
     return 0

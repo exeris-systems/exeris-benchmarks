@@ -1,0 +1,14 @@
+{
+  "target_id": "spring-hibernate",
+  "port": 9001,
+  "scenario_endpoint_path": "/api/v1/users",
+  "startup_init_utc": "2026-08-11T08:42:01Z",
+  "health_ready_utc": "2026-08-11T08:42:07Z",
+  "first_request_utc": "2026-08-11T08:42:08Z",
+  "startup_to_health_ms": 6201,
+  "startup_to_first_request_ms": 6378,
+  "health_to_first_request_ms": 177,
+  "health_attempts": 1,
+  "first_request_attempts": 1,
+  "generated_at_utc": "2026-08-11T08:42:08Z"
+}

@@ -1,0 +1,26 @@
+{
+  "target_a_input": "spring-on-exeris-pure-native",
+  "target_b_input": "quarkus-tuned",
+  "target_a_contract": {
+    "target_id": "spring-on-exeris-pure-native",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-runtime-on-exeris-pure-native.env",
+    "profile_id": "spring-on-exeris-pure-native",
+    "compose_file": "",
+    "jar_path": "",
+    "health_url": "http://localhost:9006/health"
+  },
+  "target_b_contract": {
+    "target_id": "quarkus-tuned",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/quarkus-tuned.env",
+    "profile_id": "quarkus-tuned",
+    "compose_file": "",
+    "jar_path": "",
+    "health_url": "http://localhost:9003/health"
+  }
+}

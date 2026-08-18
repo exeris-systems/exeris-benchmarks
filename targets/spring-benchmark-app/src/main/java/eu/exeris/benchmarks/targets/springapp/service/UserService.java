@@ -22,4 +22,11 @@ public class UserService {
     public List<UserView> findFrozenContractUsers() {
         return userRepository.findTopUsersWithDetails(USERS_LIMIT, FRIENDS_LIMIT, INTERESTS_LIMIT);
     }
+
+    // Light single-read counterpart of findFrozenContractUsers. Same transactional boundary as
+    // the heavy contract so the light/heavy delta is the query shape, not the tx demarcation.
+    @Transactional(readOnly = true)
+    public UserSummary findUserById(long id) {
+        return userRepository.findUserById(id);
+    }
 }

@@ -19,7 +19,18 @@
     <maven.shade.plugin.version>3.6.0</maven.shade.plugin.version>
     <graalvm.buildtools.native.version>0.10.3</graalvm.buildtools.native.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <exeris.kernel.version>0.10.1</exeris.kernel.version>
+    <!--
+      MUST match the kernel line the Spring arms carry, or kernel version becomes a free
+      variable on exactly the comparison that closes HLA gap G1 (spring-hibernate vs
+      exeris-community). The three Spring-on-Exeris arms are jar-verified on 0.10.2
+      (community/core/spi); this arm was pinned one patch below at 0.10.1 and its jar dates
+      from 2026-08-01, i.e. before the #50 kernel bump.
+
+      Bump all four targets together and re-verify with:
+        unzip -l <jar> | grep exeris-kernel      (Spring arms, fat jars)
+        mvn -q dependency:list | grep exeris-kernel   (this arm, shaded)
+    -->
+    <exeris.kernel.version>0.10.2</exeris.kernel.version>
   </properties>
 
   <dependencies>

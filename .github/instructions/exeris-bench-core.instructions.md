@@ -38,3 +38,10 @@ Capture and preserve:
 - scenario id + target classification
 
 Prefer minimal, schema-compatible, repeatable benchmark changes.
+
+**Pin `LC_ALL=C` in any analysis script whose `awk` reads decimal numbers.** `mawk` honours the
+locale's decimal separator, so under a comma-decimal locale (`pl_PL`, `de_DE`, …) `"0.61" + 0`
+evaluates to **0** — silently, with no error — while `jq`, the usual producer of that input,
+always emits a `.`. This has already produced a column of zeros in a real analysis pass
+(2026-07-30, non-heap breakdown). Reproducibility includes reproducing on someone else's
+locale; a derived figure that changes with `LANG` is not a measurement.

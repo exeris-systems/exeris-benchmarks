@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" font-family="Verdana,Helvetica,sans-serif" role="img" aria-label="Service-time latency ladder, ORM axis, both contracts">
+<rect width="1200" height="560" fill="#0f172a"/>
+<text x="24" y="34" font-size="17" font-weight="bold" fill="#f8fafc">Service-time latency across the rate ladder — the arms diverge in headroom, not in cost</text>
+<text x="24" y="54" font-size="11" fill="#94a3b8">open-loop wrk2, 36/36 leaves comparison_eligible, min rate_attainment 99.55 % · p99 drawn as an ab–ba RANGE, never a point (n=2 per cell = two directions, not two repeats — no restart variance, see §2.4)</text>
+<text x="70" y="108" font-size="13" font-weight="bold" fill="#f8fafc">heavy contract (3 queries, ~9.2 KB)</text>
+<line x1="70" y1="470.0" x2="540" y2="470.0" stroke="#334155" stroke-width="1"/>
+<text x="62" y="474.0" font-size="10" fill="#94a3b8" text-anchor="end">0.0</text>
+<line x1="70" y1="427.5" x2="540" y2="427.5" stroke="#334155" stroke-width="1"/>
+<text x="62" y="431.5" font-size="10" fill="#94a3b8" text-anchor="end">2.0</text>
+<line x1="70" y1="385.0" x2="540" y2="385.0" stroke="#334155" stroke-width="1"/>
+<text x="62" y="389.0" font-size="10" fill="#94a3b8" text-anchor="end">4.0</text>
+<line x1="70" y1="342.5" x2="540" y2="342.5" stroke="#334155" stroke-width="1"/>
+<text x="62" y="346.5" font-size="10" fill="#94a3b8" text-anchor="end">6.0</text>
+<line x1="70" y1="300.0" x2="540" y2="300.0" stroke="#334155" stroke-width="1"/>
+<text x="62" y="304.0" font-size="10" fill="#94a3b8" text-anchor="end">8.0</text>
+<line x1="70" y1="257.5" x2="540" y2="257.5" stroke="#334155" stroke-width="1"/>
+<text x="62" y="261.5" font-size="10" fill="#94a3b8" text-anchor="end">10.0</text>
+<line x1="70" y1="215.0" x2="540" y2="215.0" stroke="#334155" stroke-width="1"/>
+<text x="62" y="219.0" font-size="10" fill="#94a3b8" text-anchor="end">12.0</text>
+<line x1="70" y1="172.5" x2="540" y2="172.5" stroke="#334155" stroke-width="1"/>
+<text x="62" y="176.5" font-size="10" fill="#94a3b8" text-anchor="end">14.0</text>
+<line x1="70" y1="130.0" x2="540" y2="130.0" stroke="#334155" stroke-width="1"/>
+<text x="62" y="134.0" font-size="10" fill="#94a3b8" text-anchor="end">16.0</text>
+<text x="24" y="124" font-size="10" fill="#94a3b8">ms</text>
+<text x="104.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">600</text>
+<text x="186.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">1 200</text>
+<text x="268.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">1 800</text>
+<text x="350.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">2 400</text>
+<text x="432.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">3 000</text>
+<text x="514.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">3 400</text>
+<text x="305" y="508" font-size="10" fill="#94a3b8" text-anchor="middle">offered rps</text>
+<polygon points="104.0,384.1 186.0,420.5 268.0,383.1 350.0,420.1 432.0,419.4 514.0,419.0 514.0,419.4 432.0,419.4 350.0,420.1 268.0,419.9 186.0,420.5 104.0,421.1" fill="#22d3ee" fill-opacity="0.18"/>
+<polyline points="104.0,402.6 186.0,420.5 268.0,401.5 350.0,420.1 432.0,419.4 514.0,419.2" fill="none" stroke="#22d3ee" stroke-width="2.5"/>
+<polyline points="104.0,439.7 186.0,441.6 268.0,439.7 350.0,441.6 432.0,441.7 514.0,441.5" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-dasharray="4,3"/>
+<line x1="104.0" y1="421.1" x2="104.0" y2="384.1" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="186.0" y1="420.5" x2="186.0" y2="420.5" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="268.0" y1="419.9" x2="268.0" y2="383.1" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="350.0" y1="420.1" x2="350.0" y2="420.1" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="432.0" y1="419.4" x2="432.0" y2="419.4" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="514.0" y1="419.4" x2="514.0" y2="419.0" stroke="#22d3ee" stroke-width="1.6"/>
+<circle cx="104.0" cy="384.1" r="6" fill="none" stroke="#f8fafc" stroke-width="1.6"/>
+<circle cx="268.0" cy="383.1" r="6" fill="none" stroke="#f8fafc" stroke-width="1.6"/>
+<polygon points="104.0,404.1 186.0,225.2 268.0,391.8 350.0,392.2 432.0,149.8 514.0,278.5 514.0,289.4 432.0,358.4 350.0,394.4 268.0,393.5 186.0,404.3 104.0,404.8" fill="#f59e0b" fill-opacity="0.18"/>
+<polyline points="104.0,404.4 186.0,314.8 268.0,392.6 350.0,393.3 432.0,254.1 514.0,284.0" fill="none" stroke="#f59e0b" stroke-width="2.5"/>
+<polyline points="104.0,426.8 186.0,425.6 268.0,423.7 350.0,425.5 432.0,395.9 514.0,398.9" fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-dasharray="4,3"/>
+<line x1="104.0" y1="404.8" x2="104.0" y2="404.1" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="186.0" y1="404.3" x2="186.0" y2="225.2" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="268.0" y1="393.5" x2="268.0" y2="391.8" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="350.0" y1="394.4" x2="350.0" y2="392.2" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="432.0" y1="358.4" x2="432.0" y2="149.8" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="514.0" y1="289.4" x2="514.0" y2="278.5" stroke="#f59e0b" stroke-width="1.6"/>
+<circle cx="186.0" cy="225.2" r="6" fill="none" stroke="#f8fafc" stroke-width="1.6"/>
+<circle cx="432.0" cy="149.8" r="6" fill="none" stroke="#f8fafc" stroke-width="1.6"/>
+<text x="640" y="108" font-size="13" font-weight="bold" fill="#f8fafc">light contract (1 PK row, ~125 B)</text>
+<line x1="640" y1="470.0" x2="1110" y2="470.0" stroke="#334155" stroke-width="1"/>
+<text x="632" y="474.0" font-size="10" fill="#94a3b8" text-anchor="end">0.0</text>
+<line x1="640" y1="427.5" x2="1110" y2="427.5" stroke="#334155" stroke-width="1"/>
+<text x="632" y="431.5" font-size="10" fill="#94a3b8" text-anchor="end">0.6</text>
+<line x1="640" y1="385.0" x2="1110" y2="385.0" stroke="#334155" stroke-width="1"/>
+<text x="632" y="389.0" font-size="10" fill="#94a3b8" text-anchor="end">1.1</text>
+<line x1="640" y1="342.5" x2="1110" y2="342.5" stroke="#334155" stroke-width="1"/>
+<text x="632" y="346.5" font-size="10" fill="#94a3b8" text-anchor="end">1.7</text>
+<line x1="640" y1="300.0" x2="1110" y2="300.0" stroke="#334155" stroke-width="1"/>
+<text x="632" y="304.0" font-size="10" fill="#94a3b8" text-anchor="end">2.2</text>
+<line x1="640" y1="257.5" x2="1110" y2="257.5" stroke="#334155" stroke-width="1"/>
+<text x="632" y="261.5" font-size="10" fill="#94a3b8" text-anchor="end">2.8</text>
+<line x1="640" y1="215.0" x2="1110" y2="215.0" stroke="#334155" stroke-width="1"/>
+<text x="632" y="219.0" font-size="10" fill="#94a3b8" text-anchor="end">3.4</text>
+<line x1="640" y1="172.5" x2="1110" y2="172.5" stroke="#334155" stroke-width="1"/>
+<text x="632" y="176.5" font-size="10" fill="#94a3b8" text-anchor="end">3.9</text>
+<line x1="640" y1="130.0" x2="1110" y2="130.0" stroke="#334155" stroke-width="1"/>
+<text x="632" y="134.0" font-size="10" fill="#94a3b8" text-anchor="end">4.5</text>
+<text x="594" y="124" font-size="10" fill="#94a3b8">ms</text>
+<text x="674.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">4 000</text>
+<text x="756.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">8 000</text>
+<text x="838.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">12 000</text>
+<text x="920.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">16 000</text>
+<text x="1002.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">20 000</text>
+<text x="1084.0" y="488" font-size="10" fill="#94a3b8" text-anchor="middle">24 000</text>
+<text x="875" y="508" font-size="10" fill="#94a3b8" text-anchor="middle">offered rps</text>
+<polygon points="674.0,328.0 756.0,323.4 838.0,313.6 920.0,285.6 1002.0,249.4 1084.0,238.0 1084.0,241.1 1002.0,259.2 920.0,287.2 838.0,315.1 756.0,327.2 674.0,328.7" fill="#22d3ee" fill-opacity="0.18"/>
+<polyline points="674.0,328.3 756.0,325.3 838.0,314.4 920.0,286.4 1002.0,254.3 1084.0,239.6" fill="none" stroke="#22d3ee" stroke-width="2.5"/>
+<polyline points="674.0,402.8 756.0,399.7 838.0,392.6 920.0,385.8 1002.0,371.4 1084.0,370.6" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-dasharray="4,3"/>
+<line x1="674.0" y1="328.7" x2="674.0" y2="328.0" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="756.0" y1="327.2" x2="756.0" y2="323.4" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="838.0" y1="315.1" x2="838.0" y2="313.6" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="920.0" y1="287.2" x2="920.0" y2="285.6" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="1002.0" y1="259.2" x2="1002.0" y2="249.4" stroke="#22d3ee" stroke-width="1.6"/>
+<line x1="1084.0" y1="241.1" x2="1084.0" y2="238.0" stroke="#22d3ee" stroke-width="1.6"/>
+<polygon points="674.0,287.9 756.0,322.7 838.0,257.7 920.0,266.8 1002.0,238.0 1084.0,164.8 1084.0,165.5 1002.0,243.3 920.0,270.5 838.0,300.8 756.0,323.4 674.0,327.2" fill="#f59e0b" fill-opacity="0.18"/>
+<polyline points="674.0,307.6 756.0,323.0 838.0,279.2 920.0,268.6 1002.0,240.7 1084.0,165.1" fill="none" stroke="#f59e0b" stroke-width="2.5"/>
+<polyline points="674.0,396.3 756.0,398.2 838.0,380.8 920.0,377.4 1002.0,368.0 1084.0,351.4" fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-dasharray="4,3"/>
+<line x1="674.0" y1="327.2" x2="674.0" y2="287.9" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="756.0" y1="323.4" x2="756.0" y2="322.7" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="838.0" y1="300.8" x2="838.0" y2="257.7" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="920.0" y1="270.5" x2="920.0" y2="266.8" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="1002.0" y1="243.3" x2="1002.0" y2="238.0" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="1084.0" y1="165.5" x2="1084.0" y2="164.8" stroke="#f59e0b" stroke-width="1.6"/>
+<line x1="70" y1="518" x2="96" y2="518" stroke="#f59e0b" stroke-width="2.5"/><text x="104" y="522" font-size="11" fill="#cbd5e1">spring-hibernate — p99 (band = ab–ba)</text><line x1="400" y1="518" x2="426" y2="518" stroke="#22d3ee" stroke-width="2.5"/><text x="434" y="522" font-size="11" fill="#cbd5e1">spring-jdbc — p99</text><line x1="610" y1="518" x2="636" y2="518" stroke="#cbd5e1" stroke-width="1.6" stroke-dasharray="4,3"/><text x="644" y="522" font-size="11" fill="#cbd5e1">p50 (mean)</text><circle cx="770" cy="518" r="6" fill="none" stroke="#f8fafc" stroke-width="1.6"/><text x="782" y="522" font-size="11" fill="#cbd5e1">single-leaf excursion — §7.1, no claim rests on these</text></svg>

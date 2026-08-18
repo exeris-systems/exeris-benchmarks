@@ -1,0 +1,11 @@
+endpoint=/api/v1/users
+aggregate_method=findTopUsersWithDetails
+query_constants=READ_TOP_USERS_SQL,READ_FRIENDS_SQL,READ_INTERESTS_SQL
+query_constant=READ_TOP_USERS_SQL
+limits.users=10
+limits.friends=10
+limits.interests=10
+capture_control=BENCH_CAPTURE_DB_EXPLAIN
+pg_stat_statements_enabled=true
+pg_stat_statements_max=10000
+note=EXPLAIN targets the three named constants. The multi-user aggregate additionally issues inline row_number() windowed variants (queryFriendsForUsers/queryInterestsForUsers); pg_stat_statements measurement-delta captures the statements that actually executed.

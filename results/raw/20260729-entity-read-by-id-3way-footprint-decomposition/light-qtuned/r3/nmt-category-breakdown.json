@@ -1,0 +1,155 @@
+{
+  "tool": "extract-nmt-category-breakdown",
+  "scale": "KB",
+  "measures": "committed",
+  "note": "NMT accounts COMMITTED bytes and has no per-category residency. A category committed size is an UPPER BOUND on its resident size; do not sum or equate these with the smaps Rss figures from extract-footprint-decomposition.sh.",
+  "total": {
+    "nmt_reserved_kb": 1717166,
+    "nmt_committed_kb": 370374
+  },
+  "java_heap": {
+    "nmt_committed_kb": 262144
+  },
+  "non_heap": {
+    "nmt_committed_kb": 108230,
+    "rollups": {
+      "class_metadata_total_kb": 50466,
+      "class_metadata_parts": {
+        "class_kb": 4795,
+        "metaspace_kb": 31663,
+        "shared_class_space_kb": 14008,
+        "note": "Class = class-space mmap + class-tagged malloc; Metaspace = non-class metadata; Shared class space = the CDS archive (largely file-backed and shareable, so it behaves differently from the other two under RSS accounting). Kept separate for that reason, and rolled up only for the all-class-metadata figure."
+      },
+      "code_kb": 22663,
+      "gc_kb": 17291,
+      "thread_kb": 1388,
+      "compiler_kb": 390,
+      "symbol_kb": 6822,
+      "internal_kb": 1388,
+      "other_kb": 3483,
+      "nmt_instrument_kb": 3045
+    }
+  },
+  "counters": {
+    "loaded_classes": 7544,
+    "threads": 34,
+    "note": "Platform threads only. Virtual-thread stacks are heap-resident StackChunk objects, so they are counted in Java Heap, not in the Thread category — a Loom-first design MOVES stack memory into the heap term rather than removing it from the footprint."
+  },
+  "categories": {
+    "java_heap": {
+      "nmt_name": "Java Heap",
+      "reserved_kb": 262144,
+      "committed_kb": 262144
+    },
+    "class": {
+      "nmt_name": "Class",
+      "reserved_kb": 1049147,
+      "committed_kb": 4795
+    },
+    "thread": {
+      "nmt_name": "Thread",
+      "reserved_kb": 34936,
+      "committed_kb": 1388
+    },
+    "code": {
+      "nmt_name": "Code",
+      "reserved_kb": 255195,
+      "committed_kb": 22663
+    },
+    "gc": {
+      "nmt_name": "GC",
+      "reserved_kb": 17291,
+      "committed_kb": 17291
+    },
+    "compiler": {
+      "nmt_name": "Compiler",
+      "reserved_kb": 390,
+      "committed_kb": 390
+    },
+    "internal": {
+      "nmt_name": "Internal",
+      "reserved_kb": 1388,
+      "committed_kb": 1388
+    },
+    "other": {
+      "nmt_name": "Other",
+      "reserved_kb": 3483,
+      "committed_kb": 3483
+    },
+    "symbol": {
+      "nmt_name": "Symbol",
+      "reserved_kb": 6822,
+      "committed_kb": 6822
+    },
+    "native_memory_tracking": {
+      "nmt_name": "Native Memory Tracking",
+      "reserved_kb": 3045,
+      "committed_kb": 3045
+    },
+    "shared_class_space": {
+      "nmt_name": "Shared class space",
+      "reserved_kb": 16384,
+      "committed_kb": 14008
+    },
+    "arena_chunk": {
+      "nmt_name": "Arena Chunk",
+      "reserved_kb": 531,
+      "committed_kb": 531
+    },
+    "tracing": {
+      "nmt_name": "Tracing",
+      "reserved_kb": 9,
+      "committed_kb": 9
+    },
+    "module": {
+      "nmt_name": "Module",
+      "reserved_kb": 75,
+      "committed_kb": 75
+    },
+    "safepoint": {
+      "nmt_name": "Safepoint",
+      "reserved_kb": 8,
+      "committed_kb": 8
+    },
+    "synchronization": {
+      "nmt_name": "Synchronization",
+      "reserved_kb": 640,
+      "committed_kb": 640
+    },
+    "serviceability": {
+      "nmt_name": "Serviceability",
+      "reserved_kb": 18,
+      "committed_kb": 18
+    },
+    "metaspace": {
+      "nmt_name": "Metaspace",
+      "reserved_kb": 65647,
+      "committed_kb": 31663
+    },
+    "string_deduplication": {
+      "nmt_name": "String Deduplication",
+      "reserved_kb": 1,
+      "committed_kb": 1
+    },
+    "object_monitors": {
+      "nmt_name": "Object Monitors",
+      "reserved_kb": 3,
+      "committed_kb": 3
+    },
+    "jni": {
+      "nmt_name": "JNI",
+      "reserved_kb": 9,
+      "committed_kb": 9
+    }
+  },
+  "closure": {
+    "category_sum_committed_kb": 370374,
+    "nmt_total_committed_kb": 370374,
+    "delta_kb": 0,
+    "tolerance_kb": 64,
+    "note": "Only top-level `-  <Category>` lines are summed. NMT nests a `Metadata:` block under Class that the top-level `Metaspace` category restates — counting both inflates class metadata about 2x. Fails closed when the sum misses NMT Total by more than the tolerance."
+  },
+  "provenance": {
+    "nmt_source": "results/raw/20260729-entity-read-by-id-3way-footprint-decomposition/light-qtuned/r3/footprint-nmt-detail-measurement-end.txt.gz"
+  }
+}

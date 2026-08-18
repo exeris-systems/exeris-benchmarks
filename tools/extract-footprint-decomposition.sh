@@ -19,6 +19,13 @@
 # Attribution is by RANGE CONTAINMENT, never exact match: NMT reports the reserved range
 # (e.g. 0xf0000000-0x100000000) while smaps shows the actual committed mapping inside it
 # (f0000000-ffe00000). An exact-match join silently yields zero.
+#
+# The same pass also splits residency into ANONYMOUS vs FILE-BACKED, because that is the
+# boundary of what NMT can be held accountable for: NMT tracks anonymous and malloc-backed
+# allocations only, so JVM/libc text pages, the CDS archive and mapped jars are resident and
+# invisible to it. Holding NMT committed against total non-heap Rss understates its coverage
+# by construction (measured: 61% of Rss but 76% of the anonymous subset on the same capture).
+# Per-category composition is a separate tool: tools/extract-nmt-category-breakdown.sh.
 
 set -euo pipefail
 
@@ -147,23 +154,35 @@ DECOMP="$(awk -v ranges="$HEAP_RANGES" '
     total_rss += $2
     if (is_heap) heap_rss += $2
   }
+  # Anonymous residency, tracked alongside Rss because NMT accounts ONLY anonymous and
+  # malloc-backed memory: the JVM/libc text pages, the CDS archive and mapped jars are
+  # resident but invisible to NMT. Comparing NMT committed against total non-heap Rss
+  # therefore understates its coverage by construction; the anonymous subset is the
+  # denominator NMT can actually be held to.
+  /^Anonymous:/ {
+    total_anon += $2
+    if (is_heap) heap_anon += $2
+  }
   /^Size:/ {
     total_size += $2
     if (is_heap) heap_size += $2
   }
   END {
-    printf "%d %d %d %d %d %d\n", \
+    printf "%d %d %d %d %d %d %d %d\n", \
       heap_rss + 0, total_rss + 0, heap_size + 0, total_size + 0, \
-      heap_mappings + 0, mappings + 0
+      heap_mappings + 0, mappings + 0, heap_anon + 0, total_anon + 0
   }
 ' "$_SMAPS_TXT")"
 
-read -r HEAP_RSS_KB TOTAL_RSS_KB HEAP_MAPPED_KB TOTAL_MAPPED_KB HEAP_MAPPINGS TOTAL_MAPPINGS <<<"$DECOMP"
+read -r HEAP_RSS_KB TOTAL_RSS_KB HEAP_MAPPED_KB TOTAL_MAPPED_KB HEAP_MAPPINGS TOTAL_MAPPINGS \
+        HEAP_ANON_KB TOTAL_ANON_KB <<<"$DECOMP"
 
 [[ "${TOTAL_RSS_KB:-0}" -gt 0 ]] || fail "smaps capture yielded zero total Rss — malformed or empty: $SMAPS_FILE"
 [[ "${HEAP_MAPPINGS:-0}" -gt 0 ]] || fail "no smaps mapping fell inside the NMT Java Heap range — captures are from different processes or different points in time"
 
 NONHEAP_RSS_KB=$(( TOTAL_RSS_KB - HEAP_RSS_KB ))
+NONHEAP_ANON_KB=$(( TOTAL_ANON_KB - HEAP_ANON_KB ))
+NONHEAP_FILE_BACKED_KB=$(( NONHEAP_RSS_KB - NONHEAP_ANON_KB ))
 COMMITTED_NOT_RESIDENT_KB=$(( NMT_HEAP_COMMITTED_KB - HEAP_RSS_KB ))
 NONHEAP_NMT_COMMITTED_KB=$(( NMT_TOTAL_COMMITTED_KB - NMT_HEAP_COMMITTED_KB ))
 
@@ -176,8 +195,12 @@ RESULT="$(jq -n \
   --argjson heap_nmt_committed_kb         "$NMT_HEAP_COMMITTED_KB" \
   --argjson heap_committed_not_resident_kb "$COMMITTED_NOT_RESIDENT_KB" \
   --argjson nonheap_smaps_resident_kb     "$NONHEAP_RSS_KB" \
+  --argjson nonheap_smaps_anonymous_kb    "$NONHEAP_ANON_KB" \
+  --argjson nonheap_file_backed_kb        "$NONHEAP_FILE_BACKED_KB" \
   --argjson nonheap_nmt_committed_kb      "$NONHEAP_NMT_COMMITTED_KB" \
+  --argjson heap_smaps_anonymous_kb       "$HEAP_ANON_KB" \
   --argjson total_smaps_resident_kb       "$TOTAL_RSS_KB" \
+  --argjson total_smaps_anonymous_kb      "$TOTAL_ANON_KB" \
   --argjson total_smaps_mapped_kb         "$TOTAL_MAPPED_KB" \
   --argjson total_nmt_committed_kb        "$NMT_TOTAL_COMMITTED_KB" \
   --argjson nmt_tracking_overhead_kb      "$NMT_TRACKING_OVERHEAD_KB" \
@@ -191,6 +214,7 @@ RESULT="$(jq -n \
     scale: "KB",
     heap: {
       smaps_resident_kb:         $heap_smaps_resident_kb,
+      smaps_anonymous_kb:        $heap_smaps_anonymous_kb,
       smaps_mapped_kb:           $heap_smaps_mapped_kb,
       nmt_reserved_kb:           $heap_nmt_reserved_kb,
       nmt_committed_kb:          $heap_nmt_committed_kb,
@@ -200,8 +224,11 @@ RESULT="$(jq -n \
                         else null end)
     },
     non_heap: {
-      smaps_resident_kb: $nonheap_smaps_resident_kb,
-      nmt_committed_kb:  $nonheap_nmt_committed_kb,
+      smaps_resident_kb:  $nonheap_smaps_resident_kb,
+      smaps_anonymous_kb: $nonheap_smaps_anonymous_kb,
+      smaps_file_backed_resident_kb: $nonheap_file_backed_kb,
+      nmt_committed_kb:   $nonheap_nmt_committed_kb,
+      nmt_coverage_note: "NMT tracks only anonymous/malloc-backed allocations, so nmt_committed_kb is comparable to smaps_anonymous_kb, NOT to smaps_resident_kb — the file-backed remainder (JVM and libc text, CDS archive, mapped jars) is resident but sits outside NMT accounting entirely.",
       instrument_cost: {
         nmt_tracking_overhead_kb:  $nmt_tracking_overhead_kb,
         nmt_tracking_committed_kb: $nmt_tracking_committed_kb,
@@ -210,9 +237,10 @@ RESULT="$(jq -n \
       smaps_resident_net_of_nmt_kb: ($nonheap_smaps_resident_kb - $nmt_tracking_committed_kb)
     },
     total: {
-      smaps_resident_kb: $total_smaps_resident_kb,
-      smaps_mapped_kb:   $total_smaps_mapped_kb,
-      nmt_committed_kb:  $total_nmt_committed_kb
+      smaps_resident_kb:  $total_smaps_resident_kb,
+      smaps_anonymous_kb: $total_smaps_anonymous_kb,
+      smaps_mapped_kb:    $total_smaps_mapped_kb,
+      nmt_committed_kb:   $total_nmt_committed_kb
     },
     attribution: {
       method: "nmt_detail_heap_range_containment_over_smaps_rss",

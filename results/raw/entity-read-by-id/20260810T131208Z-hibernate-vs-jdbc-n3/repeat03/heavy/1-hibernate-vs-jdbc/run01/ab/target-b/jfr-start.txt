@@ -1,0 +1,8 @@
+513967:
+No available recordings.
+
+Use jcmd 513967 JFR.start to start a recording.
+513967:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 513967 JFR.dump name=spring_jdbc_20260810_183828 filename=FILEPATH to copy recording data to file.

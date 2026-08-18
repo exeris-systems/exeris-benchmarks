@@ -1,0 +1,6 @@
+1881352:
+VM Arguments:
+jvm_args: -Xms1280m -Xmx1280m -XX:MaxRAM=2048m -XX:NativeMemoryTracking=summary -Dspring.classformat.ignore=true 
+java_command: targets/spring-benchmark-app/target/spring-benchmark-app-1.0.0-SNAPSHOT.jar
+java_class_path (initial): targets/spring-benchmark-app/target/spring-benchmark-app-1.0.0-SNAPSHOT.jar
+Launcher Type: SUN_STANDARD

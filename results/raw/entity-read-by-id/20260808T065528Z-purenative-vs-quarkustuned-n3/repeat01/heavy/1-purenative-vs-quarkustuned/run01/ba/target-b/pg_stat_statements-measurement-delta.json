@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-08-08T07:56:47Z",
+  "phase": "measurement-delta",
+  "server_version_num": "160002",
+  "column_profile": "exec_time_cols",
+  "baseline_timestamp": "2026-08-08T07:41:45Z",
+  "final_timestamp": "2026-08-08T07:56:47Z",
+  "reset_detected": false,
+  "warning": null,
+  "note": "Per-target delta over this target's measurement window (final minus baseline). mean_time_ms is derived (total/calls) for the window; max_time_ms_cumulative is the pg_stat running max and is NOT window-scoped. Diagnostic meta-queries are filtered out.",
+  "queries": [
+    {
+      "queryid": "5642500616955608682",
+      "query": "SELECT ranked.user_id, ranked.friend_user_id, ranked.friend_username\nFROM (\n    SELECT f.user_id,\n           f.friend_user_id,\n           u.username AS friend_username,\n           row_number() OVER (PARTITION BY f.user_id ORDER BY f.friend_user_id ASC) AS rn\n    FROM friendships f\n    JOIN users u ON u.id = f.friend_user_id\n    WHERE f.user_id IN ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n) ranked\nWHERE ranked.rn <= $11\nORDER BY ranked.user_id ASC, ranked.friend_user_id ASC",
+      "calls": 11551242,
+      "total_time_ms": 3514507.1432630233,
+      "mean_time_ms": 0.3042536156080033,
+      "max_time_ms_cumulative": 25.270504
+    },
+    {
+      "queryid": "5411875004500411312",
+      "query": "SELECT ranked.user_id, ranked.interest_id, ranked.interest_name, ranked.interest_category\nFROM (\n    SELECT ui.user_id,\n           ui.interest_id,\n           i.name AS interest_name,\n           i.category AS interest_category,\n           row_number() OVER (PARTITION BY ui.user_id ORDER BY ui.interest_id ASC) AS rn\n    FROM user_interests ui\n    JOIN interests i ON i.id = ui.interest_id\n    WHERE ui.user_id IN ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n) ranked\nWHERE ranked.rn <= $11\nORDER BY ranked.user_id ASC, ranked.interest_id ASC",
+      "calls": 11551242,
+      "total_time_ms": 1958597.115122703,
+      "mean_time_ms": 0.16955727489067435,
+      "max_time_ms_cumulative": 15.327874999999999
+    },
+    {
+      "queryid": "-3796665954484366818",
+      "query": "SELECT id, username FROM users ORDER BY id ASC LIMIT $1",
+      "calls": 11551242,
+      "total_time_ms": 137771.3054472768,
+      "mean_time_ms": 0.011926969017468148,
+      "max_time_ms_cumulative": 19.212266
+    },
+    {
+      "queryid": "6650430479887907887",
+      "query": "BEGIN",
+      "calls": 11551242,
+      "total_time_ms": 2650.1627195900883,
+      "mean_time_ms": 0.0002294266468999687,
+      "max_time_ms_cumulative": 9.624193
+    },
+    {
+      "queryid": "-3136912395674931128",
+      "query": "SET application_name = 'PostgreSQL JDBC Driver'",
+      "calls": 16,
+      "total_time_ms": 0.15696399999999988,
+      "mean_time_ms": 0.009810249999999993,
+      "max_time_ms_cumulative": 0.019086
+    }
+  ]
+}

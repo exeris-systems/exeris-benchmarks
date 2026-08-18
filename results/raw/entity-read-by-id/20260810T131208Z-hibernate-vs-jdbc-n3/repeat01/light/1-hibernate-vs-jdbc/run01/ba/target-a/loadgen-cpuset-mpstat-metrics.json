@@ -1,0 +1,41 @@
+{
+  "source_stream": "loadgen-cpuset-mpstat.csv",
+  "samples": 901,
+  "cpus_in_set": 4,
+  "busy_pct_mean": 13.75,
+  "busy_pct_min": 7.09,
+  "busy_pct_p50": 13.78,
+  "busy_pct_p95": 14.95,
+  "busy_pct_max": 16.40,
+  "component_pct_mean": {
+    "usr": 2.99,
+    "sys": 8.06,
+    "iowait": 0.07,
+    "soft": 2.62,
+    "irq": 0.00,
+    "steal": 0.00,
+    "nice": 0.00,
+    "guest": 0.00,
+    "gnice": 0.00
+  },
+  "per_cpu_busy_pct_mean": {
+    "2": 14.07,
+    "3": 13.58,
+    "10": 13.69,
+    "11": 13.66
+  },
+  "role": "loadgen",
+  "ceiling_reading": "loadgen_headroom_available",
+  "ceiling_reading_threshold_note": "loadgen_saturated at busy_pct_mean >= 95, near_saturation >= 80. A saturated load generator does NOT bound the result, it INVALIDATES it: the measurement then describes how fast the driver can offer requests, not how fast the target can serve them. Unlike the DB ceiling, no comparator survives this — discard the leaf.",
+  "sampler_meta": {
+  "resolved_cpuset": "2-3,10-11",
+  "source": "env:LOADGEN_CPU_AFFINITY",
+  "cpuset_is_restricted": true,
+  "loadgen_cpu_attributable": true,
+  "interval_seconds": 1,
+  "window": "measurement",
+  "target_id": "spring-hibernate",
+  "sampler_started": true,
+  "note": "Load generator (wrk) CPU over the measurement window. Read it as a CEILING CHECK, not as a cost: a closed-loop throughput number is an application measurement only while the generator has headroom. If busy cores approach the pin width, the arm was generator-bound and the rps figure is a floor, not a result."
+}
+}

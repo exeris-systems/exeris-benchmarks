@@ -1,0 +1,17 @@
+# results/raw/ is contractually "unmodified tool output, committed for traceability"
+# (CLAUDE.md, docs/benchmark-philosophy.md). Git's default text handling breaks that
+# contract quietly: endpoint-diag captures are `curl -i` dumps whose HTTP response
+# headers are CRLF-terminated *because CRLF is the wire format*, and normalising them
+# to LF rewrites the evidence on the way into the index. The bytes committed would no
+# longer be the bytes captured, and nothing in the artifact would say so.
+#
+# `-text` disables end-of-line conversion outright — no normalisation on add, no
+# reconversion on checkout — so every result file round-trips byte-identical on any
+# platform. Applied to the whole tree rather than to *.txt because the same guarantee
+# has to hold for driver dumps, CSV sidecars and JSON alike; a future tool that emits
+# CRLF must not silently lose it for want of a matching pattern here.
+results/** -text
+enterprise/results/** -text
+
+# Same reasoning for anything a driver writes verbatim.
+runtime/drivers/** -text

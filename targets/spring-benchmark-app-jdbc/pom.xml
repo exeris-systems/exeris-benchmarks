@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.exeris.benchmarks</groupId>
+  <artifactId>spring-benchmark-app-jdbc</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>Exeris :: Benchmarks :: Spring Benchmark App (Tomcat, plain JDBC, no ORM)</name>
+  <description>Standalone Spring benchmark target app.</description>
+
+  <properties>
+    <java.version>26</java.version>
+    <maven.compiler.release>${java.version}</maven.compiler.release>
+    <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
+    <!--
+      MUST equal spring.boot.sb4.version in exeris-spring-runtime's parent POM (ADR-028 dual
+      matrix). That is what the Exeris-hosted arms resolve to when their runtime is built with
+      -Pmatrix-sb4, and equality on this line is the whole point: until 2026-08-06 this arm ran
+      Boot 4.0.4 / Hibernate 7.2.7 against the Exeris arms' Boot 3.5.14 / Hibernate 6.6.49, the
+      largest unquantified confound on every Tomcat-relative number in the claims registry.
+
+      Raised 4.0.4 -> 4.1.0 rather than pinning the runtime's sb4 line down to 4.0.4, so the
+      comparison sits on the newest line both sides can reach. If sb4 moves in the runtime, move
+      this with it and rebuild all four arms together.
+    -->
+    <spring-boot.version>4.1.0</spring-boot.version>
+    <graalvm.buildtools.native.version>0.10.4</graalvm.buildtools.native.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!--
+        Pin neo4j-bolt-connection to the version paired with neo4j-java-driver:5.28.8 (bolt 6.0.2 API).
+        Spring Boot 4.0.4 imports neo4j-bolt-connection-bom:10.1.1 via its BOM chain
+        (spring-boot-dependencies → neo4j-java-driver-bom:6.0.3 → neo4j-bolt-connection-bom:10.1.1).
+        MetricsListener was removed between 6.0.2 and 10.1.1, causing NoClassDefFoundError.
+        First BOM declaration wins in Maven resolution — this entry must stay FIRST.
+      -->
+      <dependency>
+        <groupId>org.neo4j.bolt</groupId>
+        <artifactId>neo4j-bolt-connection-bom</artifactId>
+        <version>11.0.2</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <!-- spring-boot-starter-data-jpa is DELIBERATELY ABSENT. This arm measures the migration a
+         Spring team would actually perform — deleting the ORM, not merely bypassing it. Leaving
+         Hibernate on the classpath would keep paying EntityManagerFactory bootstrap and its
+         resident footprint while the request path no longer used it, which would understate the
+         benefit and make the RSS comparison against spring-hibernate meaningless. The pair
+         therefore differs in PERSISTENCE STACK, not only in repository code; that is the
+         measured decision, and it is labelled as such in the pair manifest.
+         spring-boot-starter-jdbc below already supplies JdbcTemplate and the DataSource. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-neo4j</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.axonframework</groupId>
+      <artifactId>axon-spring-boot-starter</artifactId>
+      <version>4.10.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      Jackson 2, REQUIRED — and yes, this arm therefore carries two databind implementations.
+      That is not an oversight; removing them on 2026-08-06 was, and it broke the arm outright:
+
+        BeanInstantiationException: Failed to instantiate [org.axonframework.serialization.Serializer]
+        Caused by: NoClassDefFoundError: com/fasterxml/jackson/databind/ObjectMapper
+          at AxonAutoConfiguration.buildSerializer(AxonAutoConfiguration.java:194)
+
+      Axon 4.10.3 predates Jackson 3 and builds its serializer against com.fasterxml.jackson
+      unconditionally. Spring Boot 4 no longer manages that artifact, so nothing else puts it on
+      the classpath. Declared explicitly, versioned by the Boot BOM's remaining Jackson 2 entries.
+
+      WHICH ONE SERVES A REQUEST: Jackson 3 (tools.jackson) 3.1.4, via Boot 4's autoconfigured
+      message converters. Jackson 2 is reachable only from Axon's event serialisation, which the
+      entity-read scenario never exercises. So the measured response path matches the other three
+      arms; what differs is startup class-loading and footprint, which belongs to this arm having
+      an event-sourcing framework at all (the Exeris arms use Flow or nothing) and is a property
+      of the arms, not of this dependency.
+
+      FENCE: do not "clean this up" without booting the arm against the database afterwards.
+      The jar builds, the classpath looks tidier, and the application dies at startup.
+    -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${maven.compiler.plugin.version}</version>
+        <configuration>
+          <release>${maven.compiler.release}</release>
+          <parameters>true</parameters>
+          <enablePreview>false</enablePreview>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <version>${spring-boot.version}</version>
+        <configuration>
+          <mainClass>eu.exeris.benchmarks.targets.springapp.SpringBenchmarkApplication</mainClass>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <useModulePath>false</useModulePath>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>native</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.graalvm.buildtools</groupId>
+            <artifactId>native-maven-plugin</artifactId>
+            <version>${graalvm.buildtools.native.version}</version>
+            <extensions>true</extensions>
+            <executions>
+              <execution>
+                <id>build-native</id>
+                <goals>
+                  <goal>compile-no-fork</goal>
+                </goals>
+                <phase>package</phase>
+              </execution>
+            </executions>
+            <configuration>
+              <imageName>spring-benchmark-app</imageName>
+              <mainClass>eu.exeris.benchmarks.targets.springapp.SpringBenchmarkApplication</mainClass>
+              <buildArgs>
+                <buildArg>--enable-monitoring=jfr</buildArg>
+              </buildArgs>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+            <version>${spring-boot.version}</version>
+            <executions>
+              <execution>
+                <id>process-aot</id>
+                <goals>
+                  <goal>process-aot</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

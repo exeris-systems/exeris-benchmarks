@@ -1,0 +1,8 @@
+541201:
+No available recordings.
+
+Use jcmd 541201 JFR.start to start a recording.
+541201:
+Started recording 2. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 541201 JFR.dump name=exeris_community_20260808_005502 filename=FILEPATH to copy recording data to file.

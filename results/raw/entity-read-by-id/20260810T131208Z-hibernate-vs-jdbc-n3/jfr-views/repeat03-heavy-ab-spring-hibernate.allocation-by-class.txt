@@ -1,0 +1,30 @@
+
+                                                  Allocation by Class
+
+Object Type                                                                                         Allocation Pressure
+--------------------------------------------------------------------------------------------------- -------------------
+java.lang.Object[]                                                                                               14.12%
+java.lang.reflect.Method                                                                                         11.46%
+org.springframework.core.ResolvableType                                                                           6.88%
+byte[]                                                                                                            5.76%
+java.util.LinkedHashMap$Entry                                                                                     5.08%
+org.springframework.core.MethodParameter                                                                          4.08%
+java.util.ArrayList                                                                                               3.57%
+java.util.HashMap$Node[]                                                                                          3.08%
+java.lang.String                                                                                                  3.01%
+org.aopalliance.intercept.MethodInterceptor[]                                                                     2.92%
+org.springframework.aop.framework.ReflectiveMethodInvocation                                                      2.89%
+java.util.LinkedHashMap                                                                                           2.36%
+java.util.concurrent.ConcurrentHashMap                                                                            2.31%
+org.springframework.core.SerializableTypeWrapper$MethodParameterTypeProvider                                      2.20%
+java.lang.Class[]                                                                                                 2.16%
+java.beans.PropertyDescriptor[]                                                                                   2.05%
+java.util.concurrent.ConcurrentHashMap$Node                                                                       1.82%
+java.lang.reflect.Method[]                                                                                        1.74%
+org.springframework.aop.framework.AdvisedSupport$MethodCacheKey                                                   1.67%
+org.hibernate.jpa.spi.NativeQueryTupleTransformer$NativeTupleElementImpl                                          1.63%
+org.springframework.aop.Advisor[]                                                                                 1.58%
+java.util.concurrent.ConcurrentHashMap$Node[]                                                                     1.53%
+jdk.internal.vm.StackChunk                                                                                        1.42%
+org.springframework.aop.framework.ProxyFactory                                                                    1.37%
+java.util.AbstractList$ListItr                                                                                    1.15%

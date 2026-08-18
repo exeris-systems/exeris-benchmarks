@@ -1,0 +1,26 @@
+{
+  "target_a_input": "spring-hibernate",
+  "target_b_input": "spring-hibernate-nosec",
+  "target_a_contract": {
+    "target_id": "spring-hibernate",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-runtime.env",
+    "profile_id": "spring-hibernate",
+    "compose_file": "",
+    "jar_path": "",
+    "health_url": "http://localhost:9001/health"
+  },
+  "target_b_contract": {
+    "target_id": "spring-hibernate-nosec",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-hibernate-nosec.env",
+    "profile_id": "spring-hibernate-nosec",
+    "compose_file": "",
+    "jar_path": "",
+    "health_url": "http://localhost:9009/health"
+  }
+}

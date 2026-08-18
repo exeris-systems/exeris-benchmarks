@@ -1,0 +1,44 @@
+{
+  "source_stream": "db-cpuset-mpstat.csv",
+  "samples": 901,
+  "cpus_in_set": 8,
+  "busy_pct_mean": 26.52,
+  "busy_pct_min": 14.01,
+  "busy_pct_p50": 26.45,
+  "busy_pct_p95": 27.95,
+  "busy_pct_max": 30.62,
+  "component_pct_mean": {
+    "usr": 23.10,
+    "sys": 2.57,
+    "iowait": 0.02,
+    "soft": 0.83,
+    "irq": 0.00,
+    "steal": 0.00,
+    "nice": 0.00,
+    "guest": 0.00,
+    "gnice": 0.00
+  },
+  "per_cpu_busy_pct_mean": {
+    "4": 27.12,
+    "5": 28.12,
+    "6": 26.26,
+    "7": 25.06,
+    "12": 26.77,
+    "13": 27.40,
+    "14": 26.28,
+    "15": 25.18
+  },
+  "role": "db",
+  "ceiling_reading": "db_headroom_available",
+  "ceiling_reading_threshold_note": "db_saturated at busy_pct_mean >= 95, db_near_saturation >= 80. When saturated, throughput ratios between arms read the Postgres ceiling and cpu/req is the sound comparator.",
+  "sampler_meta": {
+  "resolved_cpuset": "4-7,12-15",
+  "source": "env:BENCH_DB_CPUSET",
+  "cpuset_is_restricted": true,
+  "db_cpu_attributable": true,
+  "interval_seconds": 1,
+  "window": "measurement",
+  "target_id": "spring-hibernate",
+  "sampler_started": true
+}
+}

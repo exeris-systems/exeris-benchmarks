@@ -1,0 +1,14 @@
+{
+  "launcher_mode": "external",
+  "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-runtime-on-exeris-pure.env",
+  "log_path": "/tmp/exeris-spring-on-exeris-pure-9005.log",
+  "external_jar_path": "targets/exeris-spring-runtime-app-pure/target/spring-benchmark-app-pure-1.0.0-SNAPSHOT.jar",
+  "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/exeris-spring-runtime-app-pure/target/spring-benchmark-app-pure-1.0.0-SNAPSHOT.jar",
+  "jar_exists": true,
+  "jar_sha256": "b9e607fb00f012aa07a2a1130d67dc783b5ccf773cb9599c313bff2394e4b765",
+  "jar_size_bytes": 67153163,
+  "jar_mtime_utc": "2026-08-05T09:08:47Z",
+  "copied": true,
+  "output_file": "results/raw/entity-read-by-id/20260805T140104Z-spring-triad-n3/repeat02/heavy/2-tomcat-vs-pure/run01/ba/target-b/target-runtime.log",
+  "note": "runtime log copied"
+}

@@ -1,0 +1,19 @@
+{
+  "total_memory_mb": 2048,
+  "db_pool_min": 16,
+  "db_pool_max": 256,
+  "require_perf_stat": 0,
+  "exeris_telemetry_subsystem_enabled": false,
+  "exeris_telemetry_jfr_enabled": false,
+  "server_cpu_affinity": "0-1,8-9",
+  "loadgen_cpu_affinity": "2-3,10-11",
+  "native_memory_tracking_enabled": true,
+  "native_memory_tracking_level": "summary",
+  "exeris_heap_mb": 256,
+  "spring_heap_mb": 1280,
+  "quarkus_heap_mb": 1280,
+  "exeris_non_heap_headroom_mb": 1792,
+  "spring_non_heap_headroom_mb": 768,
+  "quarkus_non_heap_headroom_mb": 768,
+  "generated_at_utc": "2026-08-06T10:19:58Z"
+}

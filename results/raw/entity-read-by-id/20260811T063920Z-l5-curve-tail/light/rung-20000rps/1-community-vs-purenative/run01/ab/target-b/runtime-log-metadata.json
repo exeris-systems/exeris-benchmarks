@@ -1,0 +1,14 @@
+{
+  "launcher_mode": "external",
+  "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/spring-runtime-on-exeris-pure-native.env",
+  "log_path": "/tmp/exeris-spring-on-exeris-pure-native-9006.log",
+  "external_jar_path": "targets/exeris-spring-runtime-app-pure-native/target/spring-benchmark-app-pure-native-1.0.0-SNAPSHOT.jar",
+  "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/exeris-spring-runtime-app-pure-native/target/spring-benchmark-app-pure-native-1.0.0-SNAPSHOT.jar",
+  "jar_exists": true,
+  "jar_sha256": "fc623d87d2dd39d7bc7cea1e8ca34ea93e20749759b5530993c9776b2691d760",
+  "jar_size_bytes": 32498929,
+  "jar_mtime_utc": "2026-08-08T22:01:38Z",
+  "copied": true,
+  "output_file": "results/raw/entity-read-by-id/20260811T063920Z-l5-curve-tail/light/rung-20000rps/1-community-vs-purenative/run01/ab/target-b/target-runtime.log",
+  "note": "runtime log copied"
+}

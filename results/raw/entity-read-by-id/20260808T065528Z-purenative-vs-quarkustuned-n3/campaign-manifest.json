@@ -1,0 +1,39 @@
+{
+  "campaign": "entity-read-by-id-purenative-vs-quarkustuned-n3",
+  "campaign_ts": "20260808T065528Z",
+  "commit_sha": "a66fcfa4a0e4406557f220ce83ae6b535bedbd76",
+  "commit_sha_note": "The perf box holds an rsynced tree, NOT a git checkout, so `git rev-parse` there returns nothing. Pass BENCH_COMMIT_SHA from the machine that holds the checkout. If this reads \"unknown\", the run cannot be tied to a source revision and must not be used for a baseline.",
+  "repeats": "01,02,03",
+  "contracts": "heavy,light",
+  "repeat_loop_position": "outer",
+  "runs_per_pair": 1,
+  "expected_leaves": 12,
+  "expected_leaves_note": "pairs x runs x directions x repeats x contracts = 1x1x2x3x2 = 12.",
+  "triad_pairs": "1-purenative-vs-quarkustuned:spring-on-exeris-pure-native:quarkus-tuned:1:9006:9003",
+  "iso_heap_mb": 1280,
+  "iso_heap_note": "pure-native reads SPRING_JAVA_OPTS, quarkus-tuned reads QUARKUS_JAVA_OPTS composed from BENCH_QUARKUS_HEAP_MB. Both pinned to the same value explicitly. Footprint is a reported axis on this cross-stack pair, so an unmatched heap would surface as an RSS finding rather than as a misconfiguration.",
+  "server_cpu_affinity": "0-1,8-9",
+  "loadgen_cpu_affinity": "2-3,10-11",
+  "db_cpuset": "4-7,12-15",
+  "backend_network_mode": "host",
+  "backend_network_mode_note": "DB on HOST networking (BENCH_DB_TUNED=1 layers the tuned override's network_mode: host; DB_HOST_NETWORK=1 makes run-comparative.sh record it). Required by docs/methodology.md for any cross-stack claim: a bridged DB charges a NAT hop per round-trip and so taxes the chattier stack asymmetrically. FENCE: the 2026-08-06 spring ladder ran BRIDGED (backend_network_mode=bridge in all 48 leaves) — absolute levels from that campaign and this one are NOT mixable, and the ladder's own cross-stack pairs (1 and 4) carry the bridge tax unquantified. PG settings are unchanged between the two (max_connections=300, shared_buffers=256MB, work_mem=8MB) and the cpuset is the same 4-7,12-15, so networking is the single environmental difference.",
+  "runtime_web_build": "exeris-spring-runtime-web-0.5.0-20260805.182020-29.jar",
+  "runtime_build_provenance_note": "The perf box resolves eu.exeris SNAPSHOTs from GitHub Packages; latest published as of 2026-08-08 is 0.5.0-20260805.182020-29, which is what this campaign's pure-native arm carries. A NEWER unpublished build exists in the author's local ~/.m2 (untimestamped, no GHP metadata, i.e. mvn-installed from a source checkout) and behaves differently — it serves ResponseEntity under Spring 7 where -29 throws IncompatibleClassChangeError. Any comparison against a locally-built arm crosses that boundary. This campaign is entirely on the published -29.",
+
+  "AXIS_FENCES": "This pair is NOT single-variable. All of the following are simultaneously true and none may be dropped from a claim derived here.",
+
+  "fence_serialisation": "DOMINANT. pure-native is on Jackson 3 (tools.jackson, 3.1.4 via Boot 4.1.0); quarkus-tuned is on Jackson 2 (com.fasterxml). This is a MAJOR-version difference sitting in the response path of every request. Prior profiling attributed roughly a fifth of Exeris on-CPU time in this scenario to Jackson 3 MethodHandle checkCustomized. Expect it to be the largest single contributor to any gap measured here, and do not attribute the gap to transport or runtime without separating it.",
+  "fence_payload_key_order": "Heavy responses from the two arms are the same 9105 bytes but are NOT byte-identical: quarkus-tuned emits keys alphabetically, pure-native in declaration order. They are equal under `jq -S`. Left un-normalised deliberately — overriding a framework's default key ordering for cosmetic parity would itself be a change to what is measured. Recorded because it is direct evidence the two serialisers are configured differently, which is the point of fence_serialisation.",
+  "fence_pool": "Connection pools differ by implementation: pure-native uses HikariCP, quarkus-tuned uses Agroal. Min/max are matched (16/256) but the implementations are not.",
+  "fence_transport": "pure-native runs the Exeris NativeTcpCarrier in mode=auto, which resolves to posix-hybrid (NIO epoll + FFM syscalls) — NOT io_uring. Verify against the carrier banner in the target log before labelling this run's transport. quarkus-tuned runs Netty/Vert.x.",
+  "fence_jdbc_logging": "pgjdbc routes through JUL on the Exeris arm; this has previously shown up in on-CPU profiles and is not present in the same form on the Quarkus side.",
+  "fence_db_ceiling": "MEASURED, not hypothetical. In the 2026-08-06 ladder, pure-native drove the pinned DB cpuset to 99.80 % mean utilisation on the HEAVY contract (n=12, range 99.78-99.83, %steal 0.00). At that level the heavy throughput of this arm is bounded by Postgres, not by the runtime, and a heavy throughput RATIO between these two arms may be measuring how close each gets to the same wall rather than how fast each is. Use cpu/req as the heavy comparator; treat heavy rps ratios as bounds. On LIGHT the same arm sat at 87.36 % — near saturation but not at it, leaving roughly an eighth of the DB in reserve. Read light as own-CPU-bound with the DB close behind, not as DB-free.",
+  "fence_auth": "Neither arm runs Spring Security: pure-native has no Spring Security on the classpath at all, and quarkus-tuned is unauthenticated. This pair is therefore FREE of the per-request security asymmetry that applies to pairs involving spring-hibernate or the compat arm. Do not borrow bounds in either direction.",
+
+  "db_client": {
+    "fetch_mode": "equalized",
+    "jdbc_url": "jdbc:postgresql://localhost:5432/benchmark_db?prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false&preferQueryMode=extended",
+    "username": "benchmark",
+    "note": "Pinned by this caller. The runner exports no DB credentials and the target env files default to a nonexistent postgres/postgres."
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "campaign": "latency-curve-triad 20260811-063920",
+  "driver": "wrk2-open-loop",
+  "claim": "comparison-eligible p99 (p99_stable)",
+  "window": "120s (60s warmup + 120s measure)",
+  "runs_per_pair": 1,
+  "order": "ab+ba",
+  "triad_pairs": "1-hibernate-vs-jdbc:spring-hibernate:spring-jdbc:1:9001:9008",
+  "contracts": {
+    "heavy": "fixed_contract_p99_stable_h1_wrk2_v1",
+    "light": "fixed_contract_p99_stable_h1_wrk2_single_read_v1"
+  },
+  "rate_ladders": {
+    "heavy_rps": [
+      600,
+      1200,
+      1800,
+      2400,
+      3000,
+      3400
+    ],
+    "light_rps": [
+      4000,
+      8000,
+      12000,
+      16000,
+      20000,
+      24000
+    ]
+  },
+  "note": "wrk2 fixed offered rate per rung (BENCH_DRIVER_MODE=open). Percentiles = true service time. Rungs are sub-saturation; open loop backs up past saturation. light ladder must be bounded by quarkus-hibernate single-read saturation."
+}

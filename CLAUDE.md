@@ -28,7 +28,9 @@ These come from `.github/copilot-instructions.md` and `.github/instructions/*.md
 - **Reproducibility**: every result must capture commit SHA, JDK/tool versions, JVM flags, hardware profile, scenario id, and target classification.
 - **Evidence-bounded conclusions**: do not state more than the data supports. Separate descriptive metrics from causal claims.
 - **Confidentiality**: treat raw JFR / flamegraphs / diagnostics as potentially sensitive. Do not leak Enterprise internals (H3, locality, enterprise targets) into public-track artifacts. The default publication mode is `public`, which default-denies raw `.jfr` (case-insensitive extension and `FLR\0` content signature).
-- **Enterprise-vs-public scoping**: `targets/exeris-community-app-locality/`, `targets/exeris-spring-runtime-benchmark-app-comp/`, the `enterprise/` tree, and H3 behavior are **excluded from the runnable/public docs path**. Operational docs (README, `docs/`) cover Community and cross-runtime tracks only. Do not promote enterprise-only behavior into Community-labeled reports.
+- **Enterprise-vs-public scoping**: `targets/exeris-community-app-locality/`, the `enterprise/` tree, and H3 behavior are **excluded from the runnable/public docs path**. Operational docs (README, `docs/`) cover Community and cross-runtime tracks only. Do not promote enterprise-only behavior into Community-labeled reports.
+  - **`spring-on-exeris*` is NOT excluded** (corrected 2026-08-11). This rule previously also named `targets/exeris-spring-runtime-benchmark-app-comp/` — a path that never existed in this repo (the target is `targets/exeris-spring-runtime-app-comp/`), added incidentally in an unrelated PR, with no rationale recorded anywhere in `docs/` or `.github/`. Exeris Spring Runtime is a product repo, listed above alongside `exeris-kernel` and *separately from* "enterprise repos"; it has never been confidential. Every `spring-on-exeris*` arm is `tier=community` in the pair manifest and is **publishable**.
+  - **Do not confuse a separation axis with a confidentiality boundary.** Pure-vs-Compatibility is a *labelling* rule ("never collapse without explicit caveat"), exactly like H1-vs-H2 and Micro-vs-Runtime — compat results must be labelled compat, stored separately, and routed to the `compat/` track, **not** withheld from publication. The confidentiality rule is the separate bullet above and covers raw JFR/diagnostics plus Enterprise internals (H3, locality, enterprise targets). This same over-application has now happened twice: once to raw JFR for Community/open-core arms, once here. When a rule written for Enterprise appears to cover an open-core artifact, check whether it names it *by intent* or only *by adjacency*.
 
 ## Comparative-result strict gate (runtime track)
 
@@ -187,7 +189,21 @@ tools/compute-fairness-index.sh --result-a A.json --result-b B.json --output fai
 tools/verify-classification.sh <status.csv>              # validates runner_status / reproducibility_status / final_reason / claim_scope enums
 tools/verify-target-asset-matrix.sh                      # checks runtime/drivers/target-asset-matrix.json vs scenarios/**/comparative-pair-manifest.json
 tools/benchmark-runner-with-metrics.sh <cmd...>          # wraps with /usr/bin/time -v, writes <output>.with-metrics.json
+
+# JVM footprint attribution — a pair, deliberately split by what they measure:
+tools/extract-footprint-decomposition.sh <nmt-detail.txt[.gz]> <smaps.txt[.gz]> [out.json]
+#   RESIDENT split: heap vs non-heap, and anonymous vs file-backed, by joining smaps Rss
+#   per mapping against the Java Heap address range in NMT's virtual memory map.
+tools/extract-nmt-category-breakdown.sh <nmt-capture.txt[.gz]> [out.json]
+#   COMMITTED split: non-heap by NMT category (class metadata / code / GC / thread / …).
 ```
+
+Never derive a heap/non-heap split by subtracting `-Xmx` from RSS — without `AlwaysPreTouch`,
+`-Xms` commits pages it never touches, so resident < committed and the subtraction can go
+negative (measured: −23 096 kB). And never sum across the two tools: one reports resident
+bytes, the other committed. NMT has no per-category residency, so a category's committed size
+is only an upper bound on its resident size — quote the coverage ratio alongside any category
+claim so the unattributed remainder stays visible.
 
 ### Updating a baseline
 
@@ -207,7 +223,7 @@ Follow `docs/regression-policy.md`. Never refresh a baseline to mask a regressio
 - For TLS rows: buffer / transport / allocator model labels populated; B3 vs B4 not framed as handler-free apples-to-apples; B3/B4 vs B5/B6 differences stated.
 - Reproducibility metadata captured (SHA, JDK/tool versions, JVM flags, hardware profile, scenario id).
 - Confidentiality reviewed: raw JFR/flamegraphs/diagnostics not leaked into public artifacts.
-- **All four summarizing surfaces swept** when any section changed — frontmatter `summary:`, TL;DR, revision history, conclusions. A correct section body does not imply correct summaries: three consecutive review rounds on the triad report found every remaining defect living *only* in these four places. Watch two specifics — a summary must not strengthen the body's quantifier ("rises to 39–59 %" ≠ "dominates"), and a bound must be the one measured on the axis being claimed (a ≤ 2 % throughput order-effect says nothing about RSS, where the same control read +13.5 %). Cross-cutting facts such as the pgjdbc fetch-config normalization belong on this sweep too.
+- **All four summarizing surfaces swept** when any section changed — frontmatter `summary:`, TL;DR, revision history, conclusions. A correct section body does not imply correct summaries: three consecutive review rounds on the triad report found every remaining defect living *only* in these four places. Watch two specifics — a summary must not strengthen the body's quantifier ("rises to 39–59 %" ≠ "dominates"), and a bound must be the one measured on the axis being claimed (a ≤ 2 % throughput order-effect says nothing about RSS, where the same control read +13.5 %). Cross-cutting facts such as the pgjdbc fetch-config normalization belong on this sweep too. The revision-history leg includes **all three dated bylines** (frontmatter `updated:`, the `*By … (updated …)*` line, the `**Updated:**` metadata field) — they drift apart, and two of them sat two days stale through two edit rounds.
 
 ## Where to read more
 

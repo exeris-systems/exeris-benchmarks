@@ -7,12 +7,20 @@ flamegraph.pl-style SVG with hover tooltips, click-to-zoom, and search.
 
 Usage:
   tools/jfr-flamegraph.py <input.jfr> <output.svg> [--title T] [--event E] [--min-pct F]
+                          [--window-start ISO] [--window-end ISO]
+
+Pass the measurement window whenever one is known — on the runtime track it is
+the pg_stat_statements measurement baseline/final pair written beside the
+recording. Without it the profile also covers warmup (JIT, class loading),
+which is exactly what a steady-state profile should exclude; the subtitle says
+which of the two the SVG is.
 
 Confidentiality: only run on Community/OSS targets. Stack frames are method names;
 do not generate flamegraphs from Enterprise (H3/locality) recordings for public
 artifacts. The output is a derived SVG, not a raw .jfr.
 """
 import sys, os, re, subprocess, html, argparse, colorsys
+from datetime import datetime, timezone
 
 # Allowlists used to validate untrusted CLI input before it reaches the `jfr`
 # OS command or the filesystem. _EVENT_RE = dotted identifier (jdk.ExecutionSample);
@@ -35,35 +43,99 @@ def validate_inputs(jfr_path, event):
         sys.exit(f"not a readable file: {jfr_path!r}")
     return pa.group(0), ev.group(0)
 
-def fold_stacks(stdout):
-    """Fold `jfr print` stackTrace blocks into {root-first stack tuple: count}."""
-    folded, frames, in_stack, total = {}, [], False, 0
+# `jfr print` renders timestamps for humans, in the LOCAL zone of whoever runs
+# it: "startTime = 13:54:54.042180329 (2026-07-31)". That is not ISO-8601 and
+# carries no offset, so it is read as local time and converted to an aware
+# instant below. The conversion is self-consistent — the same machine renders
+# and parses — but it does mean event times are only comparable with a window
+# after both become instants. The ISO branch is kept in case a future jfr
+# emits offsets directly.
+_START_RE = re.compile(
+    r"^startTime\s*=\s*(?:"
+    r"(?P<clock>\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*\((?P<date>\d{4}-\d{2}-\d{2})\)"
+    r"|(?P<iso>\S+))"
+)
+
+def parse_event_time(match):
+    """Turn a _START_RE match into an aware datetime, or None."""
+    if match.group("iso"):
+        return parse_instant(match.group("iso"))
+    clock, date = match.group("clock"), match.group("date")
+    if "." in clock:
+        head, frac = clock.split(".", 1)
+        clock = f"{head}.{frac[:6]}"
+    try:
+        naive = datetime.fromisoformat(f"{date}T{clock}")
+    except ValueError:
+        return None
+    return naive.astimezone()  # naive is local time; attach this machine's offset
+
+def parse_instant(text):
+    """Parse a JFR/harness ISO-8601 instant into an aware datetime.
+
+    JFR stamps carry a local offset and nanosecond precision
+    ("2026-07-31T13:54:54.016541737+02:00"); harness window boundaries are UTC
+    with none ("2026-07-31T12:02:05Z"). Fractional digits are truncated to the
+    6 that datetime accepts, and 'Z' is normalised, so both forms compare
+    correctly as instants rather than as strings.
+    """
+    s = text.strip().replace("Z", "+00:00")
+    m = re.match(r"^(.*?\.)(\d+)(.*)$", s)
+    if m:
+        s = m.group(1) + m.group(2)[:6] + m.group(3)
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+def fold_stacks(stdout, window_start=None, window_end=None):
+    """Fold `jfr print` stackTrace blocks into {root-first stack tuple: count}.
+
+    When a window is supplied, only samples whose startTime falls inside it are
+    folded. Without it a flame graph mixes warmup — chiefly JIT compilation and
+    class loading — into the profile, which is precisely the activity a steady
+    state profile is meant to exclude.
+    """
+    folded, frames, in_stack, total, skipped = {}, [], False, 0, 0
+    cur_ts = None
     for line in stdout.splitlines():
         s = line.strip()
+        if not in_stack:
+            m = _START_RE.match(s)
+            if m:
+                cur_ts = parse_event_time(m)
         if s.startswith("stackTrace = ["):
             frames, in_stack = [], True
         elif not in_stack:
             continue
         elif s == "]":
             in_stack = False
-            if frames:
+            in_window = True
+            if window_start is not None or window_end is not None:
+                in_window = (cur_ts is not None
+                             and (window_start is None or cur_ts >= window_start)
+                             and (window_end is None or cur_ts <= window_end))
+            if frames and in_window:
                 key = tuple(reversed(frames))  # jfr is leaf-first; flamegraph wants root-first
                 folded[key] = folded.get(key, 0) + 1
                 total += 1
+            elif frames:
+                skipped += 1
             frames = []
         elif s != "...":
             fn = s.split("(", 1)[0]  # "pkg.Class.method(args) line: N" -> "pkg.Class.method"
             frames.append(fn if fn else s)
-    return folded, total
+    return folded, total, skipped
 
-def extract_folded(jfr_path, event):
+def extract_folded(jfr_path, event, window_start=None, window_end=None):
     """Run jfr print and fold ExecutionSample stacks into {stack_tuple: count}."""
     jfr_path, event = validate_inputs(jfr_path, event)  # use only the sanitized values
     cmd = ["jfr", "print", "--events", event, "--stack-depth", "2048", jfr_path]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         sys.exit(f"jfr print failed: {proc.stderr[:400]}")
-    return fold_stacks(proc.stdout)
+    return fold_stacks(proc.stdout, window_start, window_end)
 
 class Node:
     __slots__ = ("name", "value", "children")
@@ -337,12 +409,36 @@ def main():
     ap.add_argument("--event", default="jdk.ExecutionSample")
     ap.add_argument("--min-pct", type=float, default=0.1,
                     help="hide frames below this %% of total (default 0.1)")
+    ap.add_argument("--window-start", default=None,
+                    help="ISO-8601 start of the measurement window; samples before it are dropped")
+    ap.add_argument("--window-end", default=None,
+                    help="ISO-8601 end of the measurement window; samples after it are dropped")
     a = ap.parse_args()
-    folded, total = extract_folded(a.jfr, a.event)
+
+    ws = we = None
+    if a.window_start:
+        ws = parse_instant(a.window_start)
+        if ws is None:
+            sys.exit(f"unparseable --window-start: {a.window_start!r}")
+    if a.window_end:
+        we = parse_instant(a.window_end)
+        if we is None:
+            sys.exit(f"unparseable --window-end: {a.window_end!r}")
+    if ws and we and we <= ws:
+        sys.exit("--window-end must be after --window-start")
+
+    folded, total, skipped = extract_folded(a.jfr, a.event, ws, we)
     if total == 0:
+        if skipped:
+            sys.exit(f"no samples inside the window ({skipped} outside it); check the window bounds")
         sys.exit("no samples extracted (wrong event? empty recording?)")
     root = build_tree(folded)
-    sub = (f"{total} {a.event} samples · frames ≥ {a.min_pct}% shown · "
+    # The window is stated in the subtitle rather than left implicit: a profile
+    # covering warmup and one covering steady state are different artefacts and
+    # must not be mistaken for each other once the SVG is detached from its run.
+    scope = (f"window {a.window_start or '−∞'} → {a.window_end or '+∞'} "
+             f"({skipped} sample(s) outside)" if (ws or we) else "WHOLE RECORDING (includes warmup)")
+    sub = (f"{total} {a.event} samples · {scope} · frames ≥ {a.min_pct}% shown · "
            f"click to zoom · Search for regexp highlight · Reset Zoom to restore")
     svg = render_svg(root, a.title, sub, a.min_pct)
     # Validate the (untrusted) output path before touching the filesystem: same

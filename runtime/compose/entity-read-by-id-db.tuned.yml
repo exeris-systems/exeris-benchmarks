@@ -36,6 +36,13 @@
 # moves away from a production-shaped network. State both in any claim; results are a
 # SEPARATE "tuned-PG" baseline — never mixed with stock-PG (bridge, unpinned) runs.
 
+# NOTE (2026-08-06): the cpuset is no longer exclusive to this override. The base compose
+# now carries `cpuset: "${BENCH_DB_CPUSET:-}"`, and the campaign scripts set it alongside the
+# server and loadgen pins — so DB pinning is the default, not a tuned-only opt-in, and the same
+# variable also tells the DB-CPU sampler which cores to watch. The literal below still wins when
+# this override is applied, which keeps BENCH_DB_TUNED=1 self-contained; keep the two values in
+# step or drop this line and rely on BENCH_DB_CPUSET alone. What remains genuinely tuned-only is
+# host networking.
 services:
   benchmark-db:
     network_mode: host

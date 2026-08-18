@@ -42,6 +42,25 @@ const sagaCompletedTotal = new Counter('saga_completed_total');
 const sagaCompensatedTotal = new Counter('saga_compensated_total');
 const sagaFailedUnrecoveredTotal = new Counter('saga_failed_unrecovered_total');
 const sagaIssuedTotal = new Counter('saga_issued_total');
+// CONTRACT-v2 §7 O0 outcome accounting. Every issued orderId lands in exactly one of the
+// five terminal buckets, and the harness asserts the identity
+//
+//   completed + compensated + unrecovered + unresolved + submit_rejected == issued
+//
+// WHY this exists rather than a lone compensation counter: a single counter cannot tell
+// "the system did not compensate" from "the observer did not see it" — both read zero. A
+// balanced set can, because a blind detector cannot satisfy the identity: the sagas it
+// failed to classify have to land somewhere. The v1 zero-compensation defect was the
+// second kind reported as the first.
+//
+// saga_not_submitted_total is deliberately OUTSIDE the identity: those iterations aborted
+// BEFORE issuance (register/recommend/cart failure) and never incremented saga_issued_total,
+// so adding them to a sum that equals issued would break the very check this exists to make.
+// The review's O0 draft listed NOT_SUBMITTED inside the identity; that is the one place its
+// formula does not survive contact with where sagaIssuedTotal.add() actually sits.
+const sagaUnresolvedTotal = new Counter('saga_unresolved_total');
+const sagaSubmitRejectedTotal = new Counter('saga_submit_rejected_total');
+const sagaNotSubmittedTotal = new Counter('saga_not_submitted_total');
 
 // Override BASE_URL via --env BASE_URL=...; K6_BASE_URL is kept as secondary compatibility input.
 const BASE_URL = __ENV.BASE_URL || __ENV.K6_BASE_URL || 'http://localhost:8080';
@@ -442,6 +461,7 @@ export default function () {
   });
 
   if (!registerOk) {
+    sagaNotSubmittedTotal.add(1);
     classifyFailure(registerRes);
     return;  // Abort user session
   }
@@ -468,12 +488,14 @@ export default function () {
   });
 
   if (!recommendOk) {
+    sagaNotSubmittedTotal.add(1);
     classifyFailure(recommendRes);
     return;
   }
 
   const productIds = extractProductIds(recommendRes);
   if (productIds.length === 0) {
+    sagaNotSubmittedTotal.add(1);
     return;  // No products to add to cart
   }
 
@@ -502,6 +524,7 @@ export default function () {
   });
 
   if (!cartAddOk) {
+    sagaNotSubmittedTotal.add(1);
     classifyFailure(cartAddRes);
     return;
   }
@@ -523,12 +546,14 @@ export default function () {
   });
 
   if (!cartGetOk) {
+    sagaNotSubmittedTotal.add(1);
     classifyFailure(cartGetRes);
     return;
   }
 
   const cartId = extractCartId(cartGetRes);
   if (!cartId) {
+    sagaNotSubmittedTotal.add(1);
     return;
   }
 
@@ -577,6 +602,10 @@ export default function () {
   });
 
   if (!orderOk) {
+    // Issued (saga_issued_total already incremented above) but the submission was
+    // refused, so no terminal outcome can ever arrive. Counted, or the O0 identity
+    // would not balance and every rejected submission would read as detector_fault.
+    sagaSubmitRejectedTotal.add(1);
     classifyFailure(orderRes);
     return;
   }
@@ -623,5 +652,11 @@ export default function () {
     sagaCompensatedDuration.add(sagaDurationMs);
   } else if (sagaUnrecovered) {
     sagaFailedUnrecoveredTotal.add(1);
+  } else {
+    // The branch whose absence WAS the defect: a saga that resolved to nothing the
+    // client recognised incremented no total at all, so an oracle reading
+    // saga_compensated_total saw a clean zero. Counted now, and the O0 identity
+    // has to balance.
+    sagaUnresolvedTotal.add(1);
   }
 }

@@ -1840,7 +1840,50 @@ else
   # compensations were observed — exactly the v1 Axon defect class the gate
   # must catch — so it counts as 0, never as "skip".
   [[ -z "$GATE_OBSERVED" ]] && GATE_OBSERVED="0"
-  if [[ "$FAULT_MODE" == "transient" ]]; then
+
+  # --- CONTRACT-v2 §7 O0: outcome accounting, PRECONDITION for O1-O3 ------------
+  #
+  # A lone compensation counter cannot distinguish "the system did not compensate"
+  # from "the observer did not see it": both read zero. That is not hypothetical —
+  # it is the v1 zero-compensation defect, a detector fault reported as a
+  # measurement. A balanced set CAN distinguish them, because a blind detector
+  # cannot satisfy the identity: whatever it failed to classify has to land
+  # somewhere.
+  #
+  #   completed + compensated + unrecovered + unresolved + submit_rejected == issued
+  #
+  # saga_not_submitted_total is deliberately NOT in the sum: those iterations
+  # aborted before issuance and never incremented saga_issued_total.
+  _o0_count() { jq -r ".metrics.${1}.count // 0" "$K6_SUMMARY_JSON" 2>/dev/null || echo 0; }
+  # k6 omits zero-sample metrics, so absence means zero — never "unknown".
+  GATE_O0_COMPLETED="$(_o0_count saga_completed_total)"
+  GATE_O0_COMPENSATED="$(_o0_count saga_compensated_total)"
+  GATE_O0_UNRECOVERED="$(_o0_count saga_failed_unrecovered_total)"
+  GATE_O0_UNRESOLVED="$(_o0_count saga_unresolved_total)"
+  GATE_O0_REJECTED="$(_o0_count saga_submit_rejected_total)"
+  GATE_O0_SUM=$(( ${GATE_O0_COMPLETED%%.*} + ${GATE_O0_COMPENSATED%%.*} + ${GATE_O0_UNRECOVERED%%.*}                   + ${GATE_O0_UNRESOLVED%%.*} + ${GATE_O0_REJECTED%%.*} ))
+  # Capability marker, same posture as GATE_V2_CAPABLE: a k6 script predating the
+  # O0 counters cannot balance, and must be recorded as not-evaluable rather than
+  # accused of a detector fault it has no way to report.
+  GATE_O0_CAPABLE="false"
+  if grep -q 'saga_unresolved_total' "$K6_SCRIPT" 2>/dev/null; then
+    GATE_O0_CAPABLE="true"
+  fi
+  if [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_SUM" != "${GATE_ISSUED%%.*}" ]]; then
+
+    # The identity did not close. This is an instrument failure, NOT a result: it
+
+    # supports no correctness claim in either direction, the same standing as
+
+    # `error` and `skipped`. Reporting the compensation figure here is exactly the
+
+    # mistake v1 made.
+
+    GATE_STATUS="detector_fault"
+
+    GATE_REASON="O0 outcome accounting does not balance: completed(${GATE_O0_COMPLETED}) + compensated(${GATE_O0_COMPENSATED}) + unrecovered(${GATE_O0_UNRECOVERED}) + unresolved(${GATE_O0_UNRESOLVED}) + submit_rejected(${GATE_O0_REJECTED}) = ${GATE_O0_SUM} != issued(${GATE_ISSUED}). Some issued sagas were classified into no terminal bucket, so the compensation count cannot be trusted in either direction — most likely a terminal-vocabulary mismatch on this stack (CONTRACT-v2 §3.1)."
+
+  elif [[ "$FAULT_MODE" == "transient" ]]; then
     # s4.2 inverse assertion: transient faults must NOT produce compensations.
     GATE_EXPECTED="0"
   elif [[ "$GATE_ISSUED" == "0" ]]; then
@@ -2004,6 +2047,7 @@ case "$GATE_STATUS" in
   fail)    echo "ERROR: correctness gate FAIL: ${GATE_REASON}" >&2 ;;
   error)   echo "ERROR: correctness gate ERROR (fails closed): ${GATE_REASON}" >&2 ;;
   skipped) echo "WARN: correctness gate SKIPPED: ${GATE_REASON}" >&2 ;;
+  detector_fault) echo "ERROR: correctness gate DETECTOR_FAULT (instrument failure, not a result): ${GATE_REASON}" >&2 ;;
 esac
 
 jq -n \
@@ -2055,6 +2099,13 @@ jq -n \
 
 if [[ "$GATE_STATUS" == "fail" ]]; then
   RUNNER_STATUS="compensation_mismatch"
+elif [[ "$GATE_STATUS" == "detector_fault" ]]; then
+  # O0 identity did not close: some issued sagas were classified into no terminal
+  # bucket. Distinct from compensation_gate_error on purpose — the gate RAN and the
+  # INSTRUMENT is what failed, so the run supports no correctness claim in either
+  # direction. Collapsing it into `error` would relose the distinction O0 exists
+  # to make.
+  RUNNER_STATUS="detector_fault"
 elif [[ "$GATE_STATUS" == "error" ]]; then
   # Gate not evaluable on a v2-capable run (missing k6 metrics, helper crash,
   # python3 unavailable, inconsistent artifacts) — fails closed, never silent.
@@ -2539,6 +2590,10 @@ if [[ "$GATE_STATUS" == "fail" ]]; then
   echo "ERROR: CONTRACT-v2 s4.1 correctness gate FAILED: observed_compensations=${GATE_OBSERVED} expected_declines=${GATE_EXPECTED} (issued=${GATE_ISSUED}, seed=${GATE_ORDER_SEED})." >&2
   echo "ERROR: run marked runner_status=compensation_mismatch; performance numbers from this run are excluded from headline tables. Details: $CORRECTNESS_GATE_JSON" >&2
   exit 3
+elif [[ "$GATE_STATUS" == "detector_fault" ]]; then
+  echo "ERROR: CONTRACT-v2 s7 O0 DETECTOR FAULT: ${GATE_REASON}" >&2
+  echo "ERROR: this is an instrument failure, not a measurement — the run supports NO correctness claim in either direction, and its compensation count must not be quoted. Details: $CORRECTNESS_GATE_JSON" >&2
+  exit 5
 elif [[ "$GATE_STATUS" == "error" ]]; then
   echo "ERROR: CONTRACT-v2 s4.1 correctness gate ERROR (fails closed): ${GATE_REASON}" >&2
   echo "ERROR: run marked runner_status=compensation_gate_error; performance numbers from this run are excluded from headline tables. Details: $CORRECTNESS_GATE_JSON" >&2

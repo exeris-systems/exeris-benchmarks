@@ -141,6 +141,21 @@
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>eu.exeris.benchmarks.targets.restateapp.RestateBenchmarkApplication</mainClass>
+                  <!-- Multi-Release: true, and it is load-bearing. The Restate SDK ships
+                       dev.restate.sdk.core.statemachine.ffm.* under META-INF/versions/23/.
+                       Shade copies those entries into the uber-jar but does NOT carry the
+                       Multi-Release manifest attribute, so the JVM ignores the versioned
+                       tree and the class is "not found" while visibly present in the jar:
+
+                         ClassNotFoundException:
+                           dev.restate.sdk.core.statemachine.ffm.NativeLibraryLoader
+
+                       The symptom is not a classpath error at startup — the app boots and
+                       every saga submission fails at runtime, which reads as a broken
+                       target rather than a packaging defect. -->
+                  <manifestEntries>
+                    <Multi-Release>true</Multi-Release>
+                  </manifestEntries>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>

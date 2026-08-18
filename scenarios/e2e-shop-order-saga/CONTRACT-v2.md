@@ -1,11 +1,11 @@
-# Scenario Contract: e2e-shop-order-saga — v2.0
+# Scenario Contract: e2e-shop-order-saga — v2.1
 
 | Field | Value |
 |---|---|
 | Scenario ID | `e2e-shop-order-saga` |
-| Contract version | 2.0 (supersedes v1) |
+| Contract version | 2.1 (supersedes v2.0, which supersedes v1) |
 | Status | DRAFT — pending claims-audit |
-| Applies to stacks | Exeris Flow · Spring Boot 3 + Axon + Neo4j · Quarkus 3 + Axon + Neo4j · Restate (server + JVM SDK service) |
+| Applies to stacks | exeris-community · spring-on-exeris · Spring Boot + Axon · Quarkus + MicroProfile LRA · Restate (server + JVM SDK service) |
 | Retroactivity | v2 fault-injection and metric-split rules apply retroactively; see §10 for which v1 results remain valid |
 
 ---
@@ -22,11 +22,36 @@ delivers the saga contract to application code — i.e. the system as a user
 would actually run it, including every required process. Component-level
 comparisons (engine-only, journal-only) are out of scope.
 
-| Stack | Deployment unit |
-|---|---|
-| Exeris | single JVM process (kernel in-process), scaffolded via Exeris SDK/tooling |
-| Spring/Quarkus + Axon | app JVM + Axon Server process + Neo4j |
-| Restate | service JVM (Restate JVM SDK) + `restate-server` (single binary) |
+**Corrected 2026-07-31 (v2.1).** The previous table listed Neo4j on one row only
+and omitted Postgres from every row, while §2 makes Postgres the shared domain
+datastore for **every** stack. Three rows, three different levels of completeness,
+and the shortest was Exeris's — a flattering count that §2 did not support. Every
+required process is now listed on every row so the counts are comparable. Neo4j is
+absent because the graph was removed from this scenario entirely (§2).
+
+| Stack | Deployment unit (every required process) | Processes |
+|---|---|---:|
+| exeris-community | app JVM (kernel in-process) + Postgres | **2** |
+| spring-on-exeris | app JVM (kernel in-process) + Postgres | **2** |
+| spring + Axon *(as configured)* | app JVM + Axon Server + Postgres | 3 |
+| quarkus + MicroProfile LRA | app JVM + LRA coordinator + Postgres | 3 |
+| Restate | service JVM (Restate JVM SDK) + `restate-server` + Postgres | 3 |
+
+The external payment gateway (§4) is part of the deployment unit for every stack
+and is sampled by the whole-deployment footprint; it is omitted from the counts
+above only because it is identical on every row and differentiates nothing.
+
+**Axon Server is the measured configuration, not a requirement of the framework.**
+Axon Framework runs entirely in the application JVM against a JPA/JDBC event store
+with a `SimpleCommandBus`. The Axon arm here is deployed the way the framework's own
+default path deploys it; the embedded configuration is a distinct deployment unit
+and is **not measured** under this contract. Recorded in §9(e).
+
+**Stack list.** The arms are `exeris-community`, `spring-on-exeris`,
+`spring + Axon`, `quarkus`, `restate`. Note that "Quarkus + Axon" was wrong in v2.0
+and is corrected here: the Quarkus arm has never run an Axon saga — Axon was present
+only as a command bus, with the saga hand-rolled. Its saga engine under v2.1 is
+MicroProfile LRA (§9).
 
 ## 2. Scenario definition
 
@@ -269,6 +294,39 @@ has a denominator worth reporting.
 - The saga executes request-response: the HTTP response returns the final
   saga outcome (`COMPLETED` | `COMPENSATED` | `FAILED_UNRECOVERED`).
 
+### 3.1 Declared terminal vocabulary (normative, added 2026-07-31)
+
+Each stack MUST declare, as data in `scenario.json` under its contract id, three
+things:
+
+| field | meaning |
+|---|---|
+| `resolution_model` | `inline`, `polled`, or `inline_with_polled_fallback` |
+| `terminal_field` | the exact response field carrying the terminal outcome |
+| `terminal_tokens` | the exact token this stack emits for each of the three §3 terminal states |
+
+The harness MUST read this declaration and MUST NOT infer either the field or the
+tokens. A stack whose declaration is absent, incomplete, or contradicted at preflight
+**does not run**.
+
+**Preflight (normative).** Before the measurement window opens, every stack is driven
+through one forced-decline and one forced-success transaction, and the harness MUST
+observe the declared `COMPENSATED` and `COMPLETED` tokens on that stack's declared
+field. Failure to observe either is a **launch failure, not a result**.
+
+**Why a declaration rather than broader matching.** Accepting a second field name
+raises tolerance without removing the class — the next stack brings a third. A
+declaration turns a silent non-match into a loud missing declaration. Two live
+examples found on 2026-07-31, both in the same file: the inline path accepted
+`body.saga_status`, which no stack emits (dead tolerance, protecting nothing today and
+hiding the real mismatch tomorrow); and `FAILED` was accepted though §3 never defines
+it, and was bucketed as unrecovered — so a stack emitting it on a declined payment
+would have turned a **missing compensation (a G2a violation) into an O3 line item**.
+
+**Scope note.** `resolution_model` is already load-bearing for §8 (inline stacks do
+not pay the polled stacks' up-to-1 s quantization). Declaring it here makes one
+property serve both the detector and the latency caveat.
+
 ## 4. Fault model (breaking change vs v1)
 
 v1 injected `payment_fail_rate = 3%` without pinning *where* the randomness
@@ -342,8 +400,17 @@ failures and destroy cross-stack comparability. v2 pins:
 | Guarantee | Definition | Verified by |
 |---|---|---|
 | **G1 Forward progress** | Every issued, non-declined orderId reaches `COMPLETED` within the run window despite injected faults and crash injection (W3) | response ledger vs issued set |
-| **G2 Compensation under failure** | Every declined orderId reaches `COMPENSATED` with all previously completed steps compensated exactly once, in LIFO order | exact oracle §7 |
+| **G2a Compensation occurrence** | Every declined orderId reaches `COMPENSATED` | exact-count gate against the seeded population, **client-observed at the HTTP boundary** — VERIFIED |
+| **G2b Compensation set and order** | the compensation set equals the completed forward-step set, exactly once per step, in LIFO order | out-of-process effect ledger keyed `(orderId, stepId, direction)` — §7 O2. **NOT BUILT, NOT CLAIMED** |
 | **G3 Termination** | Every issued orderId reaches a terminal state (`COMPLETED`/`COMPENSATED`/`FAILED_UNRECOVERED`); no saga remains in-flight after drain timeout | drain scan |
+
+**G2 split, 2026-07-31 (v2.1) — normative.** v2.0 stated G2 as one guarantee
+verified by "exact oracle §7". That oracle does not exist. What exists is a count
+of status strings observed by the k6 client at the HTTP boundary, which can show
+that a declined order reached `COMPENSATED` but can say nothing about *which* steps
+were compensated or in what order. Splitting it is not a weakening of the contract:
+it is the contract finally describing what the harness measures. G2b returns in full
+when O2 is built.
 
 **G3 asterisk (normative disclosure):** administrative termination paths
 that bypass compensation (Restate `kill` vs `cancel`; any Exeris hard-abort;
@@ -354,9 +421,66 @@ where one exists) — never administrative cancellation APIs.
 
 ## 7. Oracles (external, shared)
 
+> **Status, 2026-07-31 (v2.1) — read before citing anything from this section.**
+> The external oracle service described below **has not been built.** What the
+> harness has is a count of status strings observed by the k6 client at the HTTP
+> boundary. O2 in particular is therefore *specified, not implemented*, and
+> `saga_compensated_total` is **not** O2 — it is "how many clients saw the word
+> COMPENSATED". §6 now carries that split as G2a/G2b.
+>
+> This is worth stating plainly rather than burying: **the oracle specified here
+> would have been immune to the defect that produced the v1 zero-compensation
+> figure.** A ledger fed by the stacks reporting `(orderId, stepId, direction)` does
+> not parse a status string, so it cannot be blinded by a field name. The fix was
+> written into v2 in July and not built; what was built instead had exactly the
+> failure the spec existed to remove. O0 and §3.1 are the compensating controls.
+
 All stacks report side effects to the same external oracle service
 (out-of-process counter store, itself durable), keyed by
 `(orderId, stepId, direction)` where direction ∈ {forward, compensation}.
+
+- **O0 — outcome accounting (PRECONDITION for O1–O3).** Every issued `orderId`
+  MUST be accounted for in exactly one terminal bucket: `COMPLETED`,
+  `COMPENSATED`, `FAILED_UNRECOVERED`, `UNRESOLVED`, or `SUBMIT_REJECTED`. The
+  harness MUST emit all five as counters, and the identity
+
+  ```
+  completed + compensated + unrecovered + unresolved + submit_rejected == issued
+  ```
+
+  MUST hold exactly. A run in which it does not emits `detector_fault` and supports
+  **no correctness claim in either direction** — the same standing as `error` and
+  `skipped`. Sessions that abort *before* issuance are counted separately
+  (`not_submitted`) and are deliberately OUTSIDE the identity: they never increment
+  `issued`, so including them would break the very check O0 exists to make.
+
+  **Rationale (normative, do not drop when quoting).** A single compensation counter
+  cannot distinguish *"the system did not compensate"* from *"the observer did not
+  see it"*: both read zero. A balanced set can, because a blind observer cannot
+  satisfy the identity — the sagas it failed to classify have to land somewhere. O0
+  exists because the v1 zero-compensation defect was a failure of the second kind and
+  was reported as the first.
+
+  **The identity alone is not sufficient, measured 2026-08-18.** A detector that
+  cannot recognise a stack's `COMPENSATED` token classifies those sagas as
+  `UNRESOLVED` and the sum still balances. Two further conditions therefore also emit
+  `detector_fault`:
+  1. `unresolved` above 2 % of issued — an unresolved saga is an observation failure,
+     not an outcome. Bound matches the existing `saga_status_resolved` threshold.
+  2. **zero compensations observed where §4.1 expects a non-zero count** — the v1
+     signature exactly. Reported as `detector_fault` rather than gate FAIL because the
+     run cannot distinguish "did not compensate" from "could not see it", and either
+     verdict would be a guess. Condition 2 exists because condition 1 was measured to
+     have thin margin: a fully blind detector yields `unresolved ≈ the decline rate`,
+     so at 3 % it landed at 2.29 %, and at a 1 % decline rate it would slip under.
+
+- **Negative control (normative, per contract revision).** The `detector_fault`
+  mechanism MUST itself be demonstrated, not asserted: at least once per contract
+  revision, a run is executed with a deliberately falsified `terminal_tokens`
+  declaration on one stack, and the harness MUST emit `detector_fault` rather than a
+  compensation figure. The control run and its verdict are committed alongside the
+  campaign. **A check that has never been observed to fire is not evidence that it
+  would.** First execution: `results/raw/e2e-shop-order-saga/negative-control-20260818/`.
 
 - **O1 — exactly-once effect (statistical):** duplicate forward executions
   per key are counted; at-least-once execution with exactly-once *recording*
@@ -423,7 +547,15 @@ compensations as user-space pattern vs Exeris kernel-level unwind — both
 satisfy G2; the difference is the finding, not a violation), (b) its
 administrative-termination semantics (§6 G3 asterisk), (c) its retry
 configuration proving §5 compliance, (d) adversarial tuning applied in the
-stack's favor.
+stack's favor, **(e) configurations available but not measured**.
+
+**(e) — added 2026-07-31 (v2.1).** Any deployment configuration of this stack that is
+materially cheaper, smaller, or simpler than the one measured, and was not measured.
+Named so the measured configuration is never read as the framework's requirement.
+(d) guards against being too generous to another stack; (e) guards against being too
+harsh — it is the only part of this register that protects a stack from us. First
+entry: Axon embedded (`EmbeddedEventStore` + JPA stores + `SimpleCommandBus`), which
+is a 2-process deployment unit against the measured 3.
 
 ## 10. Retroactive validity of v1 results
 
@@ -435,6 +567,23 @@ stack's favor.
 | Any mixed-population latency table | invalid under v2, do not cite |
 
 ## 11. Change log
+
+- **2.1** — O0 outcome-accounting identity as precondition for O1–O3, with
+  `detector_fault` added to the verdict enum, plus the unresolved-rate and
+  zero-against-nonzero conditions the negative control showed were needed (§7);
+  declared per-stack terminal vocabulary and mandatory preflight (§3.1); negative
+  control required per contract revision and executed (§7); deployment-unit table
+  reconciled with §2 and process counts made comparable (§1); Axon Server restated as
+  the measured configuration rather than a framework requirement (§1, §9e); stack list
+  reconciled with implementation, including that the Quarkus arm never ran an Axon
+  saga (§1); G2 split into G2a (verified, client-observed) and G2b (out-of-process
+  ledger, not built, not claimed) (§6, §7); §4.1 exactness scoped to the
+  actually-issued population; graph removed from the scenario entirely (§2).
+
+  **Origin.** Every delta in 2.1 traces to one defect: the v1 zero-compensation figure
+  was a detector fault reported as a measurement, and neither the gates nor any reader
+  caught it. O0, §3.1 and the negative control are the three independent places that
+  failure is now blocked.
 
 - **2.0** — deterministic per-orderId terminal fault (§4.1) replacing
   per-attempt probabilistic injection; `stableHash64` pinned to FNV-1a

@@ -73,10 +73,6 @@
          @Complete then run on the Vert.x event loop instead of pinning a worker thread
          per in-flight coordinator round trip, which is exactly the exhaustion mode a
          parking saga benchmark at a fixed arrival rate is built to expose. -->
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-rest-client-jackson</artifactId>
-    </dependency>
 
     <!-- The CLASSIC client, and only the client. The SERVER stays on Quarkus REST
          (quarkus-rest-jackson) so every endpoint this benchmark measures is still on

@@ -179,8 +179,24 @@ public class ShopOrderFlowService {
         if (sqlSteps.settleParkedPayment(sagaId, authorized).isEmpty()) {
             return false;
         }
-        Optional<FlowContext> parked = flowTemplate.lookupParked(
-                instance.getMostSignificantBits(), instance.getLeastSignificantBits());
+        // The callback can beat the park: at the shape-A gateway delay (~1 ms) the round
+        // trip is comparable to the time the engine needs to reach await-payment and
+        // register the instance. Giving up on the first miss strands the saga with its
+        // outcome already persisted — a hang that reads as "slow stack", not as a race.
+        Optional<FlowContext> parked = Optional.empty();
+        for (int attempt = 0; attempt < 200; attempt++) {
+            parked = flowTemplate.lookupParked(
+                    instance.getMostSignificantBits(), instance.getLeastSignificantBits());
+            if (parked.isPresent()) {
+                break;
+            }
+            try {
+                Thread.sleep(5L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
         if (parked.isEmpty()) {
             return false;
         }

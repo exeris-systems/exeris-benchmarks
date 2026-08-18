@@ -1296,13 +1296,29 @@ PY
 # detector cannot see COMPENSATED, and the run MUST end in detector_fault rather
 # than in a compensation figure. A check never observed to fire is not evidence
 # that it would.
+# Two modes, because they exercise DIFFERENT guards and only one of them is the
+# guard the v1 defect got past:
+#
+#   preflight - falsify the declaration everywhere. The 3.1 preflight must reject
+#               it before the window opens. Cheap, and the earliest possible catch.
+#   detector  - falsify ONLY the copy handed to k6, leaving the preflight reading
+#               the true declaration. Preflight then PASSES (the stack really does
+#               emit COMPENSATED) and the detector alone is blind — the v1 shape.
 BENCH_NEGATIVE_CONTROL="${BENCH_NEGATIVE_CONTROL:-0}"
-if [[ "$BENCH_NEGATIVE_CONTROL" == "1" ]]; then
-  TERMINAL_VOCABULARY_JSON="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" \
-    | jq -c '.terminal_tokens.COMPENSATED = "__NEGATIVE_CONTROL_WRONG_TOKEN__"')"
-  echo "NEGATIVE CONTROL ACTIVE: COMPENSATED token falsified. This run MUST end detector_fault." >&2
-fi
-export K6_TERMINAL_VOCABULARY="$TERMINAL_VOCABULARY_JSON"
+K6_VOCABULARY_JSON="$TERMINAL_VOCABULARY_JSON"
+case "$BENCH_NEGATIVE_CONTROL" in
+  1|preflight)
+    TERMINAL_VOCABULARY_JSON="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -c '.terminal_tokens.COMPENSATED = "__NEGATIVE_CONTROL_WRONG_TOKEN__"')"
+    K6_VOCABULARY_JSON="$TERMINAL_VOCABULARY_JSON"
+    echo "NEGATIVE CONTROL (preflight): declaration falsified; the 3.1 preflight MUST reject it." >&2
+    ;;
+  detector)
+    K6_VOCABULARY_JSON="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -c '.terminal_tokens.COMPENSATED = "__NEGATIVE_CONTROL_WRONG_TOKEN__"')"
+    echo "NEGATIVE CONTROL (detector): only k6 copy falsified; preflight will PASS." >&2
+    echo "NEGATIVE CONTROL (detector): the run MUST end detector_fault, never a compensation figure." >&2
+    ;;
+esac
+export K6_TERMINAL_VOCABULARY="$K6_VOCABULARY_JSON"
 
 VOCAB_FIELD="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -r '.terminal_field')"
 VOCAB_TOK_COMPLETED="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -r '.terminal_tokens.COMPLETED')"
@@ -1394,7 +1410,7 @@ PY
 }
 
 if ! preflight_terminal_vocabulary "$BASE_URL" "$PRE_TOKEN"; then
-  if [[ "$BENCH_NEGATIVE_CONTROL" == "1" ]]; then
+  if [[ "$BENCH_NEGATIVE_CONTROL" == "1" || "$BENCH_NEGATIVE_CONTROL" == "preflight" ]]; then
     echo "NEGATIVE CONTROL: preflight rejected the falsified declaration, as required." >&2
     echo "NEGATIVE CONTROL: this is the expected outcome — the detector is demonstrably not blind." >&2
     exit 80

@@ -208,9 +208,30 @@ public final class OrderSagaOrchestrator {
             return false;
         }
         UUID uuid = UUID.fromString(sagaId);
-        Optional<FlowContext> parked = flowEngine.scheduler()
-            .lookupParked(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+        // The callback can beat the park. At the shape-A gateway delay (~1 ms) the
+        // round trip is comparable to the time the engine needs to reach await-payment
+        // and register the instance as parked, so lookupParked legitimately misses.
+        // Giving up on the first miss would strand the saga with its outcome already
+        // persisted — a hang that reads as "slow stack", not as a race. Bounded wait,
+        // then fail loudly rather than silently.
+        Optional<FlowContext> parked = Optional.empty();
+        for (int attempt = 0; attempt < 200; attempt++) {
+            parked = flowEngine.scheduler()
+                .lookupParked(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+            if (parked.isPresent()) {
+                break;
+            }
+            try {
+                Thread.sleep(5L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
         if (parked.isEmpty()) {
+            System.err.println("[saga] payment settled for order " + dbOrderId
+                + " but no parked flow appeared within 1s; the saga is stranded with"
+                + " outcome=" + outcome + " persisted. This is a wake race, not a decline.");
             return false;
         }
         flowEngine.scheduler().wake(parked.get());
@@ -305,23 +326,17 @@ public final class OrderSagaOrchestrator {
         // rather than held in a map — an in-memory outcome would be lost on crash,
         // and the resumed step would re-dispatch to a gateway that has already
         // answered, parking forever.
+        // request-payment: commit the payment-requested writes and dispatch, then
+        // CONTINUE — deliberately NOT PARK. Returning CONTINUE is what pushes this
+        // step's compensation (refund-payment) onto the unwind stack; the kernel's
+        // applyParkOutcome does not push one, so parking here would silently drop
+        // refund-payment from the LIFO chain on a decline.
         FlowStepAction paymentAction = ctx -> {
             SagaOrder order = resolveOrder(ctx);
             if (order == null) {
                 return FlowOutcome.FAIL;
             }
             long orderId = order.orderId();
-
-            String settled = readPaymentOutcome(orderId);
-            if (PAYMENT_AUTHORIZED.equals(settled)) {
-                return FlowOutcome.CONTINUE;
-            }
-            if (PAYMENT_DECLINED.equals(settled)) {
-                // CONTRACT-v2 section 4.1: business-terminal decline. FlowOutcome.FAIL
-                // routes to kernel-driven LIFO compensation and is never retried
-                // (section 5: zero retries on decline).
-                return FlowOutcome.FAIL;
-            }
 
             byte[] payloadBytes = paymentRequestedPayload(orderId).getBytes(StandardCharsets.UTF_8);
             executor.executeManaged(conn -> {
@@ -336,7 +351,44 @@ public final class OrderSagaOrchestrator {
                 updateStatus(conn, orderId, "PAYMENT_PROCESSING");
             });
             dispatchPaymentRequest(order);
-            return FlowOutcome.PARK;
+            return FlowOutcome.CONTINUE;
+        };
+
+        // await-payment: parks and does nothing else.
+        //
+        // WHY A SEPARATE STEP, established the hard way on 2026-08-18: this kernel's
+        // RuntimeFlowInstance.beginScheduleAfterWake() returns currentStep + 1, so a
+        // woken flow resumes at the step AFTER the one that parked — it does NOT
+        // re-enter it. The previous single-step design read the settled outcome at the
+        // top of the parking step and assumed re-entry; on wake that read was simply
+        // skipped, so a DECLINED payment continued to confirm-order and the saga
+        // completed successfully. Caught by the §3.1 vocabulary preflight on its first
+        // execution: forced-decline order returned COMPLETED.
+        FlowStepAction awaitPaymentAction = ctx -> FlowOutcome.PARK;
+
+        // settle-payment: the step the wake actually lands on, and therefore the only
+        // place the persisted outcome can be read.
+        FlowStepAction settlePaymentAction = ctx -> {
+            SagaOrder order = resolveOrder(ctx);
+            if (order == null) {
+                return FlowOutcome.FAIL;
+            }
+            String settled = readPaymentOutcome(order.orderId());
+            if (PAYMENT_DECLINED.equals(settled)) {
+                // CONTRACT-v2 section 4.1: business-terminal decline. FAIL routes to
+                // kernel-driven LIFO compensation (refund-payment, then
+                // restore-inventory) and is never retried (section 5).
+                return FlowOutcome.FAIL;
+            }
+            if (PAYMENT_AUTHORIZED.equals(settled)) {
+                return FlowOutcome.CONTINUE;
+            }
+            // Woken with no settled outcome: the callback did not land, or landed for a
+            // different order. FAIL rather than CONTINUE — treating an unknown payment
+            // as authorised is the one failure mode this scenario must never have.
+            System.err.println("[saga] settle-payment woken with no persisted outcome for order "
+                + order.orderId() + "; failing closed to compensation.");
+            return FlowOutcome.FAIL;
         };
 
         FlowStepAction paymentCompensation = ctx -> {
@@ -394,13 +446,17 @@ public final class OrderSagaOrchestrator {
 
         FlowDefinition def = flowEngine.plans()
             .newDefinition("order-fulfillment")
-            .step("reserve-inventory", reserveAction, reserveCompensation)
-            .step("charge-payment",    paymentAction,  paymentCompensation)
-            .step("confirm-order",     confirmAction,  null)
-            .step("send-email",        emailAction,    null)
+            .step("reserve-inventory", reserveAction,       reserveCompensation)
+            .step("request-payment",   paymentAction,       paymentCompensation)
+            .step("await-payment",     awaitPaymentAction,  null)
+            .step("settle-payment",    settlePaymentAction, null)
+            .step("confirm-order",     confirmAction,       null)
+            .step("send-email",        emailAction,         null)
             .transition(0, 1)
             .transition(1, 2)
             .transition(2, 3)
+            .transition(3, 4)
+            .transition(4, 5)
             // CONTRACT-v2 section 5 transient-fault retry budget: max 3 attempts total
             // (1 initial + 2 retries) -> maxRetries(2) counts retries after the initial
             // attempt. Terminal declines (section 4.1) return FlowOutcome.FAIL, which

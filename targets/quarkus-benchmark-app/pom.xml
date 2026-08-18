@@ -72,7 +72,19 @@
          Keeping the reactive stack is not only about making it start: @Compensate and
          @Complete then run on the Vert.x event loop instead of pinning a worker thread
          per in-flight coordinator round trip, which is exactly the exhaustion mode a
-         parking saga benchmark at a fixed arrival rate is built to expose. -->
+         parking saga benchmark at a fixed arrival rate is built to expose.
+         Both artifacts, deliberately: the LRA build step checks for 'quarkus-rest-client'
+         BY NAME and a transitive copy via -jackson does not satisfy it, while -jackson is
+         what actually supplies the reactive client with JSON. -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-rest-client</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-rest-client-jackson</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>io.quarkus</groupId>

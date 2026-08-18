@@ -63,6 +63,16 @@
       <artifactId>quarkus-narayana-lra</artifactId>
     </dependency>
 
+    <!-- Required BY quarkus-narayana-lra, which fails its build step without it:
+         "'quarkus-narayana-lra' can only work if 'quarkus-rest-client' or
+         'quarkus-resteasy-client' is present". It is how the participant talks to the
+         coordinator. Noted here because it is a real footprint difference this arm
+         carries and the others do not — §9(a). -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-rest-client</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-narayana-jta</artifactId>

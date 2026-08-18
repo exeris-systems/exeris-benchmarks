@@ -129,7 +129,8 @@
       "required_contracts": [
         "exeris_community_h1_park1_v3",
         "quarkus_lra_h1_park1_v3",
-        "spring_axon_h1_park1_v3"
+        "spring_axon_h1_park1_v3",
+        "restate_saga_h1_park1_v3"
       ]
     }
   },
@@ -958,8 +959,8 @@
       "measured_peak_concurrency": 342,
       "graph_backend": "none",
       "ramp_up_seconds": 60,
-      "warmup_seconds": 60,
-      "measurement_window_seconds": 180,
+      "warmup_seconds": 300,
+      "measurement_window_seconds": 900,
       "think_time_ms_min": 800,
       "think_time_ms_max": 2500,
       "payment_fail_rate": 0.03,
@@ -1021,7 +1022,8 @@
         ]
       },
       "payment_callback_delay_ms": 1,
-      "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired."
+      "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
+      "cooldown_seconds": 30
     },
     "quarkus_lra_h1_park1_v3": {
       "scenario_id": "e2e-shop-order-saga",
@@ -1039,8 +1041,8 @@
       "measured_peak_concurrency": 342,
       "graph_backend": "none",
       "ramp_up_seconds": 60,
-      "warmup_seconds": 60,
-      "measurement_window_seconds": 180,
+      "warmup_seconds": 300,
+      "measurement_window_seconds": 900,
       "think_time_ms_min": 800,
       "think_time_ms_max": 2500,
       "payment_fail_rate": 0.03,
@@ -1104,7 +1106,8 @@
       "payment_callback_delay_ms": 1,
       "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
       "saga_orchestration": "microprofile-lra-single-participant",
-      "_engine_note": "quarkus-narayana-lra, official io.quarkus extension, support level PREVIEW. Saga enrolled as ONE participant with the LIFO unwind in application code, because the LRA spec guarantees no ordering across participants. A durable saga ENVELOPE, never 'full LRA' (§9(a)). Runs Quarkus 3.38.2, not 3.34.3."
+      "_engine_note": "quarkus-narayana-lra, official io.quarkus extension, support level PREVIEW. Saga enrolled as ONE participant with the LIFO unwind in application code, because the LRA spec guarantees no ordering across participants. A durable saga ENVELOPE, never 'full LRA' (§9(a)). Runs Quarkus 3.38.2, not 3.34.3.",
+      "cooldown_seconds": 30
     },
     "spring_axon_h1_park1_v3": {
       "scenario_id": "e2e-shop-order-saga",
@@ -1122,8 +1125,8 @@
       "measured_peak_concurrency": 342,
       "graph_backend": "none",
       "ramp_up_seconds": 60,
-      "warmup_seconds": 60,
-      "measurement_window_seconds": 180,
+      "warmup_seconds": 300,
+      "measurement_window_seconds": 900,
       "think_time_ms_min": 800,
       "think_time_ms_max": 2500,
       "payment_fail_rate": 0.03,
@@ -1186,7 +1189,89 @@
         ]
       },
       "payment_callback_delay_ms": 1,
-      "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired."
+      "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
+      "cooldown_seconds": 30
+    },
+    "restate_saga_h1_park1_v3": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "target_app": "restate",
+      "framework": "restate-jvm-sdk",
+      "framework_version": "2.9.3",
+      "saga_framework": "restate-durable-execution",
+      "graph_backend": "none",
+      "event_backend": "restate-journal-plus-outbox",
+      "virtual_users": 100,
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 300,
+      "measurement_window_seconds": 900,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "baseline_only",
+      "claim_scope": "comparison_eligible_pending_gate",
+      "comparison_class": "durable-execution-external-server",
+      "comparison_disqualifiers": [
+        "protocol_mode h1 (JDK com.sun.net.httpserver facade, HTTP/1.1 only) vs h2c on the canonical saga contracts — strict-gate disqualifier, same class as spring_runtime_on_exeris_flow_neo4j_h1_v1",
+        "CONTRACT-v2 s3 resolution model is INLINE (terminal outcome in the POST /api/v1/orders 200 body, k6 skips the poll loop) whereas exeris-community, spring-hibernate and spring-on-exeris are POLLED with up-to-1s quantization — cross-model saga-duration rows are forbidden without naming each stack resolution model",
+        "deployment unit includes an external restate-server container outside the per-process resource sampler; whole-deployment footprint must be attributed separately from logs/restate-server-docker-stats.csv",
+        "status poll is an in-memory sticky-terminal projection (status_poll_comparison_excluded), same class as the Axon stacks"
+      ],
+      "durability_tier_note": "restate-server 1.7 default = replicated loglet + RocksDB WAL fsync per commit batch (T2 fsync node-durable). CONTRACT-v2 s8 forbids cross-tier comparison; declare the tier per run.",
+      "claim_scope_note": "Baseline-only per CONTRACT-v2-IMPLEMENTATION.md (restate row) and claim guardrail 4: descriptive single-stack Restate runs are permitted with the durability tier declared; Restate comparisons in tables or prose are NOT, until the disqualifiers above are resolved and the stack is wired as a fixed_contracts entry plus a comparative-pair-manifest row.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "descriptive_single_stack_only",
+        "recommend_latency_ms": "descriptive_single_stack_only",
+        "cart_add_latency_ms": "descriptive_single_stack_only",
+        "cart_get_latency_ms": "descriptive_single_stack_only",
+        "order_create_latency_ms": "descriptive_single_stack_only",
+        "order_poll_latency_ms": "descriptive_single_stack_only"
+      },
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      },
+      "workload_shape": "A-minimal-park",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "payment_callback_delay_ms": 1,
+      "cooldown_seconds": 30,
+      "_promotion_note": "PROMOTED from baseline_only_contracts on 2026-08-18: restate is measured alongside spring and quarkus, not kept as a descriptive aside. It qualifies on the same terms as the others — it parks on charge-payment (awakeable resolved by the gateway at the Restate ingress) and it is durable (invocation journal, RocksDB WAL), so §8's cross-tier prohibition does not exclude it.",
+      "_deviation_9a": "The gateway callback resolves the awakeable at the Restate INGRESS and never enters the target JVM — platform-natural, since Restate owns durable execution, but it means this arm's per-callback cost lands in restate-server rather than in the JVM. The whole-deployment footprint still captures it; a target-JVM-only comparison would not."
     }
   },
   "baseline_only_contracts": {
@@ -1264,7 +1349,8 @@
           "ACCEPTED",
           "PARKED"
         ]
-      }
+      },
+      "_superseded_by": "restate_saga_h1_park1_v3"
     }
   }
 }

@@ -307,8 +307,31 @@ P0–P3 are independent of every build decision and can start immediately.
   `spring-on-exeris`. The Hibernate arms leave the saga roster and survive only as a
   separate ORM axis if anyone wants one.
 
-- **D2b — Spring Security filter chain.** Still open; see §2.2. Upstream measured it at
-  23 % of the hosting rung and made it switchable, and the Exeris arm carries none.
+- **D2b — Spring Security filter chain: leave every stack's security as the platform
+  provides it, and declare it.** RESOLVED, and my framing of it was wrong.
+
+  I wrote "the Exeris arm carries no Spring Security at all" as though that were an
+  Exeris advantage. **Quarkus carries none either** — so Spring Security is a *Spring*
+  property, not an Exeris one, and switching the chain off would measure a Spring
+  nobody deploys. The counterweight runs the other way: Exeris derives a
+  `SHARED`-strategy **RLS key** per request (`BenchmarkJwtSecurityProvider`), which
+  neither of the others has an analogue for, so it pays authorization work they do not.
+
+  All three verify a JWT on every request; what differs is the mechanism:
+
+  | stack | request-path authorization |
+  |---|---|
+  | exeris-community | `SecurityInterceptor` + `BenchmarkJwtSecurityProvider` — signature verify + principal + RLS key |
+  | spring-* | `SecurityFilterChain` → `oauth2ResourceServer` JWT decode + `AuthorizationManager`, reached even on `permitAll` |
+  | quarkus-* | explicit `authTokenService.authenticate(...)` per resource method, no filter chain |
+
+  None of them is skipping the work; they are three idioms for the same requirement.
+  So: **no switch is flipped for the comparison.** The mechanism is declared per stack
+  alongside `resolution_model` (§3.1), and the difference must not be read as a runtime
+  property — the same treatment `resolution_model` gets, for the same reason.
+
+  Upstream's 23 % figure stays valid for what it measured — the *hosting* rung inside
+  the Spring ladder, Spring vs Spring — and does not transfer to a cross-platform row.
 
 - **D3 — `register` moves out of the per-iteration path.** RESOLVED, and the reasoning
   changed on the way. The ORM half is indeed moot once no arm runs Hibernate. What

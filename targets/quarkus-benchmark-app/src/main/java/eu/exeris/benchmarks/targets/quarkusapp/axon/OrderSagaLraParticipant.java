@@ -2,16 +2,9 @@ package eu.exeris.benchmarks.targets.quarkusapp.axon;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.HeaderParam;
-import jakarta.ws.rs.PUT;
-import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.Response;
 
-import org.eclipse.microprofile.lra.annotation.Compensate;
-import org.eclipse.microprofile.lra.annotation.Complete;
 import org.eclipse.microprofile.lra.annotation.ParticipantStatus;
-import org.eclipse.microprofile.lra.annotation.Status;
-import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
 import org.jboss.logging.Logger;
 
 import java.net.URI;
@@ -37,6 +30,13 @@ import java.net.URI;
  * does not use LRA's multi-participant choreography. Registered in §9(a); the
  * extension's support level (<em>preview</em>) goes into the reproducibility metadata.
  *
+ * <h2>Annotations live on the resource, not here</h2>
+ *
+ * <p>Quarkus refuses to build when a class carries {@code @LRA} without a
+ * {@code @Compensate} on the SAME class. The JAX-RS and LRA annotations therefore sit
+ * on {@code ShopSagaResource}, which delegates straight to this bean — the logic keeps
+ * a name and a home, the framework gets the shape it demands.
+ *
  * <h2>Why the LRA id lives on the orders row</h2>
  *
  * The coordinator hands back only the LRA id when it calls compensate/complete, and it
@@ -44,7 +44,6 @@ import java.net.URI;
  * survive.
  */
 @ApplicationScoped
-@Path("/api/v1/lra/order-saga")
 public class OrderSagaLraParticipant {
 
     private static final Logger LOG = Logger.getLogger(OrderSagaLraParticipant.class);
@@ -65,10 +64,7 @@ public class OrderSagaLraParticipant {
      * Restate arms produce, and it is not delegated to the coordinator for the reason
      * in the class javadoc.
      */
-    @PUT
-    @Path("/compensate")
-    @Compensate
-    public Response compensate(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
+    public Response compensate(URI lraId) {
         Long dbOrderId = stepService.findOrderIdByLraId(lraId.toString());
         if (dbOrderId == null) {
             // Nothing to unwind that we can identify. Reporting Compensated rather than
@@ -97,17 +93,11 @@ public class OrderSagaLraParticipant {
      * because a participant without {@code @Complete} cannot report its state, and a
      * saga whose completion is unobservable is not one this contract can gate.
      */
-    @PUT
-    @Path("/complete")
-    @Complete
-    public Response complete(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
+    public Response complete(URI lraId) {
         return Response.ok(ParticipantStatus.Completed.name()).build();
     }
 
-    @PUT
-    @Path("/status")
-    @Status
-    public Response status(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
+    public Response status(URI lraId) {
         Long dbOrderId = stepService.findOrderIdByLraId(lraId.toString());
         if (dbOrderId == null) {
             return Response.ok(ParticipantStatus.Active.name()).build();

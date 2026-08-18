@@ -26,7 +26,13 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import eu.exeris.benchmarks.targets.quarkusapp.axon.OrderSagaLraParticipant;
+import jakarta.ws.rs.PUT;
+import org.eclipse.microprofile.lra.annotation.Compensate;
+import org.eclipse.microprofile.lra.annotation.Complete;
+import org.eclipse.microprofile.lra.annotation.Status;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
+import java.net.URI;
 
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +54,33 @@ public class ShopSagaResource {
 
     @Inject
     AxonOrderSagaService axonOrderSagaService;
+
+    @Inject
+    OrderSagaLraParticipant lraParticipant;
+
+    // CONTRACT-v2 §9(a): the LRA participant callbacks MUST live on the same class as
+    // the @LRA method — Quarkus fails the build otherwise. They delegate immediately;
+    // the unwind logic stays in OrderSagaLraParticipant where it can be found by name.
+    @PUT
+    @Path("/lra/order-saga/compensate")
+    @Compensate
+    public Response lraCompensate(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
+        return lraParticipant.compensate(lraId);
+    }
+
+    @PUT
+    @Path("/lra/order-saga/complete")
+    @Complete
+    public Response lraComplete(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
+        return lraParticipant.complete(lraId);
+    }
+
+    @PUT
+    @Path("/lra/order-saga/status")
+    @Status
+    public Response lraStatus(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
+        return lraParticipant.status(lraId);
+    }
 
     @POST
     @Path("/auth/register")

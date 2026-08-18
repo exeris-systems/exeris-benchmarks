@@ -2043,7 +2043,19 @@ else
   if [[ "${GATE_ISSUED%%.*}" -gt 0 ]]; then
     GATE_O0_UNRESOLVED_PCT=$(( ${GATE_O0_UNRESOLVED%%.*} * 10000 / ${GATE_ISSUED%%.*} ))
   fi
-  if [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_UNRESOLVED_PCT" -gt 200 ]]; then
+  # Second detector_fault condition, added after the negative control measured its own
+  # margin: a fully blind detector produces unresolved ~= the decline rate, so at 3%
+  # declines the run above landed at 2.29% — over the 2% bound, but only just. At a 1%
+  # decline rate the same total blindness would slip UNDER it.
+  #
+  # Observing zero compensations where the oracle expects some is the exact v1 signature.
+  # It is reported as detector_fault rather than gate FAIL deliberately: the run cannot
+  # distinguish "did not compensate" from "could not see it", and saying so is honest
+  # where either verdict would be a guess.
+  if [[ "$GATE_O0_CAPABLE" == "true" && "${GATE_OBSERVED%%.*}" -eq 0 && -n "${GATE_EXPECTED:-}" && "${GATE_EXPECTED%%.*}" -gt 0 ]]; then
+    GATE_STATUS="detector_fault"
+    GATE_REASON="O0: zero compensations observed where the §4.1 oracle expects ${GATE_EXPECTED} over ${GATE_ISSUED} issued. Zero-against-nonzero is the v1 signature and cannot distinguish a stack that did not compensate from a detector that could not see it. Check this stack's declared terminal_tokens (§3.1) first."
+  elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_UNRESOLVED_PCT" -gt 200 ]]; then
     GATE_STATUS="detector_fault"
     GATE_REASON="O0: ${GATE_O0_UNRESOLVED} of ${GATE_ISSUED} issued sagas ($(( GATE_O0_UNRESOLVED_PCT / 100 )).$(( GATE_O0_UNRESOLVED_PCT % 100 ))%) reached no terminal outcome the detector recognises, above the 2% bound. An unresolved saga is an observation failure, not an outcome, so the compensation count cannot be trusted in either direction. First thing to check: this stack's declared terminal_tokens (CONTRACT-v2 §3.1) against what it actually emits."
   elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_SUM" != "${GATE_ISSUED%%.*}" ]]; then

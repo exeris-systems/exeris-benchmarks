@@ -269,29 +269,74 @@ P0–P3 are independent of every build decision and can start immediately.
 
 ---
 
-## 9. Decisions needed before implementation
+## 9. Decisions — RESOLVED 2026-07-31
 
-- **D1 — quarkus's saga engine.** Community Axon extension (real LIFO, pre-1.0,
-  single maintainer) / LRA (native, no ordering guarantee, needs a §2 deviation) /
-  keep engineless and label it out of the durable comparison. Recommendation: the
-  Axon extension if quarkus must be a peer; otherwise label it out — it is a valid
-  and interesting reference point as "what a stack with no orchestration engine
-  costs", provided it is never tabulated as one.
-- **D2 — Spring JDBC variants.** *Cost revised down after the merge:*
-  `spring-benchmark-app-jdbc` already exists with the saga, so this is the
-  three-file parking port, not a new target. Recommendation: do it — RSS is a
-  headline metric, and upstream's ORM axis shows the repository layer costs
-  headroom, which is exactly what a 50/s arrival-rate scenario is sensitive to.
-  `spring-on-exeris` still needs its own JDBC variant.
-- **D2b — the Spring Security filter chain.** Upstream measured it at **23 % of the
-  hosting rung** and made it switchable. The saga arms have the same confound and the
-  Exeris arm carries no Spring Security at all. Decide whether the saga comparison
-  runs with the chain on (realistic) or off (isolates the runtime) — but decide it,
-  rather than inheriting the default and rediscovering the term later.
-- **D3 — does `register` stay per-iteration?** It is the main remaining ORM-sensitive
-  step; moving it to setup would shrink the ORM's influence without building
-  anything.
-- **D4 — G2: downgrade now, or build O2 first?** Recommendation: downgrade now,
-  build O2 after — the external `(orderId, stepId, direction)` ledger is the only
-  design here that is structurally immune to the detector fault that started all of
-  this.
+- **D1 — quarkus's saga engine: `quarkus-narayana-lra`, saga enrolled as a SINGLE
+  participant.** RESOLVED.
+
+  Premise corrected first: `quarkus-narayana-lra` is a **first-party** extension —
+  groupId `io.quarkus`, in the platform BOM, maintained by Red Hat & IBM, support
+  level **preview**. It is available directly; Camel only layers a routing DSL over
+  the same coordinator. So the choice was never "unofficial Axon vs Camel", it was
+  "official LRA vs a community extension", and the official one wins.
+
+  The single-participant shape is what makes it work despite the spec guaranteeing no
+  compensation ordering (`LRA-SPIKE.md`): one participant is enrolled and its
+  `@Compensate` unwinds the steps LIFO **in application code**, so §2 is satisfied by
+  construction rather than by trusting coordinator behaviour that the spec does not
+  promise and that we did not measure.
+
+  | property | outcome |
+  |---|---|
+  | provenance | first-party, `io.quarkus`, RH/IBM — not a pre-1.0 single-maintainer repo |
+  | durability | the coordinator persists open LRAs and enrolments and drives compensate/complete after a restart — a real engine where there is none today |
+  | §2 LIFO | preserved, unwound by our code |
+  | park | natural: the LRA stays open across the gateway wait |
+
+  **Must be declared, §9(a):** this uses LRA as a durable saga *envelope*, not as
+  multi-participant choreography. It must never be presented as "full LRA". The
+  `preview` support level goes into the reproducibility metadata.
+
+  Rejected with reason: multi-participant LRA reporting whatever order Narayana
+  happens to produce. More faithful to the spec, but it either violates §2 or forces a
+  per-stack deviation on exactly the axis §7 measures. Viable later only as a
+  separate, labelled target.
+
+- **D2 — Spring JDBC variants: do it.** RESOLVED. Cost is the three-file parking port
+  into the existing `spring-benchmark-app-jdbc`, plus a JDBC variant of
+  `spring-on-exeris`. The Hibernate arms leave the saga roster and survive only as a
+  separate ORM axis if anyone wants one.
+
+- **D2b — Spring Security filter chain.** Still open; see §2.2. Upstream measured it at
+  23 % of the hosting rung and made it switchable, and the Exeris arm carries none.
+
+- **D3 — `register` moves out of the per-iteration path.** RESOLVED, and the reasoning
+  changed on the way. The ORM half is indeed moot once no arm runs Hibernate. What
+  remains is independent of ORM: `registerWithRetry` is called inside the default
+  function, so **the `users` table grows by ~16 400 rows during the measurement
+  window** — iteration 1 and iteration 16 000 do not measure the same dataset.
+
+  The stronger argument is not stationarity but relevance: **registration is not part
+  of an order flow.** `recommend` and `cart` were kept because a customer browses and
+  fills a cart before ordering; a returning customer does not register. Registering
+  once per order is both unrealistic and non-stationary, so this is the same principle
+  that kept the other two, not an exception to it.
+
+  Shape: `setup()` registers a pool of K users once and hands the tokens to the
+  iterations; **K = maxVUs and the user is picked by `__VU`**, so no two concurrent
+  iterations share a cart — the current per-iteration registration is what guarantees
+  cart isolation today, and a naive shared pool would silently introduce cart
+  collisions. No target change required: `register` already returns the token, and
+  there is no login endpoint to build.
+
+- **D4 — G2: downgrade now, build O2 last.** RESOLVED. Split G2 into G2a (compensation
+  occurrence, exact-count gate, **client-observed at the HTTP boundary**, verified) and
+  G2b (compensation set and LIFO order via an out-of-process ledger keyed
+  `(orderId, stepId, direction)` — **not built, not claimed**). O2 is the final item of
+  the programme, after the campaign.
+
+  Worth carrying in the v2.1 changelog as a sentence rather than a line item: the
+  oracle §7 already describes **would have been immune to the defect that started all
+  of this**, because a ledger fed by the stacks does not parse a status string and so
+  cannot be blinded by a field name. The fix was specified in July and not built; what
+  was built instead had exactly the failure the spec existed to remove.

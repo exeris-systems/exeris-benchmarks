@@ -1265,6 +1265,143 @@ if [[ -n "$PRE_TOKEN" ]]; then
   echo "Recommendation preflight OK (status=${RECOMMEND_CODE})."
 fi
 
+
+# --- CONTRACT-v2 §3.1: declared terminal vocabulary + preflight ---------------
+#
+# The harness reads the vocabulary this stack DECLARES and never infers it. A
+# stack whose declaration is absent, incomplete, or contradicted at preflight
+# does not run — that is a launch failure, not a result.
+#
+# This exists because the alternative is what happened: the detector was blind on
+# one arm, reported a clean zero, and nothing in the pipeline could tell that
+# apart from "no compensations occurred".
+TERMINAL_VOCABULARY_JSON="$(python3 - "$CONTRACT_ID" <<'PY'
+import json, sys
+cid = sys.argv[1]
+j = json.load(open("scenarios/e2e-shop-order-saga/scenario.json", encoding="utf-8"))
+for ns in ("fixed_contracts", "baseline_only_contracts"):
+    c = j.get(ns, {}).get(cid)
+    if isinstance(c, dict) and "terminal_vocabulary" in c:
+        print(json.dumps(c["terminal_vocabulary"], separators=(",", ":"))); sys.exit(0)
+sys.exit(3)
+PY
+)" || {
+  echo "ERROR: contract '${CONTRACT_ID}' declares no terminal_vocabulary (CONTRACT-v2 3.1)." >&2
+  echo "ERROR: the harness will not guess the terminal field or its tokens — that is the" >&2
+  echo "ERROR: defect class 3.1 exists to close. Declare it in scenario.json." >&2
+  exit 79
+}
+
+# Negative control (CONTRACT-v2 7). Deliberately falsifies the declaration so the
+# detector cannot see COMPENSATED, and the run MUST end in detector_fault rather
+# than in a compensation figure. A check never observed to fire is not evidence
+# that it would.
+BENCH_NEGATIVE_CONTROL="${BENCH_NEGATIVE_CONTROL:-0}"
+if [[ "$BENCH_NEGATIVE_CONTROL" == "1" ]]; then
+  TERMINAL_VOCABULARY_JSON="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" \
+    | jq -c '.terminal_tokens.COMPENSATED = "__NEGATIVE_CONTROL_WRONG_TOKEN__"')"
+  echo "NEGATIVE CONTROL ACTIVE: COMPENSATED token falsified. This run MUST end detector_fault." >&2
+fi
+export K6_TERMINAL_VOCABULARY="$TERMINAL_VOCABULARY_JSON"
+
+VOCAB_FIELD="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -r '.terminal_field')"
+VOCAB_TOK_COMPLETED="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -r '.terminal_tokens.COMPLETED')"
+VOCAB_TOK_COMPENSATED="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -r '.terminal_tokens.COMPENSATED')"
+echo "Declared terminal vocabulary: field=${VOCAB_FIELD} completed=${VOCAB_TOK_COMPLETED} compensated=${VOCAB_TOK_COMPENSATED}"
+
+
+# CONTRACT-v2 3.1 preflight (normative): before the measurement window opens, drive
+# one forced-DECLINE and one forced-SUCCESS order and require the DECLARED tokens to
+# appear on the DECLARED field. Failure to observe either is a launch failure.
+#
+# This is the check that would have caught the v1 zero-compensation defect at t=0
+# instead of after a full campaign: a stack that cannot show a COMPENSATED under a
+# guaranteed decline is either not compensating or not observable, and either way
+# its compensation count is worthless.
+#
+# The two orderIds are chosen by IMPORTING tools/bench/lib/fnv1a64.py, never by
+# re-implementing the rule. A fourth copy of a rule that must be identical
+# everywhere is precisely the drift this contract keeps having to correct.
+preflight_terminal_vocabulary() {
+  local base="$1" token="$2"
+  [[ -n "$token" ]] || { echo "vocabulary preflight: no auth token; skipping is NOT allowed" >&2; return 1; }
+
+  local ids decline_id success_id
+  ids="$(python3 - <<'PY'
+import sys
+sys.path.insert(0, "tools/bench/lib")
+from fnv1a64 import decline          # the single normative implementation
+d = s = None
+for i in range(100000):
+    oid = f"preflight-vocab-i{i}"
+    if d is None and decline(oid): d = oid
+    if s is None and not decline(oid): s = oid
+    if d and s: break
+if not (d and s):
+    sys.exit(4)
+print(d); print(s)
+PY
+)" || { echo "vocabulary preflight: could not derive probe orderIds" >&2; return 1; }
+  decline_id="$(printf '%s\n' "$ids" | sed -n 1p)"
+  success_id="$(printf '%s\n' "$ids" | sed -n 2p)"
+
+  local _pid _cart _body _observed _expected _oid
+  _pid="$(jq -r '.[0].id // empty' "$RECOMMEND_PREFLIGHT_BODY_JSON" 2>/dev/null || true)"
+  [[ -n "$_pid" ]] || { echo "vocabulary preflight: no product id from the recommendation preflight" >&2; return 1; }
+
+  for _case in "decline:${decline_id}:${VOCAB_TOK_COMPENSATED}" "success:${success_id}:${VOCAB_TOK_COMPLETED}"; do
+    _oid="$(printf '%s' "$_case" | cut -d: -f2)"
+    _expected="$(printf '%s' "$_case" | cut -d: -f3)"
+
+    curl -sS $CURL_INSECURE_OPT -o /dev/null -X POST "$base/api/v1/cart/add" \
+      -H "Authorization: Bearer $token" -H 'content-type: application/json' \
+      --data-binary "$(jq -nc --arg p "$_pid" '{productId:$p,quantity:1}')" || return 1
+    _cart="$(curl -sS $CURL_INSECURE_OPT -X GET "$base/api/v1/cart" \
+      -H "Authorization: Bearer $token" | jq -r '.cart_id // .id // empty')"
+    [[ -n "$_cart" ]] || { echo "vocabulary preflight: no cart id" >&2; return 1; }
+
+    _body="$(curl -sS $CURL_INSECURE_OPT -X POST "$base/api/v1/orders" \
+      -H "Authorization: Bearer $token" -H 'content-type: application/json' \
+      --data-binary "$(jq -nc --arg o "$_oid" --arg c "$_cart" '{orderId:$o,cartId:$c,paymentMethod:"CARD"}')")"
+    _observed="$(printf '%s' "$_body" | jq -r --arg f "$VOCAB_FIELD" '.[$f] // empty')"
+
+    # Inline is the declared model, but the declaration also permits a polled
+    # fallback, so a non-terminal inline answer is followed up rather than failed.
+    if [[ "$_observed" != "$_expected" ]]; then
+      local _n=0
+      while (( _n < 30 )); do
+        _observed="$(curl -sS $CURL_INSECURE_OPT -X GET "$base/api/v1/orders/${_oid}/status" \
+          -H "Authorization: Bearer $token" | jq -r --arg f "$VOCAB_FIELD" '.[$f] // empty')"
+        [[ "$_observed" == "$_expected" ]] && break
+        _n=$((_n+1)); sleep 1
+      done
+    fi
+
+    if [[ "$_observed" != "$_expected" ]]; then
+      echo "ERROR: CONTRACT-v2 3.1 vocabulary preflight FAILED on the ${_case%%:*} case." >&2
+      echo "ERROR:   orderId        ${_oid}" >&2
+      echo "ERROR:   declared field ${VOCAB_FIELD}" >&2
+      echo "ERROR:   expected token ${_expected}" >&2
+      echo "ERROR:   observed       '${_observed:-<absent>}'" >&2
+      echo "ERROR: the declaration in scenario.json does not describe what this stack emits." >&2
+      echo "ERROR: Running anyway would produce a compensation count that cannot be trusted" >&2
+      echo "ERROR: in either direction — the exact failure 3.1 exists to prevent." >&2
+      return 1
+    fi
+    echo "  vocabulary preflight ${_case%%:*}: observed '${_observed}' on '${VOCAB_FIELD}' as declared."
+  done
+  return 0
+}
+
+if ! preflight_terminal_vocabulary "$BASE_URL" "$PRE_TOKEN"; then
+  if [[ "$BENCH_NEGATIVE_CONTROL" == "1" ]]; then
+    echo "NEGATIVE CONTROL: preflight rejected the falsified declaration, as required." >&2
+    echo "NEGATIVE CONTROL: this is the expected outcome — the detector is demonstrably not blind." >&2
+    exit 80
+  fi
+  exit 79
+fi
+
 bench_read_k6_defaults "$K6_ENV_FILE"
 export BASE_URL
 
@@ -1877,7 +2014,10 @@ else
   if grep -q 'saga_unresolved_total' "$K6_SCRIPT" 2>/dev/null; then
     GATE_O0_CAPABLE="true"
   fi
-  if [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_SUM" != "${GATE_ISSUED%%.*}" ]]; then
+  if [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_UNRESOLVED_PCT" -gt 200 ]]; then
+    GATE_STATUS="detector_fault"
+    GATE_REASON="O0: ${GATE_O0_UNRESOLVED} of ${GATE_ISSUED} issued sagas ($(( GATE_O0_UNRESOLVED_PCT / 100 )).$(( GATE_O0_UNRESOLVED_PCT % 100 ))%) reached no terminal outcome the detector recognises, above the 2% bound. An unresolved saga is an observation failure, not an outcome, so the compensation count cannot be trusted in either direction. First thing to check: this stack's declared terminal_tokens (CONTRACT-v2 §3.1) against what it actually emits."
+  elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_SUM" != "${GATE_ISSUED%%.*}" ]]; then
 
     # The identity did not close. This is an instrument failure, NOT a result: it
 

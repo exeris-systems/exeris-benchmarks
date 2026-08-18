@@ -71,7 +71,49 @@ const REGISTER_MAX_ATTEMPTS = Number.parseInt(__ENV.K6_REGISTER_MAX_ATTEMPTS || 
 // FAILED_UNRECOVERED is the CONTRACT-v2 §5/§6 terminal-failure state (compensation retry
 // budget exhausted); FAILED is kept for pre-v2 targets. COMPENSATING is non-terminal: saga
 // rollback still in progress.
-const TERMINAL_SAGA_STATUSES = new Set(['COMPLETED', 'COMPENSATED', 'FAILED', 'FAILED_UNRECOVERED']);
+// CONTRACT-v2 §3.1 — the terminal vocabulary is DECLARED per stack in
+// scenarios/e2e-shop-order-saga/scenario.json and passed in here by the harness.
+// It is never inferred and never widened with a fallback.
+//
+// Why a declaration rather than accepting more spellings: broadening the match
+// raises tolerance without removing the class — the next stack brings a third
+// name. A declaration turns a silent non-match into a loud missing declaration.
+// Two live examples of the class, both found on 2026-07-31:
+//   - the inline path accepted `body.saga_status`, which NO stack emits. Dead
+//     tolerance protects nothing today and hides the real mismatch tomorrow.
+//   - 'FAILED' was accepted "for pre-v2 targets" though §3 never defines it, and
+//     was bucketed as unrecovered — so a stack emitting it on a declined payment
+//     would turn a MISSING COMPENSATION (a §6 G2 violation) into an O3 line item.
+const SAGA_VOCABULARY = (() => {
+  const raw = __ENV.K6_TERMINAL_VOCABULARY;
+  if (!raw) {
+    throw new Error(
+      'K6_TERMINAL_VOCABULARY is not set. CONTRACT-v2 §3.1 requires the terminal ' +
+      'vocabulary to be declared per stack and read by the harness; guessing it is ' +
+      'what produced the v1 zero-compensation defect. Refusing to run.');
+  }
+  const v = JSON.parse(raw);
+  const tokens = v.terminal_tokens || {};
+  for (const required of ['COMPLETED', 'COMPENSATED', 'FAILED_UNRECOVERED']) {
+    if (!tokens[required]) {
+      throw new Error(`terminal_tokens.${required} missing from the declaration for this stack.`);
+    }
+  }
+  if (!v.terminal_field) {
+    throw new Error('terminal_field missing from the declaration for this stack.');
+  }
+  return {
+    field: v.terminal_field,
+    pollField: v.poll_terminal_field || v.terminal_field,
+    completed: tokens.COMPLETED,
+    compensated: tokens.COMPENSATED,
+    unrecovered: tokens.FAILED_UNRECOVERED,
+  };
+})();
+
+const TERMINAL_SAGA_STATUSES = new Set([
+  SAGA_VOCABULARY.completed, SAGA_VOCABULARY.compensated, SAGA_VOCABULARY.unrecovered,
+]);
 const POLL_EXPECTED_STATUSES = http.expectedStatuses(200, 404);
 // Set K6_EXPECTED_PROTO=HTTP/2.0 to enforce an http2_rate>0.99 threshold.
 const EXPECTED_PROTO = __ENV.K6_EXPECTED_PROTO || '';
@@ -338,7 +380,7 @@ function extractOrderId(response) {
 function extractTerminalStatus(response) {
   try {
     const body = JSON.parse(response.body);
-    const status = body.status || body.saga_status || null;
+    const status = body[SAGA_VOCABULARY.field] || null;
     return TERMINAL_SAGA_STATUSES.has(status) ? status : null;
   } catch (e) {
     return null;
@@ -412,7 +454,7 @@ function pollSagaStatus(token, orderId, baseUrl) {
 
     try {
       const body = JSON.parse(statusRes.body);
-      sagaStatus = body.status || 'UNKNOWN';
+      sagaStatus = body[SAGA_VOCABULARY.pollField] || 'UNKNOWN';
     } catch (e) {
       sagaStatus = 'PARSE_ERROR';
     }
@@ -626,11 +668,11 @@ export default function () {
   }
   const sagaDurationMs = Date.now() - orderSubmitStartMs;
 
-  const sagaSuccess = pollResult.sagaStatus === 'COMPLETED';
-  const sagaCompensated = pollResult.sagaStatus === 'COMPENSATED';
+  const sagaSuccess = pollResult.sagaStatus === SAGA_VOCABULARY.completed;
+  const sagaCompensated = pollResult.sagaStatus === SAGA_VOCABULARY.compensated;
   // FAILED_UNRECOVERED per CONTRACT-v2 §5 (compensation retry budget exhausted); FAILED kept
   // for pre-v2 targets — both count into the unrecovered-failure bucket.
-  const sagaUnrecovered = pollResult.sagaStatus === 'FAILED' || pollResult.sagaStatus === 'FAILED_UNRECOVERED';
+  const sagaUnrecovered = pollResult.sagaStatus === SAGA_VOCABULARY.unrecovered;
   const sagaFailed = sagaUnrecovered || pollResult.pollFailed;
   const sagaUnresolved = !pollResult.resolved;
 

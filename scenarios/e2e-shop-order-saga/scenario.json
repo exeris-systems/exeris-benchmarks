@@ -423,7 +423,27 @@
       },
       "maturity": "guard",
       "claim_scope": "coverage_limited",
-      "comparison_class": "platform-natural-stack"
+      "comparison_class": "platform-natural-stack",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      }
     },
     "quarkus_axon_pgq_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -463,7 +483,27 @@
       "claim_scope": "coverage_limited",
       "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community is NOT supported at this claim scope.",
       "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
-      "comparison_class": "platform-natural-stack"
+      "comparison_class": "platform-natural-stack",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      }
     },
     "spring_boot_axon_pgq_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -503,7 +543,27 @@
       "claim_scope": "coverage_limited",
       "claim_scope_note": "Axon saga targets record end-to-end HTTP latency under the Axon Framework event-sourcing execution model. Request-path DB writes differ structurally from Exeris community (Axon: in-process command dispatch + in-memory SimpleEventBus event publish — no synchronous DB writes in HTTP request path; Exeris: INSERT orders + INSERT order_items + UPDATE saga_id — 3 synchronous DB writes in HTTP request path). Inventory reservation, multi-step saga state transitions, and compensation are not executed in the request path under Axon. Status poll served from in-memory projection (ConcurrentHashMap), not from a DB read. Cross-target latency comparison with exeris-community is NOT supported at this claim scope.",
       "workload_note": "product_level_including_framework: Axon Framework event-sourcing saga model vs Exeris CoreFlowEngine native saga. order_id is a logical AtomicLong saga correlation identifier, not a DB BIGSERIAL row. status_poll_comparison_excluded: true.",
-      "comparison_class": "platform-natural-stack"
+      "comparison_class": "platform-natural-stack",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      }
     },
     "exeris_community_h2c_age_compat_v1": {
       "scenario_id": "e2e-shop-order-saga",
@@ -686,7 +746,27 @@
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
       "superseded_contract": "exeris_community_h2c_v1",
       "workload_shape": "A0-straight-through-superseded",
-      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work."
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      }
     },
     "quarkus_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -745,7 +825,27 @@
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
       "superseded_contract": "quarkus_axon_neo4j_v1",
       "workload_shape": "A0-straight-through-superseded",
-      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work."
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      }
     },
     "spring_boot_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -805,7 +905,27 @@
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
       "superseded_contract": "spring_boot_axon_neo4j_v1",
       "workload_shape": "A0-straight-through-superseded",
-      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work."
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      }
     }
   },
   "baseline_only_contracts": {
@@ -863,6 +983,26 @@
         "cart_get_latency_ms": "descriptive_single_stack_only",
         "order_create_latency_ms": "descriptive_single_stack_only",
         "order_poll_latency_ms": "descriptive_single_stack_only"
+      },
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
       }
     }
   }

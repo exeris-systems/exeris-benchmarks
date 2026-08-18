@@ -230,7 +230,7 @@ public final class HttpApiServer {
             // v2 request-response: terminal outcome in the 200 body — k6 skips polling.
             sendJson(exchange, 200, new OrderTerminalView(result.orderId(), result.status(), result.sagaId()));
         } catch (OrderSagaClient.SagaSubmissionException e) {
-            log.error("order {} saga submission failed: {}", orderId, e.getMessage());
+            log.error("order {} saga submission failed", orderId, e);  // full cause: the message alone swallowed a ClassNotFoundException for a whole debugging round
             sendJson(exchange, 502, new ErrorResponse("saga_submission_failed"));
         }
     }

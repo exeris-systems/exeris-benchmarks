@@ -766,7 +766,8 @@
           "ACCEPTED",
           "PARKED"
         ]
-      }
+      },
+      "_superseded_by": "exeris_community_h1_park1_v3"
     },
     "quarkus_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -845,7 +846,8 @@
           "ACCEPTED",
           "PARKED"
         ]
-      }
+      },
+      "_superseded_by": "quarkus_lra_h1_park1_v3"
     },
     "spring_boot_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -925,7 +927,254 @@
           "ACCEPTED",
           "PARKED"
         ]
-      }
+      },
+      "_superseded_by": "spring_axon_h1_park1_v3"
+    },
+    "exeris_community_h1_park1_v3": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "protocol_note": "h1 because k6 CANNOT drive cleartext HTTP/2 (verified: curl --http2-prior-knowledge and h2load both negotiate h2c against the same endpoint where k6 gets HTTP/1.1; grafana/k6#970 open since 2019). All three targets DO serve h2c, so this is a driver limit, not a target limit. h1-for-all is fair because it is identical on every stack; an h2c track needs a different driver and its own profile key.",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "resolution_model": "inline",
+      "resolution_model_note": "CONTRACT-v2 section 3 request-response: the POST /api/v1/orders body carries the terminal outcome, so k6 never polls. Uniform across all three contracts as of 2026-07-30 - previously exeris-community and spring-hibernate were polled with 1 s quantization, which made their measured saga duration a flat ~1010 ms of client sleep.",
+      "load_model": "constant-arrival-rate",
+      "measurement_arrival_rate_per_s": 50,
+      "arrival_rate_note": "50 sessions/s chosen from a measured sweep (3/25/50/100/200). 50 is the highest rate clean on ALL stacks: at 100 exeris-community loses its entire measurement phase to connection resets. VU counts are a POOL CEILING under this executor, not concurrency - the previous virtual_users:100 field described a closed-loop model this scenario does not run.",
+      "measured_peak_concurrency": 342,
+      "graph_backend": "none",
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "descriptive_only",
+      "claim_scope": "comparison_eligible_pending_gate",
+      "supersedes_note": "Supersedes the h2c-named v1 contract for this target. Runs under the two MUST NEVER be aggregated: protocol label, terminal-outcome resolution model and arrival rate all changed.",
+      "target_app": "exeris-community",
+      "framework": "exeris-community",
+      "saga_orchestration": "flow-native",
+      "event_backend": "events-l3-outbox",
+      "comparison_class": "platform-natural-stack",
+      "claim_scope_note": "Runs the saga in-process on the request thread and returns the terminal outcome inline. Persists flow state to the Postgres v5 tables, so a share of this stack Postgres cost is saga state - see deployment-footprint.json, which reports it per component. The request thread blocks for the saga duration because FlowScheduler exposes no synchronous execute and no completion handle (section 9(a)).",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
+      "superseded_contract": "exeris_community_h2c_v1",
+      "workload_shape": "A-minimal-park",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      },
+      "payment_callback_delay_ms": 1,
+      "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired."
+    },
+    "quarkus_lra_h1_park1_v3": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "protocol_note": "h1 because k6 CANNOT drive cleartext HTTP/2 (verified: curl --http2-prior-knowledge and h2load both negotiate h2c against the same endpoint where k6 gets HTTP/1.1; grafana/k6#970 open since 2019). All three targets DO serve h2c, so this is a driver limit, not a target limit. h1-for-all is fair because it is identical on every stack; an h2c track needs a different driver and its own profile key.",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "resolution_model": "inline",
+      "resolution_model_note": "CONTRACT-v2 section 3 request-response: the POST /api/v1/orders body carries the terminal outcome, so k6 never polls. Uniform across all three contracts as of 2026-07-30 - previously exeris-community and spring-hibernate were polled with 1 s quantization, which made their measured saga duration a flat ~1010 ms of client sleep.",
+      "load_model": "constant-arrival-rate",
+      "measurement_arrival_rate_per_s": 50,
+      "arrival_rate_note": "50 sessions/s chosen from a measured sweep (3/25/50/100/200). 50 is the highest rate clean on ALL stacks: at 100 exeris-community loses its entire measurement phase to connection resets. VU counts are a POOL CEILING under this executor, not concurrency - the previous virtual_users:100 field described a closed-loop model this scenario does not run.",
+      "measured_peak_concurrency": 342,
+      "graph_backend": "none",
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "descriptive_only",
+      "claim_scope": "comparison_eligible_pending_gate",
+      "supersedes_note": "Supersedes the h2c-named v1 contract for this target. Runs under the two MUST NEVER be aggregated: protocol label, terminal-outcome resolution model and arrival rate all changed.",
+      "target_app": "quarkus-hibernate",
+      "framework": "quarkus",
+      "saga_framework": "axon-framework",
+      "event_backend": "axon-event-sourcing-outbox",
+      "comparison_class": "platform-natural-stack",
+      "claim_scope_note": "CORRECTED 2026-07-30. The previous note (shared verbatim with the spring contract) claimed Axon performs no synchronous DB writes in the HTTP request path. That is FALSE for this stack: AxonOrderSagaCommandHandler.handle runs insert-order, reserve-inventory, charge-payment and confirm-order (or the LIFO compensation pair) synchronously on the request thread and returns the terminal outcome in the POST body. Every domain write happens in the request path here.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
+      "superseded_contract": "quarkus_axon_neo4j_v1",
+      "workload_shape": "A-minimal-park",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      },
+      "payment_callback_delay_ms": 1,
+      "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
+      "saga_orchestration": "microprofile-lra-single-participant",
+      "_engine_note": "quarkus-narayana-lra, official io.quarkus extension, support level PREVIEW. Saga enrolled as ONE participant with the LIFO unwind in application code, because the LRA spec guarantees no ordering across participants. A durable saga ENVELOPE, never 'full LRA' (§9(a)). Runs Quarkus 3.38.2, not 3.34.3."
+    },
+    "spring_axon_h1_park1_v3": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "protocol_note": "h1 because k6 CANNOT drive cleartext HTTP/2 (verified: curl --http2-prior-knowledge and h2load both negotiate h2c against the same endpoint where k6 gets HTTP/1.1; grafana/k6#970 open since 2019). All three targets DO serve h2c, so this is a driver limit, not a target limit. h1-for-all is fair because it is identical on every stack; an h2c track needs a different driver and its own profile key.",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "resolution_model": "inline",
+      "resolution_model_note": "CONTRACT-v2 section 3 request-response: the POST /api/v1/orders body carries the terminal outcome, so k6 never polls. Uniform across all three contracts as of 2026-07-30 - previously exeris-community and spring-hibernate were polled with 1 s quantization, which made their measured saga duration a flat ~1010 ms of client sleep.",
+      "load_model": "constant-arrival-rate",
+      "measurement_arrival_rate_per_s": 50,
+      "arrival_rate_note": "50 sessions/s chosen from a measured sweep (3/25/50/100/200). 50 is the highest rate clean on ALL stacks: at 100 exeris-community loses its entire measurement phase to connection resets. VU counts are a POOL CEILING under this executor, not concurrency - the previous virtual_users:100 field described a closed-loop model this scenario does not run.",
+      "measured_peak_concurrency": 342,
+      "graph_backend": "none",
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 60,
+      "measurement_window_seconds": 180,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "descriptive_only",
+      "claim_scope": "comparison_eligible_pending_gate",
+      "supersedes_note": "Supersedes the h2c-named v1 contract for this target. Runs under the two MUST NEVER be aggregated: protocol label, terminal-outcome resolution model and arrival rate all changed.",
+      "target_app": "spring-hibernate",
+      "framework": "spring-boot",
+      "saga_framework": "axon-framework",
+      "event_backend": "axon-event-sourcing-outbox",
+      "comparison_class": "platform-natural-stack",
+      "claim_scope_note": "CORRECTED 2026-07-30. Saga progression IS asynchronous here (event-driven via a tracking processor), unlike quarkus-hibernate which runs the whole saga on the request thread - the two Axon stacks are NOT the same architecture, so the previously shared claim_scope_note was wrong for at least one of them. Two disclosed deviations: (a) the request thread now awaits saga completion so the response carries the terminal outcome per section 3, which is not idiomatic Axon; (d) the saga processor is given 16 segments/threads.",
+      "tuning_disclosure": "CONTRACT-v2 section 9(d): axon.eventhandling.processors.OrderFulfillmentSagaProcessor thread-count=16, initial-segment-count=16. Axon default is ONE segment and ONE thread, which serialized all saga progression and produced 7613 ms median saga latency at 50/s versus 22 ms (exeris) and 34 ms (quarkus). With 16 segments: 37 ms. Comparing a one-thread default against unbounded concurrency measures the default, not the framework. The default-config ceiling is reported separately as its own finding.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
+      "superseded_contract": "spring_boot_axon_neo4j_v1",
+      "workload_shape": "A-minimal-park",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      },
+      "payment_callback_delay_ms": 1,
+      "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired."
     }
   },
   "baseline_only_contracts": {

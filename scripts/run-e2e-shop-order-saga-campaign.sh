@@ -136,6 +136,12 @@ apply_resource_profile() {
   generated_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   export EXERIS_DB_POOL_MAX_SIZE="$BENCH_DB_POOL_MAX"
+  # CONTRACT-v2 §4 parking workload. Exported here so EVERY rep of EVERY arm runs the
+  # same shape: the baseline fails closed (exit 74) if the running gateway's delay or
+  # fault mode disagrees with what the run declares, so a campaign that forgot to pass
+  # these would stop rather than quietly measure shape A0 again.
+  export BENCH_PAYMENT_PARKING="${BENCH_PAYMENT_PARKING:-1}"
+  export PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-1}"
   export BENCH_SERVER_CPU_AFFINITY
   export BENCH_CGROUP_MEMORY_LIMIT_MB
   export BENCH_CGROUP_CPU_QUOTA_PCT

@@ -582,10 +582,21 @@ ensure_benchmark_infra() {
   # Mirror the seed's path exactly: another container, over the compose network.
   _pg_net="$(docker inspect exeris-e2e-saga-postgres \
     --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{break}}{{end}}' 2>/dev/null || true)"
+  # NOTE (2026-08-19): the seed's path changed with the network mode. Under host
+  # networking there is no compose DNS, so the seed container reaches Postgres at
+  # 127.0.0.1 - which pg_hba maps to `trust`. This probe therefore verifies REACHABILITY
+  # there, not the password; the scram path that broke on 2026-07-30 is no longer used
+  # by anything in the deployment. Probing the old service-name address instead failed
+  # for every run, which is how this was caught.
   _pg_auth_probe() {
     [[ -z "$_pg_net" ]] && return 0   # cannot probe; leave it to the seed's own fail-closed
-    docker run --rm --network "$_pg_net" -e PGPASSWORD=postgres postgres:16.2 \
-      psql -h exeris-e2e-saga-postgres -U postgres -tAc 'select 1' >/dev/null 2>&1
+    if [[ "$_pg_net" == "host" ]]; then
+      docker run --rm --network host -e PGPASSWORD=postgres postgres:16.2 \
+        psql -h 127.0.0.1 -U postgres -tAc 'select 1' >/dev/null 2>&1
+    else
+      docker run --rm --network "$_pg_net" -e PGPASSWORD=postgres postgres:16.2 \
+        psql -h exeris-e2e-saga-postgres -U postgres -tAc 'select 1' >/dev/null 2>&1
+    fi
   }
   if ! _pg_auth_probe; then
     echo "WARN: Postgres password auth (docker-network path, as the seed uses) is failing; resetting the role password." >&2

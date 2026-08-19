@@ -760,6 +760,70 @@ The two surviving warnings (`health_url` port 9004 shared by `spring-on-exeris`/
 9005 by `exeris-blackbird`/`spring-on-exeris-pure`) are pre-existing and involve no target in
 this roster.
 
+## The stack degrades across a long session, and it invalidates cross-arm comparison — 2026-08-19
+
+**Operational rule: restart the compose stack between arms.** A campaign that runs several
+arms back to back without restarting produces numbers that drift by a factor of five, in one
+direction, with no error anywhere.
+
+### Measured
+
+Same jar (`spring-axon-embedded`, the JPA target), same contract, same 20 s / 60 s / 20 s
+windows, same pinning, same VU pools (400/500/500), three measurements across one session:
+
+| | first run of the day | after ~15 back-to-back runs | after `docker compose restart` |
+|---|---|---|---|
+| `saga_completed_duration` p95 | 8.9 s | **43.0 s** | **8.50 s** |
+| `http_req_duration` p95 | 6.4 s | 17.5 s | 6.70 s |
+| `dropped_iterations` | 232 | 1024 | 244 |
+| compensations | 145 | 98 | 145 |
+
+The restart restores the original numbers, and the compensation count returns to **exactly**
+145 — the same deterministic §4.1 population the first run produced. The middle column is not
+noise; it is a degraded stack.
+
+### What it is not
+
+Each of these was measured and excluded before the restart was tried:
+
+- **Not the artifact.** This is one jar measured three times. The finding surfaced while I was
+  attributing a slowdown to the JDBC targets; the control refuted that, and the JPA jar turned
+  out to be *worse* than the JDBC ones at that moment.
+- **Not teardown co-residence.** It survived a deliberate 90 s idle gap after the previous
+  arm's JVM exited (39.0 s p95 on the repeat).
+- **Not table bloat.** `inventory` 216 kB, `orders` 1.6 MB, dead tuples in the thousands,
+  autovacuum minutes old.
+- **Not host pressure.** Load 1.36, 58 GB page cache free, CPU at 3.74 GHz, no throttling, one
+  expected JVM.
+- **Not the loadgen configuration.** Identical `maxVUs` 400/500/500 in both the fast and slow
+  runs.
+- **Not the payment gateway stub.** 14.5 MB RSS, 1 PID, 0.01 % CPU after five hours and tens
+  of thousands of callbacks.
+- **Not target CPU exhaustion.** The target JVM used **under one core** in every run
+  (`avg_cores_used` 0.70–0.85, ~100 CPU-seconds) whether p95 was 8.5 s or 43 s. The slow runs
+  burned *less* CPU while taking three times longer, which is the signature of waiting on a
+  fixed-size resource rather than of running out of processor.
+
+### What it is
+
+**Unknown, and stated as unknown.** The remedy is established (restart the stack) and the
+symptom is characterised, but the specific accumulating state — Postgres runtime state, a
+connection-pool effect, or something in one of the sidecar containers — has not been isolated.
+Postgres had spent 13 036 s in checkpoint writes over a five-hour uptime, which is heavy
+sustained write pressure and the best current lead, but that is a lead and not a cause.
+
+### Consequences
+
+1. **Every comparative run restarts the stack between arms.** Without it, arm ordering becomes
+   a variable: whichever arm runs last is measured on the most degraded stack. That is exactly
+   the kind of order effect the AB/BA controls elsewhere in this repo exist to catch.
+2. **Runs recorded hours apart in one uninterrupted session are not comparable**, even for the
+   same target.
+3. **Three earlier `detector_fault` verdicts on the JDBC Spring arms are void as evidence about
+   those arms.** They were measured on the degraded stack and say nothing about the targets.
+4. This is a *latency* and *queueing* finding. It says nothing about the §8 footprint metrics,
+   which were stable across all runs (peak RSS 1195–1263 MB).
+
 ## Appendix A — §9 per-stack deviation register (stubs)
 
 Pre-report scaffolding for contract §9. Every entry marked TODO is

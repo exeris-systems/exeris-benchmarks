@@ -628,21 +628,30 @@ Its log carries `WARN InMemoryTokenStore: An in memory token store is being crea
 completed sagas. Axon Server supplies an event store but neither a token store nor a saga
 store, and Axon's starter falls back to in-memory when no store bean is declared.
 
-That is a **§8 durability-tier asymmetry between the two Axon arms**, and it must not be
-collapsed:
+That was a **§8 durability-tier asymmetry between the two Axon arms**:
 
 - `spring-axon` (Axon Server): events durable in Axon Server; **tracking tokens and saga state
-  in memory** — a restart loses in-flight saga state and replays from wherever the in-memory
-  token happens to be.
+  in memory** — a restart loses in-flight saga state and the tracking position with it.
 - `spring-axon-embedded`: events, tokens and saga state all durable in the shared Postgres.
 
-The embedded arm therefore pays per-session write traffic the Axon Server arm does not pay,
-and a footprint or throughput comparison between the two that does not state this reads a
-durability difference as an efficiency difference. **Open decision:** whether to leave the
-asymmetry and disclose it, or declare JDBC token and saga stores for the Axon Server arm too
-(which is the ordinary production shape — in-memory tokens are Axon's no-store fallback, not a
-deployment choice) and re-measure. Not resolved here; nothing in this change set alters the
-Axon Server arm's stores.
+The embedded arm would have paid per-session write traffic the Axon Server arm simply never
+paid, so any footprint or throughput row between the two would have read a durability
+difference as an efficiency difference.
+
+**RESOLVED 2026-08-19: both arms are now on durable JDBC token and saga stores**
+(`AxonJdbcStateStoreConfig`, gated only on `exeris.axon.enabled=true`). This is the ordinary
+Axon Server deployment shape — Axon Server is an event store with no token-store or saga-store
+API, and in-memory is the starter's no-bean fallback, not a deployment choice. The two arms
+now differ on exactly one axis, the one the comparison is about: **where events live.**
+
+Consequences to carry:
+
+- The Axon Server arm now writes token claims (16 segments) and saga/association rows to the
+  shared Postgres. That traffic is NEW, and it is the honest cost of a durable saga engine.
+- **Any `spring-axon` run recorded before 2026-08-19 is not comparable with one recorded
+  after**, and must not be aggregated across that boundary.
+- The in-memory fallback had also been hiding the Jackson defect above: with no serialization
+  round-trip the saga is a live Java object, so `{}` never appeared.
 
 ### Verified terminal — 2026-08-19, perf box (exploratory profile, not a citable number)
 

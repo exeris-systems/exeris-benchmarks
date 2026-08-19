@@ -151,7 +151,12 @@ apply_resource_profile() {
   export BENCH_LOADGEN_CPUS="${BENCH_LOADGEN_CPUS:-4,5,12,13}"
   export BENCH_BACKEND_CPUS="${BENCH_BACKEND_CPUS:-6,7,14,15}"
   export BENCH_PAYMENT_PARKING="${BENCH_PAYMENT_PARKING:-1}"
-  export PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-1}"
+  # 100 ms, matching the compose default and the "100 ms for perf runs" convention in the
+  # compose file. It was 1 ms, which is a declaration the running gateway never matched -
+  # the baseline's fail-closed check refused every arm before k6 started. A 1 ms callback
+  # would also collapse the parked population the shape exists to create: parked concurrency
+  # is arrival rate x delay, so 1 ms means ~0.05 parked sagas at 50/s instead of ~5.
+  export PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-100}"
   export BENCH_SERVER_CPU_AFFINITY
   export BENCH_CGROUP_MEMORY_LIMIT_MB
   export BENCH_CGROUP_CPU_QUOTA_PCT

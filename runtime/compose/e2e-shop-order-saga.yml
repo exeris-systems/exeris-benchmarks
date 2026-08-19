@@ -159,9 +159,10 @@ services:
       # bind of 8124 is what the baseline's listener audit verifies rather than assumes.
       # server.address binds the Spring Boot HTTP port (8024). The gRPC ports (8124
       # client, 8224 internal) are bound by Axon Server itself; bind-address is the
-      # property that moves them off 0.0.0.0, and the baseline's listener audit is what
-      # confirms it landed.
-      JAVA_TOOL_OPTIONS: "-Daxoniq.axonserver.devmode.enabled=true -Dserver.address=127.0.0.1 -Daxoniq.axonserver.hostname=127.0.0.1 -Daxoniq.axonserver.internal-hostname=127.0.0.1 -Daxoniq.axonserver.bind-address=127.0.0.1"
+      # property that moves 8124, and internal-bind-address is a SECOND property that
+      # moves 8224 - bind-address alone left the internal port on 0.0.0.0, which is how
+      # the audit caught it. Verified against ss, not assumed.
+      JAVA_TOOL_OPTIONS: "-Daxoniq.axonserver.devmode.enabled=true -Dserver.address=127.0.0.1 -Daxoniq.axonserver.hostname=127.0.0.1 -Daxoniq.axonserver.internal-hostname=127.0.0.1 -Daxoniq.axonserver.bind-address=127.0.0.1 -Daxoniq.axonserver.internal-bind-address=127.0.0.1"
     network_mode: host
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8024/actuator/health"]

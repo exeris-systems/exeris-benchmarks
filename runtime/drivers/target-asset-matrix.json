@@ -152,6 +152,27 @@
       "mode": "pure"
     },
     {
+      "target_id": "spring-axon-embedded",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "runtime/drivers/env/spring-axon-embedded.env",
+      "profile_id": "spring-axon-embedded",
+      "compose_file": "",
+      "jar_path": "",
+      "health_url": "http://localhost:9014/health",
+      "asset_state": "runnable",
+      "eligibility_class": "baseline-candidate",
+      "missing_assets": [],
+      "non_runnable_reason": "",
+      "descriptor": "Spring Boot + Axon Framework with the JPA event store (embedded; Postgres is the durable store, no Axon Server)",
+      "app_dir": "targets/spring-benchmark-app",
+      "default_protocol_note": "h1, matching every other saga arm. Same jar and same artifact as spring-hibernate; the arms differ only in EXERIS_AXON_SERVER_ENABLED, which decides whether Axon's event/token/saga stores live in Axon Server (3-process deployment unit) or in the shared Postgres via JPA (2-process).",
+      "legacy_target_ids": [],
+      "mode": "pure",
+      "eligibility_note": "CONTRACT-v2 s9(e) second Axon deployment shape. Exists because the Axon Server shape hosts part of the saga engine in a container the target-JVM sampler cannot see, so a s8 footprint comparison against in-process saga engines (exeris-community, quarkus LRA) partly measures where the work is hosted rather than what it costs. This arm removes that by construction. Report BOTH shapes; neither is 'the' Axon number."
+    },
+    {
       "target_id": "spring-hibernate-nosec",
       "tier": "community",
       "protocol_mode": "h1",

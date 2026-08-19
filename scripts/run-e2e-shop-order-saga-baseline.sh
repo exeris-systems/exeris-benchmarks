@@ -650,7 +650,15 @@ ensure_benchmark_infra() {
       2>/dev/null || true
   }
 
-  if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
+  # spring-axon-embedded is the one arm that matches every *axon*/*spring* pattern above
+  # and must NOT get an Axon Server: its whole point is a TWO-process CONTRACT-v2 s1
+  # deployment unit with Axon's stores in the shared Postgres. Starting the container
+  # anyway would idle ~2 GB next to the measurement and land in the s8 footprint rollup,
+  # i.e. it would report the three-process cost under the two-process arm's name.
+  if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
+    echo "Axon EMBEDDED arm (contract=${CONTRACT_ID}): Axon Server is deliberately NOT started;"
+    echo "  the event, token and saga stores live in Postgres via JPA (s1 unit = target JVM + Postgres)."
+  elif [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
     echo "Axon target detected (contract=${CONTRACT_ID}); starting benchmark-axonserver."
     # Fresh event store per rep. `rm -f` WITHOUT `-s` silently skips a RUNNING
     # container ("No stopped containers") — the anonymous volumes the image
@@ -931,6 +939,7 @@ echo "Durability tier label: ${DURABILITY_TIER} (source: ${DURABILITY_TIER_SOURC
 case "${TARGET_APP:-}" in
   exeris-community|exeris-community-app|exeris-e2e-community-h2*)  TARGET_APP_LOG_FILE="/tmp/exeris-community.log"  ;;
   exeris-community-app-locality)                  TARGET_APP_LOG_FILE="/tmp/exeris-locality-8080.log"  ;;
+  spring-axon-embedded|spring-axon-jpa)            TARGET_APP_LOG_FILE="/tmp/exeris-spring-axon-embedded-9014.log" ;;
   spring-on-exeris|spring-hibernate|spring-app-axon|spring-*)      TARGET_APP_LOG_FILE="/tmp/exeris-spring-9001.log"    ;;
   quarkus-hibernate|quarkus-app-axon|quarkus-*)   TARGET_APP_LOG_FILE="/tmp/exeris-quarkus-9002.log"   ;;
   restate|restate-benchmark-app|restate-*)        TARGET_APP_LOG_FILE="/tmp/exeris-restate-9004.log"   ;;
@@ -1742,7 +1751,9 @@ fi
 
 # Start Axon Server docker stats sampler (if axon contract detected)
 AXON_STATS_PID=""
-if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
+if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
+  : # no Axon Server in this arm's deployment unit; nothing to sample (see the start gate above)
+elif [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
   _axon_cid="$(docker inspect --format '{{.Id}}' exeris-e2e-saga-axonserver 2>/dev/null || true)"
   if [[ -n "$_axon_cid" ]]; then
     _start_container_stats_sampler exeris-e2e-saga-axonserver "$AXON_STATS_CSV"

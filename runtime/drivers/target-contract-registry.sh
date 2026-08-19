@@ -41,6 +41,13 @@ normalize_target_alias() {
     spring-hibernate|spring-jvm-vt-tuned|spring-benchmark-app|spring-runtime|\
     spring-app-axon|spring-native-default) echo "spring-hibernate" ;;
 
+    # 2a) The SAME spring-hibernate jar with Axon Server switched off, so Axon's event,
+    #     token and saga stores fall back to JPA against the shared Postgres and the
+    #     command bus runs in-process. CONTRACT-v2 s9(e): the Axon arm has two legitimate
+    #     deployment shapes and this is the two-process one. Separate id, not an alias of
+    #     spring-hibernate - the s1 deployment unit differs, so the footprint does too.
+    spring-axon-embedded|spring-axon-jpa) echo "spring-axon-embedded" ;;
+
     # 2b) Spring Boot + Tomcat, no ORM (plain JdbcTemplate) — the honest no-Exeris,
     #     no-ORM comparator; see targets/spring-benchmark-app-jdbc/.../UserRepository.java
     spring-jdbc|spring-benchmark-app-jdbc) echo "spring-jdbc" ;;

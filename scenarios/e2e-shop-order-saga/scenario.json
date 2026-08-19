@@ -130,6 +130,7 @@
         "exeris_community_h1_park1_v3",
         "quarkus_lra_h1_park1_v3",
         "spring_axon_h1_park1_v3",
+        "spring_axon_embedded_h1_park1_v3",
         "restate_saga_h1_park1_v3"
       ]
     }
@@ -148,6 +149,10 @@
       "postgres-graph"
     ],
     "spring-on-exeris": [
+      "neo4j",
+      "postgres-graph"
+    ],
+    "spring-axon-embedded": [
       "neo4j",
       "postgres-graph"
     ]
@@ -1191,6 +1196,91 @@
       "payment_callback_delay_ms": 1,
       "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
       "cooldown_seconds": 30
+    },
+    "spring_axon_embedded_h1_park1_v3": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "protocol_note": "h1 because k6 CANNOT drive cleartext HTTP/2 (verified: curl --http2-prior-knowledge and h2load both negotiate h2c against the same endpoint where k6 gets HTTP/1.1; grafana/k6#970 open since 2019). All three targets DO serve h2c, so this is a driver limit, not a target limit. h1-for-all is fair because it is identical on every stack; an h2c track needs a different driver and its own profile key.",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "resolution_model": "inline",
+      "resolution_model_note": "CONTRACT-v2 section 3 request-response: the POST /api/v1/orders body carries the terminal outcome, so k6 never polls. Uniform across all three contracts as of 2026-07-30 - previously exeris-community and spring-hibernate were polled with 1 s quantization, which made their measured saga duration a flat ~1010 ms of client sleep.",
+      "load_model": "constant-arrival-rate",
+      "measurement_arrival_rate_per_s": 50,
+      "arrival_rate_note": "50 sessions/s chosen from a measured sweep (3/25/50/100/200). 50 is the highest rate clean on ALL stacks: at 100 exeris-community loses its entire measurement phase to connection resets. VU counts are a POOL CEILING under this executor, not concurrency - the previous virtual_users:100 field described a closed-loop model this scenario does not run.",
+      "measured_peak_concurrency": 342,
+      "graph_backend": "none",
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 300,
+      "measurement_window_seconds": 900,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "descriptive_only",
+      "claim_scope": "comparison_eligible_pending_gate",
+      "supersedes_note": "New arm (2026-08-19), supersedes nothing. Runs under this id must never be aggregated with spring_axon_h1_park1_v3: the s1 deployment unit differs.",
+      "target_app": "spring-axon-embedded",
+      "framework": "spring-boot",
+      "saga_framework": "axon-framework",
+      "event_backend": "axon-jpa-event-store",
+      "comparison_class": "platform-natural-stack",
+      "claim_scope_note": "Saga progression is asynchronous here exactly as in spring_axon_h1_park1_v3 - the same tracking processor, the same 16 threads/segments s9(d) tuning - but the tokens and saga state are written to Postgres via JPA rather than to Axon Server. The s9(d) disclosure therefore applies unchanged, and one thing it does NOT cover applies only here: the JPA token store takes a row lock per segment per claim, so Postgres carries saga-progression write traffic that the Axon Server shape sends elsewhere. That is the cost this arm is meant to make visible, not a defect.",
+      "tuning_disclosure": "CONTRACT-v2 section 9(d): axon.eventhandling.processors.OrderFulfillmentSagaProcessor thread-count=16, initial-segment-count=16. Axon default is ONE segment and ONE thread, which serialized all saga progression and produced 7613 ms median saga latency at 50/s versus 22 ms (exeris) and 34 ms (quarkus). With 16 segments: 37 ms. Comparing a one-thread default against unbounded concurrency measures the default, not the framework. The default-config ceiling is reported separately as its own finding.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
+      "superseded_contract": "spring_boot_axon_neo4j_v1",
+      "workload_shape": "A-minimal-park",
+      "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      },
+      "payment_callback_delay_ms": 1,
+      "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
+      "cooldown_seconds": 30,
+      "deployment_unit": "target-jvm + postgres",
+      "deployment_unit_note": "TWO processes, against spring_axon_h1_park1_v3's three. Same jar, same saga code, same Axon Framework version; EXERIS_AXON_SERVER_ENABLED=false makes Spring Boot's Axon autoconfiguration fall back to the JPA event store, JpaTokenStore and JpaSagaStore in the SHARED Postgres, with SimpleCommandBus in-process. Registered under CONTRACT-v2 s9(e). It exists because the Axon Server shape hosts part of the saga engine in a container the target-JVM sampler cannot see, so a s8 footprint comparison against in-process saga engines partly measures WHERE the work is hosted rather than what it costs. Both shapes are reported; neither is 'the' Axon number, and the two must never be collapsed into one row."
     },
     "restate_saga_h1_park1_v3": {
       "scenario_id": "e2e-shop-order-saga",

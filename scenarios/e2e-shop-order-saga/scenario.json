@@ -1240,9 +1240,9 @@
       "target_app": "spring-axon-embedded",
       "framework": "spring-boot",
       "saga_framework": "axon-framework",
-      "event_backend": "axon-jpa-event-store",
+      "event_backend": "axon-jdbc-event-store",
       "comparison_class": "platform-natural-stack",
-      "claim_scope_note": "Saga progression is asynchronous here exactly as in spring_axon_h1_park1_v3 - the same tracking processor, the same 16 threads/segments s9(d) tuning - but the tokens and saga state are written to Postgres via JPA rather than to Axon Server. The s9(d) disclosure therefore applies unchanged, and one thing it does NOT cover applies only here: the JPA token store takes a row lock per segment per claim, so Postgres carries saga-progression write traffic that the Axon Server shape sends elsewhere. That is the cost this arm is meant to make visible, not a defect.",
+      "claim_scope_note": "Saga progression is asynchronous here exactly as in spring_axon_h1_park1_v3 - the same tracking processor, the same 16 threads/segments s9(d) tuning - but the events, tokens and saga state are written to Postgres over Axon's own JDBC storage engines (JdbcEventStorageEngine / JdbcTokenStore / JdbcSagaStore) rather than to Axon Server. JDBC, not JPA: every arm in this scenario is measured on JDBC because Exeris is, and an ORM on one side of the comparison would be a second variable. The s9(d) disclosure therefore applies unchanged, and one thing it does NOT cover applies only here: the token store takes a row lock per segment per claim, so Postgres carries saga-progression write traffic that the Axon Server shape sends elsewhere. That is the cost this arm is meant to make visible, not a defect.",
       "tuning_disclosure": "CONTRACT-v2 section 9(d): axon.eventhandling.processors.OrderFulfillmentSagaProcessor thread-count=16, initial-segment-count=16. Axon default is ONE segment and ONE thread, which serialized all saga progression and produced 7613 ms median saga latency at 50/s versus 22 ms (exeris) and 34 ms (quarkus). With 16 segments: 37 ms. Comparing a one-thread default against unbounded concurrency measures the default, not the framework. The default-config ceiling is reported separately as its own finding.",
       "per_step_metric_claim_scope": {
         "auth_latency_ms": "comparison_eligible",

@@ -1603,6 +1603,33 @@ for _shared in "exeris-e2e-saga-postgres:$POSTGRES_STATS_CSV:POSTGRES" \
   fi
 done
 
+# --- CPU pinning for the backend containers ------------------------------------------
+#
+# Postgres, the payment gateway and whichever saga server this arm needs (Axon Server,
+# LRA coordinator, restate-server) all run in containers and, unpinned, land on the same
+# cores as the target and the load generator. On this box that is 8 physical cores for
+# everything, and the effect is measurable: 50 sessions/s declared, 36.5/s delivered.
+#
+# Applied with `docker update` rather than in the compose file so the split lives with
+# the run that declares it — the compose stack is shared with ad-hoc use, and a cpuset
+# baked in there would silently constrain runs that never asked for one.
+#
+# Fails closed: a partially-pinned deployment is worse than an unpinned one, because the
+# metadata would claim isolation the run did not have.
+if [[ -n "${BENCH_BACKEND_CPUS:-}" ]]; then
+  for _c in exeris-e2e-saga-postgres exeris-e2e-saga-payment-gateway             exeris-e2e-saga-axonserver exeris-e2e-saga-lra-coordinator             exeris-e2e-saga-restate-server; do
+    if docker inspect -f '{{.State.Running}}' "$_c" >/dev/null 2>&1; then
+      if ! docker update --cpuset-cpus "$BENCH_BACKEND_CPUS" "$_c" >/dev/null 2>&1; then
+        echo "ERROR: could not pin $_c to CPUs ${BENCH_BACKEND_CPUS}." >&2
+        echo "ERROR: refusing to run a partially-pinned deployment — the metadata would claim" >&2
+        echo "ERROR: an isolation this run does not have." >&2
+        exit 76
+      fi
+    fi
+  done
+  echo "Backend containers pinned to CPUs ${BENCH_BACKEND_CPUS}."
+fi
+
 # Payment gateway sampler (parking workload only).
 PAYMENT_GATEWAY_STATS_PID=""
 if [[ "$BENCH_PAYMENT_PARKING" == "1" ]]; then

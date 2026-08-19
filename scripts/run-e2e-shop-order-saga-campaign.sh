@@ -140,6 +140,16 @@ apply_resource_profile() {
   # same shape: the baseline fails closed (exit 74) if the running gateway's delay or
   # fault mode disagrees with what the run declares, so a campaign that forgot to pass
   # these would stop rather than quietly measure shape A0 again.
+  # CPU pinning, disjoint by construction on this 8-physical-core box (CPU n and n+8 are
+  # SMT siblings of core n, so each set is whole physical cores):
+  #   target   cores 0-3  -> 0-3,8-11
+  #   loadgen  cores 4-5  -> 4,5,12,13
+  #   backends cores 6-7  -> 6,7,14,15
+  # Overridable, but never silently absent: the baseline fails closed if taskset is
+  # missing or a container cannot be pinned.
+  export BENCH_TARGET_CPUS="${BENCH_TARGET_CPUS:-0-3,8-11}"
+  export BENCH_LOADGEN_CPUS="${BENCH_LOADGEN_CPUS:-4,5,12,13}"
+  export BENCH_BACKEND_CPUS="${BENCH_BACKEND_CPUS:-6,7,14,15}"
   export BENCH_PAYMENT_PARKING="${BENCH_PAYMENT_PARKING:-1}"
   export PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-1}"
   export BENCH_SERVER_CPU_AFFINITY

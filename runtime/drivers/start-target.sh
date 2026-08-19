@@ -195,7 +195,26 @@ case "${START_MODE}" in
     # Java 26 module system compatibility for Neo4j driver + Eclipse Collections
     # Add --add-opens flag to EXERIS_JAVA_OPTS so it's used by EXTERNAL_START_CMD
     export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} --add-opens java.base/jdk.internal.module=ALL-UNNAMED"
-    bash -lc "cd '$ROOT' && $EXTERNAL_START_CMD"
+    # CPU pinning (BENCH_TARGET_CPUS). Disjoint core sets for target / load generator /
+    # backends are what make a throughput number mean anything on a single box: without
+    # them k6, the JVM, Postgres and the saga servers all compete, and the arrival rate
+    # the contract declares is not the rate the target sees. Measured 2026-08-19 on this
+    # box: 50/s declared, 36.5/s delivered, nothing pinned.
+    #
+    # Fails closed rather than running unpinned, for the same reason the memory cap does:
+    # an unpinned run looks identical to a pinned one in every artifact it produces.
+    if [[ -n "${BENCH_TARGET_CPUS:-}" ]]; then
+      if ! command -v taskset >/dev/null 2>&1; then
+        echo "ERROR: BENCH_TARGET_CPUS=${BENCH_TARGET_CPUS} set but taskset is unavailable;" >&2
+        echo "       refusing to run unpinned — indistinguishable from pinned in every artifact." >&2
+        exit 1
+      fi
+      export TARGET_CPU_PREFIX="taskset -c ${BENCH_TARGET_CPUS} "
+      echo "  Target CPU affinity: ${BENCH_TARGET_CPUS}"
+    else
+      export TARGET_CPU_PREFIX=""
+    fi
+    bash -lc "cd '$ROOT' && ${TARGET_CPU_PREFIX}$EXTERNAL_START_CMD"
     ;;
   *)
     echo "ERROR: Unknown START_MODE: $START_MODE" >&2

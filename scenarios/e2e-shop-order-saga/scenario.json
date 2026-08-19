@@ -124,7 +124,7 @@
       "track_id": "track_c_no_graph",
       "backend_family": "none",
       "backend_mode": "none",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3",
       "_note": "CONTRACT-v2 §2.1 shape A. The graph was removed from this scenario (§2) because it confounded the only comparison the scenario exists to make, so this track has no graph backend at all — Neo4j is not in the §1 deployment unit and is not started. track_id is an isolation boundary: results here MUST NOT be aggregated with track_a_neo4j.",
       "required_contracts": [
         "exeris_community_h1_park100_v3",
@@ -983,7 +983,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1065,7 +1065,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1149,7 +1149,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1232,7 +1232,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1369,7 +1369,7 @@
         ]
       },
       "workload_shape": "A-minimal-park",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3",
       "payment_callback_delay_ms": 1,
       "cooldown_seconds": 30,
       "_promotion_note": "PROMOTED from baseline_only_contracts on 2026-08-18: restate is measured alongside spring and quarkus, not kept as a descriptive aside. It qualifies on the same terms as the others — it parks on charge-payment (awakeable resolved by the gateway at the Restate ingress) and it is durable (invocation journal, RocksDB WAL), so §8's cross-tier prohibition does not exclude it.",
@@ -1398,7 +1398,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1482,7 +1482,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1565,7 +1565,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",

@@ -82,6 +82,61 @@ MicroProfile LRA (§9).
 > (`…-h1-loopback-runtime-k6-inline-r50-v2`) and by new contract ids; the
 > h2c-named contracts are marked `superseded`.
 
+> **RE-RATED to 38 sessions/s, 2026-08-19.** The 50/s above is superseded for the
+> parking shapes. Two things were wrong with it, and the second is the reason this
+> paragraph exists rather than a one-line edit.
+>
+> *It was never validated for this workload.* The sweep that produced it
+> (3 / 25 / 50 / 200) was run under shape A0, straight-through, where nothing parks.
+> When parking was introduced the load model was carried across the shape boundary
+> unchanged — the one thing §2.1 says must never happen. "Highest rate clean on every
+> stack" was true of a workload this scenario no longer runs.
+>
+> *It is not sustainable.* A capacity ladder on 2026-08-19 measured, per arm:
+>
+> | arm | rungs | capacity | failure mode at the ceiling |
+> |---|---|---|---|
+> | `spring-axon-jdbc` | 30 ✓ 38 ✓ 46 ✗ | ~45.6/s | soft — queue grows without bound |
+> | `spring-axon-embedded-jdbc` | 30 ✓ 38 ✓ 46 ✗ | ~45.7/s | soft — queue grows without bound |
+> | `quarkus-lra-jdbc` | 38 ✓ 46 ✓ 54 ✓ | >54/s | not reached |
+> | `exeris-community` | 50 ✓ 65 ✗ 80 ✗ | 50–65/s | **hard — 36 % of requests error** |
+>
+> At 50/s both Axon arms were therefore in permanent overload: in-flight work climbed
+> monotonically for an entire 11-minute window (545 → 2882 concurrent) and never reached
+> steady state, with nothing CPU-saturated anywhere in the deployment.
+>
+> **What overload does to a percentile is why this is normative.** In overload a
+> percentile measures how far the queue grew before the window closed, so it scales with
+> *window length* rather than with the system: the same jar reported a saga p95 of 10.5 s
+> at a 100 s window, 52 s at a 690 s one, and 401 ms at a sustainable rate. All three are
+> "the p95"; only the last is a property of the stack. Every parking-shape latency figure
+> recorded before this amendment is a queue-growth artifact and MUST NOT be published as
+> latency.
+>
+> 38/s is a measured clean plateau on every arm tested at it, leaving ~17 % headroom under
+> the binding arm. The headroom is deliberate: `exeris-community` does not degrade
+> gracefully at its own ceiling but fails outright, and running any arm near its ceiling
+> makes the campaign hostage to small capacity changes — which is how a stack that drifted
+> a few per cent produced a 5× latency swing.
+>
+> **Runs at 50/s MUST NOT be aggregated with runs at 38/s.** The boundary is carried by
+> the `r38` token in `workload_profile_key`
+> (`e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park100-v3`).
+>
+> **Capacity is promoted to a first-class reported metric.** For a saga workload under
+> shape B — where §2.1 already says end-to-end latency "loses most of its discriminating
+> power" because the gateway delay dominates it — the maximum sustainable arrival rate and
+> the CPU cost per saga discriminate where latency does not. A capacity figure must state
+> its failure mode: an arm that queues and an arm that errors have not demonstrated the
+> same thing.
+>
+> **A capacity claim requires a correctness gate, not just a flat queue.** A failing
+> iteration returns its loadgen slot immediately, so a stack collapsing into errors
+> produces the same flat concurrency curve as a stack coping. `exeris-community` at 65/s
+> showed a textbook plateau (slope +0.087) while 36 % of its requests were failing and
+> 14 566 iterations never reached order submission. A rung counts as sustained only if the
+> queue is flat **and** the O0 identity closes with no unsubmitted iterations.
+
 Structural requirements (normative in v2):
 
 - The saga consists of ≥ 2 compensatable steps *preceding* S_pay, S_pay

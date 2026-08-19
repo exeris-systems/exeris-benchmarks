@@ -285,9 +285,25 @@ export function setup() {
 
 // Helper function to generate a deterministic unique identity per test iteration
 function generateIdentity() {
-  const iterationInTest = exec.scenario.iterationInTest;
+  // `exec.scenario.iterationInTest` counts PER SCENARIO and restarts at 0 for each of the
+  // three phases, while k6 hands the same VU to different scenarios in turn. So a VU that
+  // served warmup iteration 400 and later measurement iteration 400 produced the SAME
+  // username twice, and `users.username` carries a unique index shared by every arm.
+  //
+  // The collisions were structural and hit every stack equally; what differed was the
+  // answer. exeris returns 409, the other arms return 200/201 for an existing user, and the
+  // session below aborts on any non-2xx — so the arm with the stricter REST semantics lost
+  // 4.09% of its registrations (1 971 of 48 157) against 0.01% (3 of 46 745) for quarkus,
+  // and roughly 1 100 sessions per rep never reached order submission at all. That is the
+  // workload penalising a difference in conflict handling, not measuring anything.
+  //
+  // `iterationInInstance` is the VU's own counter and does not restart between scenarios, so
+  // (vu, iteration) is unique for the whole test. Fixing the generator is the right layer:
+  // the alternative — accepting 409 as success in the check — would hide a real conflict if
+  // one ever occurred for a different reason.
+  const iterationInVu = exec.vu.iterationInInstance;
   const vuId = exec.vu.idInTest;
-  const username = `user_${vuId}_${iterationInTest}`;
+  const username = `user_${vuId}_${iterationInVu}`;
 
   return {
     username,

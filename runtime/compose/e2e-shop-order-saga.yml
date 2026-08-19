@@ -162,7 +162,18 @@ services:
       # property that moves 8124, and internal-bind-address is a SECOND property that
       # moves 8224 - bind-address alone left the internal port on 0.0.0.0, which is how
       # the audit caught it. Verified against ss, not assumed.
-      JAVA_TOOL_OPTIONS: "-Daxoniq.axonserver.devmode.enabled=true -Dserver.address=127.0.0.1 -Daxoniq.axonserver.hostname=127.0.0.1 -Daxoniq.axonserver.internal-hostname=127.0.0.1 -Daxoniq.axonserver.bind-address=127.0.0.1 -Daxoniq.axonserver.internal-bind-address=127.0.0.1"
+      # MEMORY CAP, kept in sync with the target JVMs (see the heap block in the campaign
+      # wrapper). Without it this sidecar sizes itself from HOST RAM -- the LRA coordinator
+      # image ships -XX:MaxRAMPercentage=80.0, i.e. 80% of a 62 GB box -- and it is not a
+      # small term: measured 2026-08-19 it was 1642 MB peak / 958 MB average RSS and 181
+      # core-seconds, more than double the target JVM it serves, and the single largest
+      # component of that arm's CONTRACT-v2 §1 unit.
+      #
+      # Capping the targets while leaving the sidecars uncapped equalises the smaller half of
+      # the deployment and lets the larger half be decided by how much RAM the bench box
+      # happens to have. The same figure on an 8 GB host would be a fraction of this, which
+      # makes it an artifact rather than a property of the stack.
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAM=2048m -Xmx1536m -Daxoniq.axonserver.devmode.enabled=true -Dserver.address=127.0.0.1 -Daxoniq.axonserver.hostname=127.0.0.1 -Daxoniq.axonserver.internal-hostname=127.0.0.1 -Daxoniq.axonserver.bind-address=127.0.0.1 -Daxoniq.axonserver.internal-bind-address=127.0.0.1"
     network_mode: host
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8024/actuator/health"]
@@ -221,7 +232,18 @@ services:
       # env var in Quarkus config ordering. Overriding JAVA_OPTS_APPEND is what actually
       # moves the socket - verified against ss, not assumed.
       QUARKUS_HTTP_HOST: "127.0.0.1"
-      JAVA_OPTS_APPEND: "-Dquarkus.http.host=127.0.0.1 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+      # MEMORY CAP, kept in sync with the target JVMs (see the heap block in the campaign
+      # wrapper). Without it this sidecar sizes itself from HOST RAM -- the LRA coordinator
+      # image ships -XX:MaxRAMPercentage=80.0, i.e. 80% of a 62 GB box -- and it is not a
+      # small term: measured 2026-08-19 it was 1642 MB peak / 958 MB average RSS and 181
+      # core-seconds, more than double the target JVM it serves, and the single largest
+      # component of that arm's CONTRACT-v2 §1 unit.
+      #
+      # Capping the targets while leaving the sidecars uncapped equalises the smaller half of
+      # the deployment and lets the larger half be decided by how much RAM the bench box
+      # happens to have. The same figure on an 8 GB host would be a fraction of this, which
+      # makes it an artifact rather than a property of the stack.
+      JAVA_OPTS_APPEND: "-XX:MaxRAM=2048m -Xmx1536m -Dquarkus.http.host=127.0.0.1 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
 
   # CONTRACT-v2 §4 (parking workload): external payment gateway.
   #

@@ -62,6 +62,18 @@
         "spring_boot_axon_age_compat_v1"
       ],
       "status": "compatibility_only"
+    },
+    {
+      "track_id": "track_none_park1_v3",
+      "backend_family": "none",
+      "required_contracts": [
+        "exeris_community_h1_park1_v3",
+        "quarkus_lra_jdbc_h1_park1_v3",
+        "spring_axon_jdbc_h1_park1_v3",
+        "spring_axon_embedded_jdbc_h1_park1_v3"
+      ],
+      "status": "roster_wired_pending_campaign",
+      "notes": "CONTRACT-v2 §4 parking roster on the graph-less track, all-JDBC. restate is deliberately absent: it is baseline-only and not comparison-eligible (h1 facade vs the canonical h2c contracts, plus an in-memory sticky-terminal status projection). track_id is an isolation boundary - never aggregate across tracks."
     }
   ],
   "segmentation_required_keys": [
@@ -113,7 +125,53 @@
       "saga_framework": "axon-framework",
       "graph_backend": "neo4j-bolt",
       "event_backend": "axon-event-sourcing-outbox",
-      "notes": "Comparison-eligible within-tier h1 loopback under required_contract=quarkus_axon_neo4j_h1_v2. Runs the ENTIRE saga synchronously on the request thread and returns the terminal outcome inline.",
+      "notes": "SUPERSEDED for CONTRACT-v2 §4 parking work by quarkus-lra-jdbc, and NOT part of the v3 roster: this target carries an ORM on the non-saga session steps. Its claim_scope below still describes the v2 contract named in these notes, which remains valid for runs recorded under that contract; it is NOT a licence to build a v3 parking claim on this arm. || Comparison-eligible within-tier h1 loopback under required_contract=quarkus_axon_neo4j_h1_v2. Runs the ENTIRE saga synchronously on the request thread and returns the terminal outcome inline.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "comparison_eligible",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "claim_scope_note": "Per-step scope governs. order_create_latency_ms became eligible on 2026-07-30 when every stack was made CONTRACT-v2 section 3 compliant (terminal outcome in the POST body); before that the polled stacks measured a flat ~1010 ms of client poll sleep against ~28 ms inline, an artifact large enough to reverse the apparent ordering. recommend_latency_ms is platform-natural ONLY - the stacks issue different work there (one Cypher query vs 1+N traversals forced by the graph SPI), measured at 2.6x Neo4j CPU for exeris.",
+      "resolution_model": "inline",
+      "superseded_by": "quarkus-lra-jdbc"
+    },
+    {
+      "target_id": "spring-hibernate",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "comparison_eligible",
+      "claim_scope": "comparison_eligible",
+      "saga_framework": "axon-framework",
+      "graph_backend": "neo4j-bolt",
+      "event_backend": "axon-event-sourcing-outbox",
+      "notes": "SUPERSEDED for CONTRACT-v2 §4 parking work by spring-axon-jdbc, and NOT part of the v3 roster: this target carries an ORM on the non-saga session steps. Its claim_scope below still describes the v2 contract named in these notes, which remains valid for runs recorded under that contract; it is NOT a licence to build a v3 parking claim on this arm. || Comparison-eligible within-tier h1 loopback under required_contract=spring_boot_axon_neo4j_h1_v2. Saga progression is async via a tracking processor tuned to 16 segments (section 9(d) disclosure); the request thread awaits completion (section 9(a) deviation). NOT the same architecture as quarkus-hibernate despite both using Axon.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "comparison_eligible",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "claim_scope_note": "Per-step scope governs. order_create_latency_ms became eligible on 2026-07-30 when every stack was made CONTRACT-v2 section 3 compliant (terminal outcome in the POST body); before that the polled stacks measured a flat ~1010 ms of client poll sleep against ~28 ms inline, an artifact large enough to reverse the apparent ordering. recommend_latency_ms is platform-natural ONLY - the stacks issue different work there (one Cypher query vs 1+N traversals forced by the graph SPI), measured at 2.6x Neo4j CPU for exeris.",
+      "resolution_model": "inline",
+      "superseded_by": "spring-axon-jdbc"
+    },
+    {
+      "target_id": "quarkus-lra-jdbc",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "comparison_eligible",
+      "claim_scope": "comparison_eligible",
+      "saga_framework": "axon-framework",
+      "graph_backend": "none",
+      "event_backend": "axon-event-sourcing-outbox",
+      "notes": "CONTRACT-v2 §4 parking arm, MicroProfile LRA saga on Agroal + plain JDBC (targets/quarkus-benchmark-app-tuned). Required contract quarkus_lra_jdbc_h1_park1_v3. JDBC roster: every arm in this scenario is measured on JDBC because Exeris is. The superseded arm's saga path was already plain JDBC, but its other session steps (register / recommend / cart) went through an ORM, putting an ORM on one side of the comparison and not the other. §1 deployment unit is THREE processes (app JVM + LRA coordinator + Postgres); the coordinator must be sampled like Axon Server. Supersedes quarkus-hibernate for this scenario - runs under the two MUST NEVER be aggregated, the artifact differs.",
       "per_step_metric_claim_scope": {
         "auth_latency_ms": "comparison_eligible",
         "cart_add_latency_ms": "comparison_eligible",
@@ -126,16 +184,38 @@
       "resolution_model": "inline"
     },
     {
-      "target_id": "spring-hibernate",
+      "target_id": "spring-axon-jdbc",
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
       "maturity": "comparison_eligible",
       "claim_scope": "comparison_eligible",
       "saga_framework": "axon-framework",
-      "graph_backend": "neo4j-bolt",
-      "event_backend": "axon-event-sourcing-outbox",
-      "notes": "Comparison-eligible within-tier h1 loopback under required_contract=spring_boot_axon_neo4j_h1_v2. Saga progression is async via a tracking processor tuned to 16 segments (section 9(d) disclosure); the request thread awaits completion (section 9(a) deviation). NOT the same architecture as quarkus-hibernate despite both using Axon.",
+      "graph_backend": "none",
+      "event_backend": "axon-server-event-store",
+      "notes": "CONTRACT-v2 §4 parking arm, Axon saga with the event store in Axon Server, spring-boot-starter-jdbc throughout (targets/spring-benchmark-app-jdbc). Required contract spring_axon_jdbc_h1_park1_v3. JDBC roster: every arm in this scenario is measured on JDBC because Exeris is. The superseded arm's saga path was already plain JDBC, but its other session steps (register / recommend / cart) went through an ORM, putting an ORM on one side of the comparison and not the other. Tracking tokens and saga state are DURABLE in Postgres here: Axon Server is an event store with no token-store or saga-store API, and Axon's starter had been falling back to in-memory, so the superseded runs did not pay for a durable saga engine at all. Supersedes spring-hibernate for this scenario, on both counts.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "comparison_eligible",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "claim_scope_note": "Per-step scope governs. order_create_latency_ms became eligible on 2026-07-30 when every stack was made CONTRACT-v2 section 3 compliant (terminal outcome in the POST body); before that the polled stacks measured a flat ~1010 ms of client poll sleep against ~28 ms inline, an artifact large enough to reverse the apparent ordering. recommend_latency_ms is platform-natural ONLY - the stacks issue different work there (one Cypher query vs 1+N traversals forced by the graph SPI), measured at 2.6x Neo4j CPU for exeris.",
+      "resolution_model": "inline"
+    },
+    {
+      "target_id": "spring-axon-embedded-jdbc",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "maturity": "comparison_eligible",
+      "claim_scope": "comparison_eligible",
+      "saga_framework": "axon-framework",
+      "graph_backend": "none",
+      "event_backend": "axon-jdbc-event-store",
+      "notes": "CONTRACT-v2 §9(e) second Axon deployment shape: the same jar and same artifact as spring-axon-jdbc with Axon Server switched off, so EVENTS go to the shared Postgres through Axon's JdbcEventStorageEngine. Required contract spring_axon_embedded_jdbc_h1_park1_v3. §1 deployment unit is TWO processes. Tokens and saga state are durable in Postgres on BOTH Axon arms, so where events live is the ONLY axis these two differ on. Report BOTH shapes; neither is 'the' Axon number.",
       "per_step_metric_claim_scope": {
         "auth_latency_ms": "comparison_eligible",
         "cart_add_latency_ms": "comparison_eligible",
@@ -212,6 +292,108 @@
         "shared_saga": "Both use Axon Framework (same version)",
         "shared_graph": "Both use Neo4j Bolt (same driver)",
         "shared_event": "Both use Axon Event Sourcing + Outbox"
+      }
+    },
+    {
+      "pair_id": "exeris-community__quarkus-lra-jdbc",
+      "baseline": "exeris-community",
+      "candidate": "quarkus-lra-jdbc",
+      "targets": [
+        "exeris-community",
+        "quarkus-lra-jdbc"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "axis": "cross-framework-saga-orchestration",
+      "framework_difference": {
+        "baseline_framework": "Exeris Community (native kernel), flow-native saga",
+        "candidate_framework": "Quarkus, MicroProfile LRA saga",
+        "shared_persistence": "Both plain JDBC on the same Postgres",
+        "deployment_unit_difference": "2 processes vs 3 (the LRA coordinator is a separate process and must be sampled)"
+      }
+    },
+    {
+      "pair_id": "exeris-community__spring-axon-jdbc",
+      "baseline": "exeris-community",
+      "candidate": "spring-axon-jdbc",
+      "targets": [
+        "exeris-community",
+        "spring-axon-jdbc"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "axis": "cross-framework-saga-orchestration",
+      "framework_difference": {
+        "baseline_framework": "Exeris Community (native kernel), flow-native saga",
+        "candidate_framework": "Spring Boot, Axon Framework saga",
+        "shared_persistence": "Both plain JDBC on the same Postgres",
+        "deployment_unit_difference": "2 processes vs 3 (Axon Server is a separate process and must be sampled)"
+      }
+    },
+    {
+      "pair_id": "exeris-community__spring-axon-embedded-jdbc",
+      "baseline": "exeris-community",
+      "candidate": "spring-axon-embedded-jdbc",
+      "targets": [
+        "exeris-community",
+        "spring-axon-embedded-jdbc"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "axis": "cross-framework-saga-orchestration",
+      "framework_difference": {
+        "baseline_framework": "Exeris Community (native kernel), flow-native saga",
+        "candidate_framework": "Spring Boot, Axon Framework saga, embedded event store",
+        "shared_persistence": "Both plain JDBC on the same Postgres",
+        "deployment_unit_difference": "None - both are 2 processes (target JVM + Postgres). This is the pair that does NOT need a where-is-it-hosted caveat on §8 footprint."
+      }
+    },
+    {
+      "pair_id": "quarkus-lra-jdbc__spring-axon-jdbc",
+      "baseline": "quarkus-lra-jdbc",
+      "candidate": "spring-axon-jdbc",
+      "targets": [
+        "quarkus-lra-jdbc",
+        "spring-axon-jdbc"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "axis": "cross-framework-cross-saga-library",
+      "framework_difference": {
+        "baseline_framework": "Quarkus",
+        "candidate_framework": "Spring Boot",
+        "saga_difference": "MicroProfile LRA vs Axon Framework - DIFFERENT saga libraries, unlike the v2 quarkus-hibernate/spring-hibernate pair which shared Axon",
+        "shared_persistence": "Both plain JDBC on the same Postgres",
+        "deployment_unit_difference": "None - both are 3 processes, but the third process differs (LRA coordinator vs Axon Server)"
+      }
+    },
+    {
+      "pair_id": "spring-axon-jdbc__spring-axon-embedded-jdbc",
+      "baseline": "spring-axon-jdbc",
+      "candidate": "spring-axon-embedded-jdbc",
+      "targets": [
+        "spring-axon-jdbc",
+        "spring-axon-embedded-jdbc"
+      ],
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "axis": "same-stack-event-store-location",
+      "framework_difference": {
+        "baseline_framework": "Spring Boot + Axon Framework",
+        "candidate_framework": "Spring Boot + Axon Framework",
+        "shared_saga": "Identical jar, identical artifact, identical saga configuration",
+        "shared_persistence": "Both plain JDBC; tokens and saga state durable in Postgres on both",
+        "only_difference": "Where EVENTS live: Axon Server vs the shared Postgres via JdbcEventStorageEngine. §1 deployment unit 3 processes vs 2."
       }
     }
   ],

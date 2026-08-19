@@ -833,6 +833,9 @@ BENCH_CGROUP_MEMORY_LIMIT_MB="${BENCH_CGROUP_MEMORY_LIMIT_MB:-}"
 BENCH_CGROUP_CPU_QUOTA_PCT="${BENCH_CGROUP_CPU_QUOTA_PCT:-}"
 _BENCH_CGROUP_SCOPE_UNIT=""
 K6_EXIT_CODE=0
+# Defaulted next to the code it describes so `set -u` cannot trip on an exit path
+# that never reaches the classifier (k6 not run at all, an early abort).
+K6_EXIT_CLASS="clean"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -1873,8 +1876,34 @@ set -e
 # throughput and time-to-peak come from the measurement window only — not a single
 # average over warmup+measurement+cooldown. Never fatal: emits valid JSON regardless.
 "$REPO_ROOT/tools/aggregate-k6-throughput.sh" "$K6_TIMESERIES_CSV" "$K6_THROUGHPUT_SERIES_JSON" || true
+# Classify the exit code instead of assuming it. "Non-zero means thresholds" is
+# wrong in the one case that matters most: a run killed from outside exits non-zero
+# and has NO verdict about the target at all, yet was being written into
+# claim-status.json as `threshold_failure` -- a measured statement about the stack,
+# manufactured from an operator pressing Ctrl-C. One is on disk already: the campaign
+# of 2026-08-19 07:32 recorded exeris-community rep 1 as a threshold failure when its
+# own k6 console says "test run was aborted because k6 received a 'terminated' signal"
+# 4m21s into a 15m window.
+#
+# 99 and 105 are pinned from evidence, not from memory of the exit-code table: 99 is
+# k6's documented threshold-breach code, and 105 was observed in this k6 (v2.0.0)
+# alongside exactly that abort message. Anything else stays deliberately unclassified
+# rather than being folded into either bucket.
+case "$K6_EXIT_CODE" in
+  0)   K6_EXIT_CLASS="clean" ;;
+  99)  K6_EXIT_CLASS="threshold_failure" ;;
+  105) K6_EXIT_CLASS="run_aborted" ;;
+  *)   K6_EXIT_CLASS="k6_exit_nonzero" ;;
+esac
 if [[ "$K6_EXIT_CODE" -ne 0 ]]; then
-  echo "Warning: k6 exited with code ${K6_EXIT_CODE} (likely threshold failures). Continuing artifact collection." >&2
+  case "$K6_EXIT_CLASS" in
+    threshold_failure)
+      echo "Warning: k6 exited ${K6_EXIT_CODE} -- thresholds breached. Continuing artifact collection." >&2 ;;
+    run_aborted)
+      echo "Warning: k6 exited ${K6_EXIT_CODE} -- the RUN WAS ABORTED (signal), not a threshold breach. This run supports no claim about the target in either direction; artifacts are collected for post-mortem only." >&2 ;;
+    *)
+      echo "Warning: k6 exited ${K6_EXIT_CODE} -- cause not classified. Read ${K6_CONSOLE_LOG} before drawing any conclusion from this run." >&2 ;;
+  esac
 fi
 
 bench_stop_resource_sampler
@@ -2495,7 +2524,9 @@ elif [[ "$GATE_STATUS" == "error" ]]; then
 elif [[ "$K6_EXIT_CODE" -eq 0 ]]; then
   RUNNER_STATUS="clean"
 else
-  RUNNER_STATUS="threshold_failure"
+  # Same classification as the warning above: an aborted run and a threshold
+  # breach are different claims and must not share a status.
+  RUNNER_STATUS="$K6_EXIT_CLASS"
 fi
 
 jq -n \
@@ -2546,6 +2577,7 @@ jq -n \
   --arg seed_overlay_verification_script_sha256 "$SEED_VERIFY_SCRIPT_SHA256" \
   --arg seed_overlay_verification_skipped "$SKIP_SEED_VERIFY" \
   --argjson k6_exit_code "$K6_EXIT_CODE" \
+  --arg k6_exit_class "$K6_EXIT_CLASS" \
   --arg runner_status "$RUNNER_STATUS" \
   '{
     scenario_id: $scenario_id,
@@ -2628,6 +2660,7 @@ jq -n \
   --arg claim_scope      "exploratory" \
   --arg correctness_gate_status "$GATE_STATUS" \
   --argjson k6_exit_code "$K6_EXIT_CODE" \
+  --arg k6_exit_class "$K6_EXIT_CLASS" \
   '{
     schema_version:   "1",
     scenario_id:      $scenario_id,
@@ -2642,7 +2675,7 @@ jq -n \
       (if $correctness_gate_status == "fail" then ["compensation_mismatch"] else [] end)
       + (if $correctness_gate_status == "error" then ["compensation_gate_error"] else [] end)
       + (if $hardware_profile != "perf-box-amd64" then ["non_canonical_hardware_profile"] else [] end)
-      + (if $k6_exit_code != 0 then ["threshold_failure"] else [] end)
+      + (if $k6_exit_code != 0 then [$k6_exit_class] else [] end)
     ),
     reason: (
       if $correctness_gate_status == "fail"
@@ -2651,8 +2684,11 @@ jq -n \
       then "correctness gate errored: CONTRACT-v2 s4.1 not evaluable on a v2-capable run (fails closed); performance numbers excluded from headline tables"
       elif $hardware_profile != "perf-box-amd64"
       then "not perf-box-amd64 hardware profile"
+      elif $k6_exit_class == "run_aborted"
+      then ("k6 exited with code " + ($k6_exit_code | tostring) +
+            ": the run was ABORTED by a signal. This is a runner fault, not a measured threshold breach -- it supports no claim about the target in either direction.")
       elif $k6_exit_code != 0
-      then ("k6 exited with code " + ($k6_exit_code | tostring))
+      then ("k6 exited with code " + ($k6_exit_code | tostring) + " (" + $k6_exit_class + ")")
       else "eligible"
       end
     )

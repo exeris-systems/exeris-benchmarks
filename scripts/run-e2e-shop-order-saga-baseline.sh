@@ -658,6 +658,13 @@ ensure_benchmark_infra() {
   if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
     echo "Axon EMBEDDED arm (contract=${CONTRACT_ID}): Axon Server is deliberately NOT started;"
     echo "  the event, token and saga stores live in Postgres via JPA (s1 unit = target JVM + Postgres)."
+    # Not started is not the same as not running: the stack is shared, and an Axon Server
+    # left up by the previous arm idles a ~2 GB JVM on the backend cores this run is pinned
+    # against. Stop it, so the deployment on the box matches the deployment in the metadata.
+    if [[ -n "$(docker ps -q -f name=exeris-e2e-saga-axonserver)" ]]; then
+      echo "  stopping a leftover exeris-e2e-saga-axonserver so it does not run beside this arm."
+      docker stop exeris-e2e-saga-axonserver >/dev/null 2>&1 || true
+    fi
   elif [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
     echo "Axon target detected (contract=${CONTRACT_ID}); starting benchmark-axonserver."
     # Fresh event store per rep. `rm -f` WITHOUT `-s` silently skips a RUNNING

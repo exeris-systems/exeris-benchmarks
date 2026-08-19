@@ -115,6 +115,15 @@ CREATE TABLE IF NOT EXISTS domain_event_entry (
 
 CREATE INDEX IF NOT EXISTS idx_domain_event_entry_agg ON domain_event_entry(aggregate_identifier, type);
 
+-- Hibernate 6 resolves Axon's @GeneratedValue on global_index to a SEQUENCE named
+-- domain_event_entry_seq, not to the implicit BIGSERIAL sequence the column declaration
+-- creates. Without it every event insert fails with 'relation "domain_event_entry_seq"
+-- does not exist' and the aggregate cannot be created at all - which surfaced as a §3.1
+-- vocabulary preflight failure ('<absent>' status), i.e. as a contract problem rather than
+-- as the schema problem it is. INCREMENT 50 matches Hibernate's default allocationSize,
+-- same as association_value_entry_seq below.
+CREATE SEQUENCE IF NOT EXISTS domain_event_entry_seq START WITH 1 INCREMENT BY 50;
+
 CREATE TABLE IF NOT EXISTS snapshot_entry (
   aggregate_identifier VARCHAR(255) NOT NULL,
   sequence_number      BIGINT       NOT NULL,

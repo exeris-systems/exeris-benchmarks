@@ -127,13 +127,38 @@ MicroProfile LRA (§9).
 > (default 8) sheds under high connection count, and the ladder ran several hundred
 > connections against it unchanged.
 >
-> This cuts both ways and neither reading may be published. Quoting 50–65/s as an
-> `exeris-community` capacity ceiling understates it, because admission was never
-> equalised. Calling the shedding a "hard failure" *mis*states it in the other direction:
-> returning 503 under excess load is designed backpressure, and is not obviously worse than
-> an arm that accepts everything and grows an unbounded queue — two different policies, not
-> a better and a worse outcome. An admission-equalised sweep is required before any arm's
-> ceiling is quoted as capacity.
+> **The arms are not running the same policy, and only one of them has a policy at all.**
+> Measured at each arm's own ceiling rung, out of tens of thousands of requests:
+>
+> | arm | rung | 503 | connection refusals | requests |
+> |---|---|---|---|---|
+> | `spring-axon-jdbc` | 46/s | **0** | 0 | ~56 000 |
+> | `spring-axon-embedded-jdbc` | 46/s | **0** | 0 | ~56 000 |
+> | `quarkus-lra-jdbc` | 54/s | 21 (0.03 %) | 0 | ~65 000 |
+> | `exeris-community` | 65/s | 216 | 14 395 | — |
+>
+> Neither Spring nor Quarkus applies request-level admission by default — that is an
+> add-on, frequently an experimental one — so they accept everything offered and let the
+> queue grow. `exeris-community` sheds by design. The measurements above are the direct
+> evidence: the arms that "degraded gracefully" shed *nothing*.
+>
+> So the two ceilings are **not the same quantity**. For the queueing arms it is a
+> service-rate limit — the rate above which work arrives faster than it is retired. For
+> `exeris-community` it is the threshold at which a deliberate policy starts refusing.
+> Putting them in one column and calling it capacity compares a measurement with a
+> configuration setting.
+>
+> Two earlier readings in this repo were wrong, in opposite directions, and both are
+> withdrawn. Quoting 50–65/s as an `exeris-community` capacity ceiling understates it,
+> because admission was never equalised. Calling the shedding a "hard failure" while
+> calling unbounded queue growth "graceful" inverts the engineering: an unbounded queue is
+> not a gentler failure mode, it is the absence of backpressure, and it ends in a
+> multi-second response or a timeout rather than a fast, honest refusal.
+>
+> **Required before any ceiling is quoted as capacity:** an admission-equalised sweep —
+> either with `exeris-community`'s shedding raised out of the way so every arm is measured
+> on the same accept-everything policy, or with each arm's ceiling reported under an
+> explicit policy label and never summed into one comparison.
 >
 > The re-rate is unaffected: 38/s sits below every arm's shedding point, and the Axon
 > capacity figures stand — those were measured with the O0 identity closing and zero

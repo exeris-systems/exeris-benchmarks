@@ -430,6 +430,34 @@ for target_app in "${TARGET_LIST[@]}"; do
     run_dir="$OUTPUT_DIR/$run_label"
     echo "--- Campaign rep ${rep}/${REPEATS}: target=${target_app} ---"
 
+    # The stack degrades across a long session and it is NOT subtle: measured
+    # 2026-08-19, one jar under one contract with identical windows and VU pools went
+    # from 8.9 s saga p95 on the first run of the day to 43.0 s after ~15 back-to-back
+    # runs, and back to 8.50 s after this restart. Nothing errored; the compensation
+    # count simply fell from 145 to 98 and the tail quadrupled.
+    #
+    # Without the restart, ARM ORDER becomes a variable — whichever arm runs last is
+    # measured on the most degraded stack — which is precisely the order effect the
+    # AB/BA controls elsewhere in this repo exist to catch. The cost is ~25 s per rep
+    # against a run of several minutes, so it is bought cheaply.
+    #
+    # Deliberately NOT fail-closed: a compose restart that fails leaves the previous
+    # containers running, and the run's own readiness gates and §3.1 preflight will
+    # catch a genuinely broken stack. Refusing the campaign here would trade a real
+    # measurement for a missing one.
+    # The campaign never defined BENCHMARK_COMPOSE_FILE -- that name lives in the baseline
+    # script -- so guarding on it would have made this block a silent no-op. Resolve the
+    # same default the baseline uses, and skip only if the file genuinely is not there.
+    _saga_compose="${BENCHMARK_COMPOSE_FILE:-$REPO_ROOT/runtime/compose/e2e-shop-order-saga.yml}"
+    if [[ "${BENCH_RESTART_STACK_BETWEEN_REPS:-1}" == "1" && -f "$_saga_compose" ]]; then
+      echo "Restarting the saga stack before this rep (measurement hygiene; set BENCH_RESTART_STACK_BETWEEN_REPS=0 to skip)."
+      if docker compose -f "$_saga_compose" restart >/dev/null 2>&1; then
+        sleep "${BENCH_STACK_RESTART_SETTLE_SECONDS:-25}"
+      else
+        echo "WARNING: compose restart failed; continuing on the existing stack. Treat this rep as potentially stack-degraded." >&2
+      fi
+    fi
+
     rc=0
     run_target_rep "$target_app" "$rep" "$run_dir" || rc=$?
 

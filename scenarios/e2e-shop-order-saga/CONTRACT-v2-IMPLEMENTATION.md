@@ -767,6 +767,17 @@ Pre-report scaffolding for contract §9. Every entry marked TODO is
 this change set. Contract §9 requires this register to appear in the report
 per stack; these stubs do not satisfy that requirement by themselves.
 
+> **Roster note (2026-08-19).** The headings below name the artifacts the entries were
+> written against. Since the JDBC roster landed, the arms actually run are
+> `quarkus-lra-jdbc` (`targets/quarkus-benchmark-app-tuned`), `spring-axon-jdbc` and
+> `spring-axon-embedded-jdbc` (both `targets/spring-benchmark-app-jdbc`). The saga
+> surface is byte-identical to the arm each replaces, so every (a)–(d) entry below
+> carries over unchanged; what does NOT carry over is anything the entries say about
+> persistence on the non-saga session steps, which is JDBC on all arms now. Two
+> stack-specific additions belong here and are recorded in the sections above rather
+> than duplicated: the Axon arms' durable token and saga stores, and the LRA arm's
+> coordinator behaviour.
+
 ### exeris-community (`targets/exeris-community-app`)
 
 - (a) Idiom deviations from contract wording (code-verified 2026-07-30):

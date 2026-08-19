@@ -2198,6 +2198,14 @@ else
   # this gate exists to prevent in the other direction. Truncation scales with phase
   # count rather than duration, so at the contract's 300/900/30 its share should be well
   # under the 1% bound below.
+  # k6 counts an iteration only when it RUNS TO COMPLETION, so issued-minus-iterations is
+  # the number of sessions cut off mid-flight by a phase gracefulStop. Those sessions have
+  # already incremented saga_issued_total and can never reach a terminal bucket, which is
+  # the mechanical way truncation happens. Reading it lets the message below report the
+  # cause instead of guessing at one.
+  GATE_O0_ITERATIONS="$(jq -r '.metrics.iterations.count // 0' "$K6_SUMMARY_JSON" 2>/dev/null || echo 0)"
+  GATE_O0_INTERRUPTED=$(( ${GATE_ISSUED%%.*} - ${GATE_O0_ITERATIONS%%.*} ))
+  [[ "$GATE_O0_INTERRUPTED" -lt 0 ]] && GATE_O0_INTERRUPTED=0
   GATE_O0_TRUNCATED=$(( ${GATE_ISSUED%%.*} - GATE_O0_SUM ))
   GATE_O0_TRUNCATED_BP=0
   if [[ "${GATE_ISSUED%%.*}" -gt 0 && "$GATE_O0_TRUNCATED" -gt 0 ]]; then
@@ -2237,7 +2245,18 @@ else
 
     GATE_STATUS="detector_fault"
 
-    GATE_REASON="O0: ${GATE_O0_TRUNCATED} of ${GATE_ISSUED} issued reached no terminal bucket ($(( GATE_O0_TRUNCATED_BP / 100 )).$(( GATE_O0_TRUNCATED_BP % 100 ))%), above the 1% truncation bound — too large for phase boundaries alone, so a §3.1 vocabulary mismatch is the likely cause. Buckets: completed(${GATE_O0_COMPLETED}) + compensated(${GATE_O0_COMPENSATED}) + unrecovered(${GATE_O0_UNRECOVERED}) + unresolved(${GATE_O0_UNRESOLVED}) + submit_rejected(${GATE_O0_REJECTED}) = ${GATE_O0_SUM} != issued(${GATE_ISSUED}). Some issued sagas were classified into no terminal bucket, so the compensation count cannot be trusted in either direction — most likely a terminal-vocabulary mismatch on this stack (CONTRACT-v2 §3.1)."
+    # Name the mechanism rather than guessing at it. The §3.1 preflight runs BEFORE the
+    # measurement window and fails the run closed, so if execution reached here the
+    # declared vocabulary already matched what the stack emits — pointing at §3.1 anyway
+    # sends the reader to re-check the one thing this run has already proved. Interrupted
+    # iterations are the honest first suspect, and they are a WINDOW problem: truncation
+    # scales with phase count, so short windows inflate it and the contract's 300/900/30
+    # is where the 1% bound is meant to hold.
+    _o0_hint="Check the phase windows first: truncation scales with phase count, not duration, so abbreviated windows inflate it."
+    if [[ "$GATE_O0_INTERRUPTED" -gt 0 ]]; then
+      _o0_hint="k6 completed ${GATE_O0_ITERATIONS} iterations against ${GATE_ISSUED} issued, i.e. ${GATE_O0_INTERRUPTED} session(s) were cut off mid-flight by a phase gracefulStop — that, not a vocabulary mismatch, is what put sagas in no bucket. Compare saga_completed_duration against the 30s gracefulStop BEFORE assuming short windows: measured 2026-08-19, lengthening the windows made this WORSE on an arm whose p95 saga settle time was 28.6s, because the sessions themselves outlived the stop. A settle time approaching gracefulStop is a stack finding; only if it is comfortably below one should you suspect the windows."
+    fi
+    GATE_REASON="O0: ${GATE_O0_TRUNCATED} of ${GATE_ISSUED} issued reached no terminal bucket ($(( GATE_O0_TRUNCATED_BP / 100 )).$(( GATE_O0_TRUNCATED_BP % 100 ))%), above the 1% truncation bound. Buckets: completed(${GATE_O0_COMPLETED}) + compensated(${GATE_O0_COMPENSATED}) + unrecovered(${GATE_O0_UNRECOVERED}) + unresolved(${GATE_O0_UNRESOLVED}) + submit_rejected(${GATE_O0_REJECTED}) = ${GATE_O0_SUM} != issued(${GATE_ISSUED}). Some issued sagas were classified into no terminal bucket, so the compensation count cannot be trusted in either direction. ${_o0_hint}"
 
   elif [[ "$FAULT_MODE" == "transient" ]]; then
     # s4.2 inverse assertion: transient faults must NOT produce compensations.

@@ -13,6 +13,7 @@ import org.axonframework.modelling.saga.repository.jpa.JpaSagaStore;
 import org.axonframework.serialization.Serializer;
 import org.axonframework.spring.messaging.unitofwork.SpringTransactionManager;
 import org.axonframework.springboot.util.RegisterDefaultEntities;
+import org.axonframework.springboot.util.jpa.ContainerManagedEntityManagerProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -53,6 +54,18 @@ import org.springframework.transaction.PlatformTransactionManager;
         "org.axonframework.modelling.saga.repository.jpa"
 })
 public class EmbeddedAxonStoreConfig {
+
+    /**
+     * Axon's bridge to the container's {@code EntityManager}. Not auto-configured here:
+     * the starter registers it as part of the JPA autoconfiguration that only engages when
+     * it is also supplying the stores, so with the stores declared above the provider has
+     * to come with them.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public EntityManagerProvider entityManagerProvider() {
+        return new ContainerManagedEntityManagerProvider();
+    }
 
     @Bean
     @ConditionalOnMissingBean

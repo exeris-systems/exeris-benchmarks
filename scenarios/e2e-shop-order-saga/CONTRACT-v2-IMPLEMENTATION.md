@@ -303,6 +303,40 @@ owns while failing to load the target, so replacing it with a lighter driver wou
 nothing. That closes the "k6 is heavy" question with a measurement rather than an
 impression.
 
+### ADR-035 admission equalization applied — and it fixes the operating point, not the ceiling
+
+The entity-read report had already settled this axis and this scenario had never applied
+it: `queueDepthAllowanceRatio` defaults to 8, under connection pressure Exeris **sheds**
+while HikariCP and Tomcat **block**, and comparing a shedding stack against blocking ones
+measures the policy. Raising it to 32 took that report's pool campaign from an 84 % error
+rate to 0 errors across all 24 runs (build fence `1bf4767`). Applied here via
+`-Dexeris.persistence.admission.queueDepthAllowanceRatio=32`, in the exact form those
+campaigns ran with — the ledger's earlier A/B of this knob is caveated as unverified,
+because the constant carries a leading dot and a wrong `-D` form is silently ignored.
+
+Same sweep, equalized:
+
+| rate | issued | O0 gate | HTTP failure | submit-rejected | unclassified |
+|---|---|---|---|---|---|
+| 50 | 7002 | **pass** | 0.006 % | 0 | 0 |
+| 100 | 3724 | detector_fault | 26 % | 496 | 350 |
+| 200 | 1138 | detector_fault | 58 % | 562 | 393 |
+
+**At the operating point it matters**: 50/s goes from ~1 % failures with 131 rejected
+submissions to 0.006 % with none, and the O0 identity closes for the first time. Every
+comparative run must carry it, and it is disclosed as a §9(d) fairness control rather than
+tuning — the arms it equalizes were never on the same policy.
+
+**Above the operating point it changes nothing**: 26 % and 58 % are within noise of the
+unequalized 27 % and 58 %. So admission control is now excluded on a *verified* knob rather
+than an unverified one, and with the DB pool excluded above, the remaining candidate for
+the rate-100 drop is the offered-connection model of the driver itself — k6 holds one
+connection per in-flight VU (~340 at 50/s, ~680 at 100/s), where an event-loop driver would
+offer the same arrival rate over a bounded shared pool. That is the next controlled
+experiment, and it is the one axis the earlier "k6 is not the bottleneck" reading did not
+test: it measured the driver's CPU, which is not how a load generator becomes the
+constraint here.
+
 ### Fourth refuted hypothesis for the rate-100 drop: DB pool sizing
 
 Today's first reading looked like a mechanism at last — the 200/s run logged 111

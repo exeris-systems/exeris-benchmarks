@@ -129,6 +129,25 @@ CREATE TABLE IF NOT EXISTS snapshot_entry (
   CONSTRAINT ux_snapshot_entry_event_id UNIQUE (event_identifier)
 );
 
+-- Axon's SnapshotEventEntry maps to snapshot_event_entry, NOT to snapshot_entry above.
+-- Nothing wrote either while Axon Server held the event store, but JpaEventStorageEngine
+-- READS the snapshot table on every aggregate load, so the embedded arm needs the name
+-- Hibernate actually resolves. snapshot_entry is kept as-is: dropping a table that a
+-- published run may have referenced buys nothing.
+CREATE TABLE IF NOT EXISTS snapshot_event_entry (
+  aggregate_identifier VARCHAR(255) NOT NULL,
+  sequence_number      BIGINT       NOT NULL,
+  type                 VARCHAR(255) NOT NULL,
+  event_identifier     VARCHAR(255) NOT NULL,
+  meta_data            BYTEA,
+  payload              BYTEA        NOT NULL,
+  payload_revision     VARCHAR(255),
+  payload_type         VARCHAR(255) NOT NULL,
+  time_stamp           VARCHAR(255) NOT NULL,
+  CONSTRAINT pk_snapshot_event_entry          PRIMARY KEY (aggregate_identifier, sequence_number, type),
+  CONSTRAINT ux_snapshot_event_entry_event_id UNIQUE (event_identifier)
+);
+
 CREATE TABLE IF NOT EXISTS token_entry (
   processor_name VARCHAR(255) NOT NULL,
   segment        INT          NOT NULL,

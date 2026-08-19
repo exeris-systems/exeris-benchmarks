@@ -24,6 +24,13 @@ DECLARE
     'exeris_outbox_dlq',
     'domain_event_entry',
     'snapshot_entry',
+    -- Axon's real snapshot table name, plus the JPA saga store's two tables. Empty while
+    -- Axon Server held the stores; the embedded arm (CONTRACT-v2 s9(e)) writes all three,
+    -- and a saga row surviving into the next rep would let a previous run's saga resume
+    -- inside a measurement window. Same reason the Axon Server volume is force-recreated.
+    'snapshot_event_entry',
+    'saga_entry',
+    'association_value_entry',
     'token_entry',
     'in_cart_edges',
     'bought_edges',

@@ -275,6 +275,58 @@ fail-safe working as intended, not a green light for the row.
 artifact is understood. 50 sessions/s (342 concurrent) is clean on all three
 comparison-eligible stacks and is the operating point.
 
+## Load level at the chosen operating point — 2026-08-19 (pinned, host-networked)
+
+Measured to answer a direct question: is 50 sessions/s actually loading anything?
+Conditions are new — target on cores 0-3,8-11, load generator on 4,5,12,13, backends on
+6,7,14,15 (SMT siblings kept together), and the compose stack moved from the docker
+bridge to host networking so the callback path no longer crosses NAT.
+
+Per-core utilisation sampled ONLY while k6 was alive (mpstat 5 s, whole-run sampling would
+dilute with seeding and JVM startup):
+
+| declared rate | target (of 4 phys cores) | load gen (of 2) | backends (of 2) |
+|---|---|---|---|
+| 50 | 0.34 cores (4.2 %) | 0.14 cores (3.5 %) | 0.26 cores (6.5 %) |
+| 100 | 0.50 cores (6.2 %) | 0.14 cores (3.5 %) | 0.46 cores (11.4 %) |
+| 200 | 0.38 cores (4.7 %) | 0.18 cores (4.4 %) | 0.28 cores (7.1 %) |
+
+**The deployment is ~10 % busy at the operating point, and raising the arrival rate does
+not raise the load — it raises connections, and delivery collapses instead.** HTTP failure
+fraction goes 1 % (50/s) → 27 % (100/s) → 58 % (200/s), issuance goes 7990 → 3715 → 1335.
+This is the same target-side drop recorded in the rate-100 finding above, unchanged.
+
+**Two consequences for how these runs may be read.** The saga numbers describe per-session
+cost with the stack near idle; they are NOT a saturation throughput and must never be
+quoted as one. And k6 is not the constraint: it uses 0.14–0.18 of the two physical cores it
+owns while failing to load the target, so replacing it with a lighter driver would move
+nothing. That closes the "k6 is heavy" question with a measurement rather than an
+impression.
+
+### Fourth refuted hypothesis for the rate-100 drop: DB pool sizing
+
+Today's first reading looked like a mechanism at last — the 200/s run logged 111
+`PersistenceProviderException` / `connectionExhausted`, peak Postgres backends 273 against
+`max_connections=300`, and `EXERIS_DB_POOL_MAX_SIZE` defaults to 256 while peak ACTIVE
+connections was 9. An oversized pool exhausting the server it depends on.
+
+Controlled A/B, everything else identical:
+
+| rate | pool max | HTTP failure | issued | peak backends | peak active |
+|---|---|---|---|---|---|
+| 100 | 256 | 27 % | 3715 | 273 | 9 |
+| 100 | 32 | **65 %** | 819 | 48 | 5 |
+| 200 | 256 | 58 % | 1335 | 273 | 9 |
+| 200 | 32 | **81 %** | 507 | 48 | 2 |
+| 200 | 64 | **78 %** | 551 | 80 | 3 |
+
+**Refuted.** Shrinking the pool made it worse at every rate while backends fell to 48 and
+active connections to 2–5, so exhaustion is a symptom downstream of the drop, not its
+cause. This agrees with what the finding above already established from JFR — requests fail
+before they reach persistence. Recorded because this row has now been wrong four times, and
+the pattern in every one of them was a plausible mechanism adopted without a controlled
+experiment; the experiment is cheap and it keeps refuting them.
+
 ## Open finding — §2 "identical recommendation step" is FALSE (graph SPI expressiveness)
 
 §2 states Neo4j "serves the recommendation step identically on every stack".

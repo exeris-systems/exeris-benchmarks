@@ -200,7 +200,21 @@ _deployment_uses_axon_server() {
   if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
     return 1
   fi
-  [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]
+  # quarkus-lra-jdbc IS on this list, and that is not a leftover. I removed it earlier today
+  # on the reasoning that the arm runs MicroProfile LRA and cannot need an Axon Server, having
+  # read the first half of AxonBusConfig.commandBus() — which builds a plain SimpleCommandBus
+  # and says in its own comment that no gRPC channel is created. The `else` branch below it
+  # does the opposite:
+  #
+  #     if (!axonEnabled) { return SimpleCommandBus.builder().build(); }
+  #     // exeris.axon.enabled=true (e2e-shop-order-saga): unchanged wiring
+  #     return AxonServerCommandBus.builder().axonServerConnectionManager(connectionManager.get())...
+  #
+  # and this runner exports EXERIS_AXON_ENABLED=true for every saga run (top of this file), so
+  # in THIS scenario the arm dispatches CreateOrderCommand through Axon Server. Removing it
+  # broke the arm outright: the §3.1 preflight failed with the decline case never reaching a
+  # terminal state. The saga is LRA; the command bus is Axon Server. Both are in its §1 unit.
+  [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *quarkus* || "$CONTRACT_ID" == *quarkus* ]]
 }
 
 # Does it include an external MicroProfile-LRA coordinator?

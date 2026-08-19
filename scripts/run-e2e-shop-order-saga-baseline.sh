@@ -1633,8 +1633,11 @@ if command -v ss >/dev/null 2>&1; then
     _lport="${_laddr##*:}"
     _lhost="${_laddr%:*}"
     case " $_saga_stack_ports " in *" $_lport "*) ;; *) continue ;; esac
+    # Loopback wears four spellings in ss output: 127.0.0.1, [::1], the v4-mapped
+    # [::ffff:127.0.0.1] that every JVM here produces on a dual-stack socket, and
+    # 127.0.0.53%lo for systemd-resolved. Anything else is off-loopback.
     case "$_lhost" in
-      127.0.0.1|"[::1]"|localhost) ;;
+      127.*|"[::1]"|"[::ffff:127."*|localhost) ;;
       *) _exposed="${_exposed} ${_laddr}" ;;
     esac
   done < <(ss -Hltn 2>/dev/null | awk '{print $4}')

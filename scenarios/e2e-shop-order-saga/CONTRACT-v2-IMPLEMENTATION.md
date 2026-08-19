@@ -585,6 +585,99 @@ Windows are 300 s warmup / 900 s measurement / 30 s cooldown, aligned with the
 entity-read fixed contracts. The previous 120/180 gave ~270 compensations per window —
 a thin denominator for an oracle whose whole claim is an exact integer.
 
+## The embedded Axon arm — what it took to reach a terminal outcome, 2026-08-19
+
+CONTRACT-v2 §9(e)'s second Axon shape (`spring-axon-embedded`, contract
+`spring_axon_embedded_h1_park1_v3`) runs the same jar as the Axon Server arm with
+`EXERIS_AXON_SERVER_ENABLED=false`. Turning Axon Server off does not by itself produce a
+working arm, and each of the four defects below stranded every session at exactly the same
+observable symptom — status `INVENTORY_RESERVED`, no exception, no WARN. They are recorded
+individually because three plausible explanations were refuted by measurement along the way,
+and the symptom alone never discriminated between them.
+
+| # | Defect | How it was refuted/confirmed |
+|---|---|---|
+| 1 | No event store at all: the starter has nothing to fall back on and the context dies building the aggregate repository | Startup failure, `Default configuration requires the use of event sourcing` |
+| 2 | Stores declared on JPA, so Hibernate mapped Axon's `@Lob byte[]` to PostgreSQL large-object OIDs | `column "token" is of type bytea but expression is of type oid`; rewritten onto Axon's JDBC engines per the all-arms-JDBC rule |
+| 3 | Axon's JDBC schemas default to entity-style identifiers, emitted unquoted, so PostgreSQL folded `TokenEntry` to `tokenentry` | `relation "tokenentry" does not exist`; fixed by naming every table and column to match the seed |
+| 4 | The saga serialized to the empty document | `JdbcSagaStore : Storing saga id … as {}` under DEBUG |
+
+Two hypotheses were **refuted**, and both had looked convincing:
+
+- **Segment routing.** Every step of this saga after the first is published as a plain event
+  (`eventBus.publish(GenericEventMessage.asEventMessage(...))`), so Axon's default
+  `SequentialPerAggregatePolicy` falls back to the event's own message identifier and sprays
+  one saga's events across all 16 segments. That is a real race and it was fixed
+  (`SagaSequencingConfiguration`), but it was **not this failure**: forcing
+  `initial-segment-count=1`/`thread-count=1` — verified in the log as only `Segment[0/0]`
+  with 2 workers — failed identically.
+- **A broken gateway callback URL.** `PaymentGatewayClient` derives its default from
+  `EXERIS_PORT`, which the arm sets to 9014, so the callback address was correct all along.
+
+The defect that actually mattered is #4. With `axon.serializer.general=jackson` and no public
+accessors on the saga, Jackson wrote every saga as `{}`. The saga was found and its
+`InventoryReserved` handler ran — on an instance with `sagaId=null` and `dbOrderId=0` — so it
+dispatched a payment naming no saga, and the callback's compare-and-set on
+`(saga_id, status='PAYMENT_PROCESSING')` matched no row.
+
+### The finding this exposed, which is NOT an embedded-arm defect
+
+The Axon Server arm never showed defect #4 because **it does not persist saga state at all**.
+Its log carries `WARN InMemoryTokenStore: An in memory token store is being created`, and the
+2026-07-17 probe recorded zero JPA writes to `saga_entry`/`association_value_entry` across two
+completed sagas. Axon Server supplies an event store but neither a token store nor a saga
+store, and Axon's starter falls back to in-memory when no store bean is declared.
+
+That is a **§8 durability-tier asymmetry between the two Axon arms**, and it must not be
+collapsed:
+
+- `spring-axon` (Axon Server): events durable in Axon Server; **tracking tokens and saga state
+  in memory** — a restart loses in-flight saga state and replays from wherever the in-memory
+  token happens to be.
+- `spring-axon-embedded`: events, tokens and saga state all durable in the shared Postgres.
+
+The embedded arm therefore pays per-session write traffic the Axon Server arm does not pay,
+and a footprint or throughput comparison between the two that does not state this reads a
+durability difference as an efficiency difference. **Open decision:** whether to leave the
+asymmetry and disclose it, or declare JDBC token and saga stores for the Axon Server arm too
+(which is the ordinary production shape — in-memory tokens are Axon's no-store fallback, not a
+deployment choice) and re-measure. Not resolved here; nothing in this change set alters the
+Axon Server arm's stores.
+
+### Verified terminal — 2026-08-19, perf box (exploratory profile, not a citable number)
+
+First clean run of this arm end to end, 50 sessions/s, 20 s warmup / 60 s measurement /
+20 s cooldown, pinned and host-networked:
+
+- §3.1 vocabulary preflight PASSES on both cases — `COMPENSATED` on the forced decline and
+  `COMPLETED` on the forced success.
+- Correctness gate **pass**: expected 145 compensations, observed 145, over the exactly-issued
+  population (`population_source: ids_file`).
+- O0 accounting closes exactly: 4625 completed + 145 compensated = **4770 issued**, 0
+  unresolved, `http_req_failed` 0.008 %.
+- 24 006 rows in `domain_event_entry`, and `saga_entry` / `association_value_entry` are back to
+  **0** after the run — `@EndSaga` deletes a saga on termination, so an empty saga table is
+  positive evidence that nothing stranded.
+- 232 `dropped_iterations`, i.e. the VU pool ceiling was reached (measurement phase peaked at
+  608/612 VUs). This is the driver-side offered-connection question, not a target failure, and
+  it is why the issued population is 4770 rather than 5000. It belongs to the open k6-vs-
+  Hyperfoil control, not to this arm.
+
+These numbers are **exploratory** — the run stamps `claim_scope=exploratory` — and are recorded
+here as evidence the arm reaches terminal outcomes, not as a performance result.
+
+### Fairness ledger for this arm
+
+- Every arm is measured on JDBC because Exeris is; the embedded arm uses Axon's own
+  `JdbcEventStorageEngine` / `JdbcTokenStore` / `JdbcSagaStore`, not Hibernate.
+- The saga is annotated for Jackson rather than moved to XStream (Axon's own advice for
+  sagas), because a per-arm serializer would add a second variable to a comparison whose
+  subject is where saga state lives.
+- `SagaSequencingConfiguration` is registered for **both** Axon arms. The Axon Server arm has
+  the same race and wins it only because events stream back from the server after the local
+  transaction commits; leaving the arms on different sequencing policies would make them
+  incomparable.
+
 ## Appendix A — §9 per-stack deviation register (stubs)
 
 Pre-report scaffolding for contract §9. Every entry marked TODO is

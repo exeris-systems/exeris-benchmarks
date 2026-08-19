@@ -2909,7 +2909,14 @@ echo "env metadata: $ENV_JSON"
 echo "run metadata: $RUN_METADATA_JSON"
 echo "resource samples: $RESOURCE_SAMPLES_CSV"
 echo "resource metrics: $RESOURCE_METRICS_JSON"
-if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]; then
+# The embedded arm matches *axon* but never starts Axon Server, and announcing a stats
+# file that was never written told a reader the three-process deployment unit had been
+# measured when CONTRACT-v2 §1 says this arm has two. Say what is actually true per arm.
+if [[ "$CONTRACT_ID" == *axon_embedded* || "$TARGET_APP" == *axon-embedded* ]]; then
+  echo "Note: no Axon Server in this arm — CONTRACT-v2 §1 deployment unit is target JVM + Postgres."
+  echo "      The saga engine runs in-process, so no third process holds part of its CPU/RSS;"
+  echo "      Postgres stays outside resource-metrics.json exactly as it does for every arm."
+elif [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]; then
   echo "axon server stats: $AXON_STATS_CSV"
   echo "Note: Axon Server CPU/RSS is in $AXON_STATS_CSV (separate process). Not included in resource-metrics.json."
 fi

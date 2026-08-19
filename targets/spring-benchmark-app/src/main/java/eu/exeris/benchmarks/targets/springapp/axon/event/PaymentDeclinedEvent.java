@@ -6,4 +6,4 @@ package eu.exeris.benchmarks.targets.springapp.application.axon.event;
  * it is routed to saga compensation and can never be retried by the command
  * gateway's transient-fault retry scheduler (§5: zero retries on decline).
  */
-public record PaymentDeclinedEvent(String sagaId, String orderId, String userId, long dbOrderId) {}
+public record PaymentDeclinedEvent(String sagaId, String orderId, String userId, long dbOrderId) implements SagaScopedEvent {}

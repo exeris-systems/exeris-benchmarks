@@ -11,5 +11,5 @@ public record OrderSagaFailedUnrecoveredEvent(
         String userId,
         String cartId,
         String sagaId
-) {
+) implements SagaScopedEvent {
 }

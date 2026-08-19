@@ -2015,6 +2015,27 @@ else
   #
   # saga_not_submitted_total is deliberately NOT in the sum: those iterations
   # aborted before issuance and never incremented saga_issued_total.
+  # --- CONTRACT-v2 §2 load model: was the DECLARED arrival rate actually delivered? -----
+  #
+  # constant-arrival-rate drops iterations when no VU is free. k6 counts them in
+  # dropped_iterations and then reports a perfectly healthy run: the gate passes, the
+  # latency percentiles look fine, and the workload was simply smaller than the contract
+  # says. §2 pins 50 sessions/s as normative, so a run that could not deliver it did not
+  # run this contract.
+  #
+  # Measured 2026-08-19 on a 90 s rate check: 190 dropped against 4 313 issued (4.4%),
+  # entirely during the initial ramp. Bound is 0.5% — above that the shortfall is
+  # structural rather than ramp noise.
+  _dropped="$(jq -r '.metrics.dropped_iterations.count // 0' "$K6_SUMMARY_JSON" 2>/dev/null || echo 0)"
+  _dropped="${_dropped%%.*}"
+  if [[ "${GATE_ISSUED%%.*}" -gt 0 && "$_dropped" -gt 0 ]]; then
+    _drop_bp=$(( _dropped * 10000 / ${GATE_ISSUED%%.*} ))
+    if [[ "$_drop_bp" -gt 50 ]]; then
+      GATE_STATUS="error"
+      GATE_REASON="§2 load model not delivered: k6 dropped ${_dropped} iterations against ${GATE_ISSUED} issued ($(( _drop_bp / 100 )).$(( _drop_bp % 100 ))%), above the 0.5% bound. constant-arrival-rate drops when no VU is free, so the workload actually applied was smaller than the declared 50 sessions/s. Raise K6_*_VUS_MAX / _PRE, or the arm cannot sustain the contract rate — either way this is not a run of this contract."
+    fi
+  fi
+
   _o0_count() { jq -r ".metrics.${1}.count // 0" "$K6_SUMMARY_JSON" 2>/dev/null || echo 0; }
   # k6 omits zero-sample metrics, so absence means zero — never "unknown".
   GATE_O0_COMPLETED="$(_o0_count saga_completed_total)"

@@ -179,6 +179,33 @@ _ensure_bench_tls_cert() {
   echo "TLS cert exported: EXERIS_TRANSPORT_CERT_PATH=${cert_path}"
 }
 
+# Does this run's §1 deployment unit include an EXTERNAL Axon Server?
+#
+# This predicate existed in three separate copies, each spelled
+#   *axon* || *spring* || *quarkus*
+# and each doing something different with the answer: starting the Axon Server container,
+# sampling it into the footprint rollup, and widening k6's saga poll budget. The
+# `*spring*`/`*quarkus*` arms date from when BOTH framework arms ran the saga through Axon
+# as a command bus. They kept matching after quarkus was rebuilt on MicroProfile LRA, so
+# every quarkus-lra-jdbc run STARTED a ~1 GB Axon Server beside an arm that never talks to
+# it, BILLED it 960 MB of RSS and 48 core-seconds, and ran k6 with a different poll budget
+# than the other arms. The campaign of 2026-08-19 reported that arm's deployment RSS as
+# ~2 240 MB instead of ~1 258 MB.
+#
+# A target-name substring is not a deployment unit. Only the contract is.
+_deployment_uses_axon_server() {
+  # The embedded arm keeps its events in Postgres — same jar, no Axon Server.
+  if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
+    return 1
+  fi
+  [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]
+}
+
+# Does it include an external MicroProfile-LRA coordinator?
+_deployment_uses_lra_coordinator() {
+  [[ "$CONTRACT_ID" == *lra* || "$TARGET_APP" == *lra* ]]
+}
+
 # Stop every container/backend sampler subshell started by this run.
 #
 # Split out of the end-of-run path on 2026-08-19 because that path is NOT the only
@@ -193,7 +220,7 @@ _ensure_bench_tls_cert() {
 # before these are assigned and `set -u` is in effect.
 _stop_container_samplers() {
   local _p _pid
-  for _p in AXON RESTATE PAYMENT_GATEWAY POSTGRES NEO4J; do
+  for _p in AXON RESTATE LRA_COORD PAYMENT_GATEWAY POSTGRES NEO4J; do
     eval "_pid=\${${_p}_STATS_PID:-}"
     if [[ -n "$_pid" ]]; then
       kill "$_pid" >/dev/null 2>&1 || true
@@ -703,14 +730,19 @@ ensure_benchmark_infra() {
       2>/dev/null || true
   }
 
-  # spring-axon-embedded is the one arm that matches every *axon*/*spring* pattern above
-  # and must NOT get an Axon Server: its whole point is a TWO-process CONTRACT-v2 s1
-  # deployment unit with Axon's stores in the shared Postgres. Starting the container
-  # anyway would idle ~2 GB next to the measurement and land in the s8 footprint rollup,
-  # i.e. it would report the three-process cost under the two-process arm's name.
-  if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
-    echo "Axon EMBEDDED arm (contract=${CONTRACT_ID}): Axon Server is deliberately NOT started;"
-    echo "  the event, token and saga stores live in Postgres via JPA (s1 unit = target JVM + Postgres)."
+  # Every arm whose CONTRACT-v2 s1 unit does not name an Axon Server must neither start one
+  # nor inherit one. This guard was written for spring-axon-embedded alone, because that was
+  # believed to be the only arm matching the old *axon*/*spring*/*quarkus* pattern wrongly.
+  # It was not: quarkus-lra-jdbc matched too, so it STARTED a ~1 GB Axon Server beside itself
+  # on the backend cores it is pinned against, then billed it into its own s8 footprint. The
+  # reasoning below always applied to any non-Axon arm; only its condition was too narrow.
+  if ! _deployment_uses_axon_server; then
+    if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
+      echo "Axon EMBEDDED arm (contract=${CONTRACT_ID}): Axon Server is deliberately NOT started;"
+      echo "  the event, token and saga stores live in Postgres (s1 unit = target JVM + Postgres)."
+    else
+      echo "Contract ${CONTRACT_ID} names no Axon Server in its s1 deployment unit; not starting one."
+    fi
     # Not started is not the same as not running: the stack is shared, and an Axon Server
     # left up by the previous arm idles a ~2 GB JVM on the backend cores this run is pinned
     # against. Stop it, so the deployment on the box matches the deployment in the metadata.
@@ -718,7 +750,7 @@ ensure_benchmark_infra() {
       echo "  stopping a leftover exeris-e2e-saga-axonserver so it does not run beside this arm."
       docker stop exeris-e2e-saga-axonserver >/dev/null 2>&1 || true
     fi
-  elif [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
+  else
     echo "Axon target detected (contract=${CONTRACT_ID}); starting benchmark-axonserver."
     # Fresh event store per rep. `rm -f` WITHOUT `-s` silently skips a RUNNING
     # container ("No stopped containers") — the anonymous volumes the image
@@ -1256,6 +1288,7 @@ RUNTIME_LOG_METADATA_JSON="$LOGS_DIR/runtime-log-metadata.json"
 AXON_STATS_CSV="$LOGS_DIR/axonserver-docker-stats.csv"
 AXON_STATS_PID=""
 RESTATE_STATS_CSV="$LOGS_DIR/restate-server-docker-stats.csv"
+LRA_COORD_STATS_CSV="$LOGS_DIR/lra-coordinator-docker-stats.csv"
 RESTATE_STATS_PID=""
 # CONTRACT-v2 §1/§8 whole-deployment footprint. The shared backends are part of
 # every stack's deployment unit and were previously unsampled, which measured
@@ -1852,7 +1885,7 @@ fi
 AXON_STATS_PID=""
 if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
   : # no Axon Server in this arm's deployment unit; nothing to sample (see the start gate above)
-elif [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
+elif _deployment_uses_axon_server; then
   _axon_cid="$(docker inspect --format '{{.Id}}' exeris-e2e-saga-axonserver 2>/dev/null || true)"
   if [[ -n "$_axon_cid" ]]; then
     _start_container_stats_sampler exeris-e2e-saga-axonserver "$AXON_STATS_CSV"
@@ -1860,6 +1893,29 @@ elif [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == 
     echo "Axon Server docker stats sampler started (container: exeris-e2e-saga-axonserver, pid: ${AXON_STATS_PID})."
   else
     echo "Warning: exeris-e2e-saga-axonserver container not found; Axon Server stats will not be captured." >&2
+  fi
+fi
+
+# Start LRA coordinator docker stats sampler (if an LRA target is detected).
+#
+# The comparative pair manifest has always said this arm's s1 deployment unit is THREE
+# processes -- app JVM + LRA coordinator + Postgres -- and that "the coordinator must be
+# sampled like Axon Server". It never was. The container name was already listed in the
+# idle-baseline loop below, so the runner knew it existed and still left it out of the
+# rollup: the one arm that needs an external coordinator was the one arm not charged for it,
+# while simultaneously being charged for an Axon Server it does not use.
+LRA_COORD_STATS_PID=""
+if _deployment_uses_lra_coordinator; then
+  _lra_cid="$(docker inspect --format '{{.Id}}' exeris-e2e-saga-lra-coordinator 2>/dev/null || true)"
+  if [[ -n "$_lra_cid" ]]; then
+    _start_container_stats_sampler exeris-e2e-saga-lra-coordinator "$LRA_COORD_STATS_CSV"
+    LRA_COORD_STATS_PID="$_CONTAINER_STATS_SAMPLER_PID"
+    echo "LRA coordinator docker stats sampler started (container: exeris-e2e-saga-lra-coordinator, pid: ${LRA_COORD_STATS_PID})."
+  else
+    echo "ERROR: contract '${CONTRACT_ID}' declares an LRA arm but exeris-e2e-saga-lra-coordinator" >&2
+    echo "ERROR: is not running. Its s1 deployment unit is app JVM + LRA coordinator + Postgres;" >&2
+    echo "ERROR: a run that cannot sample the coordinator understates the arm and is not comparable." >&2
+    exit 64
   fi
 fi
 
@@ -1884,7 +1940,7 @@ if [[ "$ENABLE_PERF_STAT" == "true" && -n "$TARGET_PID" ]]; then
 fi
 
 # Extend poll budget for Axon targets: SimpleEventBus async projection may lag under high concurrency.
-if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
+if _deployment_uses_axon_server; then
   export K6_MAX_POLL_ATTEMPTS="${K6_MAX_POLL_ATTEMPTS:-40}"
 fi
 # CONTRACT-v2 s8 outcome-split reporting needs p99 for saga_completed_duration /
@@ -2017,6 +2073,7 @@ _write_deployment_footprint() {
     "$(if [[ "$GRAPH_TRACK" == "neo4j" ]]; then _component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend "$(_csv_span_seconds "$NEO4J_STATS_CSV")"; fi)" \
     "$(_component_json exeris-e2e-saga-axonserver "$AXON_STATS_CSV" stack-specific "$(_csv_span_seconds "$AXON_STATS_CSV")")" \
     "$(_component_json exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV" stack-specific "$(_csv_span_seconds "$RESTATE_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-lra-coordinator "$LRA_COORD_STATS_CSV" stack-specific "$(_csv_span_seconds "$LRA_COORD_STATS_CSV")")" \
     "$(_component_json exeris-e2e-saga-payment-gateway "$PAYMENT_GATEWAY_STATS_CSV" shared-external "$(_csv_span_seconds "$PAYMENT_GATEWAY_STATS_CSV")")" \
     | jq -s '.')"
 

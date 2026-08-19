@@ -179,8 +179,42 @@ _ensure_bench_tls_cert() {
   echo "TLS cert exported: EXERIS_TRANSPORT_CERT_PATH=${cert_path}"
 }
 
+# Stop every container/backend sampler subshell started by this run.
+#
+# Split out of the end-of-run path on 2026-08-19 because that path is NOT the only
+# way this script exits, and the samplers are `while true` loops: anything that
+# skipped it leaked a per-second loop that outlives the run. Four of them were
+# found alive four hours after their campaign died -- two `docker stats`, one
+# `docker exec psql` against the shared Postgres once a second, all still
+# appending to a run directory nothing would ever read again.
+#
+# Idempotent by blanking each pid as it is reaped, so the normal path and the
+# EXIT trap can both call it. Every read is ${x:-} because the trap can fire
+# before these are assigned and `set -u` is in effect.
+_stop_container_samplers() {
+  local _p _pid
+  for _p in AXON RESTATE PAYMENT_GATEWAY POSTGRES NEO4J; do
+    eval "_pid=\${${_p}_STATS_PID:-}"
+    if [[ -n "$_pid" ]]; then
+      kill "$_pid" >/dev/null 2>&1 || true
+      wait "$_pid" 2>/dev/null || true
+      eval "${_p}_STATS_PID=''"
+    fi
+  done
+  if [[ -n "${PG_CONNECTIONS_PID:-}" ]]; then
+    kill "$PG_CONNECTIONS_PID" >/dev/null 2>&1 || true
+    wait "$PG_CONNECTIONS_PID" 2>/dev/null || true
+    PG_CONNECTIONS_PID=""
+  fi
+}
+
 cleanup_baseline() {
-  [[ -n "$PRE_TMP" ]] && rm -f "$PRE_TMP"
+  # Guard: this runs from EXIT and from the INT/TERM/HUP handlers below, and a
+  # signal arriving during cleanup would otherwise re-enter it.
+  [[ -n "${_CLEANUP_BASELINE_DONE:-}" ]] && return 0
+  _CLEANUP_BASELINE_DONE=1
+  [[ -n "${PRE_TMP:-}" ]] && rm -f "$PRE_TMP"
+  _stop_container_samplers
   bench_stop_resource_sampler
   bench_stop_perf_stat
   # Best-effort stop of OS sidecars on any exit path (guarded: trap may fire
@@ -1230,7 +1264,15 @@ HOST_MPSTAT_CSV="$LOGS_DIR/host-mpstat.csv"
 TARGET_PIDSTAT_PID=""
 HOST_MPSTAT_PID=""
 mkdir -p "$LOGS_DIR"
+# EXIT alone is not enough: bash does not run an EXIT trap when the shell is killed
+# by an UNTRAPPED signal, so Ctrl-C, a `kill` from a campaign wrapper, or a dropped
+# ssh session left the per-second sampler loops running with no parent. Trapping the
+# three signals explicitly, then re-exiting with the conventional 128+signo, keeps the
+# exit status honest for whatever is reading it while still running cleanup.
 trap cleanup_baseline EXIT
+trap 'cleanup_baseline; exit 130' INT
+trap 'cleanup_baseline; exit 143' TERM
+trap 'cleanup_baseline; exit 129' HUP
 
 if [[ "$AUTO_START_INFRA" == "true" ]]; then
   ensure_benchmark_infra
@@ -1848,43 +1890,8 @@ if [[ -n "$HOST_MPSTAT_PID" ]]; then
   HOST_MPSTAT_PID=""
 fi
 
-# Stop Axon Server docker stats sampler
-if [[ -n "$AXON_STATS_PID" ]]; then
-  kill "$AXON_STATS_PID" >/dev/null 2>&1 || true
-  wait "$AXON_STATS_PID" 2>/dev/null || true
-  AXON_STATS_PID=""
-fi
-
-# Stop restate-server docker stats sampler
-if [[ -n "$RESTATE_STATS_PID" ]]; then
-  kill "$RESTATE_STATS_PID" >/dev/null 2>&1 || true
-  wait "$RESTATE_STATS_PID" 2>/dev/null || true
-  RESTATE_STATS_PID=""
-fi
-
-# Stop the payment-gateway sampler
-if [[ -n "$PAYMENT_GATEWAY_STATS_PID" ]]; then
-  kill "$PAYMENT_GATEWAY_STATS_PID" >/dev/null 2>&1 || true
-  wait "$PAYMENT_GATEWAY_STATS_PID" 2>/dev/null || true
-  PAYMENT_GATEWAY_STATS_PID=""
-fi
-
-# Stop the Postgres backend-count sampler
-if [[ -n "$PG_CONNECTIONS_PID" ]]; then
-  kill "$PG_CONNECTIONS_PID" >/dev/null 2>&1 || true
-  wait "$PG_CONNECTIONS_PID" 2>/dev/null || true
-  PG_CONNECTIONS_PID=""
-fi
-
-# Stop shared-backend samplers
-for _p in POSTGRES NEO4J; do
-  _pid="${!_p:+}"; eval "_pid=\${${_p}_STATS_PID:-}"
-  if [[ -n "$_pid" ]]; then
-    kill "$_pid" >/dev/null 2>&1 || true
-    wait "$_pid" 2>/dev/null || true
-    eval "${_p}_STATS_PID=''"
-  fi
-done
+# Stop the container/backend samplers (same helper the EXIT trap uses).
+_stop_container_samplers
 
 # --- CONTRACT-v2 §1/§8 whole-deployment footprint rollup --------------------
 #

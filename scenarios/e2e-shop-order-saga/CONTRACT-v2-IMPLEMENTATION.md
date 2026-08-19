@@ -875,6 +875,78 @@ What it does affect is hygiene that matters for a fail-closed harness: a leaked
 artifacts of a *re-run into the same path*. Both are reasons to fix it independently of
 the drift.
 
+## The arrival-rate ceiling is the arm, not the loadgen — 2026-08-19
+
+**50 sessions/s (CONTRACT-v2 §2, normative) is above what the Spring+Axon arms can
+retire.** They are in sustained overload for the whole measurement window, which makes
+every saga latency percentile recorded for them at that rate a queue-growth artifact
+rather than a service time.
+
+### The steady-state test
+
+Run long enough for a queue to reveal itself, then watch in-flight concurrency. A system
+at capacity plateaus; a system in overload climbs for as long as you let it.
+
+| | `exeris-community` | `spring-axon-jdbc` (16 threads) | `spring-axon-jdbc` (48 threads) |
+|---|---|---|---|
+| in-flight (VUs) over ~11 min | **flat 344–355** | 545 → 2882 | 633 → 2155 |
+| mean iteration duration | **flat 6.66–6.76 s** | 9.4 → 58.9 s | 10.9 → 41.1 s |
+| `dropped_iterations` | **0** | 1665 | 891 |
+| achieved rate | 49.4/s | 42.0/s | 44.3/s |
+
+`exeris-community` is textbook steady state across nine minutes at the contract windows.
+Both Spring points climb monotonically from the first bucket to the last and never
+plateau.
+
+### It is not the loadgen
+
+Measured outside k6, because asking k6 whether k6 is the bottleneck is not a control.
+While holding 2882 VUs and ~2700 established connections to the target, the k6 process
+used **13.9 % of one core**, and its four pinned cores were **89–96 % idle** (`mpstat`).
+`dropped_iterations` is what k6 does when in-flight demand outruns its pool — a symptom
+of the queue, not its cause. No Hyperfoil port was built, because there is nothing here
+for a different loadgen to fix.
+
+### It is not our tuning of the saga processor
+
+`application.properties` sets the processor's `thread-count` and `initial-segment-count`
+from `EXERIS_AXON_SAGA_THREADS/SEGMENTS`, defaulting to 16 — our number, chosen because
+Axon's own default of one segment and one thread is far worse. A thread dump during the
+first run showed 14 of those 16 threads parked in socket reads, which makes the pool look
+like the obvious constraint.
+
+It is not. Tripling it to 48/48 (both knobs, since a processor cannot run more workers
+than it has segments, and `initial-segment-count` applies only at token creation — the
+seed truncates `token_entry`, so a fresh run does re-create them; verified 48 workers live
+via `jcmd`) moved capacity from 42.0 to 44.3 iterations/s. **+5 %, not 3×** — while target
+CPU roughly *doubled*, from 0.86 to 1.68 cores. More threads bought contention, not
+throughput, and the concurrency curve still never plateaued.
+
+### It is not the shared deployment components
+
+`exeris-community` parks on the same payment-gateway stub — its 129 ms saga p95 is that
+stub's 100 ms delay plus overhead — against the same Postgres, and sustains 50/s flat.
+Whatever the limit is, it is inside the Spring+Axon arm. Nothing was CPU-saturated in any
+run: target 0.86–1.68 of 8 pinned cores, Postgres 0.76, Axon Server 0.16.
+
+### Consequences
+
+1. **The Spring arms' saga latency percentiles at 50/s are not latency.** In overload a
+   percentile measures how far the queue grew before the window closed, so it scales with
+   window length: the same jar reported 10.5 s at a 100 s window and 52 s at a 690 s one.
+   This is also the real reason lengthening the windows made results *worse*, which had
+   been attributed elsewhere.
+2. **They must not be compared against `exeris-community`'s 129 ms.** That is a stable
+   system set against a diverging queue, not a latency comparison — CLAUDE.md's matched-
+   scope rule rejects it.
+3. **§2's 50/s needs revisiting**, either by rating the scenario at a rate every arm
+   sustains, or by promoting *capacity* (maximum sustainable arrival rate) to a first-class
+   reported metric. The second is arguably the more honest headline for a saga workload.
+4. A strong lead — **not proof** — for the session drift recorded above: near overload,
+   measured p95 is a function of (capacity − arrival rate), so a small capacity loss
+   produces a large latency swing. That explains the drift's *magnitude*; it still does
+   not explain why capacity moved at all, so that finding stays UNKNOWN.
+
 ## Appendix A — §9 per-stack deviation register (stubs)
 
 Pre-report scaffolding for contract §9. Every entry marked TODO is

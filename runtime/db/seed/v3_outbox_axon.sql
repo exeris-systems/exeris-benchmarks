@@ -100,8 +100,8 @@ CREATE INDEX IF NOT EXISTS idx_exeris_outbox_dlq_stream ON exeris_outbox_dlq (st
 CREATE TABLE IF NOT EXISTS domain_event_entry (
   global_index         BIGSERIAL    NOT NULL,
   event_identifier     VARCHAR(255) NOT NULL,
-  meta_data            OID,
-  payload              OID          NOT NULL,
+  meta_data            BYTEA,
+  payload              BYTEA        NOT NULL,
   payload_revision     VARCHAR(255),
   payload_type         VARCHAR(255) NOT NULL,
   time_stamp           VARCHAR(255) NOT NULL,
@@ -115,13 +115,10 @@ CREATE TABLE IF NOT EXISTS domain_event_entry (
 
 CREATE INDEX IF NOT EXISTS idx_domain_event_entry_agg ON domain_event_entry(aggregate_identifier, type);
 
--- Hibernate 6 resolves Axon's @GeneratedValue on global_index to a SEQUENCE named
--- domain_event_entry_seq, not to the implicit BIGSERIAL sequence the column declaration
--- creates. Without it every event insert fails with 'relation "domain_event_entry_seq"
--- does not exist' and the aggregate cannot be created at all - which surfaced as a §3.1
--- vocabulary preflight failure ('<absent>' status), i.e. as a contract problem rather than
--- as the schema problem it is. INCREMENT 50 matches Hibernate's default allocationSize,
--- same as association_value_entry_seq below.
+-- Kept for the JPA path only: Hibernate resolves Axon's @GeneratedValue on global_index to
+-- a sequence of this name rather than to the BIGSERIAL column's implicit one. Axon's JDBC
+-- engine uses the BIGSERIAL identity directly and never touches this. Harmless either way,
+-- and cheaper to keep than to re-derive if the JPA shape is ever revisited.
 CREATE SEQUENCE IF NOT EXISTS domain_event_entry_seq START WITH 1 INCREMENT BY 50;
 
 CREATE TABLE IF NOT EXISTS snapshot_entry (
@@ -148,8 +145,8 @@ CREATE TABLE IF NOT EXISTS snapshot_event_entry (
   sequence_number      BIGINT       NOT NULL,
   type                 VARCHAR(255) NOT NULL,
   event_identifier     VARCHAR(255) NOT NULL,
-  meta_data            OID,
-  payload              OID          NOT NULL,
+  meta_data            BYTEA,
+  payload              BYTEA        NOT NULL,
   payload_revision     VARCHAR(255),
   payload_type         VARCHAR(255) NOT NULL,
   time_stamp           VARCHAR(255) NOT NULL,
@@ -160,7 +157,7 @@ CREATE TABLE IF NOT EXISTS snapshot_event_entry (
 CREATE TABLE IF NOT EXISTS token_entry (
   processor_name VARCHAR(255) NOT NULL,
   segment        INT          NOT NULL,
-  token          OID,
+  token          BYTEA,
   token_type     VARCHAR(255),
   timestamp      VARCHAR(255),
   owner          VARCHAR(255),
@@ -181,7 +178,7 @@ CREATE TABLE IF NOT EXISTS saga_entry (
   saga_id         VARCHAR(255) NOT NULL,
   revision        VARCHAR(255),
   saga_type       VARCHAR(255),
-  serialized_saga OID,
+  serialized_saga BYTEA,
   CONSTRAINT pk_saga_entry PRIMARY KEY (saga_id)
 );
 
@@ -204,20 +201,18 @@ CREATE INDEX IF NOT EXISTS idx_ave_saga_id_type
 COMMIT;
 
 -- ---------------------------------------------------------------------------------------
--- Axon @Lob columns are OID, not BYTEA — and existing databases must be migrated.
+-- Axon's JDBC schema is BYTEA, and databases converted to OID must be converted back.
 --
--- Hibernate 6 on PostgreSQLDialect maps Axon's `@Lob byte[]` to a large-object OID. The
--- seed already recorded this for saga_entry.serialized_saga; the same applies to
--- token_entry.token and to the payload/meta_data columns of the event tables. It never
--- mattered while Axon Server held the event store, because nothing wrote these tables.
--- The embedded arm (CONTRACT-v2 §9(e)) writes all of them, and the mismatch surfaced as
--- `ERROR: column "token" is of type bytea but expression is of type oid` from the saga
--- processor — a WARN, with the run continuing and the tokens simply never persisting.
+-- CONTRACT-v2 §9(e)'s embedded arm briefly ran on Axon's JPA stores, where Hibernate maps
+-- `@Lob byte[]` to a PostgreSQL large-object OID. That arm now uses Axon's JDBC storage
+-- engines instead - every arm in this scenario is measured on JDBC because Exeris is - and
+-- Axon's own JDBC table factories declare these columns BYTEA. BYTEA is also simply the
+-- right type here: large objects survive TRUNCATE as orphans, so the OID shape grew the
+-- database by one object per event with nothing reading them.
 --
 -- CREATE TABLE IF NOT EXISTS cannot fix a table that already exists, so convert in place.
--- Safe because these tables are truncated by v0_clean immediately before this runs: the
--- columns are empty, so dropping and re-adding loses nothing.
--- ---------------------------------------------------------------------------------------
+-- Safe because v0_clean truncates these tables immediately before this runs: the columns
+-- are empty, so drop-and-re-add loses nothing.
 DO $axon_lob$
 DECLARE
   col RECORD;
@@ -226,16 +221,16 @@ BEGIN
     SELECT table_name, column_name, is_nullable
       FROM information_schema.columns
      WHERE table_schema = 'public'
-       AND data_type = 'bytea'
+       AND data_type = 'oid'
        AND (table_name, column_name) IN (
-             ('token_entry','token'),
+             ('token_entry','token'),               ('saga_entry','serialized_saga'),
              ('domain_event_entry','payload'),      ('domain_event_entry','meta_data'),
              ('snapshot_event_entry','payload'),    ('snapshot_event_entry','meta_data'))
   LOOP
     EXECUTE format('ALTER TABLE %I DROP COLUMN %I', col.table_name, col.column_name);
-    EXECUTE format('ALTER TABLE %I ADD COLUMN %I OID%s', col.table_name, col.column_name,
+    EXECUTE format('ALTER TABLE %I ADD COLUMN %I BYTEA%s', col.table_name, col.column_name,
                    CASE WHEN col.is_nullable = 'NO' THEN ' NOT NULL' ELSE '' END);
-    RAISE NOTICE '[v3] %.% converted bytea -> oid (Axon @Lob mapping)', col.table_name, col.column_name;
+    RAISE NOTICE '[v3] %.% converted oid -> bytea (Axon JDBC schema)', col.table_name, col.column_name;
   END LOOP;
 END
 $axon_lob$;

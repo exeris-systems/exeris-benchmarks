@@ -41,16 +41,30 @@ normalize_target_alias() {
     spring-hibernate|spring-jvm-vt-tuned|spring-benchmark-app|spring-runtime|\
     spring-app-axon|spring-native-default) echo "spring-hibernate" ;;
 
-    # 2a) The SAME spring-hibernate jar with Axon Server switched off, so Axon's event,
-    #     token and saga stores fall back to JPA against the shared Postgres and the
-    #     command bus runs in-process. CONTRACT-v2 s9(e): the Axon arm has two legitimate
-    #     deployment shapes and this is the two-process one. Separate id, not an alias of
-    #     spring-hibernate - the s1 deployment unit differs, so the footprint does too.
+    # 2a) The SAME spring-hibernate jar with Axon Server switched off, so Axon's EVENTS go
+    #     to the shared Postgres through Axon's own JdbcEventStorageEngine and the command
+    #     bus runs in-process. Tokens and saga state are durable in Postgres on BOTH Axon
+    #     arms, so events are the only axis they differ on. CONTRACT-v2 s9(e): the Axon arm
+    #     has two legitimate deployment shapes and this is the two-process one. Separate id,
+    #     not an alias of spring-hibernate - the s1 deployment unit differs, so the
+    #     footprint does too. The spring-axon-jpa alias is kept for old run directories; it
+    #     names a shape this target no longer has.
     spring-axon-embedded|spring-axon-jpa) echo "spring-axon-embedded" ;;
+
+    # 2a-jdbc) The embedded Axon shape on the JDBC jar. JDBC-roster replacement for
+    #     spring-axon-embedded, whose jar still carries Spring Data JPA for the non-saga
+    #     endpoints (register / recommend / cart). Separate id: the artifact differs.
+    spring-axon-embedded-jdbc) echo "spring-axon-embedded-jdbc" ;;
 
     # 2b) Spring Boot + Tomcat, no ORM (plain JdbcTemplate) — the honest no-Exeris,
     #     no-ORM comparator; see targets/spring-benchmark-app-jdbc/.../UserRepository.java
     spring-jdbc|spring-benchmark-app-jdbc) echo "spring-jdbc" ;;
+
+    # 2b-axon) The SAME spring-benchmark-app-jdbc jar with Axon AND Axon Server enabled.
+    #     JDBC-roster replacement for spring-hibernate in the saga scenario. Distinct id
+    #     from spring-jdbc, which is the same jar with Axon off for the entity-read work:
+    #     one deployment unit is two processes, the other three.
+    spring-axon-jdbc) echo "spring-axon-jdbc" ;;
     # 2c) The SAME spring-hibernate jar with the servlet SecurityFilterChain switched off.
     #     Exists only to bound the security confound in the hosting rung (CLAIMS L3).
     spring-hibernate-nosec|spring-nosec) echo "spring-hibernate-nosec" ;;
@@ -66,6 +80,13 @@ normalize_target_alias() {
     # 5) Quarkus + pure JDBC (no ORM), "tuned" transport: native epoll + native BoringSSL TLS
     #    (contrast: quarkus-hibernate runs default Quarkus — JDK NIO + JSSE).
     quarkus-tuned|quarkus-benchmark-app-tuned|quarkus-jdbc|quarkus-benchmark-app-jdbc) echo "quarkus-tuned" ;;
+
+    # 5a) The SAME quarkus-benchmark-app-tuned jar carrying the CONTRACT-v2 s4 parking +
+    #     MicroProfile LRA saga surface. JDBC-roster replacement for quarkus-hibernate in
+    #     the saga scenario. Distinct id from quarkus-tuned, which is the same jar wired
+    #     for the entity-read TLS work (EXERIS_PORT is the SSL port there, and this arm is
+    #     cleartext h1 because the s4 payment gateway stub speaks plaintext HTTP/1.1).
+    quarkus-lra-jdbc) echo "quarkus-lra-jdbc" ;;
 
     # 6) Restate durable-execution saga target (deployment unit: target JVM + restate-server)
     restate|restate-benchmark-app) echo "restate" ;;

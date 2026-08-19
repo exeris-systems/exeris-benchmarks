@@ -218,7 +218,16 @@ export const options = {
       duration: WARMUP_DURATION,
       preAllocatedVUs: WARMUP_VUS_PRE,
       maxVUs: WARMUP_VUS_MAX,
-      gracefulStop: '10s',
+      // 30s, matching the other two phases. It was 10s, and the measured iteration
+      // duration is avg 6.7 s / p95 8.4 s / max 10.07 s - that max IS the gracefulStop,
+      // i.e. iterations were being CUT at the warmup boundary rather than finishing. A
+      // cut iteration has already incremented saga_issued_total and can then reach no
+      // terminal bucket, which is exactly what the O0 identity reported: 244 of 7990
+      // (3.05%) unclassified on the 2026-08-19 pinned run, over the 1% truncation bound,
+      // failing the run as a detector fault. Warmup iterations that finish after the
+      // boundary keep phase=warmup tags, so they add load during measurement - which is
+      // what steady state means - without entering measurement's metrics.
+      gracefulStop: '30s',
       tags: { phase: 'warmup' },
     },
     // Measurement window — filter by phase=measurement for p99 claims

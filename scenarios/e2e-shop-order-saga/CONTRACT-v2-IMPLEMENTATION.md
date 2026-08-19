@@ -824,6 +824,57 @@ sustained write pressure and the best current lead, but that is a lead and not a
 4. This is a *latency* and *queueing* finding. It says nothing about the §8 footprint metrics,
    which were stable across all runs (peak RSS 1195–1263 MB).
 
+## The baseline leaked per-second sampler loops on every abnormal exit — 2026-08-19
+
+Found by accident while checking whether the box was idle: four
+`run-e2e-shop-order-saga-baseline.sh` subshells were still alive with `PPID 1`,
+four hours after the campaign that started them had died. Two were `docker stats`
+loops, one was `docker exec … psql` against the shared Postgres once a second, and
+all of them were still appending to a run directory nothing would ever read again.
+
+### Two defects, both required
+
+Either one alone would have been harmless; together they leak on every abnormal exit.
+
+1. **`cleanup_baseline` never stopped these samplers.** The kill logic existed, but only
+   in the end-of-run path after the footprint rollup. Every exit that skipped that path
+   — a failed gate, a `set -e` abort, an error during collection — left the loops running
+   *even though the EXIT trap fired correctly*. The trap was not broken; it simply did
+   not know about them.
+2. **The trap covered `EXIT` only.** Bash does not run an EXIT trap when the shell is
+   killed by an untrapped signal, so `Ctrl-C`, a `kill` from a campaign wrapper, or a
+   dropped ssh session skipped cleanup altogether.
+
+The immediate cause of these four was the campaign of 07:32, which stopped after rep 1
+on `k6 exited with code 105` (a threshold breach) — exactly the kind of early exit
+defect 1 does not cover.
+
+### Fix
+
+`_stop_container_samplers` now holds the kill logic and is called from both the
+end-of-run path and `cleanup_baseline`; it is idempotent because each pid is blanked as
+it is reaped. `INT`/`TERM`/`HUP` are trapped explicitly, run cleanup, and re-exit
+`128+signo` so the exit status stays honest for the campaign wrapper reading it.
+
+The end-of-run block now delegates to the same helper rather than keeping its own copy.
+That is the substance of the fix, not tidying: a duplicate is what let one copy know
+about the samplers while the other did not.
+
+### What this does and does not explain
+
+It does **not** explain the session drift recorded above, and it should not be written up
+as if it did. The measured cost is far too small: each leaked loop had accumulated
+9–27 CPU-seconds over four hours, host load with all four running was 0.34–0.59, and no
+`docker` CLI process appeared in the top CPU consumers. The tempting story — leaked
+samplers accumulate across a long session and progressively load the box — fits the
+*shape* of the drift and fails on the *magnitude*, so the drift stays UNKNOWN.
+
+What it does affect is hygiene that matters for a fail-closed harness: a leaked
+`docker exec psql` once a second is connection churn against the shared backend of the
+§1 deployment unit, and leaked writers appending to a dead run directory can corrupt
+artifacts of a *re-run into the same path*. Both are reasons to fix it independently of
+the drift.
+
 ## Appendix A — §9 per-stack deviation register (stubs)
 
 Pre-report scaffolding for contract §9. Every entry marked TODO is

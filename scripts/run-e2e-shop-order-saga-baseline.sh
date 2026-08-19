@@ -1065,6 +1065,34 @@ export BENCH_CONTAINER_HOST_ADDR="${BENCH_CONTAINER_HOST_ADDR:-127.0.0.1}"
 # stamped into run metadata and verified against the running gateway before load.
 PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-100}"
 
+# ...and the contract id has to AGREE with it. The comment above already stated the
+# §2.1 mapping; nothing enforced it, and the whole roster ran a 100 ms gateway under
+# `park1` ids -- shape B's workload wearing shape A's name -- from the introduction of
+# parking until 2026-08-19. It survived because the two facts lived in different files:
+# the delay defaults here, the shape lives in the contract id, and the existing check
+# below only compares the declared delay against the RUNNING GATEWAY. A stack can be
+# perfectly self-consistent and still be measuring a different workload than it claims.
+#
+# This is not a cosmetic mismatch. §2.1 gives shape A "the only shape in which saga
+# latency is a legitimate headline" and shape B "latency is dominated by the gateway
+# delay... report it only alongside the delay" -- so the wrong label grants permission
+# to headline a number that is mostly a constant.
+case "$CONTRACT_ID" in
+  *_park1_v3)   _expected_delay_ms=1 ;;
+  *_park100_v3) _expected_delay_ms=100 ;;
+  *)            _expected_delay_ms="" ;;   # shape C / non-parking ids: harness-controlled
+esac
+if [[ -n "$_expected_delay_ms" && "$PAYMENT_STUB_DELAY_MS" != "$_expected_delay_ms" ]]; then
+  echo "ERROR: workload-shape mismatch (CONTRACT-v2 §2.1)." >&2
+  echo "ERROR:   contract id '${CONTRACT_ID}' declares a ${_expected_delay_ms} ms payment-gateway park," >&2
+  echo "ERROR:   but this run is configured for ${PAYMENT_STUB_DELAY_MS} ms." >&2
+  echo "ERROR: §2.1 shapes carry their own contract ids and workload_profile_key and MUST NEVER" >&2
+  echo "ERROR: be aggregated, so a run may not be recorded under a shape it did not execute." >&2
+  echo "ERROR: Either set PAYMENT_STUB_DELAY_MS=${_expected_delay_ms}, or pass the contract id for" >&2
+  echo "ERROR: the shape you actually intend to run." >&2
+  exit 64
+fi
+
 configure_target_runtime_overrides
 # Pick a free port if the configured target port is busy.
 _configured_port="$(bench_extract_port_from_url "$BASE_URL")"

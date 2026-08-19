@@ -64,13 +64,13 @@
       "status": "compatibility_only"
     },
     {
-      "track_id": "track_none_park1_v3",
+      "track_id": "track_none_park100_v3",
       "backend_family": "none",
       "required_contracts": [
-        "exeris_community_h1_park1_v3",
-        "quarkus_lra_jdbc_h1_park1_v3",
-        "spring_axon_jdbc_h1_park1_v3",
-        "spring_axon_embedded_jdbc_h1_park1_v3"
+        "exeris_community_h1_park100_v3",
+        "quarkus_lra_jdbc_h1_park100_v3",
+        "spring_axon_jdbc_h1_park100_v3",
+        "spring_axon_embedded_jdbc_h1_park100_v3"
       ],
       "status": "roster_wired_pending_campaign",
       "notes": "CONTRACT-v2 §4 parking roster on the graph-less track, all-JDBC. restate is deliberately absent: it is baseline-only and not comparison-eligible (h1 facade vs the canonical h2c contracts, plus an in-memory sticky-terminal status projection). track_id is an isolation boundary - never aggregate across tracks."
@@ -171,7 +171,7 @@
       "saga_framework": "axon-framework",
       "graph_backend": "none",
       "event_backend": "axon-event-sourcing-outbox",
-      "notes": "CONTRACT-v2 §4 parking arm, MicroProfile LRA saga on Agroal + plain JDBC (targets/quarkus-benchmark-app-tuned). Required contract quarkus_lra_jdbc_h1_park1_v3. JDBC roster: every arm in this scenario is measured on JDBC because Exeris is. The superseded arm's saga path was already plain JDBC, but its other session steps (register / recommend / cart) went through an ORM, putting an ORM on one side of the comparison and not the other. §1 deployment unit is THREE processes (app JVM + LRA coordinator + Postgres); the coordinator must be sampled like Axon Server. Supersedes quarkus-hibernate for this scenario - runs under the two MUST NEVER be aggregated, the artifact differs.",
+      "notes": "CONTRACT-v2 §4 parking arm, MicroProfile LRA saga on Agroal + plain JDBC (targets/quarkus-benchmark-app-tuned). Required contract quarkus_lra_jdbc_h1_park100_v3. JDBC roster: every arm in this scenario is measured on JDBC because Exeris is. The superseded arm's saga path was already plain JDBC, but its other session steps (register / recommend / cart) went through an ORM, putting an ORM on one side of the comparison and not the other. §1 deployment unit is THREE processes (app JVM + LRA coordinator + Postgres); the coordinator must be sampled like Axon Server. Supersedes quarkus-hibernate for this scenario - runs under the two MUST NEVER be aggregated, the artifact differs.",
       "per_step_metric_claim_scope": {
         "auth_latency_ms": "comparison_eligible",
         "cart_add_latency_ms": "comparison_eligible",
@@ -193,7 +193,7 @@
       "saga_framework": "axon-framework",
       "graph_backend": "none",
       "event_backend": "axon-server-event-store",
-      "notes": "CONTRACT-v2 §4 parking arm, Axon saga with the event store in Axon Server, spring-boot-starter-jdbc throughout (targets/spring-benchmark-app-jdbc). Required contract spring_axon_jdbc_h1_park1_v3. JDBC roster: every arm in this scenario is measured on JDBC because Exeris is. The superseded arm's saga path was already plain JDBC, but its other session steps (register / recommend / cart) went through an ORM, putting an ORM on one side of the comparison and not the other. Tracking tokens and saga state are DURABLE in Postgres here: Axon Server is an event store with no token-store or saga-store API, and Axon's starter had been falling back to in-memory, so the superseded runs did not pay for a durable saga engine at all. Supersedes spring-hibernate for this scenario, on both counts.",
+      "notes": "CONTRACT-v2 §4 parking arm, Axon saga with the event store in Axon Server, spring-boot-starter-jdbc throughout (targets/spring-benchmark-app-jdbc). Required contract spring_axon_jdbc_h1_park100_v3. JDBC roster: every arm in this scenario is measured on JDBC because Exeris is. The superseded arm's saga path was already plain JDBC, but its other session steps (register / recommend / cart) went through an ORM, putting an ORM on one side of the comparison and not the other. Tracking tokens and saga state are DURABLE in Postgres here: Axon Server is an event store with no token-store or saga-store API, and Axon's starter had been falling back to in-memory, so the superseded runs did not pay for a durable saga engine at all. Supersedes spring-hibernate for this scenario, on both counts.",
       "per_step_metric_claim_scope": {
         "auth_latency_ms": "comparison_eligible",
         "cart_add_latency_ms": "comparison_eligible",
@@ -215,7 +215,7 @@
       "saga_framework": "axon-framework",
       "graph_backend": "none",
       "event_backend": "axon-jdbc-event-store",
-      "notes": "CONTRACT-v2 §9(e) second Axon deployment shape: the same jar and same artifact as spring-axon-jdbc with Axon Server switched off, so EVENTS go to the shared Postgres through Axon's JdbcEventStorageEngine. Required contract spring_axon_embedded_jdbc_h1_park1_v3. §1 deployment unit is TWO processes. Tokens and saga state are durable in Postgres on BOTH Axon arms, so where events live is the ONLY axis these two differ on. Report BOTH shapes; neither is 'the' Axon number.",
+      "notes": "CONTRACT-v2 §9(e) second Axon deployment shape: the same jar and same artifact as spring-axon-jdbc with Axon Server switched off, so EVENTS go to the shared Postgres through Axon's JdbcEventStorageEngine. Required contract spring_axon_embedded_jdbc_h1_park100_v3. §1 deployment unit is TWO processes. Tokens and saga state are durable in Postgres on BOTH Axon arms, so where events live is the ONLY axis these two differ on. Report BOTH shapes; neither is 'the' Axon number.",
       "per_step_metric_claim_scope": {
         "auth_latency_ms": "comparison_eligible",
         "cart_add_latency_ms": "comparison_eligible",
@@ -305,7 +305,7 @@
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "axis": "cross-framework-saga-orchestration",
       "framework_difference": {
         "baseline_framework": "Exeris Community (native kernel), flow-native saga",
@@ -325,7 +325,7 @@
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "axis": "cross-framework-saga-orchestration",
       "framework_difference": {
         "baseline_framework": "Exeris Community (native kernel), flow-native saga",
@@ -345,7 +345,7 @@
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "axis": "cross-framework-saga-orchestration",
       "framework_difference": {
         "baseline_framework": "Exeris Community (native kernel), flow-native saga",
@@ -365,7 +365,7 @@
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "axis": "cross-framework-cross-saga-library",
       "framework_difference": {
         "baseline_framework": "Quarkus",
@@ -386,7 +386,7 @@
       "tier": "community",
       "protocol_mode": "h1",
       "transport_mode": "loopback-h1",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-inline-r50-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "axis": "same-stack-event-store-location",
       "framework_difference": {
         "baseline_framework": "Spring Boot + Axon Framework",

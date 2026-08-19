@@ -124,14 +124,14 @@
       "track_id": "track_c_no_graph",
       "backend_family": "none",
       "backend_mode": "none",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "_note": "CONTRACT-v2 §2.1 shape A. The graph was removed from this scenario (§2) because it confounded the only comparison the scenario exists to make, so this track has no graph backend at all — Neo4j is not in the §1 deployment unit and is not started. track_id is an isolation boundary: results here MUST NOT be aggregated with track_a_neo4j.",
       "required_contracts": [
-        "exeris_community_h1_park1_v3",
-        "quarkus_lra_jdbc_h1_park1_v3",
-        "spring_axon_jdbc_h1_park1_v3",
-        "spring_axon_embedded_jdbc_h1_park1_v3",
-        "restate_saga_h1_park1_v3"
+        "exeris_community_h1_park100_v3",
+        "quarkus_lra_jdbc_h1_park100_v3",
+        "spring_axon_jdbc_h1_park100_v3",
+        "spring_axon_embedded_jdbc_h1_park100_v3",
+        "restate_saga_h1_park100_v3"
       ]
     }
   },
@@ -797,7 +797,7 @@
           "PARKED"
         ]
       },
-      "_superseded_by": "exeris_community_h1_park1_v3"
+      "_superseded_by": "exeris_community_h1_park100_v3"
     },
     "quarkus_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -877,7 +877,7 @@
           "PARKED"
         ]
       },
-      "_superseded_by": "quarkus_lra_h1_park1_v3"
+      "_superseded_by": "quarkus_lra_h1_park100_v3"
     },
     "spring_boot_axon_neo4j_h1_v2": {
       "scenario_id": "e2e-shop-order-saga",
@@ -958,9 +958,9 @@
           "PARKED"
         ]
       },
-      "_superseded_by": "spring_axon_h1_park1_v3"
+      "_superseded_by": "spring_axon_h1_park100_v3"
     },
-    "exeris_community_h1_park1_v3": {
+    "exeris_community_h1_park100_v3": {
       "scenario_id": "e2e-shop-order-saga",
       "tier": "community",
       "protocol_mode": "h1",
@@ -983,7 +983,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1042,7 +1042,7 @@
       "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
       "cooldown_seconds": 30
     },
-    "quarkus_lra_h1_park1_v3": {
+    "quarkus_lra_h1_park100_v3": {
       "scenario_id": "e2e-shop-order-saga",
       "tier": "community",
       "protocol_mode": "h1",
@@ -1065,7 +1065,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1126,7 +1126,7 @@
       "_engine_note": "quarkus-narayana-lra, official io.quarkus extension, support level PREVIEW. Saga enrolled as ONE participant with the LIFO unwind in application code, because the LRA spec guarantees no ordering across participants. A durable saga ENVELOPE, never 'full LRA' (§9(a)). Runs Quarkus 3.38.2, not 3.34.3.",
       "cooldown_seconds": 30
     },
-    "spring_axon_h1_park1_v3": {
+    "spring_axon_h1_park100_v3": {
       "scenario_id": "e2e-shop-order-saga",
       "tier": "community",
       "protocol_mode": "h1",
@@ -1149,7 +1149,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1209,7 +1209,7 @@
       "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
       "cooldown_seconds": 30
     },
-    "spring_axon_embedded_h1_park1_v3": {
+    "spring_axon_embedded_h1_park100_v3": {
       "scenario_id": "e2e-shop-order-saga",
       "tier": "community",
       "protocol_mode": "h1",
@@ -1232,7 +1232,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1248,13 +1248,13 @@
       },
       "maturity": "descriptive_only",
       "claim_scope": "comparison_eligible_pending_gate",
-      "supersedes_note": "New arm (2026-08-19), supersedes nothing. Runs under this id must never be aggregated with spring_axon_h1_park1_v3: the s1 deployment unit differs.",
+      "supersedes_note": "New arm (2026-08-19), supersedes nothing. Runs under this id must never be aggregated with spring_axon_h1_park100_v3: the s1 deployment unit differs.",
       "target_app": "spring-axon-embedded",
       "framework": "spring-boot",
       "saga_framework": "axon-framework",
       "event_backend": "axon-jdbc-event-store",
       "comparison_class": "platform-natural-stack",
-      "claim_scope_note": "Saga progression is asynchronous here exactly as in spring_axon_h1_park1_v3 - the same tracking processor, the same 16 threads/segments s9(d) tuning - but the events, tokens and saga state are written to Postgres over Axon's own JDBC storage engines (JdbcEventStorageEngine / JdbcTokenStore / JdbcSagaStore) rather than to Axon Server. JDBC, not JPA: every arm in this scenario is measured on JDBC because Exeris is, and an ORM on one side of the comparison would be a second variable. The s9(d) disclosure therefore applies unchanged, and one thing it does NOT cover applies only here: the token store takes a row lock per segment per claim, so Postgres carries saga-progression write traffic that the Axon Server shape sends elsewhere. That is the cost this arm is meant to make visible, not a defect.",
+      "claim_scope_note": "Saga progression is asynchronous here exactly as in spring_axon_h1_park100_v3 - the same tracking processor, the same 16 threads/segments s9(d) tuning - but the events, tokens and saga state are written to Postgres over Axon's own JDBC storage engines (JdbcEventStorageEngine / JdbcTokenStore / JdbcSagaStore) rather than to Axon Server. JDBC, not JPA: every arm in this scenario is measured on JDBC because Exeris is, and an ORM on one side of the comparison would be a second variable. The s9(d) disclosure therefore applies unchanged, and one thing it does NOT cover applies only here: the token store takes a row lock per segment per claim, so Postgres carries saga-progression write traffic that the Axon Server shape sends elsewhere. That is the cost this arm is meant to make visible, not a defect.",
       "tuning_disclosure": "CONTRACT-v2 section 9(d): axon.eventhandling.processors.OrderFulfillmentSagaProcessor thread-count=16, initial-segment-count=16. Axon default is ONE segment and ONE thread, which serialized all saga progression and produced 7613 ms median saga latency at 50/s versus 22 ms (exeris) and 34 ms (quarkus). With 16 segments: 37 ms. Comparing a one-thread default against unbounded concurrency measures the default, not the framework. The default-config ceiling is reported separately as its own finding.",
       "per_step_metric_claim_scope": {
         "auth_latency_ms": "comparison_eligible",
@@ -1292,9 +1292,9 @@
       "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
       "cooldown_seconds": 30,
       "deployment_unit": "target-jvm + postgres",
-      "deployment_unit_note": "TWO processes, against spring_axon_h1_park1_v3's three. Same jar, same saga code, same Axon Framework version; EXERIS_AXON_SERVER_ENABLED=false makes Spring Boot's Axon autoconfiguration fall back to the JPA event store, JpaTokenStore and JpaSagaStore in the SHARED Postgres, with SimpleCommandBus in-process. Registered under CONTRACT-v2 s9(e). It exists because the Axon Server shape hosts part of the saga engine in a container the target-JVM sampler cannot see, so a s8 footprint comparison against in-process saga engines partly measures WHERE the work is hosted rather than what it costs. Both shapes are reported; neither is 'the' Axon number, and the two must never be collapsed into one row."
+      "deployment_unit_note": "TWO processes, against spring_axon_h1_park100_v3's three. Same jar, same saga code, same Axon Framework version; EXERIS_AXON_SERVER_ENABLED=false makes Spring Boot's Axon autoconfiguration fall back to the JPA event store, JpaTokenStore and JpaSagaStore in the SHARED Postgres, with SimpleCommandBus in-process. Registered under CONTRACT-v2 s9(e). It exists because the Axon Server shape hosts part of the saga engine in a container the target-JVM sampler cannot see, so a s8 footprint comparison against in-process saga engines partly measures WHERE the work is hosted rather than what it costs. Both shapes are reported; neither is 'the' Axon number, and the two must never be collapsed into one row."
     },
-    "restate_saga_h1_park1_v3": {
+    "restate_saga_h1_park100_v3": {
       "scenario_id": "e2e-shop-order-saga",
       "tier": "community",
       "protocol_mode": "h1",
@@ -1369,13 +1369,13 @@
         ]
       },
       "workload_shape": "A-minimal-park",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "payment_callback_delay_ms": 1,
       "cooldown_seconds": 30,
       "_promotion_note": "PROMOTED from baseline_only_contracts on 2026-08-18: restate is measured alongside spring and quarkus, not kept as a descriptive aside. It qualifies on the same terms as the others — it parks on charge-payment (awakeable resolved by the gateway at the Restate ingress) and it is durable (invocation journal, RocksDB WAL), so §8's cross-tier prohibition does not exclude it.",
       "_deviation_9a": "The gateway callback resolves the awakeable at the Restate INGRESS and never enters the target JVM — platform-natural, since Restate owns durable execution, but it means this arm's per-callback cost lands in restate-server rather than in the JVM. The whole-deployment footprint still captures it; a target-JVM-only comparison would not."
     },
-    "quarkus_lra_jdbc_h1_park1_v3": {
+    "quarkus_lra_jdbc_h1_park100_v3": {
       "scenario_id": "e2e-shop-order-saga",
       "tier": "community",
       "protocol_mode": "h1",
@@ -1398,7 +1398,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1414,7 +1414,7 @@
       },
       "maturity": "descriptive_only",
       "claim_scope": "comparison_eligible_pending_gate",
-      "supersedes_note": "JDBC roster (2026-08-19): every arm in this scenario is measured on JDBC because Exeris is. The superseded contract ran a jar whose SAGA path was already plain JDBC, but whose other session steps (register / recommend / cart) went through an ORM - an ORM on one side of the comparison and not the other. This contract runs targets/quarkus-benchmark-app-tuned (Agroal + plain JDBC) instead of targets/quarkus-benchmark-app (Hibernate ORM + Panache). The saga surface is byte-identical - it was copied verbatim after verifying that no saga-path file in either target references Panache, an EntityManager or an @Entity. Deployment unit is unchanged at THREE processes (app JVM + LRA coordinator + Postgres). Runs under this id and under quarkus_lra_h1_park1_v3 MUST NEVER be aggregated: the artifact differs.",
+      "supersedes_note": "JDBC roster (2026-08-19): every arm in this scenario is measured on JDBC because Exeris is. The superseded contract ran a jar whose SAGA path was already plain JDBC, but whose other session steps (register / recommend / cart) went through an ORM - an ORM on one side of the comparison and not the other. This contract runs targets/quarkus-benchmark-app-tuned (Agroal + plain JDBC) instead of targets/quarkus-benchmark-app (Hibernate ORM + Panache). The saga surface is byte-identical - it was copied verbatim after verifying that no saga-path file in either target references Panache, an EntityManager or an @Entity. Deployment unit is unchanged at THREE processes (app JVM + LRA coordinator + Postgres). Runs under this id and under quarkus_lra_h1_park100_v3 MUST NEVER be aggregated: the artifact differs.",
       "target_app": "quarkus-lra-jdbc",
       "framework": "quarkus",
       "saga_framework": "axon-framework",
@@ -1430,7 +1430,7 @@
         "order_poll_latency_ms": "not_applicable_inline_resolution"
       },
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
-      "superseded_contract": "quarkus_lra_h1_park1_v3",
+      "superseded_contract": "quarkus_lra_h1_park100_v3",
       "workload_shape": "A-minimal-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
       "terminal_vocabulary": {
@@ -1459,7 +1459,7 @@
       "_engine_note": "quarkus-narayana-lra, official io.quarkus extension, support level PREVIEW. Saga enrolled as ONE participant with the LIFO unwind in application code, because the LRA spec guarantees no ordering across participants. A durable saga ENVELOPE, never 'full LRA' (§9(a)). Runs Quarkus 3.38.2, not 3.34.3.",
       "cooldown_seconds": 30
     },
-    "spring_axon_jdbc_h1_park1_v3": {
+    "spring_axon_jdbc_h1_park100_v3": {
       "scenario_id": "e2e-shop-order-saga",
       "tier": "community",
       "protocol_mode": "h1",
@@ -1482,7 +1482,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1515,7 +1515,7 @@
         "order_poll_latency_ms": "not_applicable_inline_resolution"
       },
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
-      "superseded_contract": "spring_axon_h1_park1_v3",
+      "superseded_contract": "spring_axon_h1_park100_v3",
       "workload_shape": "A-minimal-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
       "terminal_vocabulary": {
@@ -1542,7 +1542,7 @@
       "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
       "cooldown_seconds": 30
     },
-    "spring_axon_embedded_jdbc_h1_park1_v3": {
+    "spring_axon_embedded_jdbc_h1_park100_v3": {
       "scenario_id": "e2e-shop-order-saga",
       "tier": "community",
       "protocol_mode": "h1",
@@ -1565,7 +1565,7 @@
       "payment_fail_rate": 0.03,
       "payload_profile": "orders-aggregate-v1",
       "required_profile": "perf-box-amd64",
-      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-park1-v3",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3",
       "seed_manifest_refs": {
         "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
         "manifest_version": "1",
@@ -1581,13 +1581,13 @@
       },
       "maturity": "descriptive_only",
       "claim_scope": "comparison_eligible_pending_gate",
-      "supersedes_note": "JDBC roster (2026-08-19): every arm in this scenario is measured on JDBC because Exeris is. The superseded contract ran a jar whose SAGA path was already plain JDBC, but whose other session steps (register / recommend / cart) went through an ORM - an ORM on one side of the comparison and not the other. This contract runs targets/spring-benchmark-app-jdbc instead of targets/spring-benchmark-app. Deployment unit is unchanged at TWO processes (target JVM + Postgres). Against spring_axon_jdbc_h1_park1_v3 the arms now differ on exactly ONE axis - where EVENTS live - because tokens and saga state are durable in Postgres on both.",
+      "supersedes_note": "JDBC roster (2026-08-19): every arm in this scenario is measured on JDBC because Exeris is. The superseded contract ran a jar whose SAGA path was already plain JDBC, but whose other session steps (register / recommend / cart) went through an ORM - an ORM on one side of the comparison and not the other. This contract runs targets/spring-benchmark-app-jdbc instead of targets/spring-benchmark-app. Deployment unit is unchanged at TWO processes (target JVM + Postgres). Against spring_axon_jdbc_h1_park100_v3 the arms now differ on exactly ONE axis - where EVENTS live - because tokens and saga state are durable in Postgres on both.",
       "target_app": "spring-axon-embedded-jdbc",
       "framework": "spring-boot",
       "saga_framework": "axon-framework",
       "event_backend": "axon-jdbc-event-store",
       "comparison_class": "platform-natural-stack",
-      "claim_scope_note": "Saga progression is asynchronous here exactly as in spring_axon_h1_park1_v3 - the same tracking processor, the same 16 threads/segments s9(d) tuning - but the events, tokens and saga state are written to Postgres over Axon's own JDBC storage engines (JdbcEventStorageEngine / JdbcTokenStore / JdbcSagaStore) rather than to Axon Server. JDBC, not JPA: every arm in this scenario is measured on JDBC because Exeris is, and an ORM on one side of the comparison would be a second variable. The s9(d) disclosure therefore applies unchanged, and one thing it does NOT cover applies only here: the token store takes a row lock per segment per claim, so Postgres carries saga-progression write traffic that the Axon Server shape sends elsewhere. That is the cost this arm is meant to make visible, not a defect.",
+      "claim_scope_note": "Saga progression is asynchronous here exactly as in spring_axon_h1_park100_v3 - the same tracking processor, the same 16 threads/segments s9(d) tuning - but the events, tokens and saga state are written to Postgres over Axon's own JDBC storage engines (JdbcEventStorageEngine / JdbcTokenStore / JdbcSagaStore) rather than to Axon Server. JDBC, not JPA: every arm in this scenario is measured on JDBC because Exeris is, and an ORM on one side of the comparison would be a second variable. The s9(d) disclosure therefore applies unchanged, and one thing it does NOT cover applies only here: the token store takes a row lock per segment per claim, so Postgres carries saga-progression write traffic that the Axon Server shape sends elsewhere. That is the cost this arm is meant to make visible, not a defect.",
       "tuning_disclosure": "CONTRACT-v2 section 9(d): axon.eventhandling.processors.OrderFulfillmentSagaProcessor thread-count=16, initial-segment-count=16. Axon default is ONE segment and ONE thread, which serialized all saga progression and produced 7613 ms median saga latency at 50/s versus 22 ms (exeris) and 34 ms (quarkus). With 16 segments: 37 ms. Comparing a one-thread default against unbounded concurrency measures the default, not the framework. The default-config ceiling is reported separately as its own finding.",
       "per_step_metric_claim_scope": {
         "auth_latency_ms": "comparison_eligible",
@@ -1598,7 +1598,7 @@
         "order_poll_latency_ms": "not_applicable_inline_resolution"
       },
       "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
-      "superseded_contract": "spring_axon_embedded_h1_park1_v3",
+      "superseded_contract": "spring_axon_embedded_h1_park100_v3",
       "workload_shape": "A-minimal-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape A0: nothing parks. NOT comparison-eligible. The stacks do not execute the same work — quarkus-hibernate runs the whole saga synchronously on the request thread (transaction script), spring-hibernate runs it async via Axon Server, exeris-community via the flow scheduler. All return the terminal outcome inline, but a shared observable contract is not equivalent execution. order_create_latency_ms was briefly lifted to comparison_eligible on 2026-07-30 on the grounds that the RESOLUTION MODEL was uniform; that was wrong and is reverted — resolution uniformity does not imply execution equivalence. Superseded by shape A (minimal park), where every stack must implement dispatch/park/wake and therefore does the same shape of work.",
       "terminal_vocabulary": {
@@ -1625,7 +1625,7 @@
       "_shape_note": "CONTRACT-v2 §2.1 shape A: every stack implements dispatch -> park -> external event -> wake, so for the first time they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2), which was straight-through and is retired.",
       "cooldown_seconds": 30,
       "deployment_unit": "target-jvm + postgres",
-      "deployment_unit_note": "TWO processes, against spring_axon_h1_park1_v3's three. Same jar, same saga code, same Axon Framework version; EXERIS_AXON_SERVER_ENABLED=false makes Spring Boot's Axon autoconfiguration fall back to the JPA event store, JpaTokenStore and JpaSagaStore in the SHARED Postgres, with SimpleCommandBus in-process. Registered under CONTRACT-v2 s9(e). It exists because the Axon Server shape hosts part of the saga engine in a container the target-JVM sampler cannot see, so a s8 footprint comparison against in-process saga engines partly measures WHERE the work is hosted rather than what it costs. Both shapes are reported; neither is 'the' Axon number, and the two must never be collapsed into one row."
+      "deployment_unit_note": "TWO processes, against spring_axon_h1_park100_v3's three. Same jar, same saga code, same Axon Framework version; EXERIS_AXON_SERVER_ENABLED=false makes Spring Boot's Axon autoconfiguration fall back to the JPA event store, JpaTokenStore and JpaSagaStore in the SHARED Postgres, with SimpleCommandBus in-process. Registered under CONTRACT-v2 s9(e). It exists because the Axon Server shape hosts part of the saga engine in a container the target-JVM sampler cannot see, so a s8 footprint comparison against in-process saga engines partly measures WHERE the work is hosted rather than what it costs. Both shapes are reported; neither is 'the' Axon number, and the two must never be collapsed into one row."
     }
   },
   "baseline_only_contracts": {
@@ -1704,7 +1704,7 @@
           "PARKED"
         ]
       },
-      "_superseded_by": "restate_saga_h1_park1_v3"
+      "_superseded_by": "restate_saga_h1_park100_v3"
     }
   }
 }

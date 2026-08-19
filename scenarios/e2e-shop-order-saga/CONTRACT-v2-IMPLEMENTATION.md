@@ -947,6 +947,69 @@ run: target 0.86–1.68 of 8 pinned cores, Postgres 0.76, Axon Server 0.16.
    produces a large latency swing. That explains the drift's *magnitude*; it still does
    not explain why capacity moved at all, so that finding stays UNKNOWN.
 
+## The roster ran shape B under shape A's name — corrected 2026-08-19
+
+Every parking run this scenario has produced, from the introduction of parking until
+today, used a **100 ms** payment gateway while carrying a `*_h1_park1_v3` contract id.
+§2.1 defines `…-park1-v3` as **shape A**, "minimal park", gateway ~1 ms, parked
+concurrency "~0 by construction"; the 100 ms gateway is **shape B**, `…-park100-v3`,
+"short park", ~5 parked at 50/s.
+
+The 100 ms itself was never a mistake. `PROPOSAL-parking-payment-step.md`, RESOLVED
+2026-07-30, decides "perf runs: 100 ms — long enough to force a real park, short enough
+not to swamp runtime differences. ~5 parked at 50/s", and the harness defaults to it in
+three places. **The workload was right and the label was wrong.**
+
+### Why it survived
+
+The two halves of the fact lived in different files. The delay defaults in the runner;
+the shape lives in the contract id; and the one check that existed compared the declared
+delay against the **running gateway container**, which agreed with it perfectly. A stack
+can be entirely self-consistent and still be measuring a different workload than it
+claims. The comment directly above the default even spelled out the mapping — "~1 ms for
+shape A, 100 ms for shape B" — so the knowledge was present and simply unenforced.
+
+### Why it is not cosmetic
+
+§2.1 attaches different reporting permissions to the two shapes:
+
+- Shape A: "the **only** shape in which saga latency is a legitimate headline."
+- Shape B: "end-to-end latency is dominated by the gateway delay, which is identical for
+  every stack, so it loses most of its discriminating power. Report it only alongside the
+  delay."
+
+The wrong label therefore granted permission to headline a number that is mostly a
+constant. Concretely, `exeris-community`'s 129 ms saga p95 is ~100 ms of stub and ~29 ms
+of system.
+
+### What changed
+
+- Contract ids `*_h1_park1_v3` → `*_h1_park100_v3` across `scenario.json` and the
+  comparative pair manifest; `track_none_park1_v3` → `track_none_park100_v3`.
+- **A second defect found while doing it:** the two files carried *different*
+  `workload_profile_key` spellings for the same workload — `…-k6-park1-v3` in
+  `scenario.json` and `…-k6-inline-r50-park1-v3` in the manifest. The key IS the
+  aggregation boundary, so two spellings mean the boundary was undefined. Both now read
+  `e2e-shop-order-saga-community-h1-loopback-runtime-k6-r50-park100-v3`: `inline` dropped
+  because it is the marker of the superseded straight-through shape A0 and is simply
+  false for a parking workload, `r50` kept because the arrival rate is an aggregation
+  boundary under §2 and **must be updated when the rate is re-rated**.
+- A fail-closed assertion in the runner ties the contract id's park token to
+  `PAYMENT_STUB_DELAY_MS` (`park1` ⇒ 1 ms, `park100` ⇒ 100 ms, shape C exempt) and exits
+  64 on mismatch. The exact configuration this repo has been running — `park1` at 100 ms
+  — is now rejected.
+
+### Aggregation: this rename does NOT create a boundary
+
+Normally a new contract id means "never aggregate across it". **Here it must not.** The
+workload did not change; only its name did. Runs recorded under `*_h1_park1_v3` with a
+100 ms gateway are shape B runs that were mislabelled, and they remain valid shape B data
+that aggregates freely with `*_h1_park100_v3` runs. Treating the rename as a boundary
+would discard correct measurements on the strength of a typo.
+
+The one thing those runs may not do is be read as shape A. There are no shape A results
+in this repo, because shape A has never been executed.
+
 ## Appendix A — §9 per-stack deviation register (stubs)
 
 Pre-report scaffolding for contract §9. Every entry marked TODO is

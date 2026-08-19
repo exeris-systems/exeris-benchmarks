@@ -200,21 +200,26 @@ _deployment_uses_axon_server() {
   if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
     return 1
   fi
-  # quarkus-lra-jdbc IS on this list, and that is not a leftover. I removed it earlier today
-  # on the reasoning that the arm runs MicroProfile LRA and cannot need an Axon Server, having
-  # read the first half of AxonBusConfig.commandBus() — which builds a plain SimpleCommandBus
-  # and says in its own comment that no gRPC channel is created. The `else` branch below it
-  # does the opposite:
+  # quarkus-lra-jdbc is NOT on this list any more, and the history is worth keeping because I
+  # got it wrong in both directions in one day.
   #
-  #     if (!axonEnabled) { return SimpleCommandBus.builder().build(); }
-  #     // exeris.axon.enabled=true (e2e-shop-order-saga): unchanged wiring
-  #     return AxonServerCommandBus.builder().axonServerConnectionManager(connectionManager.get())...
+  # AxonBusConfig.commandBus() opens with `if (!axonEnabled) return SimpleCommandBus…` under a
+  # comment stating no gRPC channel is created. I read that, concluded the *quarkus* arm of the
+  # old predicate was stale, and removed it — which broke the arm outright, because the `else`
+  # directly below builds an AxonServerCommandBus and this runner exports
+  # EXERIS_AXON_ENABLED=true for every saga run. So I put it back.
   #
-  # and this runner exports EXERIS_AXON_ENABLED=true for every saga run (top of this file), so
-  # in THIS scenario the arm dispatches CreateOrderCommand through Axon Server. Removing it
-  # broke the arm outright: the §3.1 preflight failed with the decline case never reaching a
-  # terminal state. The saga is LRA; the command bus is Axon Server. Both are in its §1 unit.
-  [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *quarkus* || "$CONTRACT_ID" == *quarkus* ]]
+  # The right fix was neither: the arm should not have been on Axon Server at all. Nothing in
+  # MicroProfile LRA needs it — the saga is @LRA(REQUIRES_NEW, end=false) with LRA participants
+  # compensating — and the command handler lives in the SAME JVM as its localSegment, so the
+  # bus was routing a local dispatch out over gRPC and back. quarkus-lra-jdbc.env now forces
+  # EXERIS_AXON_ENABLED=false, which selects the in-process SimpleCommandBus, and the arm's §1
+  # unit becomes the three processes the pair manifest has always declared.
+  #
+  # The lesson is about the predicate itself: a target-name substring cannot express "does this
+  # deployment include an external Axon Server", because the answer depends on a runtime flag.
+  # This now keys on the contract, and the env file that sets the flag carries the reason.
+  [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]
 }
 
 # Does it include an external MicroProfile-LRA coordinator?

@@ -28,6 +28,12 @@ DECLARE
     -- Axon Server held the stores; the embedded arm (CONTRACT-v2 s9(e)) writes all three,
     -- and a saga row surviving into the next rep would let a previous run's saga resume
     -- inside a measurement window. Same reason the Axon Server volume is force-recreated.
+    -- exeris_saga_state was missing from this list until 2026-08-19, so the Flow engine's
+    -- durable saga rows accumulated across every run AND across kernel versions -- 17 988 of
+    -- them by the time it was noticed, some written by 0.10.2 under an older schema_version.
+    -- Not the cause of any measured defect so far (checked: truncating it did not change the
+    -- 0.11.0 stall), but a seed that leaves state behind is not a seed.
+    'exeris_saga_state',
     'snapshot_event_entry',
     'saga_entry',
     'association_value_entry',

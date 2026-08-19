@@ -157,7 +157,11 @@ services:
       # server.address binds the Spring Boot HTTP port (8024); the gRPC ports read
       # axoniq.axonserver.internal-hostname/hostname for advertisement, so the loopback
       # bind of 8124 is what the baseline's listener audit verifies rather than assumes.
-      JAVA_TOOL_OPTIONS: "-Daxoniq.axonserver.devmode.enabled=true -Dserver.address=127.0.0.1 -Daxoniq.axonserver.hostname=127.0.0.1 -Daxoniq.axonserver.internal-hostname=127.0.0.1"
+      # server.address binds the Spring Boot HTTP port (8024). The gRPC ports (8124
+      # client, 8224 internal) are bound by Axon Server itself; bind-address is the
+      # property that moves them off 0.0.0.0, and the baseline's listener audit is what
+      # confirms it landed.
+      JAVA_TOOL_OPTIONS: "-Daxoniq.axonserver.devmode.enabled=true -Dserver.address=127.0.0.1 -Daxoniq.axonserver.hostname=127.0.0.1 -Daxoniq.axonserver.internal-hostname=127.0.0.1 -Daxoniq.axonserver.bind-address=127.0.0.1"
     network_mode: host
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8024/actuator/health"]
@@ -189,6 +193,10 @@ services:
       # endpoint in the target JVM is simply 127.0.0.1:9084 - no host-gateway hop.
       RESTATE_INGRESS__BIND_ADDRESS: "127.0.0.1:8080"
       RESTATE_ADMIN__BIND_ADDRESS: "127.0.0.1:9070"
+      # Node-to-node message fabric (5122). Single node here, so loopback is the whole
+      # cluster; it defaults to [::]:5122 and was the one port the audit caught exposed.
+      RESTATE_BIND_ADDRESS: "127.0.0.1:5122"
+      RESTATE_ADVERTISED_ADDRESS: "http://127.0.0.1:5122/"
     volumes:
       # Anonymous volume ON PURPOSE: the baseline force-recreates this service
       # with `rm -sf --volumes` per run so stale invocation journals from a
@@ -207,7 +215,12 @@ services:
     network_mode: host
     environment:
       QUARKUS_HTTP_PORT: "8090"
+      # QUARKUS_HTTP_HOST alone does NOT bind loopback here: the image bakes
+      # JAVA_OPTS_APPEND=-Dquarkus.http.host=0.0.0.0, and a system property outranks the
+      # env var in Quarkus config ordering. Overriding JAVA_OPTS_APPEND is what actually
+      # moves the socket - verified against ss, not assumed.
       QUARKUS_HTTP_HOST: "127.0.0.1"
+      JAVA_OPTS_APPEND: "-Dquarkus.http.host=127.0.0.1 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
 
   # CONTRACT-v2 §4 (parking workload): external payment gateway.
   #

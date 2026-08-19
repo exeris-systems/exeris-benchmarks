@@ -99,7 +99,7 @@ MicroProfile LRA (§9).
 > | `spring-axon-jdbc` | 30 ✓ 38 ✓ 46 ✗ | ~45.6/s | soft — queue grows without bound |
 > | `spring-axon-embedded-jdbc` | 30 ✓ 38 ✓ 46 ✗ | ~45.7/s | soft — queue grows without bound |
 > | `quarkus-lra-jdbc` | 38 ✓ 46 ✓ 54 ✓ | >54/s | not reached |
-> | `exeris-community` | 50 ✓ 65 ✗ 80 ✗ | 50–65/s | **hard — 36 % of requests error** |
+> | `exeris-community` | 50 ✓ 65 ✗ 80 ✗ | ≥50/s, **not bounded** | admission shedding at default config — see below |
 >
 > At 50/s both Axon arms were therefore in permanent overload: in-flight work climbed
 > monotonically for an entire 11-minute window (545 → 2882 concurrent) and never reached
@@ -114,10 +114,30 @@ MicroProfile LRA (§9).
 > latency.
 >
 > 38/s is a measured clean plateau on every arm tested at it, leaving ~17 % headroom under
-> the binding arm. The headroom is deliberate: `exeris-community` does not degrade
-> gracefully at its own ceiling but fails outright, and running any arm near its ceiling
-> makes the campaign hostage to small capacity changes — which is how a stack that drifted
-> a few per cent produced a 5× latency swing.
+> the binding arm. The headroom is deliberate: running any arm near its ceiling makes the
+> campaign hostage to small capacity changes — which is how a stack that drifted a few per
+> cent produced a 5× latency swing.
+>
+> **`exeris-community`'s upper rungs measured ADMISSION, not capacity.** The ladder varied
+> only the arrival rate and left queue depth at its default, so what the 65/s and 80/s rungs
+> found is where the default admission policy begins shedding, not where the runtime runs
+> out of work capacity. The error mix says so directly: at 80/s, 11 232 responses were
+> **503** and 13 692 were **409** — the stack deliberately refusing load — alongside 4 450
+> connection-level refusals. No OOM, no crash. ADR-035's `queueDepthAllowanceRatio`
+> (default 8) sheds under high connection count, and the ladder ran several hundred
+> connections against it unchanged.
+>
+> This cuts both ways and neither reading may be published. Quoting 50–65/s as an
+> `exeris-community` capacity ceiling understates it, because admission was never
+> equalised. Calling the shedding a "hard failure" *mis*states it in the other direction:
+> returning 503 under excess load is designed backpressure, and is not obviously worse than
+> an arm that accepts everything and grows an unbounded queue — two different policies, not
+> a better and a worse outcome. An admission-equalised sweep is required before any arm's
+> ceiling is quoted as capacity.
+>
+> The re-rate is unaffected: 38/s sits below every arm's shedding point, and the Axon
+> capacity figures stand — those were measured with the O0 identity closing and zero
+> errors, by queue growth rather than by refusal.
 >
 > **Runs at 50/s MUST NOT be aggregated with runs at 38/s.** The boundary is carried by
 > the `r38` token in `workload_profile_key`

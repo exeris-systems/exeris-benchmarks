@@ -2060,6 +2060,22 @@ else
   # An unresolved saga is an OBSERVATION failure, not an outcome — whatever caused it,
   # the compensation figure cannot be trusted in either direction. Bound is the same 2%
   # the k6 saga_status_resolved threshold uses, so the two agree rather than conflict.
+  # The shortfall between issued and the five buckets is NOT automatically a
+  # misclassification. k6 stops iterations still in flight at each phase boundary
+  # (gracefulStop): they incremented saga_issued_total and were then killed before any
+  # outcome. That is TRUNCATION — the load generator stopped watching — and it is a
+  # different thing from a detector that cannot recognise an outcome it was shown.
+  #
+  # Measured 2026-08-19: a 100 s three-phase run truncated 210 of 4 611 (4.6%), which my
+  # first O0 called detector_fault. Wrong verdict on a real signal, which is exactly what
+  # this gate exists to prevent in the other direction. Truncation scales with phase
+  # count rather than duration, so at the contract's 300/900/30 its share should be well
+  # under the 1% bound below.
+  GATE_O0_TRUNCATED=$(( ${GATE_ISSUED%%.*} - GATE_O0_SUM ))
+  GATE_O0_TRUNCATED_BP=0
+  if [[ "${GATE_ISSUED%%.*}" -gt 0 && "$GATE_O0_TRUNCATED" -gt 0 ]]; then
+    GATE_O0_TRUNCATED_BP=$(( GATE_O0_TRUNCATED * 10000 / ${GATE_ISSUED%%.*} ))
+  fi
   GATE_O0_UNRESOLVED_PCT=0   # basis points
   if [[ "${GATE_ISSUED%%.*}" -gt 0 ]]; then
     GATE_O0_UNRESOLVED_PCT=$(( ${GATE_O0_UNRESOLVED%%.*} * 10000 / ${GATE_ISSUED%%.*} ))
@@ -2079,7 +2095,10 @@ else
   elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_UNRESOLVED_PCT" -gt 200 ]]; then
     GATE_STATUS="detector_fault"
     GATE_REASON="O0: ${GATE_O0_UNRESOLVED} of ${GATE_ISSUED} issued sagas ($(( GATE_O0_UNRESOLVED_PCT / 100 )).$(( GATE_O0_UNRESOLVED_PCT % 100 ))%) reached no terminal outcome the detector recognises, above the 2% bound. An unresolved saga is an observation failure, not an outcome, so the compensation count cannot be trusted in either direction. First thing to check: this stack's declared terminal_tokens (CONTRACT-v2 §3.1) against what it actually emits."
-  elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_SUM" != "${GATE_ISSUED%%.*}" ]]; then
+  elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_TRUNCATED" -lt 0 ]]; then
+    GATE_STATUS="detector_fault"
+    GATE_REASON="O0: the five terminal buckets sum to ${GATE_O0_SUM}, MORE than the ${GATE_ISSUED} issued. A saga counted twice is as wrong as one counted never, and no truncation explains it."
+  elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_TRUNCATED_BP" -gt 100 ]]; then
 
     # The identity did not close. This is an instrument failure, NOT a result: it
 
@@ -2091,7 +2110,7 @@ else
 
     GATE_STATUS="detector_fault"
 
-    GATE_REASON="O0 outcome accounting does not balance: completed(${GATE_O0_COMPLETED}) + compensated(${GATE_O0_COMPENSATED}) + unrecovered(${GATE_O0_UNRECOVERED}) + unresolved(${GATE_O0_UNRESOLVED}) + submit_rejected(${GATE_O0_REJECTED}) = ${GATE_O0_SUM} != issued(${GATE_ISSUED}). Some issued sagas were classified into no terminal bucket, so the compensation count cannot be trusted in either direction — most likely a terminal-vocabulary mismatch on this stack (CONTRACT-v2 §3.1)."
+    GATE_REASON="O0: ${GATE_O0_TRUNCATED} of ${GATE_ISSUED} issued reached no terminal bucket ($(( GATE_O0_TRUNCATED_BP / 100 )).$(( GATE_O0_TRUNCATED_BP % 100 ))%), above the 1% truncation bound — too large for phase boundaries alone, so a §3.1 vocabulary mismatch is the likely cause. Buckets: completed(${GATE_O0_COMPLETED}) + compensated(${GATE_O0_COMPENSATED}) + unrecovered(${GATE_O0_UNRECOVERED}) + unresolved(${GATE_O0_UNRESOLVED}) + submit_rejected(${GATE_O0_REJECTED}) = ${GATE_O0_SUM} != issued(${GATE_ISSUED}). Some issued sagas were classified into no terminal bucket, so the compensation count cannot be trusted in either direction — most likely a terminal-vocabulary mismatch on this stack (CONTRACT-v2 §3.1)."
 
   elif [[ "$FAULT_MODE" == "transient" ]]; then
     # s4.2 inverse assertion: transient faults must NOT produce compensations.

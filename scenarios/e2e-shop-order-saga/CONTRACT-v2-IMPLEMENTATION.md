@@ -687,6 +687,79 @@ here as evidence the arm reaches terminal outcomes, not as a performance result.
   transaction commits; leaving the arms on different sequencing policies would make them
   incomparable.
 
+## The JDBC roster — 2026-08-19
+
+**Rule:** every arm in this scenario is measured on JDBC, because Exeris is. An ORM on one
+side of a comparison is a second variable.
+
+The saga path itself was already plain JDBC on every arm — no saga-path file in any of the
+four targets references Panache, an `EntityManager`, an `@Entity` or a `JpaRepository`
+(checked, not assumed, before any code was copied). But the k6 session is
+register → recommend → cart add → cart get → **order**, and on the previous Quarkus and
+Spring arms those *other four steps* went through Hibernate ORM + Panache and Spring Data
+JPA respectively, while exeris-community ran them on JDBC. So the roster, not just the saga
+code, had to move.
+
+| was | is | artifact |
+|---|---|---|
+| `quarkus-hibernate` | **`quarkus-lra-jdbc`** (9015) | `targets/quarkus-benchmark-app-tuned` — Agroal + plain JDBC |
+| `spring-hibernate` | **`spring-axon-jdbc`** (9016) | `targets/spring-benchmark-app-jdbc` — `spring-boot-starter-jdbc` |
+| `spring-axon-embedded` | **`spring-axon-embedded-jdbc`** (9017) | same jar as `spring-axon-jdbc` |
+
+`exeris-community` and `restate` are unchanged. `restate` stays baseline-only and is
+deliberately absent from the comparison track.
+
+### Both JDBC targets predated the §4 parking rework
+
+Neither `quarkus-benchmark-app-tuned` nor `spring-benchmark-app-jdbc` had the parking shape:
+both still ran the saga inline with the §4.1 FNV-1a decline rule evaluated locally, and the
+Quarkus one had no LRA participant, no gateway client and no callback resource. In each pair
+every target-only line turned out to be the *pre-parking* shape rather than a JDBC
+customization, so the saga surface was taken verbatim from the arm being replaced — 9 files
+on the Quarkus side, 5 on the Spring side — plus `quarkus-narayana-lra`, both rest-client
+artifacts, both LRA coordinator-url spellings, and the §9(d) processor tuning.
+
+### Separate target ids, deliberately
+
+`quarkus-tuned` and `spring-jdbc` already existed — wired for the **entity-read** work, where
+`quarkus-tuned`'s `EXERIS_PORT` is the SSL port and `spring-jdbc` never enables Axon. Adding
+saga knobs to those env files would have made two campaigns perturb each other. A target id
+is the deployment identity in this repo, so a different deployment gets a different id, even
+on the same artifact.
+
+### No-aggregation boundaries created by this change
+
+Each is recorded in the contract's own `supersedes_note`, because a stale number quoted
+across one of these is not a small error:
+
+1. **Artifact.** Runs under `quarkus_lra_h1_park1_v3` / `spring_axon_h1_park1_v3` /
+   `spring_axon_embedded_h1_park1_v3` must never be aggregated with their `*_jdbc_*`
+   successors. Different jar, different ORM exposure on four of five session steps.
+2. **Durability.** Independently of (1): any `spring-axon` run recorded **before
+   2026-08-19** predates durable token and saga stores on that arm, so it was not paying for
+   a durable saga engine at all.
+
+### Harness state
+
+`tools/verify-target-asset-matrix.sh` passes with zero failures. It had been failing closed
+on `spring-axon-embedded` *before* this work — the comparative pair manifest was still at
+the v2 generation (three `compatible_targets`, `required_contracts` naming the pre-parking
+`*_h1_v2` ids) — and that is now fixed rather than worked around: the manifest carries the
+three JDBC arms, five `allowed_pairs`, and a `track_none_park1_v3` track. Two pairs are worth
+naming explicitly:
+
+- `quarkus-lra-jdbc` × `spring-axon-jdbc` is **cross-framework-cross-saga-library**. The v2
+  Quarkus/Spring pair shared Axon and its axis label said so; MicroProfile LRA and Axon
+  Framework are different saga engines, and the label had to change with the roster.
+- `spring-axon-jdbc` × `spring-axon-embedded-jdbc` is the **only** pair with no
+  deployment-unit difference — identical jar and artifact, tokens and saga state durable in
+  Postgres on both, differing solely in where events live. It is therefore the one pair whose
+  §8 footprint comparison needs no where-is-it-hosted caveat.
+
+The two surviving warnings (`health_url` port 9004 shared by `spring-on-exeris`/`restate`,
+9005 by `exeris-blackbird`/`spring-on-exeris-pure`) are pre-existing and involve no target in
+this roster.
+
 ## Appendix A — §9 per-stack deviation register (stubs)
 
 Pre-report scaffolding for contract §9. Every entry marked TODO is

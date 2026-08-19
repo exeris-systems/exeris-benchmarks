@@ -33,9 +33,11 @@ export EXERIS_AXON_ENABLED="${EXERIS_AXON_ENABLED:-true}"
 # saga ledger'"'"'s earlier A/B of this knob is caveated as unverified - the class constant
 # carries a LEADING DOT (the prefix is applied at runtime), so a wrong -D form is silently
 # ignored and reads as "the knob has no effect".
-if [[ "${TARGET_APP:-}" == exeris-* || "${TARGET_APP:-}" == *on-exeris* ]]; then
-  export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} -Dexeris.persistence.admission.queueDepthAllowanceRatio=${EXERIS_ADMISSION_QUEUE_RATIO:-32}"
-fi
+# MOVED: this used to sit here, ~800 lines above the line that first assigns TARGET_APP.
+# `"${TARGET_APP:-}"` was therefore always empty, the pattern never matched, and the export
+# never ran -- so the equalization this comment describes has never once been applied. It is
+# now performed in configure_target_runtime_overrides, which runs after argument parsing, and
+# is verified against the started process rather than trusted.
 
 usage() {
   cat <<'EOF'
@@ -485,6 +487,13 @@ configure_target_runtime_overrides() {
       export EXERIS_INSECURE_REQUESTS="enabled"
       ;;
   esac
+
+  # ADR-035 admission equalization (see the note at the top of this file). Exeris SHEDS
+  # under connection pressure where HikariCP and Tomcat BLOCK; comparing a shedding stack
+  # against blocking ones measures the policy, not the runtime.
+  if [[ "$TARGET_APP" == exeris-* || "$TARGET_APP" == *on-exeris* ]]; then
+    export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} -Dexeris.persistence.admission.queueDepthAllowanceRatio=${EXERIS_ADMISSION_QUEUE_RATIO:-32}"
+  fi
 
   # Enable NMT for off-heap capture (matching full-triad behavior).
   export SPRING_JAVA_OPTS="${SPRING_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
@@ -1588,6 +1597,33 @@ export BASE_URL
 
 TARGET_PORT="$(bench_extract_port_from_url "$BASE_URL")"
 TARGET_PID="$(bench_detect_pid_for_port "$TARGET_PORT")"
+
+# Verify the admission equalization reached the PROCESS, not just a shell variable.
+#
+# It did not, for the entire life of this scenario: the export was guarded on TARGET_APP
+# from a line that ran ~800 lines before TARGET_APP was first assigned, so the guard was
+# always false and the flag was never passed. Nothing noticed, because a missing -D is
+# indistinguishable from a present one unless you look at the process -- and the symptom it
+# produced (exeris shedding under a pool the other arms merely queue on) reads as a runtime
+# property rather than as a missing flag. The 2026-08-19 campaign lost all three exeris reps
+# to a s4.1 gate failure caused by exactly this.
+#
+# Checking the shell variable would re-make the original mistake. Read /proc/<pid>/cmdline.
+if [[ "$TARGET_APP" == exeris-* || "$TARGET_APP" == *on-exeris* ]] && [[ -n "$TARGET_PID" ]]; then
+  if [[ -r "/proc/$TARGET_PID/cmdline" ]]; then
+    if tr '\0' ' ' < "/proc/$TARGET_PID/cmdline" | grep -q 'queueDepthAllowanceRatio'; then
+      echo "ADR-035 admission equalization confirmed on pid ${TARGET_PID} (ratio=${EXERIS_ADMISSION_QUEUE_RATIO:-32})."
+    else
+      echo "ERROR: ADR-035 admission equalization is NOT on the target command line (pid ${TARGET_PID})." >&2
+      echo "ERROR: exeris arms shed under connection pressure at the default ratio 8 while the" >&2
+      echo "ERROR: Spring/Quarkus arms block, so this run would compare an admission policy" >&2
+      echo "ERROR: rather than the runtimes. Check that EXERIS_JAVA_OPTS reaches EXTERNAL_START_CMD." >&2
+      exit 64
+    fi
+  else
+    echo "Warning: cannot read /proc/${TARGET_PID}/cmdline; admission equalization unverified." >&2
+  fi
+fi
 printf 'epoch_ms,utime_ticks,stime_ticks,rss_kb,vmsize_kb,threads,vmhwm_kb,smaps_rss_kb,cgroup_mem_kb\n' > "$RESOURCE_SAMPLES_CSV"
 
 # Apply OS-level cgroup limits (memory + CPU) if configured.

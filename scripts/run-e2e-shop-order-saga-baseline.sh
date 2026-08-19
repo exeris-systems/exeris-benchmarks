@@ -362,13 +362,13 @@ configure_target_runtime_overrides() {
   # restate-server). Exported BEFORE target start so the app's startup
   # self-registration and the baseline's post-readiness force-registration
   # agree on the same endpoints. restate-server runs in Docker
-  # (benchmark-restate-server), so it calls back into the host-side SDK
-  # endpoint via host.docker.internal.
+  # (benchmark-restate-server) with host networking, so the host-side SDK
+  # endpoint is 127.0.0.1:<port> from inside the container too.
   if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
     export RESTATE_SDK_PORT="${RESTATE_SDK_PORT:-9084}"
     export RESTATE_INGRESS_URL="${RESTATE_INGRESS_URL:-http://localhost:8080}"
     export RESTATE_ADMIN_URL="${RESTATE_ADMIN_URL:-http://localhost:9070}"
-    export RESTATE_SDK_ADVERTISED_URL="${RESTATE_SDK_ADVERTISED_URL:-http://host.docker.internal:${RESTATE_SDK_PORT}}"
+    export RESTATE_SDK_ADVERTISED_URL="${RESTATE_SDK_ADVERTISED_URL:-http://${BENCH_CONTAINER_HOST_ADDR}:${RESTATE_SDK_PORT}}"
     export RESTATE_AUTO_REGISTER="${RESTATE_AUTO_REGISTER:-true}"
   fi
 
@@ -452,7 +452,7 @@ configure_target_runtime_overrides() {
     export EXERIS_PAYMENT_GATEWAY_URL="${EXERIS_PAYMENT_GATEWAY_URL:-http://localhost:9300/payments}"
     local _callback_port="${EXERIS_HTTP_PORT:-${_base_port:-}}"
     if [[ -z "${EXERIS_PAYMENT_CALLBACK_URL:-}" && ! "$_callback_port" =~ ^[0-9]+$ ]]; then
-      # Without a port the URL would be built as ".../host.docker.internal:/api/..." —
+      # Without a port the URL would be built as ".../127.0.0.1:/api/..." —
       # syntactically plausible, uniformly unreachable, and the only symptom would be
       # every saga stranding. Refuse instead.
       echo "ERROR: BENCH_PAYMENT_PARKING=1 but no target port could be derived from BASE_URL='${BASE_URL}'." >&2
@@ -460,11 +460,16 @@ configure_target_runtime_overrides() {
       echo "ERROR: Set EXERIS_PAYMENT_CALLBACK_URL explicitly to override." >&2
       exit 75
     fi
-    # host.docker.internal, not localhost: the gateway runs in a container and calls
-    # back to the target JVM on the HOST. Same wiring reason as restate-server's
-    # advertised SDK URL.
-    export EXERIS_PAYMENT_CALLBACK_URL="${EXERIS_PAYMENT_CALLBACK_URL:-http://host.docker.internal:${_callback_port}/api/v1/payments/callback}"
-    export EXERIS_RESTATE_INGRESS_CALLBACK_URL="${EXERIS_RESTATE_INGRESS_CALLBACK_URL:-http://benchmark-restate-server:8080}"
+    # BENCH_CONTAINER_HOST_ADDR is how a container addresses the host, and it is one
+    # knob rather than four literals because it changed once already: it was
+    # host.docker.internal while the stack ran on the docker bridge, and is 127.0.0.1
+    # now that every service is host-networked. A wrong value fails invisibly — the saga
+    # dispatches, parks, and never settles, which reads as a slow stack.
+    export EXERIS_PAYMENT_CALLBACK_URL="${EXERIS_PAYMENT_CALLBACK_URL:-http://${BENCH_CONTAINER_HOST_ADDR}:${_callback_port}/api/v1/payments/callback}"
+    # Same address for the restate arm: under host networking the ingress binds the
+    # host's loopback, so the gateway reaches it at 127.0.0.1:8080 (on the bridge this
+    # had to be the compose service name instead).
+    export EXERIS_RESTATE_INGRESS_CALLBACK_URL="${EXERIS_RESTATE_INGRESS_CALLBACK_URL:-http://${BENCH_CONTAINER_HOST_ADDR}:8080}"
     # The stub speaks plaintext HTTP/1.1 only. Under a TLS protocol mode the callback
     # would be dispatched to a port that answers TLS, every settle would fail, and
     # every saga would strand — so refuse the run instead of producing a directory
@@ -965,6 +970,12 @@ fi
 # payment gateway and callback URLs and needs both. (The gateway's docker-stats
 # sampler further down consumes them too.)
 BENCH_PAYMENT_PARKING="${BENCH_PAYMENT_PARKING:-0}"
+# How a container addresses the host. 127.0.0.1 since the stack went host-networked
+# (2026-08-19); host.docker.internal is the value to set if it is ever moved back onto
+# the docker bridge. Used for the gateway callback, the restate ingress callback and the
+# restate SDK advertised URL - the three addresses whose failure mode is a saga that
+# parks and never settles.
+export BENCH_CONTAINER_HOST_ADDR="${BENCH_CONTAINER_HOST_ADDR:-127.0.0.1}"
 # Sets parked concurrency (parked ≈ arrival rate × delay). CONTRACT-v2 §2.1 pins
 # it per workload shape — ~1 ms for shape A, 100 ms for shape B, harness-controlled
 # for shape C — and it MUST be identical across stacks within a run, so it is both
@@ -1197,7 +1208,7 @@ bench_ensure_target_ready "$BASE_URL" "$CURL_INSECURE_OPT" "$HEALTH_TIMEOUT_SECO
 # once /health answers: it binds before the facade in the target's main().
 if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
   _restate_admin_url="${RESTATE_ADMIN_URL:-http://localhost:9070}"
-  _restate_sdk_url="${RESTATE_SDK_ADVERTISED_URL:-http://host.docker.internal:${RESTATE_SDK_PORT:-9084}}"
+  _restate_sdk_url="${RESTATE_SDK_ADVERTISED_URL:-http://${BENCH_CONTAINER_HOST_ADDR:-127.0.0.1}:${RESTATE_SDK_PORT:-9084}}"
   RESTATE_REGISTRATION_TXT="$LOGS_DIR/restate-registration.txt"
   _restate_reg_http="000"
   echo "Registering Restate deployment ${_restate_sdk_url} at ${_restate_admin_url}/deployments..."
@@ -1602,6 +1613,44 @@ for _shared in "exeris-e2e-saga-postgres:$POSTGRES_STATS_CSV:POSTGRES" \
     echo "Warning: ${_sc} not found; its share of the deployment footprint will be missing." >&2
   fi
 done
+
+# --- Host-networking exposure audit (fail closed) -------------------------------------
+#
+# The stack runs with network_mode: host, so nothing publishes ports on our behalf any
+# more: each service binds whatever address it was told to, and the compose file tells
+# all of them 127.0.0.1. If one of those settings is wrong - or an image changes its
+# default - the service binds 0.0.0.0 on a box with a public IP and no firewall this
+# account can inspect. That has already happened once here (Postgres reachable from the
+# internet, rogue superuser roles, 2026-07-30), and it is invisible from inside a run:
+# the benchmark works perfectly either way.
+#
+# So the bind addresses are checked, not trusted, on every run.
+_saga_stack_ports="5432 9300 8024 8124 8080 9070 9071 8090 5122 7474 7687"
+if command -v ss >/dev/null 2>&1; then
+  _exposed=""
+  while read -r _laddr; do
+    [[ -z "$_laddr" ]] && continue
+    _lport="${_laddr##*:}"
+    _lhost="${_laddr%:*}"
+    case " $_saga_stack_ports " in *" $_lport "*) ;; *) continue ;; esac
+    case "$_lhost" in
+      127.0.0.1|"[::1]"|localhost) ;;
+      *) _exposed="${_exposed} ${_laddr}" ;;
+    esac
+  done < <(ss -Hltn 2>/dev/null | awk '{print $4}')
+  if [[ -n "$_exposed" ]]; then
+    echo "ERROR: saga stack ports are bound off-loopback:${_exposed}" >&2
+    echo "ERROR: the stack is host-networked, so these are reachable from anywhere this box is." >&2
+    echo "ERROR: fix the service bind address in runtime/compose/e2e-shop-order-saga.yml and" >&2
+    echo "ERROR: recreate the container. Refusing to run." >&2
+    exit 77
+  fi
+  echo "Exposure audit: all saga stack ports bound to loopback."
+else
+  echo "ERROR: ss is unavailable, so the host-networked stack's bind addresses cannot be" >&2
+  echo "ERROR: verified. Refusing to run rather than assume they are loopback." >&2
+  exit 77
+fi
 
 # --- CPU pinning for the backend containers ------------------------------------------
 #

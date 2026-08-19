@@ -20,7 +20,7 @@ import java.time.Duration;
  * be a fourth implementation choice that no stack would make on its own. Same
  * reason the §4.1 FNV rule is duplicated.
  *
- * <p>The callback host defaults to {@code host.docker.internal} because the
+ * <p>The callback host defaults to {@code 127.0.0.1}: the stack is host-networked, so the
  * gateway runs in a container and calls back to this JVM on the host — the same
  * wiring reason as restate-server's advertised SDK URL. Override with
  * {@code EXERIS_PAYMENT_CALLBACK_URL} when the gateway runs on the host.
@@ -35,7 +35,7 @@ public class PaymentGatewayClient {
 
     private static final String CALLBACK_URL = System.getenv()
             .getOrDefault("EXERIS_PAYMENT_CALLBACK_URL",
-                    "http://host.docker.internal:"
+                    "http://127.0.0.1:"
                             + System.getenv().getOrDefault("EXERIS_PORT", "8080")
                             + "/api/v1/payments/callback");
 

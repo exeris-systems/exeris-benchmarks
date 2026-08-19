@@ -209,12 +209,22 @@ case "${START_MODE}" in
         echo "       refusing to run unpinned — indistinguishable from pinned in every artifact." >&2
         exit 1
       fi
-      export TARGET_CPU_PREFIX="taskset -c ${BENCH_TARGET_CPUS} "
+      # Feed the env files' OWN affinity hook rather than prefixing the whole command.
+      # EXTERNAL_START_CMD begins with environment assignments (EXERIS_PORT=... java ...),
+      # so `taskset -c <set> EXERIS_PORT=9000 java ...` makes taskset try to EXECUTE
+      # "EXERIS_PORT=9000" and the target dies before it logs a line — measured here on
+      # 2026-08-19 as a 120 s health timeout with an empty log. Every env file already
+      # places ${SERVER_CPU_AFFINITY:+taskset -c ... } immediately before `java`, which is
+      # the one position that both binds the JVM and leaves the assignments alone.
+      export SERVER_CPU_AFFINITY="${BENCH_TARGET_CPUS}"
+      if [[ "$EXTERNAL_START_CMD" != *SERVER_CPU_AFFINITY* ]]; then
+        echo "ERROR: BENCH_TARGET_CPUS=${BENCH_TARGET_CPUS} set but ${TARGET_ENV} does not honour" >&2
+        echo "       SERVER_CPU_AFFINITY in EXTERNAL_START_CMD; the run would be silently unpinned." >&2
+        exit 1
+      fi
       echo "  Target CPU affinity: ${BENCH_TARGET_CPUS}"
-    else
-      export TARGET_CPU_PREFIX=""
     fi
-    bash -lc "cd '$ROOT' && ${TARGET_CPU_PREFIX}$EXTERNAL_START_CMD"
+    bash -lc "cd '$ROOT' && $EXTERNAL_START_CMD"
     ;;
   *)
     echo "ERROR: Unknown START_MODE: $START_MODE" >&2

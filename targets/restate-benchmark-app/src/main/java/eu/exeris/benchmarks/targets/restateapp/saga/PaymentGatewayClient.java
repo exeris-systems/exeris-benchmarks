@@ -35,17 +35,18 @@ public final class PaymentGatewayClient {
      * Base of the Restate ingress as reachable FROM THE GATEWAY CONTAINER — a different
      * address from the one this JVM would use, and getting it wrong is silent.
      *
-     * <p>It is the compose SERVICE NAME, not host.docker.internal. The other arms' callback
-     * URLs point at the host because their targets are host processes; the Restate ingress
-     * is a container whose port compose publishes as 127.0.0.1:8080, i.e. bound to the
-     * host's loopback only. From the gateway container that address answers
-     * "Connection refused", the awakeable is never resolved, the workflow stays parked, and
-     * the ingress call eventually fails with HttpTimeoutException — which reads as a slow or
-     * broken target, not as a wrong callback address. Both containers sit on
-     * compose_default, so the service name resolves and skips the host hop entirely.
+     * <p>Since 2026-08-19 the stack is host-networked, so this is 127.0.0.1:8080 — the
+     * gateway container shares the host's network namespace and the ingress binds the
+     * host's loopback. While the stack ran on the bridge this had to be the compose
+     * SERVICE NAME instead (127.0.0.1 inside the gateway container was the container's own
+     * loopback, and answered "Connection refused"). Either way the failure is silent in the
+     * same way: the awakeable is never resolved, the workflow stays parked, the ingress call
+     * ends in HttpTimeoutException, and it reads as a slow target rather than a wrong
+     * address. The baseline exports EXERIS_RESTATE_INGRESS_CALLBACK_URL explicitly so the
+     * wiring is decided in one place rather than by whichever default was compiled in.
      */
     private static final String RESTATE_INGRESS_URL = System.getenv()
-            .getOrDefault("EXERIS_RESTATE_INGRESS_CALLBACK_URL", "http://benchmark-restate-server:8080");
+            .getOrDefault("EXERIS_RESTATE_INGRESS_CALLBACK_URL", "http://127.0.0.1:8080");
 
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))

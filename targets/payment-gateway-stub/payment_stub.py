@@ -21,6 +21,8 @@ integer.
 
 Config (env):
   PAYMENT_STUB_PORT            listen port (default 9300)
+  PAYMENT_STUB_HOST            listen address (default 0.0.0.0; the compose file
+                               sets 127.0.0.1 because it runs host-networked)
   PAYMENT_STUB_DELAY_MS        callback delay; the workload parameter that sets
                                parked concurrency (parked ~= rate x delay).
                                100 for perf runs, 1000 for crash runs.
@@ -51,6 +53,10 @@ DECLINE_MODULUS = 1000
 DECLINE_THRESHOLD = 30
 
 PORT = int(os.environ.get("PAYMENT_STUB_PORT", "9300"))
+# Bind address. 0.0.0.0 was harmless while compose published the port as
+# 127.0.0.1:9300 and did the binding for us; under host networking the container
+# shares the host namespace, so 0.0.0.0 here means 0.0.0.0 on a public IP.
+HOST = os.environ.get("PAYMENT_STUB_HOST", "0.0.0.0")
 DELAY_MS = int(os.environ.get("PAYMENT_STUB_DELAY_MS", "100"))
 JITTER_MS = int(os.environ.get("PAYMENT_STUB_DELAY_JITTER_MS", "0"))
 
@@ -178,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
     server.daemon_threads = True
     print(f"payment-gateway-stub listening on {PORT} "
           f"(delay={DELAY_MS}ms jitter={JITTER_MS}ms fault_mode={FAULT_MODE})", flush=True)

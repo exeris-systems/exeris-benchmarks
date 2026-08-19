@@ -57,3 +57,27 @@ BEGIN
     RAISE NOTICE '[v0_clean] No benchmark tables found — skipping truncate (fresh DB).';
   END IF;
 END $$;
+
+-- ---------------------------------------------------------------------------------------
+-- Orphaned large objects.
+--
+-- Axon's @Lob columns are large-object OIDs on PostgreSQL, and TRUNCATE removes the
+-- REFERENCES while leaving the objects themselves in pg_largeobject. Across a campaign
+-- that writes an event per saga step, that is unbounded growth in a table nothing in the
+-- benchmark ever reads — measured as disk, attributed to nothing.
+--
+-- Unconditional unlink is safe here: this database exists only for the benchmark seed and
+-- has no other large-object user. It runs AFTER the truncate above, so nothing live is
+-- pointed at what it removes.
+-- ---------------------------------------------------------------------------------------
+DO $lo_cleanup$
+DECLARE
+  removed bigint := 0;
+BEGIN
+  SELECT count(*) INTO removed FROM pg_largeobject_metadata;
+  IF removed > 0 THEN
+    PERFORM lo_unlink(oid) FROM pg_largeobject_metadata;
+    RAISE NOTICE '[v0_clean] Unlinked % orphaned large object(s) left by Axon @Lob columns.', removed;
+  END IF;
+END
+$lo_cleanup$;

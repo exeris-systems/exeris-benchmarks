@@ -100,8 +100,8 @@ CREATE INDEX IF NOT EXISTS idx_exeris_outbox_dlq_stream ON exeris_outbox_dlq (st
 CREATE TABLE IF NOT EXISTS domain_event_entry (
   global_index         BIGSERIAL    NOT NULL,
   event_identifier     VARCHAR(255) NOT NULL,
-  meta_data            BYTEA,
-  payload              BYTEA        NOT NULL,
+  meta_data            OID,
+  payload              OID          NOT NULL,
   payload_revision     VARCHAR(255),
   payload_type         VARCHAR(255) NOT NULL,
   time_stamp           VARCHAR(255) NOT NULL,
@@ -139,8 +139,8 @@ CREATE TABLE IF NOT EXISTS snapshot_event_entry (
   sequence_number      BIGINT       NOT NULL,
   type                 VARCHAR(255) NOT NULL,
   event_identifier     VARCHAR(255) NOT NULL,
-  meta_data            BYTEA,
-  payload              BYTEA        NOT NULL,
+  meta_data            OID,
+  payload              OID          NOT NULL,
   payload_revision     VARCHAR(255),
   payload_type         VARCHAR(255) NOT NULL,
   time_stamp           VARCHAR(255) NOT NULL,
@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS snapshot_event_entry (
 CREATE TABLE IF NOT EXISTS token_entry (
   processor_name VARCHAR(255) NOT NULL,
   segment        INT          NOT NULL,
-  token          BYTEA,
+  token          OID,
   token_type     VARCHAR(255),
   timestamp      VARCHAR(255),
   owner          VARCHAR(255),
@@ -193,3 +193,40 @@ CREATE INDEX IF NOT EXISTS idx_ave_saga_id_type
   ON association_value_entry (saga_id, saga_type);
 
 COMMIT;
+
+-- ---------------------------------------------------------------------------------------
+-- Axon @Lob columns are OID, not BYTEA — and existing databases must be migrated.
+--
+-- Hibernate 6 on PostgreSQLDialect maps Axon's `@Lob byte[]` to a large-object OID. The
+-- seed already recorded this for saga_entry.serialized_saga; the same applies to
+-- token_entry.token and to the payload/meta_data columns of the event tables. It never
+-- mattered while Axon Server held the event store, because nothing wrote these tables.
+-- The embedded arm (CONTRACT-v2 §9(e)) writes all of them, and the mismatch surfaced as
+-- `ERROR: column "token" is of type bytea but expression is of type oid` from the saga
+-- processor — a WARN, with the run continuing and the tokens simply never persisting.
+--
+-- CREATE TABLE IF NOT EXISTS cannot fix a table that already exists, so convert in place.
+-- Safe because these tables are truncated by v0_clean immediately before this runs: the
+-- columns are empty, so dropping and re-adding loses nothing.
+-- ---------------------------------------------------------------------------------------
+DO $axon_lob$
+DECLARE
+  col RECORD;
+BEGIN
+  FOR col IN
+    SELECT table_name, column_name, is_nullable
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND data_type = 'bytea'
+       AND (table_name, column_name) IN (
+             ('token_entry','token'),
+             ('domain_event_entry','payload'),      ('domain_event_entry','meta_data'),
+             ('snapshot_event_entry','payload'),    ('snapshot_event_entry','meta_data'))
+  LOOP
+    EXECUTE format('ALTER TABLE %I DROP COLUMN %I', col.table_name, col.column_name);
+    EXECUTE format('ALTER TABLE %I ADD COLUMN %I OID%s', col.table_name, col.column_name,
+                   CASE WHEN col.is_nullable = 'NO' THEN ' NOT NULL' ELSE '' END);
+    RAISE NOTICE '[v3] %.% converted bytea -> oid (Axon @Lob mapping)', col.table_name, col.column_name;
+  END LOOP;
+END
+$axon_lob$;

@@ -18,6 +18,25 @@ source "$LIB/run-summary.sh"
 # Saga-order runs opt into Axon explicitly; generic runtime startup stays default-off.
 export EXERIS_AXON_ENABLED="${EXERIS_AXON_ENABLED:-true}"
 
+# ADR-035 admission equalization, carried over from the entity-read campaigns
+# (results/reports/2026-07-22-entity-read-by-id-memory-cpu-sweep.md, build fence 1bf4767).
+#
+# The default queueDepthAllowanceRatio is 8, and under connection pressure Exeris SHEDS
+# while HikariCP and Tomcat BLOCK. That is a policy difference, not a runtime property, and
+# comparing a shedding stack against blocking ones measures the policy: it is what produced
+# an 84 % error rate on the exeris arm in that report'"'"'s pool pre-runs, and raising the ratio
+# to 32 took all 24 runs to zero errors. This scenario never applied the equalization, and
+# its own rate-100 finding has been chasing an unexplained exeris-only connection drop ever
+# since.
+#
+# The property string is the one those campaigns actually ran with. Recorded because the
+# saga ledger'"'"'s earlier A/B of this knob is caveated as unverified - the class constant
+# carries a LEADING DOT (the prefix is applied at runtime), so a wrong -D form is silently
+# ignored and reads as "the knob has no effect".
+if [[ "${TARGET_APP:-}" == exeris-* || "${TARGET_APP:-}" == *on-exeris* ]]; then
+  export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} -Dexeris.persistence.admission.queueDepthAllowanceRatio=${EXERIS_ADMISSION_QUEUE_RATIO:-32}"
+fi
+
 usage() {
   cat <<'EOF'
 Usage: run-e2e-shop-order-saga-baseline.sh [options]

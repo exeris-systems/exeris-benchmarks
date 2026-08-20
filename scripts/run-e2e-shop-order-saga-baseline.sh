@@ -527,6 +527,28 @@ configure_target_runtime_overrides() {
       ;;
   esac
 
+  # pgjdbc fairness parameters, identical on every arm.
+  #
+  # The four env files already carry the SAME url string, and that is not the same thing as
+  # the same configuration: pgjdbc parameters left out of the url fall back to per-driver and
+  # per-pool defaults, so Agroal, HikariCP and the exeris engine can each end up on a different
+  # query protocol while the url text matches. That is the exact non-equalization that produced
+  # the entity-read sweep-vs-triad gap (9f2b182), and the set below is the one those campaigns
+  # settled on: prepared statements on, fetch-all rather than a cursor, adaptive fetch off,
+  # extended protocol pinned.
+  #
+  # adaptiveFetch=false matters even though defaultRowFetchSize=0 would seem to make it moot:
+  # adaptiveFetch=true WITH rowFetchSize=0 is a no-op that reads as a passing equalization while
+  # changing nothing -- a fake-pass this repo has already been caught by once.
+  #
+  # Exported here rather than edited into four env files so the arms cannot drift apart, and
+  # applied by REPLACING any query string the env file carries, not by appending to it.
+  _pgjdbc_fair="${BENCH_PGJDBC_FAIR_PARAMS:-preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false}"
+  _pgjdbc_base="${EXERIS_DB_JDBC_URL:-jdbc:postgresql://localhost:5432/postgres}"
+  _pgjdbc_base="${_pgjdbc_base%%\?*}"
+  export EXERIS_DB_JDBC_URL="${_pgjdbc_base}?${_pgjdbc_fair}"
+  echo "pgjdbc fairness params applied to every arm: ${_pgjdbc_fair}"
+
   # ADR-035 admission equalization (see the note at the top of this file). Exeris SHEDS
   # under connection pressure where HikariCP and Tomcat BLOCK; comparing a shedding stack
   # against blocking ones measures the policy, not the runtime.

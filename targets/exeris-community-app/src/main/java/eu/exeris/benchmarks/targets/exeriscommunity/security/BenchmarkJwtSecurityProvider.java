@@ -104,7 +104,32 @@ public final class BenchmarkJwtSecurityProvider implements SecurityProvider {
         UUID principalId = subject(claims);
         ImmutablePrincipal principal =
             new ImmutablePrincipal(principalId, Optional.empty(), Set.of(), Set.of());
-        return new AuthenticationResult(principal, ImmutableStorageContext.shared(principalId.toString()));
+        // GLOBAL, not shared(principalId), since 2026-08-20.
+        //
+        // A per-subject isolation key is what CONTRACT-v2 calls an unmatched axis here: the
+        // Quarkus and Spring arms carry no tenant isolation at all, so keying exeris per user
+        // made it do work the comparison does not ask for. And it bought nothing -- the
+        // benchmark database has ZERO row-security policies and ZERO tables with RLS enabled
+        // (checked, not assumed), so the key steered pool and scope selection without ever
+        // being read by a policy.
+        //
+        // It was not free. The kernel's engine has two entry points -- openConnection() keyed
+        // "shared" and openConnection(ctx) keyed from the context -- and a request that touches
+        // both mismatches, emitting BYPASS_SCOPE_MISMATCH and taking a second connection
+        // outside its own request session. Measured on the 2026-08-19 campaign: 548 683
+        // bypasses against 274 514 request sessions, exactly 2.0 per session, which is why this
+        // arm exhausted even a 128-connection pool while quarkus-lra-jdbc peaked at 21.
+        //
+        // Worse than the arithmetic: the bypass path does not run ConnectionInterceptors, so
+        // under RLS it hands the request a connection still carrying the previous borrower's
+        // tenant GUC. A kernel-side integration test confirmed a cross-tenant read through it.
+        // That defect is not ours to fix, but choosing a per-subject key is what puts this
+        // scenario on the exact configuration where it fires -- with none of the isolation it
+        // would otherwise be paying for.
+        //
+        // If this scenario ever wants to measure tenant isolation, that is a separate labelled
+        // axis with RLS actually enabled, not a silent surcharge inside "cost of a saga".
+        return new AuthenticationResult(principal, ImmutableStorageContext.GLOBAL);
     }
 
     @Override

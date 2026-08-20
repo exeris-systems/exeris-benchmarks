@@ -28,6 +28,12 @@ public final class ExerisCommunityApplication {
     private static final String TRANSPORT_CERT_PATH_ENV = "EXERIS_TRANSPORT_CERT_PATH";
     private static final String TRANSPORT_KEY_PATH_ENV = "EXERIS_TRANSPORT_KEY_PATH";
     private static final String HTTP_MAX_CONNECTIONS_ENV = "EXERIS_HTTP_MAX_CONNECTIONS";
+    private static final String HTTP_BIND_HOST_ENV = "EXERIS_HTTP_BIND_HOST";
+
+    private static String readEnvOrDefault(String name, String fallback) {
+        String raw = System.getenv(name);
+        return (raw == null || raw.isBlank()) ? fallback : raw.trim();
+    }
 
     private ExerisCommunityApplication() {
     }
@@ -87,7 +93,18 @@ public final class ExerisCommunityApplication {
         java.util.Set<String> enabled = java.util.Set.of(subsystems.split(","));
         System.setProperty("exeris.launcher.subsystems", subsystems);
         System.setProperty("exeris.telemetry.jfrEnabled", Boolean.toString(resolveTelemetryJfrEnabled()));
-        System.setProperty("exeris.http.bindHost", "0.0.0.0");
+        // Loopback by default, not 0.0.0.0. This was hardcoded to the wildcard, which meant
+        // the benchmark target listened on every interface of a box that sits on a public IP
+        // and has already been compromised once through an internet-reachable service. It also
+        // silently defeated -Dexeris.http.bindHost: this method runs at startup and
+        // System.setProperty OVERWRITES whatever the command line passed, so the flag looked
+        // applied (it is on the JVM command line) while the wildcard bind persisted -- ss
+        // showed *:9000 throughout.
+        //
+        // Override with EXERIS_HTTP_BIND_HOST when a run genuinely needs a wider bind; the
+        // payment gateway is host-networked and reaches this JVM as 127.0.0.1, so the parking
+        // callback path does not.
+        System.setProperty("exeris.http.bindHost", readEnvOrDefault(HTTP_BIND_HOST_ENV, "127.0.0.1"));
         System.setProperty("exeris.http.port", Integer.toString(appConfig.port()));
         System.setProperty("exeris.http.mode", "SERVER");
         System.setProperty("exeris.http.maxVersion", appConfig.httpMaxVersion());

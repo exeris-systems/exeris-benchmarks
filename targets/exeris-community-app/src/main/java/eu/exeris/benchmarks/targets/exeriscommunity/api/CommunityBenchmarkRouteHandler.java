@@ -403,15 +403,14 @@ public final class CommunityBenchmarkRouteHandler {
                     exchange.respond(HttpStatus.UNAUTHORIZED);
                 } else {
                     long userId = resolved.getAsLong();
-                    StorageContext ctx = KernelProviders.STORAGE_CONTEXT.get();
-                    // benchmark-local: align RLS key with authenticated user id for SHARED strategy
-                    if (ctx.strategy() == StorageContext.IsolationStrategy.SHARED) {
-                        ScopedValue.where(KernelProviders.STORAGE_CONTEXT,
-                            ImmutableStorageContext.shared(Long.toString(userId)))
-                            .run(() -> handler.accept(userId));
-                    } else {
-                        handler.accept(userId);
-                    }
+                    // The per-user storage-context rebinding that used to sit here is gone
+                    // (2026-08-20). It aligned an RLS key with the authenticated user id, for a
+                    // database with no row-security policies, and the key's only measurable
+                    // effect was to collide with the kernel engine's "shared"-keyed entry point
+                    // and double this arm's connection demand. See BenchmarkJwtSecurityProvider
+                    // for the full reasoning; the provider now yields GLOBAL, which is what the
+                    // Quarkus and Spring arms are effectively running.
+                    handler.accept(userId);
                 }
             });
             if (!authenticated) {

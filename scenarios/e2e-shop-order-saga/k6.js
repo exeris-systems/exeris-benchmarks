@@ -202,6 +202,26 @@ const _thresholds = {
   admission_rejected:      ['rate<0.05'],
   req_timed_out:           ['rate<0.02'],
   req_failed_other:        ['rate<0.02'],
+
+  // CONTRACT-v2 phase scoping. The phase comment further down states that warmup and cooldown
+  // are EXCLUDED from analysis and that consumers must filter by the `phase` tag - but k6's
+  // end-of-test summary aggregates every phase, and the harness reads that summary. So the
+  // published p95/p99 silently folded the cold-start ramp back in.
+  //
+  // Measured 2026-08-20, spring-axon-jdbc rep-1: whole-run p95 4654 ms vs measurement-window
+  // p95 431 ms. All 2989 slow sagas sat in one contiguous 98 s window starting 11 s into the
+  // run and never recurred; reps 2 and 3 of the same arm read 433/433 ms. The defect is
+  // INVISIBLE on an arm with no cold-start transient (exeris: 129 ms either way), so it
+  // survives review and penalises only the arm that has one.
+  //
+  // A threshold expression is the only way to make k6 emit a tag-scoped submetric into the
+  // summary. These are deliberately non-failing - `p(99)>=0` always holds - because they
+  // exist to CREATE the submetric, not to gate. Latency gating lives in the correctness and
+  // comparative strict gates; adding one here would be a new policy, not a bug fix.
+  'saga_completed_duration{phase:measurement}':   ['p(99)>=0'],
+  'saga_compensated_duration{phase:measurement}': ['p(99)>=0'],
+  'http_req_duration{phase:measurement}':         ['p(99)>=0'],
+  'iteration_duration{phase:measurement}':        ['p(95)>=0'],
 };
 if (EXPECTED_PROTO === 'HTTP/2.0') {
   _thresholds['http2_rate'] = ['rate>0.99'];
@@ -505,15 +525,40 @@ function pollSagaStatus(token, orderId, baseUrl) {
 //   status === 0  → network failure (timeout, connection refused, etc.)
 //   status === 503 → admission gate rejection (backpressure)
 //   anything else  → unexpected HTTP error code
+//
+// All three Rates are recorded on EVERY classified outcome, not only on the matching one.
+// They used to be one-sided (`.add(true)` and nothing else), which makes a k6 Rate degenerate:
+// with no false samples the rate is 1.0 the moment a single occurrence lands, so a threshold
+// like `rate<0.05` fires on the FIRST 503 and sets k6 exit 99. That is what produced
+// runner_status=threshold_failure on all three quarkus-lra-jdbc reps of the 2026-08-20
+// campaign. Measured 503 counts there were 1, 5 and 68 out of ~46 743 issued orders - a
+// SINGLE 503 in rep-1 breached `rate<0.05` and failed the run, while `errors`, which is
+// correctly two-sided, recorded that same event as 0.0021% and passed.
+//
+// The denominator is deliberately the same as `errors`: one sample per iteration outcome -
+// a failed iteration classifies here, a completed one calls classifyIterationOk below. So
+// `admission_rejected rate<0.05` reads as "fewer than 5% of iterations died on admission",
+// which is what the threshold was always meant to say.
+//
+// These three Rates are NOT the O0 terms and must never be read as such. O0's submit-rejected
+// bucket is the saga_submit_rejected_total Counter incremented at the order-submit failure
+// path; a k6 Rate has passes/fails/value and no `count` at all, so reading `.count` off one
+// silently yields 0 and manufactures a phantom O0 gap exactly the size of the 503 count.
 function classifyFailure(res) {
-  if (res.status === 0) {
-    reqTimedOutRate.add(true);
-  } else if (res.status === 503) {
-    admissionRejectedRate.add(true);
-  } else {
-    reqFailedOtherRate.add(true);
-  }
+  const timedOut = res.status === 0;
+  const admissionRejected = res.status === 503;
+  reqTimedOutRate.add(timedOut);
+  admissionRejectedRate.add(admissionRejected);
+  reqFailedOtherRate.add(!timedOut && !admissionRejected);
   errorRate.add(true);
+}
+
+// The false side of the three cause Rates above, recorded once per iteration that reached a
+// terminal saga outcome. Without it those Rates have no denominator.
+function classifyIterationOk() {
+  reqTimedOutRate.add(false);
+  admissionRejectedRate.add(false);
+  reqFailedOtherRate.add(false);
 }
 
 export default function () {
@@ -709,6 +754,7 @@ export default function () {
   sagaStatusResolvedRate.add(pollResult.resolved);
   sagaPoll404ExhaustedRate.add(pollResult.exhausted404);
   errorRate.add(!pollResult.resolved || pollResult.pollFailed || sagaUnrecovered);
+  classifyIterationOk();
 
   // CONTRACT-v2 §8 outcome-split metrics: one duration Trend per terminal outcome population.
   if (sagaSuccess) {

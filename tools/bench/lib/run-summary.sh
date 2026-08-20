@@ -47,18 +47,23 @@ bench_print_run_summary() {
   if [[ -f "$k6_summary_json" ]] && command -v jq >/dev/null 2>&1; then
     local raw_p99 raw_p95 raw_rate raw_saga raw_404 raw_comp raw_orders
     local raw_done_p50 raw_done_p99 raw_comp_p50 raw_comp_p99
-    raw_p99="$(    jq -r '.metrics.http_req_duration["p(99)"]          // empty' "$k6_summary_json" 2>/dev/null || true)"
-    raw_p95="$(    jq -r '.metrics.http_req_duration["p(95)"]          // empty' "$k6_summary_json" 2>/dev/null || true)"
+    # Phase scoping (CONTRACT-v2): k6's end-of-test summary aggregates warmup + measurement +
+    # cooldown, but the scenario declares warmup and cooldown EXCLUDED from analysis. Prefer the
+    # {phase:measurement} submetric that k6.js emits; fall back to the whole-run key so result
+    # artifacts produced before 2026-08-20 still parse. See the note in k6.js thresholds.
+    raw_p99="$(    jq -r '.metrics["http_req_duration{phase:measurement}"]["p(99)"] // .metrics.http_req_duration["p(99)"] // empty' "$k6_summary_json" 2>/dev/null || true)"
+    raw_p95="$(    jq -r '.metrics["http_req_duration{phase:measurement}"]["p(95)"] // .metrics.http_req_duration["p(95)"] // empty' "$k6_summary_json" 2>/dev/null || true)"
     raw_rate="$(   jq -r '.metrics.http_req_failed.value               // empty' "$k6_summary_json" 2>/dev/null || true)"
     raw_saga="$(   jq -r '.metrics.saga_success.value                  // empty' "$k6_summary_json" 2>/dev/null || true)"
     raw_404="$(    jq -r '.metrics.saga_poll_404_exhausted.count        // empty' "$k6_summary_json" 2>/dev/null || true)"
     raw_comp="$(   jq -r '.metrics.saga_compensated.value              // empty' "$k6_summary_json" 2>/dev/null || true)"
     raw_orders="$( jq -r '.metrics.orders_initiated.rate               // empty' "$k6_summary_json" 2>/dev/null || true)"
     # Outcome-split saga latency (CONTRACT-v2 s8): COMPLETED vs COMPENSATED populations.
-    raw_done_p50="$(jq -r '.metrics.saga_completed_duration["p(50)"]   // .metrics.saga_completed_duration.med   // empty' "$k6_summary_json" 2>/dev/null || true)"
-    raw_done_p99="$(jq -r '.metrics.saga_completed_duration["p(99)"]   // empty' "$k6_summary_json" 2>/dev/null || true)"
-    raw_comp_p50="$(jq -r '.metrics.saga_compensated_duration["p(50)"] // .metrics.saga_compensated_duration.med // empty' "$k6_summary_json" 2>/dev/null || true)"
-    raw_comp_p99="$(jq -r '.metrics.saga_compensated_duration["p(99)"] // empty' "$k6_summary_json" 2>/dev/null || true)"
+    # Measurement-window first, whole-run as the pre-2026-08-20 fallback (see note above).
+    raw_done_p50="$(jq -r '.metrics["saga_completed_duration{phase:measurement}"]["p(50)"]   // .metrics["saga_completed_duration{phase:measurement}"].med   // .metrics.saga_completed_duration["p(50)"]   // .metrics.saga_completed_duration.med   // empty' "$k6_summary_json" 2>/dev/null || true)"
+    raw_done_p99="$(jq -r '.metrics["saga_completed_duration{phase:measurement}"]["p(99)"]   // .metrics.saga_completed_duration["p(99)"]   // empty' "$k6_summary_json" 2>/dev/null || true)"
+    raw_comp_p50="$(jq -r '.metrics["saga_compensated_duration{phase:measurement}"]["p(50)"] // .metrics["saga_compensated_duration{phase:measurement}"].med // .metrics.saga_compensated_duration["p(50)"] // .metrics.saga_compensated_duration.med // empty' "$k6_summary_json" 2>/dev/null || true)"
+    raw_comp_p99="$(jq -r '.metrics["saga_compensated_duration{phase:measurement}"]["p(99)"] // .metrics.saga_compensated_duration["p(99)"] // empty' "$k6_summary_json" 2>/dev/null || true)"
     done_total="$(  jq -r '.metrics.saga_completed_total.count          // empty' "$k6_summary_json" 2>/dev/null || true)"
     comp_total="$(  jq -r '.metrics.saga_compensated_total.count        // empty' "$k6_summary_json" 2>/dev/null || true)"
 

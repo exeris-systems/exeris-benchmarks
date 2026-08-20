@@ -3066,24 +3066,26 @@ if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_
         saga_failed_unrecovered_total: ($km.saga_failed_unrecovered_total.count // null),
         http_reqs_total:             ($km.http_reqs.count // 0),
         http_reqs_rate:              ($km.http_reqs.rate // 0),
-        http_req_duration_avg_ms:    ($km.http_req_duration.avg // null),
-        http_req_duration_p90_ms:    ($km.http_req_duration["p(90)"] // null),
-        http_req_duration_p95_ms:    ($km.http_req_duration["p(95)"] // null),
-        iteration_duration_avg_ms:   ($km.iteration_duration.avg // null),
-        iteration_duration_p90_ms:   ($km.iteration_duration["p(90)"] // null),
-        iteration_duration_p95_ms:   ($km.iteration_duration["p(95)"] // null),
+        http_req_duration_avg_ms:    ($km["http_req_duration{phase:measurement}"].avg // $km.http_req_duration.avg // null),
+        http_req_duration_p90_ms:    ($km["http_req_duration{phase:measurement}"]["p(90)"] // $km.http_req_duration["p(90)"] // null),
+        http_req_duration_p95_ms:    ($km["http_req_duration{phase:measurement}"]["p(95)"] // $km.http_req_duration["p(95)"] // null),
+        iteration_duration_avg_ms:   ($km["iteration_duration{phase:measurement}"].avg // $km.iteration_duration.avg // null),
+        iteration_duration_p90_ms:   ($km["iteration_duration{phase:measurement}"]["p(90)"] // $km.iteration_duration["p(90)"] // null),
+        iteration_duration_p95_ms:   ($km["iteration_duration{phase:measurement}"]["p(95)"] // $km.iteration_duration["p(95)"] // null),
         error_rate_pct:              (($km.http_req_failed.value // 0) * 100),
         latency_by_outcome: {
           note: "CONTRACT-v2 s8: COMPLETED and COMPENSATED are separate populations (structurally different code paths); never mix or average across them",
+          window: (if ($km["saga_completed_duration{phase:measurement}"] // null) != null then "measurement" else "whole-run-legacy" end),
+          window_note: "Percentiles are taken from the {phase:measurement} submetric. k6 end-of-test summary aggregates warmup+measurement+cooldown, but the scenario declares warmup and cooldown EXCLUDED from analysis; reading the unscoped metric folded the cold-start ramp back into the published tail (measured 2026-08-20, spring-axon-jdbc rep-1: whole-run p95 4654 ms vs measurement 431 ms). whole-run-legacy means the run predates the submetric and its percentiles are NOT phase-scoped.",
           completed: {
             count:  ($km.saga_completed_total.count // null),
-            p50_ms: ($km.saga_completed_duration["p(50)"] // $km.saga_completed_duration.med // null),
-            p99_ms: ($km.saga_completed_duration["p(99)"] // null)
+            p50_ms: ($km["saga_completed_duration{phase:measurement}"]["p(50)"] // $km["saga_completed_duration{phase:measurement}"].med // $km.saga_completed_duration["p(50)"] // $km.saga_completed_duration.med // null),
+            p99_ms: ($km["saga_completed_duration{phase:measurement}"]["p(99)"] // $km.saga_completed_duration["p(99)"] // null)
           },
           compensated: {
             count:  ($km.saga_compensated_total.count // null),
-            p50_ms: ($km.saga_compensated_duration["p(50)"] // $km.saga_compensated_duration.med // null),
-            p99_ms: ($km.saga_compensated_duration["p(99)"] // null)
+            p50_ms: ($km["saga_compensated_duration{phase:measurement}"]["p(50)"] // $km["saga_compensated_duration{phase:measurement}"].med // $km.saga_compensated_duration["p(50)"] // $km.saga_compensated_duration.med // null),
+            p99_ms: ($km["saga_compensated_duration{phase:measurement}"]["p(99)"] // $km.saga_compensated_duration["p(99)"] // null)
           }
         },
         cores_effective:             (if $cores_effective == "" then null else ($cores_effective | tonumber) end),

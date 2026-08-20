@@ -29,10 +29,30 @@ export EXERIS_AXON_ENABLED="${EXERIS_AXON_ENABLED:-true}"
 # its own rate-100 finding has been chasing an unexplained exeris-only connection drop ever
 # since.
 #
-# The property string is the one those campaigns actually ran with. Recorded because the
-# saga ledger'"'"'s earlier A/B of this knob is caveated as unverified - the class constant
-# carries a LEADING DOT (the prefix is applied at runtime), so a wrong -D form is silently
-# ignored and reads as "the knob has no effect".
+# The property string is the one those campaigns actually ran with (1bf4767, which measured
+# 84% HTTP errors going to 0% at pool=4 through this exact spelling).
+#
+# The "class constant carries a LEADING DOT" warning that used to sit here was WRONG, and
+# believing it cost a day on 2026-08-20: it made a dead-knob explanation plausible enough that
+# I rewrote the spelling across five scripts before reverting. It came from reading a
+# strings(1) dump of the constant pool, where every UTF8 entry is preceded by a two-byte
+# length that strings renders as a character. `persistence.admission.queueDepthAllowanceRatio`
+# is 46 characters and 46 is 0x2E, '.'. The same dump shows
+# `(persistence.admission.guardBandThreshold` (40 = '(') and
+# `1persistence.admission.fairnessQueueDepthThreshold` (49 = '1'); nobody reads those as a
+# leading paren or a leading digit.
+#
+# All seven admission keys are plain `persistence.admission.*` read through ConfigProvider,
+# and the Community provider maps a ConfigProvider key to a system property by prepending
+# `exeris.` -- so -Dexeris.persistence.admission.<key> is correct, and always was.
+#
+# Verified by behaviour, which is the only thing that settles it: at ratio=0 ("strict
+# pre-035") this spelling immediately produces REJECT_NO_CAPACITY / REJECT_HARD_SATURATION /
+# REJECT_GUARD_BAND_FAIRNESS in the JFR, against 277 104 consecutive ACCEPTs when permissive.
+#
+# Trap for anyone probing this knob: the runner injects the -D itself from
+# EXERIS_ADMISSION_QUEUE_RATIO below. A probe that sets that variable while passing a
+# different spelling on the command line is not testing the spelling at all. Both of mine did.
 # MOVED: this used to sit here, ~800 lines above the line that first assigns TARGET_APP.
 # `"${TARGET_APP:-}"` was therefore always empty, the pattern never matched, and the export
 # never ran -- so the equalization this comment describes has never once been applied. It is

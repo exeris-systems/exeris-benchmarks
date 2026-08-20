@@ -673,6 +673,46 @@ The remaining rules apply to every shape:
   timeline. Until then, no Exeris result may be juxtaposed with published
   replicated-cluster numbers of any other stack.
 - ≥ 5 measured runs after discarded warm-up; variance reported.
+- **Apparatus-limitation labels (added 2026-08-20, v2.2).** A known limitation of the
+  measuring apparatus is carried by the **metric**, not by the run, and never by silence.
+  A run whose numbers stand under a bounded, direction-known limitation is not a retraction
+  and must not read like one; conversely a metric that inherits a limitation must not be
+  quotable as if it did not. This is the same device as the `coverage_limited_*` labels
+  already in this contract, applied to the instrument rather than to the scope.
+
+  First label: **`apparatus_limited_shared_cpuset`**, on every container-derived CPU figure
+  from the 2026-08-20 campaigns (1024m and 256m tiers). Verified at the cgroup level, not
+  inferred: `postgres`, `payment-gateway`, `restate-server` and `lra-coordinator` all report
+  `cpuset.cpus.effective = 6-7,14-15` — one four-thread set, two physical cores with SMT.
+  So a three-process arm crowds its coordinator onto the same two physical cores its Postgres
+  already occupies, and a two-process arm has nothing to crowd. Backend-set utilisation runs
+  5.8 % (exeris-community) to 21.7 % (spring-axon-jdbc) while the eight-thread target set runs
+  2.4 % to 8.5 %, i.e. the wide set carries the light load.
+
+  **Direction is known and runs toward the thesis**, which is why it is labelled rather than
+  quietly carried: process count drives the crowding, and process count is what §1 makes the
+  unit of comparison, so the apparatus penalises the architecture under test in the same
+  direction as the claim. The payment gateway — identical work on every arm by construction —
+  fits `gateway_s = 51.80 + 0.01466 x backend_set_s` with R² = 0.943 across five arms.
+
+  **The coefficient does NOT license a correction**, and no such correction is applied. It was
+  fitted on a 52 s container and would be extrapolated across a 17x range to a 165-900 s one,
+  on n = 5, with SMT as the mechanism — under which interference depends on how much the victim
+  itself computes, making the smallest container in the set the worst possible calibrator for
+  the largest. Neighbour load is also not monotonic with the set total (exeris-community's
+  Postgres has the sparsest neighbourhood at 54 s; the three coordinator-bearing arms cluster
+  at 260-290 s), so a coefficient correction would not move rows in parallel. The fix is
+  topological, not statistical: disjoint pin sets per measured container.
+
+  **A third outcome the repin control cannot rule out on this host.** `dockerd`, `containerd`
+  and `rsyslogd` run with affinity `0-15` (verified; `taskset` on them fails EPERM, this account
+  has no passwordless sudo, and the kernel cmdline carries no `isolcpus`), and their load is not
+  constant across arms. So the planned control — gateway spread must fall below the ~2 %
+  within-arm spread — has three possible outcomes, not two, and an unpinned-housekeeping term
+  can hold the spread up and be misread as a genuine load difference. Until housekeeping can be
+  confined, that term is measured and bounded rather than removed
+  (`tools/saga/host-housekeeping.sh`), and the control's verdict is reported with it.
+
 
 ## 9. Per-stack deviation register
 

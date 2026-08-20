@@ -1,9 +1,9 @@
-# Scenario Contract: e2e-shop-order-saga — v2.1
+# Scenario Contract: e2e-shop-order-saga — v2.2
 
 | Field | Value |
 |---|---|
 | Scenario ID | `e2e-shop-order-saga` |
-| Contract version | 2.1 (supersedes v2.0, which supersedes v1) |
+| Contract version | 2.2 (supersedes v2.1, which supersedes v2.0, which supersedes v1) |
 | Status | DRAFT — pending claims-audit |
 | Applies to stacks | exeris-community · spring-on-exeris · Spring Boot + Axon · Quarkus + MicroProfile LRA · Restate (server + JVM SDK service) |
 | Retroactivity | v2 fault-injection and metric-split rules apply retroactively; see §10 for which v1 results remain valid |
@@ -33,7 +33,8 @@ absent because the graph was removed from this scenario entirely (§2).
 |---|---|---:|
 | exeris-community | app JVM (kernel in-process) + Postgres | **2** |
 | spring-on-exeris | app JVM (kernel in-process) + Postgres | **2** |
-| spring + Axon *(as configured)* | app JVM + Axon Server + Postgres | 3 |
+| spring + Axon *(Axon Server)* | app JVM + Axon Server + Postgres | 3 |
+| spring + Axon *(embedded)* | app JVM (`EmbeddedEventStore` + JPA) + Postgres | **2** |
 | quarkus + MicroProfile LRA | app JVM + LRA coordinator + Postgres | 3 |
 | Restate | service JVM (Restate JVM SDK) + `restate-server` + Postgres | 3 |
 
@@ -41,17 +42,39 @@ The external payment gateway (§4) is part of the deployment unit for every stac
 and is sampled by the whole-deployment footprint; it is omitted from the counts
 above only because it is identical on every row and differentiates nothing.
 
-**Axon Server is the measured configuration, not a requirement of the framework.**
-Axon Framework runs entirely in the application JVM against a JPA/JDBC event store
-with a `SimpleCommandBus`. The Axon arm here is deployed the way the framework's own
-default path deploys it; the embedded configuration is a distinct deployment unit
-and is **not measured** under this contract. Recorded in §9(e).
+**Axon Server is the framework's default deployment path, not a requirement of the
+framework.** Axon Framework also runs entirely in the application JVM against a
+JPA/JDBC event store with a `SimpleCommandBus`. The two are distinct deployment units
+with distinct process counts, so they are distinct rows — never one "Axon" row.
 
-**Stack list.** The arms are `exeris-community`, `spring-on-exeris`,
-`spring + Axon`, `quarkus`, `restate`. Note that "Quarkus + Axon" was wrong in v2.0
-and is corrected here: the Quarkus arm has never run an Axon saga — Axon was present
-only as a command bus, with the saga hand-rolled. Its saga engine under v2.1 is
-MicroProfile LRA (§9).
+**Promoted to measured, 2026-08-20 (v2.2).** v2.1 recorded the embedded configuration
+in §9(e) as available-but-not-measured. It is now measured, as
+`spring_axon_embedded_jdbc_h1_park100_v3`, for a reason that only appeared once the
+number existed: naming a cheaper configuration without measuring it protects a stack
+from being *misrepresented*, but it cannot say whether the cheaper configuration is
+actually usable. Measured, it is — and it is not free. Embedded halves the process
+count and cuts whole-deployment RSS from ~2.2–2.4 GB to ~1.0–1.3 GB, exactly as §9(e)
+predicted, while its p99 ranged 608 → 11 802 ms across three otherwise identical reps
+against 588–610 ms for the Axon Server configuration. That is a trade-off a reader can
+act on; "available but not measured" is not. An §9(e) entry discharged by measurement
+is the strongest outcome available to that register, not a weakening of it.
+
+**Consequence for reporting.** The two Axon rows must not be collapsed, averaged, or
+described as "Axon" in prose. They differ in process count (§1), in footprint, and in
+tail stability, and each of those differences is a finding.
+
+**Stack list.** The measured arms are `exeris-community`, `spring-on-exeris`,
+`spring + Axon (Axon Server)`, `spring + Axon (embedded)`, `quarkus`, `restate` — six
+rows, added to in v2.2 (embedded promoted from §9(e); see above).
+
+Two roster corrections carried from earlier revisions. "Quarkus + Axon" was wrong in
+v2.0: the Quarkus arm has never run an Axon saga — Axon was present only as a command
+bus, with the saga hand-rolled. Its saga engine from v2.1 on is MicroProfile LRA (§9).
+And `spring-on-exeris` has been listed here since v2.1 while no contract id existed for
+it, so it could not be run; v2.2 adds `spring_on_exeris_h1_park100_v3` and the roster
+entry, against `exeris-spring-runtime` 0.7.0. Until a run under that id exists, the arm
+is **listed and pending**, which is a third state and must be labelled as such — not
+silently absent from a table whose header claims to cover the roster.
 
 ## 2. Scenario definition
 
@@ -631,6 +654,18 @@ The remaining rules apply to every shape:
   named in the report for every stack.
 - Durability tier (T1 process-durable / T2 fsync node-durable) is declared
   per run; **cross-tier comparisons are forbidden** in all tables and prose.
+  **Strengthened 2026-08-20 (v2.2): the tier MUST be rendered as a column in every
+  comparative table, together with its source**, and the source MUST distinguish
+  *verified from live configuration* from *declared from a product default*. The
+  2026-08-20 shape-B campaign was uniformly T2 and so was never at risk of a cross-tier
+  claim — but its first draft table carried no tier column at all, which means the
+  reader had to take that on trust. A rule that is satisfied invisibly is indistinguishable
+  from a rule that was ignored. Worked example from that campaign: the four
+  Postgres-backed arms are `T2-fsync-node-durable-postgres` verified from
+  `synchronous_commit=on` / `fsync=on` read off the running server, while Restate is
+  `T2-fsync-node-durable` declared from `restate-server-1.7-wal-fsync`, a documented
+  product default we did not independently verify. Same tier, different evidential
+  standing, and the column must show both.
   T3 (replicated) is planned but explicitly decoupled from v2: it enters as
   a separate contract revision only after passing its own correctness gates
   (replica crash injection, partition behavior, quorum-before-ack
@@ -653,9 +688,31 @@ stack's favor, **(e) configurations available but not measured**.
 materially cheaper, smaller, or simpler than the one measured, and was not measured.
 Named so the measured configuration is never read as the framework's requirement.
 (d) guards against being too generous to another stack; (e) guards against being too
-harsh — it is the only part of this register that protects a stack from us. First
-entry: Axon embedded (`EmbeddedEventStore` + JPA stores + `SimpleCommandBus`), which
-is a 2-process deployment unit against the measured 3.
+harsh — it is the only part of this register that protects a stack from us.
+
+**First entry, discharged 2026-08-20 (v2.2).** Axon embedded (`EmbeddedEventStore` +
+JPA stores + `SimpleCommandBus`), a 2-process deployment unit against the measured 3,
+was the register's first entry. It is now a measured arm (§1). Discharge by measurement
+is the intended terminal state of an (e) entry: the register exists to stop a cheaper
+configuration from going unmentioned, and the strongest form of mentioning it is a row
+in the table. An entry is discharged only by measuring it, never by deciding it does
+not matter.
+
+**Standing entries.**
+
+- *spring-on-exeris* is measured in its **compatibility** configuration
+  (`exeris-spring-runtime-app-comp`). The **pure** configuration
+  (`exeris-spring-runtime-app-pure`) is available and cheaper, and is not measured
+  here. Note the direction: this entry is (e) applied against our own stack, and the
+  measured configuration is the more expensive of the two.
+- Native-image builds exist for both spring-on-exeris configurations
+  (`…-comp-native`, `…-pure-native`) and are not measured under this contract.
+- The Axon Server heap ceiling applied in this harness is **(d)**, not (e) — it is
+  tuning we imposed, not a configuration the framework offers.
+
+Adding an arm to §1 does not empty this register; it moves one entry out of it. New
+entries are added whenever a cheaper configuration of a measured stack is identified,
+including our own.
 
 ## 10. Retroactive validity of v1 results
 
@@ -667,6 +724,36 @@ is a 2-process deployment unit against the measured 3.
 | Any mixed-population latency table | invalid under v2, do not cite |
 
 ## 11. Change log
+
+- **2.2** — Axon embedded promoted from §9(e) to a measured arm, as a distinct
+  2-process deployment unit that must never be collapsed with the Axon Server row
+  (§1, §9e); `spring-on-exeris` added to the measured roster, closing a gap where
+  §1 named it and no contract id existed for it; §9(e) reworked around
+  *discharge by measurement* and given standing entries, two of which apply against
+  our own stack (§9e); durability tier required as a **column with its source**, and
+  the source required to separate verified-from-config from declared-from-default (§8).
+
+  **Origin.** A review of the 2026-08-20 shape-B campaign against this document, and
+  every delta traces to the same failure mode: **the contract and the measured roster
+  had drifted apart, in both directions at once.** The campaign measured an arm §1
+  declared unmeasured, and omitted an arm §1 listed. Neither was caught by any gate,
+  because every gate in §7 validates a run against its own contract id and nothing
+  validates the set of contract ids against §1.
+
+  Two further findings from that review are compliance failures against rules that
+  already existed, and so change no wording here — recorded because a rule that is
+  broken silently is worth as much as a rule that is absent. First, the campaign led
+  its headline with end-to-end latency in shape B, which §2.1 says "loses most of its
+  discriminating power" and §8 lists as *secondary*; the shape-B headline metrics are
+  CPU per saga and resources held per in-flight saga. Second, §8 requires ≥ 5 measured
+  runs and the campaign ran 3.
+
+  A third is a limitation rather than a failure, and belongs in the reader's hands:
+  at the §2 normative rate the measured in-flight saga population is 4.7–16.7, at which
+  "resources held per in-flight saga" cannot discriminate between a thread-per-saga and
+  a state-per-saga engine — measured thread counts are dominated by fixed framework
+  pools and the ratio inverts, ranking the arm with the fewest in-flight sagas worst.
+  Shape B can state the metric; only shape C can make it mean anything.
 
 - **2.1** — O0 outcome-accounting identity as precondition for O1–O3, with
   `detector_fault` added to the verdict enum, plus the unresolved-rate and

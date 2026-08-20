@@ -27,7 +27,7 @@
       Boot-3-compiled and this pairing is unsupported.
     -->
     <spring-boot.version>4.1.0</spring-boot.version>
-    <exeris-spring-runtime.version>0.5.0-SNAPSHOT</exeris-spring-runtime.version>
+    <exeris-spring-runtime.version>0.7.0</exeris-spring-runtime.version>
     <!--
       MUST equal the kernel line that exeris-spring-runtime ${exeris-spring-runtime.version}
       pulls transitively — verify with

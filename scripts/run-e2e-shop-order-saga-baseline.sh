@@ -1278,6 +1278,85 @@ BENCHMARK_COMPOSE_FILE="$REPO_ROOT/$BENCHMARK_COMPOSE_REF"
 SEED_MANIFEST_PATH="$REPO_ROOT/$SEED_MANIFEST_REF"
 SEED_VERIFY_SCRIPT="$REPO_ROOT/$SEED_VERIFY_SCRIPT_REF"
 
+# ---------------------------------------------------------------------------------------
+# CONTRACT-ID <-> SCENARIO.JSON <-> RUNTIME three-way invariant (added 2026-08-20).
+#
+# WHY THIS EXISTS, and why it is not the same as the PAYMENT_STUB_DELAY_MS check above.
+# That check closes ONE leg: contract id vs the delay this run is configured for. It does
+# not look at scenario.json at all. So when the roster was relabelled park1 -> park100 on
+# 2026-08-19, the ids moved, the prose moved, the runtime moved -- and every fixed_contracts
+# entry kept workload_shape="A-minimal-park" and payment_callback_delay_ms=1. For a day the
+# id said B, the gateway ran B, and the machine-readable declaration said A. Nothing failed,
+# because nothing compared those two.
+#
+# That was the FIFTH occurrence of one class in this scenario: a human-readable name and a
+# machine-readable field drifting apart with no invariant tying them. Counting the previous
+# four -- Neo4j listed on one deployment-unit row only, "Quarkus + Axon" naming an Axon saga
+# that never existed, spring-axon-embedded measured while s1 declared it unmeasured,
+# spring-on-exeris listed in s1 with no contract id to run it -- the pattern is the point.
+# Fixing the fifth instance one more time changes nothing about the sixth.
+#
+# So: the contract id is the single source of truth, and every token in it is asserted
+# against both the declaration and the runtime, at startup, BEFORE any measurement. A
+# mismatch is a start failure (exit 64), never a result -- same posture as the s3.1
+# terminal-vocabulary preflight.
+_wpk="$(jq -r --arg cid "$CONTRACT_ID" '.fixed_contracts[$cid].workload_profile_key // ""' "$SCENARIO_JSON" 2>/dev/null || true)"
+_decl_shape="$(jq -r --arg cid "$CONTRACT_ID" '.fixed_contracts[$cid].workload_shape // ""' "$SCENARIO_JSON" 2>/dev/null || true)"
+_decl_delay="$(jq -r --arg cid "$CONTRACT_ID" '.fixed_contracts[$cid].payment_callback_delay_ms // ""' "$SCENARIO_JSON" 2>/dev/null || true)"
+_inv_fail=0
+_inv_say() { echo "ERROR: [contract-invariant] $*" >&2; _inv_fail=1; }
+
+# --- leg 1: the park<N> token in the contract id fixes the declared delay AND the shape ---
+case "$CONTRACT_ID" in
+  *_park1_v3)   _tok_delay=1;   _tok_shape_prefix="A-" ;;
+  *_park100_v3) _tok_delay=100; _tok_shape_prefix="B-" ;;
+  *)            _tok_delay="";  _tok_shape_prefix=""   ;;   # shape C / non-parking: unasserted
+esac
+if [[ -n "$_tok_delay" ]]; then
+  if [[ -n "$_decl_delay" && "$_decl_delay" != "null" && "$_decl_delay" != "$_tok_delay" ]]; then
+    _inv_say "contract id '${CONTRACT_ID}' implies a ${_tok_delay} ms park, but scenario.json declares payment_callback_delay_ms=${_decl_delay}."
+  fi
+  if [[ -n "$_decl_shape" && "$_decl_shape" != "null" && "$_decl_shape" != ${_tok_shape_prefix}* ]]; then
+    _inv_say "contract id '${CONTRACT_ID}' implies CONTRACT-v2 s2.1 shape ${_tok_shape_prefix%-}, but scenario.json declares workload_shape='${_decl_shape}'."
+  fi
+  # leg 1c: and the runtime must agree with the declaration, not only with the id.
+  if [[ -n "$_decl_delay" && "$_decl_delay" != "null" && "$_decl_delay" != "$PAYMENT_STUB_DELAY_MS" ]]; then
+    _inv_say "scenario.json declares payment_callback_delay_ms=${_decl_delay} but this run is configured for PAYMENT_STUB_DELAY_MS=${PAYMENT_STUB_DELAY_MS}."
+  fi
+fi
+
+# --- leg 2: the r<N> token in workload_profile_key fixes the measurement arrival rate ---
+# workload_profile_key looks like ...-runtime-k6-r38-park100-v3; r38 means 38 sessions/s,
+# which is the s2 normative rate the whole roster is re-rated to. A key that says r38 while
+# k6 runs a different rate records the run under a profile it did not execute, and s2.1
+# forbids aggregating across profiles -- so this is an aggregation hazard, not a typo.
+if [[ "$_wpk" =~ -r([0-9]+)- ]]; then
+  _tok_rate="${BASH_REMATCH[1]}"
+  _run_rate="${K6_MEASURE_RATE:-}"
+  if [[ -z "$_run_rate" && -f "$SCENARIO_DIR/k6.env" ]]; then
+    _run_rate="$(sed -n 's/^[[:space:]]*K6_MEASURE_RATE=\([0-9]\{1,\}\).*/\1/p' "$SCENARIO_DIR/k6.env" | tail -1)"
+  fi
+  if [[ -n "$_run_rate" && "$_run_rate" != "$_tok_rate" ]]; then
+    _inv_say "workload_profile_key '${_wpk}' declares r${_tok_rate} (${_tok_rate} sessions/s) but this run drives K6_MEASURE_RATE=${_run_rate}."
+  fi
+fi
+
+# --- leg 3: the park<N> token must also appear in workload_profile_key ---
+case "$CONTRACT_ID" in
+  *_park1_v3)   [[ -n "$_wpk" && "$_wpk" != *"-park1-"*   ]] && _inv_say "contract id '${CONTRACT_ID}' is park1 but workload_profile_key is '${_wpk}'." ;;
+  *_park100_v3) [[ -n "$_wpk" && "$_wpk" != *"-park100-"* ]] && _inv_say "contract id '${CONTRACT_ID}' is park100 but workload_profile_key is '${_wpk}'." ;;
+esac
+
+if [[ "$_inv_fail" != "0" ]]; then
+  echo "ERROR: [contract-invariant] the contract id, scenario.json and the runtime configuration disagree." >&2
+  echo "ERROR: [contract-invariant] CONTRACT-v2 s2.1 gives each shape its own ids and its own" >&2
+  echo "ERROR: [contract-invariant] workload_profile_key and forbids aggregating across them, and s8 requires" >&2
+  echo "ERROR: [contract-invariant] every reported figure to name its shape. A run recorded under a shape it did" >&2
+  echo "ERROR: [contract-invariant] not execute defeats both. Fix the declaration or pass the id you mean to run." >&2
+  exit 64
+fi
+unset _inv_fail _tok_delay _tok_shape_prefix _tok_rate _run_rate
+
 # Backend container network mode (fairness gate). By default the stateful backends
 # run bridged with published ports → every target↔backend packet crosses NAT, an
 # asymmetric tax across stacks of differing DB-chattiness. DB_HOST_NETWORK=1 (or

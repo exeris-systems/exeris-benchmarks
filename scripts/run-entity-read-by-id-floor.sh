@@ -141,7 +141,7 @@ trial() {
   )
   [[ "$tls" == "1" ]] && env_prefix+=("BENCHMARK_TLS_ENABLED=1" "EXERIS_SSL_ENABLED=true" "EXERIS_TRANSPORT_CERT_PATH=${CERT_PATH}" "EXERIS_TRANSPORT_KEY_PATH=${KEY_PATH}")
   if [[ "$arm" == "exeris-community" ]]; then
-    env_prefix+=("EXERIS_SUBSYSTEMS=${subs}" "EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false" "EXERIS_TELEMETRY_JFR_ENABLED=false" "JDK_JAVA_OPTIONS=-Dpersistence.admission.queueDepthAllowanceRatio=${ADMISSION_RATIO}")
+    env_prefix+=("EXERIS_SUBSYSTEMS=${subs}" "EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false" "EXERIS_TELEMETRY_JFR_ENABLED=false" "JDK_JAVA_OPTIONS=-Dexeris.persistence.admission.queueDepthAllowanceRatio=${ADMISSION_RATIO}")
   fi
   local cmd=(env "${env_prefix[@]}" "$CONSTRAINED_RUNNER"
     --execution-profile-id "$pid" --contract-id "$cid"

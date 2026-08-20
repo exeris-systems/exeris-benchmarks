@@ -152,7 +152,7 @@ for r in $(seq 1 "$REPEATS"); do
           "EXERIS_SUBSYSTEMS=${mode_subsystems}"
           "EXERIS_ENABLE_TELEMETRY_SUBSYSTEM=false"
           "EXERIS_TELEMETRY_JFR_ENABLED=false"
-          "JDK_JAVA_OPTIONS=-Dexeris.persistence.admission.queueDepthAllowanceRatio=${ADMISSION_RATIO}"
+          "JDK_JAVA_OPTIONS=-Dpersistence.admission.queueDepthAllowanceRatio=${ADMISSION_RATIO}"
         )
         exeris_subsystems="$mode_subsystems"
       fi

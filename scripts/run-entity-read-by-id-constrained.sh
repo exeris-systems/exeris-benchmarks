@@ -327,7 +327,7 @@ ensure_constrained_scope() {
   #    OOMs a floor-sized cgroup and inflates the measured floor).
   #  - JDK_JAVA_OPTIONS: extra JVM -D system properties for the target (the JVM reads it
   #    automatically). Used to set exeris kernel config that has no dedicated env var,
-  #    e.g. -Dexeris.persistence.admission.queueDepthAllowanceRatio=N (ADR-035 admission
+  #    e.g. -Dpersistence.admission.queueDepthAllowanceRatio=N (ADR-035 admission
   #    control) so the connection-pool sweep can raise exeris's acquire-queue depth to
   #    cover the offered connections instead of shedding at small pools.
   #  - BENCHMARK_LOADGEN_CGROUP_ESCAPE: memory-floor only. Tells run-wrk2.sh to re-exec

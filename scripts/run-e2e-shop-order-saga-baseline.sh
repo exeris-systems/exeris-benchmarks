@@ -511,7 +511,7 @@ configure_target_runtime_overrides() {
   # under connection pressure where HikariCP and Tomcat BLOCK; comparing a shedding stack
   # against blocking ones measures the policy, not the runtime.
   if [[ "$TARGET_APP" == exeris-* || "$TARGET_APP" == *on-exeris* ]]; then
-    export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} -Dexeris.persistence.admission.queueDepthAllowanceRatio=${EXERIS_ADMISSION_QUEUE_RATIO:-32}"
+    export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} -Dpersistence.admission.queueDepthAllowanceRatio=${EXERIS_ADMISSION_QUEUE_RATIO:-32}"
   fi
 
   # Enable NMT for off-heap capture (matching full-triad behavior).
@@ -1630,10 +1630,13 @@ TARGET_PID="$(bench_detect_pid_for_port "$TARGET_PORT")"
 # Checking the shell variable would re-make the original mistake. Read /proc/<pid>/cmdline.
 if [[ "$TARGET_APP" == exeris-* || "$TARGET_APP" == *on-exeris* ]] && [[ -n "$TARGET_PID" ]]; then
   if [[ -r "/proc/$TARGET_PID/cmdline" ]]; then
-    if tr '\0' ' ' < "/proc/$TARGET_PID/cmdline" | grep -q 'queueDepthAllowanceRatio'; then
+    if tr '\0' ' ' < "/proc/$TARGET_PID/cmdline" | grep -q -- '-Dpersistence[.]admission[.]queueDepthAllowanceRatio='; then
       echo "ADR-035 admission equalization confirmed on pid ${TARGET_PID} (ratio=${EXERIS_ADMISSION_QUEUE_RATIO:-32})."
     else
-      echo "ERROR: ADR-035 admission equalization is NOT on the target command line (pid ${TARGET_PID})." >&2
+      echo "ERROR: ADR-035 admission equalization is NOT on the target command line in its" >&2
+      echo "ERROR: EFFECTIVE form (pid ${TARGET_PID}). The property is persistence.admission.*," >&2
+      echo "ERROR: with NO exeris. prefix -- the prefixed spelling is accepted by the JVM, shows" >&2
+      echo "ERROR: up on the command line, and is never read." >&2
       echo "ERROR: exeris arms shed under connection pressure at the default ratio 8 while the" >&2
       echo "ERROR: Spring/Quarkus arms block, so this run would compare an admission policy" >&2
       echo "ERROR: rather than the runtimes. Check that EXERIS_JAVA_OPTS reaches EXTERNAL_START_CMD." >&2

@@ -232,7 +232,14 @@ fi
 
 # The baseline owns the k6 run; let it finish or fail, then restart the target
 # for recovery. Recovery is what is under test, so the target must come back.
-wait "$BASELINE_PID" 2>/dev/null || true
+# Capture it. A crash run whose LOAD PHASE never happened is not a correctness result, and
+# discarding this status let one through: the 2026-08-21 park ladder aborted on a gateway-delay
+# mismatch, issued nothing beyond the two §3.1 preflight orders, and was reported as
+# all_sagas_reached_terminal_state — a clean pass over an empty measurement. The zero-order
+# guard did not catch it because the preflight leaves two rows behind.
+BASELINE_STATUS=0
+wait "$BASELINE_PID" 2>/dev/null || BASELINE_STATUS=$?
+[[ "$BASELINE_STATUS" -ne 0 ]] && echo "WARNING: the baseline (load) phase exited ${BASELINE_STATUS}; this run is not a measurement." >&2
 echo "Restarting target for recovery..."
 # Recovery must bring back the SAME deployment that crashed, so it goes through the very
 # starter the baseline used rather than a hand-rolled `eval` of the env file. That eval
@@ -310,6 +317,7 @@ jq -n \
   --arg w_before "${WRITES_BEFORE:-}" --arg w_after "${WRITES_AFTER:-}" \
   --arg coh_n "${COHORT_SIZE:-0}" --arg coh_res "${COHORT_RESOLVED:-}" --arg coh_still "${COHORT_STILL:-}" \
   --arg ss_pre "${PRE_SAGA_STATE:-}" --arg ss_post "${POST_SAGA_STATE:-}" \
+  --arg bstat "${BASELINE_STATUS:-0}" \
   --argjson drain "$DRAIN_SECONDS" \
   --arg coords "${CRASHED_COORDINATORS:-}" \
   --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -354,8 +362,11 @@ jq -n \
        post_drain: (if $ss_post == "" then null else $ss_post end)
      },
      orders_with_duplicate_payment_step: ($dup | tonumber? // null),
+     load_phase_exit_status: ($bstat | tonumber? // null),
      verdict:
-       (if (($post_total | tonumber? // 0) == 0)
+       (if (($bstat | tonumber? // 0) != 0)
+          then "inconclusive_load_phase_failed"
+        elif (($post_total | tonumber? // 0) == 0)
           then "inconclusive_no_orders_observed"
         elif ((($pre_unknown + $post_unknown) | length) > 0)
           then "inconclusive_undeclared_status_token"
@@ -364,7 +375,7 @@ jq -n \
         elif (($post | tonumber? // 1) == 0)
           then "all_sagas_reached_terminal_state"
         else "sagas_stranded_after_recovery" end),
-     verdict_guards: "An empty orders table is NOT a pass: the 2026-08-21 run reported all_sagas_reached_terminal_state for an arm whose 3.1 preflight had aborted before a single order was issued. A status token in neither declared list is NOT bucketed as terminal. A recovered target that never became healthy cannot evidence non-resumption.",
+     verdict_guards: "A failed load phase is NOT a pass, and neither is an empty orders table: the 2026-08-21 run reported all_sagas_reached_terminal_state for an arm whose 3.1 preflight had aborted before a single order was issued. A status token in neither declared list is NOT bucketed as terminal. A recovered target that never became healthy cannot evidence non-resumption.",
      interpretation: "nonterminal_orders_post_drain > 0 means in-flight sagas did NOT resume after the crash. orders_with_duplicate_payment_step > 0 means a step was RE-EXECUTED rather than resumed, which is a duplicate-execution (O1) signal, not recovery.",
      claim_limits: "CORRECTNESS ONLY. Never cite in a latency or throughput table. Not a full §7 oracle: no per-(orderId,stepId,direction) ledger, so LIFO ordering stays unverified.",
      generated_at_utc: $generated_at_utc

@@ -2869,10 +2869,14 @@ if [[ -n "$GATE_EXPECTED" ]]; then
     GATE_STATUS="fail"; GATE_FAIL_KIND="count_mismatch"
     GATE_REASON="observed_compensations=${GATE_OBSERVED} != expected_declines=${GATE_EXPECTED} (issued=${GATE_ISSUED}${GATE_POP_COUNTS:+ (${GATE_POP_COUNTS})} seed=${GATE_ORDER_SEED} fault=${FAULT_MODE}); CONTRACT-v2 s4.1 requires exact equality"
   fi
-  if [[ "$GATE_STATUS" == "pass" && "${GATE_OBSERVED:-0}" =~ ^[0-9]+$ && "${GATE_OBSERVED:-0}" -gt 0 ]]; then
+  # The corroboration leg is evaluated INDEPENDENTLY of the count leg. Gating it on
+  # `GATE_STATUS == pass` masked it exactly where it mattered: in the 2026-08-21 W3a run
+  # quarkus-lra failed the count leg first (118 vs 121), so its ZERO compensated rows were
+  # never judged — the one arm the leg exists to catch was the one it skipped.
+  if [[ "${GATE_OBSERVED:-0}" =~ ^[0-9]+$ && "${GATE_OBSERVED:-0}" -gt 0 ]]; then
     if [[ "$GATE_DOMAIN_COMPENSATED" == "0" ]]; then
+      GATE_REASON="observed_compensations=${GATE_OBSERVED} but the domain store holds ZERO rows in a compensated terminal state (${GATE_COMPENSATED_TOKENS}). The client-visible token was emitted without the backward-recovery path running; s4.1 is not satisfied by an acknowledgement. [count leg: ${GATE_REASON}]"
       GATE_STATUS="fail"; GATE_FAIL_KIND="uncorroborated"
-      GATE_REASON="observed_compensations=${GATE_OBSERVED} matches expected_declines, but the domain store holds ZERO rows in a compensated terminal state (${GATE_COMPENSATED_TOKENS}). The client-visible token was emitted without the backward-recovery path running; s4.1 is not satisfied by an acknowledgement."
     elif [[ -z "$GATE_DOMAIN_COMPENSATED" ]]; then
       GATE_REASON="${GATE_REASON}; domain corroboration NOT MEASURED (no compensated_tokens declared or psql unavailable)"
     else

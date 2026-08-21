@@ -254,8 +254,13 @@ echo "Orders with duplicated PAYMENT_REQUESTED (re-execution signal): ${DUP_STEP
 _left="$(_target_pid)"
 if [[ -n "$_left" ]]; then
   echo "  WARNING: recovered target still listening as pid ${_left} after stop-target.sh; killing." >&2
-  kill "$_left" 2>/dev/null || true; sleep 3
-  kill -0 "$_left" 2>/dev/null && kill -9 "$_left" 2>/dev/null || true
+  kill "$_left" 2>/dev/null || true
+  # Wait for the port to actually free rather than sleeping a fixed 3s: the 2026-08-21 rerun
+  # reported a leak on the last arm that was gone moments later, i.e. shutdown latency read
+  # as contamination. A campaign checking between arms sees the same race for real.
+  for _ in $(seq 1 20); do [[ -z "$(_target_pid)" ]] && break; sleep 1; done
+  _left="$(_target_pid)"
+  [[ -n "$_left" ]] && { kill -9 "$_left" 2>/dev/null || true; sleep 2; }
 fi
 
 jq -n \

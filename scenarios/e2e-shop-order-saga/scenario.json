@@ -1020,7 +1020,7 @@
       "workload_shape_note": "CONTRACT-v2 §2.1 shape B — short park (~100 ms). Answers: what does one asynchronous hop cost, and does the engine handle it without pinning a resource per in-flight saga? Meaningful: CPU per saga, resources held while parked (threads, DB connections, sockets), wake throughput. Read with care: end-to-end latency is dominated by the gateway delay, identical on every stack, so it loses most of its discriminating power — report it only alongside the delay. LIMITATION measured 2026-08-20: at the §2 normative rate the in-flight saga population is 4.7–16.7, at which 'resources held per in-flight saga' does NOT discriminate thread-per-saga from state-per-saga — observed thread counts are dominated by fixed framework pools (66–115 threads regardless of 4.7 vs 16.7 in flight) and the ratio inverts, ranking the arm with the fewest in-flight sagas worst. Shape C is where that metric becomes measurable.",
 "domain_row_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
-        "_note": "Does not persist the authorization outcome as a row state: PAYMENT_PROCESSING goes straight to CONFIRMED or PAYMENT_REFUNDED. That is one fewer UPDATE per saga than the spring and quarkus arms, and §2 declares no required state sequence to say which is correct — see the write-census in the W3a artifacts.",
+        "_note": "CORRECTED 2026-08-21 after the fail-closed guard caught the omission on the first run: this arm DOES persist the authorization outcome, via OrderSagaOrchestrator.settlePayment writing PAYMENT_AUTHORIZED/PAYMENT_DECLINED through SETTLE_PARKED_PAYMENT_SQL - a compare-and-set on the parked row, not an updateStatus() call, which is why enumerating updateStatus() sites missed it. The earlier claim here that exeris writes one fewer UPDATE per saga than spring/quarkus was wrong in our own favour. Measured n_tup_upd per inserted order on 2026-08-21: restate 4.00, spring-axon 5.00 (both arms), quarkus-lra 5.93, exeris-community 6.00 - this arm writes the MOST, and only restate writes four.",
         "verified_on": "2026-08-21",
         "verified_from": "targets/exeris-community-app/src/main/java/.../saga/OrderSagaOrchestrator.java updateStatus() call sites",
         "table": "orders",
@@ -1038,6 +1038,8 @@
           "SAGA_INITIATED",
           "INVENTORY_RESERVED",
           "PAYMENT_PROCESSING",
+          "PAYMENT_AUTHORIZED",
+          "PAYMENT_DECLINED",
           "PAYMENT_REFUNDED",
           "CONFIRMED"
         ]

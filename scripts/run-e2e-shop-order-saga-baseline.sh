@@ -2035,7 +2035,12 @@ _pin_coord="${BENCH_COORDINATOR_CPUS:-${BENCH_BACKEND_CPUS:-}}"
 if [[ -n "$_pin_pg$_pin_gw$_pin_coord" ]]; then
   _pin_one() {   # $1 = container, $2 = cpuset, $3 = role label
     [[ -z "$2" ]] && return 0
-    docker inspect -f '{{.State.Running}}' "$1" >/dev/null 2>&1 || return 0
+    # Must test the VALUE, not just that inspect succeeded: `docker inspect` on an existing but
+    # stopped container exits 0 and prints "false", and every arm leaves the OTHER arms'
+    # coordinators stopped.
+    local _running
+    _running="$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null || true)"
+    [[ "$_running" == "true" ]] || return 0
     if ! docker update --cpuset-cpus "$2" "$1" >/dev/null 2>&1; then
       echo "ERROR: could not pin $1 ($3) to CPUs $2." >&2
       echo "ERROR: refusing to run a partially-pinned deployment — the metadata would claim" >&2
@@ -2046,8 +2051,12 @@ if [[ -n "$_pin_pg$_pin_gw$_pin_coord" ]]; then
     # intersected with the inherited affinity mask, so a container can end up on fewer cores
     # than asked for without docker reporting an error.
     local _eff
-    _eff="$(docker exec "$1" sh -lc 'cat /sys/fs/cgroup/cpuset.cpus.effective 2>/dev/null' 2>/dev/null | tr -d '
-')"
+    # `|| true` is load-bearing: this script runs under `set -euo pipefail`, and with pipefail a
+    # failing `docker exec` makes the whole pipeline non-zero, which kills the run. That is exactly
+    # what happened on the first exeris-community run under these pins — that arm does not use
+    # Axon Server, its container was stopped, and verifying the pin took the run down with it. A
+    # verification step must never be able to fail the thing it verifies.
+    _eff="$(docker exec "$1" sh -lc 'cat /sys/fs/cgroup/cpuset.cpus.effective 2>/dev/null' 2>/dev/null | tr -d "\\r\\n" || true)"
     if [[ -n "$_eff" ]]; then
       echo "  pinned $3 ($1) -> requested $2, effective ${_eff}"
     else

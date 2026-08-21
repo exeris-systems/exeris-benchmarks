@@ -110,6 +110,18 @@ _census() {
          from (select status, count(*) n from orders group by status) s"
 }
 
+# Engine-side saga state, as distinct from the domain row. exeris-kernel Community selects a
+# durable JdbcFlowSnapshotStore over exeris_saga_state when a PersistenceEngine is bootstrapped
+# and flow.persistenceEnabled is true, and falls back to the heap CommunityFlowSnapshotStore
+# when it is not (ADR-022; kernel docs/subsystems/flow.md). Those two are indistinguishable
+# from the orders table alone, and they are completely different claims about the arm: one is
+# "the engine cannot resume", the other is "we did not bind the store". PARKED rows here at
+# the crash decide which. Other arms keep their engine state elsewhere and simply read zero.
+_saga_state_census() {
+  _psql "select coalesce(string_agg(state||'='||n, ',' order by state),'')
+         from (select state, count(*) n from exeris_saga_state group by state) s"
+}
+
 # The identities of the sagas that were in flight at the crash. Counting non-terminal rows
 # before and after answers "how many are stuck NOW", which is not the question: k6 keeps
 # submitting through the restart, so a post-drain count is a mix of sagas that failed to
@@ -181,6 +193,7 @@ sleep "$CRASH_AT_SECONDS"
 
 IFS='|' read -r PRE_BREAKDOWN PRE_TOTAL PRE_NONTERMINAL PRE_UNKNOWN <<< "$(_census)"
 PRE_NONTERM_IDS="$(_nonterminal_ids | paste -sd',' -)"
+PRE_SAGA_STATE="$(_saga_state_census)"
 echo "Pre-crash: orders=${PRE_TOTAL:-0} non-terminal=${PRE_NONTERMINAL:-0} (${PRE_BREAKDOWN})"
 [[ -n "${PRE_UNKNOWN:-}" ]] && echo "  WARNING: undeclared status token(s) present: ${PRE_UNKNOWN}"
 
@@ -262,8 +275,10 @@ if [[ -n "$PRE_NONTERM_IDS" ]]; then
   COHORT_RESOLVED="$(_psql "select count(*) from orders where id in (${PRE_NONTERM_IDS}) and status in (${TERMINAL_SQL})")"
   COHORT_STILL="$(   _psql "select count(*) from orders where id in (${PRE_NONTERM_IDS}) and status not in (${TERMINAL_SQL})")"
 fi
+POST_SAGA_STATE="$(_saga_state_census)"
 echo "Post-recovery: orders=${POST_TOTAL:-0} non-terminal=${POST_NONTERMINAL:-0} (${POST_BREAKDOWN})"
 echo "In-flight cohort at crash: ${COHORT_SIZE} sagas -> resolved=${COHORT_RESOLVED:-n/a} still-stuck=${COHORT_STILL:-n/a}"
+echo "Engine saga-state rows: pre=[${PRE_SAGA_STATE:-none}] post=[${POST_SAGA_STATE:-none}]"
 [[ -n "${POST_UNKNOWN:-}" ]] && echo "  WARNING: undeclared status token(s) present: ${POST_UNKNOWN}"
 echo "Orders with duplicated PAYMENT_REQUESTED (re-execution signal): ${DUP_STEPS}"
 
@@ -294,6 +309,7 @@ jq -n \
   --arg healthy "${RECOVERED_HEALTHY:-false}" --arg raff "${RECOVERED_AFFINITY:-}" \
   --arg w_before "${WRITES_BEFORE:-}" --arg w_after "${WRITES_AFTER:-}" \
   --arg coh_n "${COHORT_SIZE:-0}" --arg coh_res "${COHORT_RESOLVED:-}" --arg coh_still "${COHORT_STILL:-}" \
+  --arg ss_pre "${PRE_SAGA_STATE:-}" --arg ss_post "${POST_SAGA_STATE:-}" \
   --argjson drain "$DRAIN_SECONDS" \
   --arg coords "${CRASHED_COORDINATORS:-}" \
   --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -331,6 +347,11 @@ jq -n \
        size:              ($coh_n    | tonumber? // 0),
        resolved_by_drain: ($coh_res  | tonumber? // null),
        still_nonterminal: ($coh_still| tonumber? // null)
+     },
+     engine_saga_state: {
+       note: "Rows in exeris_saga_state by state. Non-empty means a durable FlowSnapshotStore is bound (JdbcFlowSnapshotStore, ADR-022); empty on the exeris arm means the heap CommunityFlowSnapshotStore was selected instead, which is a wiring fact about this deployment, not a statement about what the engine can do. Other arms hold engine state elsewhere and read empty by design.",
+       pre_crash:  (if $ss_pre  == "" then null else $ss_pre  end),
+       post_drain: (if $ss_post == "" then null else $ss_post end)
      },
      orders_with_duplicate_payment_step: ($dup | tonumber? // null),
      verdict:

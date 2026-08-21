@@ -1018,7 +1018,7 @@
       "superseded_contract": "exeris_community_h2c_v1",
       "workload_shape": "B-short-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape B — short park (~100 ms). Answers: what does one asynchronous hop cost, and does the engine handle it without pinning a resource per in-flight saga? Meaningful: CPU per saga, resources held while parked (threads, DB connections, sockets), wake throughput. Read with care: end-to-end latency is dominated by the gateway delay, identical on every stack, so it loses most of its discriminating power — report it only alongside the delay. LIMITATION measured 2026-08-20: at the §2 normative rate the in-flight saga population is 4.7–16.7, at which 'resources held per in-flight saga' does NOT discriminate thread-per-saga from state-per-saga — observed thread counts are dominated by fixed framework pools (66–115 threads regardless of 4.7 vs 16.7 in flight) and the ratio inverts, ranking the arm with the fewest in-flight sagas worst. Shape C is where that metric becomes measurable.",
-"domain_row_vocabulary": {
+      "domain_row_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
         "_note": "CORRECTED 2026-08-21 after the fail-closed guard caught the omission on the first run: this arm DOES persist the authorization outcome, via OrderSagaOrchestrator.settlePayment writing PAYMENT_AUTHORIZED/PAYMENT_DECLINED through SETTLE_PARKED_PAYMENT_SQL - a compare-and-set on the parked row, not an updateStatus() call, which is why enumerating updateStatus() sites missed it. The earlier claim here that exeris writes one fewer UPDATE per saga than spring/quarkus was wrong in our own favour. Measured n_tup_upd per inserted order on 2026-08-21: restate 4.00, spring-axon 5.00 (both arms), quarkus-lra 5.93, exeris-community 6.00 - this arm writes the MOST, and only restate writes four.",
         "verified_on": "2026-08-21",
@@ -1374,7 +1374,7 @@
         "order_create_latency_ms": "descriptive_single_stack_only",
         "order_poll_latency_ms": "descriptive_single_stack_only"
       },
-"domain_row_vocabulary": {
+      "domain_row_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
         "_note": "Same four-update path as exeris-community; see that arm's note.",
         "verified_on": "2026-08-21",
@@ -1485,7 +1485,7 @@
       "superseded_contract": "quarkus_lra_h1_park100_v3",
       "workload_shape": "B-short-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape B — short park (~100 ms). Answers: what does one asynchronous hop cost, and does the engine handle it without pinning a resource per in-flight saga? Meaningful: CPU per saga, resources held while parked (threads, DB connections, sockets), wake throughput. Read with care: end-to-end latency is dominated by the gateway delay, identical on every stack, so it loses most of its discriminating power — report it only alongside the delay. LIMITATION measured 2026-08-20: at the §2 normative rate the in-flight saga population is 4.7–16.7, at which 'resources held per in-flight saga' does NOT discriminate thread-per-saga from state-per-saga — observed thread counts are dominated by fixed framework pools (66–115 threads regardless of 4.7 vs 16.7 in flight) and the ratio inverts, ranking the arm with the fewest in-flight sagas worst. Shape C is where that metric becomes measurable.",
-"domain_row_vocabulary": {
+      "domain_row_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
         "_note": "Writes FAILED, not FAILED_UNRECOVERED (markOrderFailed); the crash runner's hardcoded guess had the latter. PAYMENT_DECLINED is NON-terminal by this arm's own definition: OrderSagaLraParticipant.status() maps CANCELLED/PAYMENT_REFUNDED to Compensated and lets PAYMENT_DECLINED fall through to Active. MEASURED 2026-08-21 on a clean no-crash run: 311 declines, 310 client-observed COMPENSATED, gate PASS, and 0 CANCELLED / 0 PAYMENT_REFUNDED / 0 ORDER_COMPENSATED in the store — this arm reports a compensation it does not perform, so declined orders stay here permanently.",
         "verified_on": "2026-08-21",
@@ -1597,7 +1597,7 @@
       "superseded_contract": "spring_axon_h1_park100_v3",
       "workload_shape": "B-short-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape B — short park (~100 ms). Answers: what does one asynchronous hop cost, and does the engine handle it without pinning a resource per in-flight saga? Meaningful: CPU per saga, resources held while parked (threads, DB connections, sockets), wake throughput. Read with care: end-to-end latency is dominated by the gateway delay, identical on every stack, so it loses most of its discriminating power — report it only alongside the delay. LIMITATION measured 2026-08-20: at the §2 normative rate the in-flight saga population is 4.7–16.7, at which 'resources held per in-flight saga' does NOT discriminate thread-per-saga from state-per-saga — observed thread counts are dominated by fixed framework pools (66–115 threads regardless of 4.7 vs 16.7 in flight) and the ratio inverts, ranking the arm with the fewest in-flight sagas worst. Shape C is where that metric becomes measurable.",
-"domain_row_vocabulary": {
+      "domain_row_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
         "_note": "Persists the authorization outcome as a row state (PaymentCallbackController:74), so five UPDATEs per saga against exeris/restate's four.",
         "verified_on": "2026-08-21",
@@ -1706,7 +1706,7 @@
       "superseded_contract": "spring_axon_embedded_h1_park100_v3",
       "workload_shape": "B-short-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape B — short park (~100 ms). Answers: what does one asynchronous hop cost, and does the engine handle it without pinning a resource per in-flight saga? Meaningful: CPU per saga, resources held while parked (threads, DB connections, sockets), wake throughput. Read with care: end-to-end latency is dominated by the gateway delay, identical on every stack, so it loses most of its discriminating power — report it only alongside the delay. LIMITATION measured 2026-08-20: at the §2 normative rate the in-flight saga population is 4.7–16.7, at which 'resources held per in-flight saga' does NOT discriminate thread-per-saga from state-per-saga — observed thread counts are dominated by fixed framework pools (66–115 threads regardless of 4.7 vs 16.7 in flight) and the ratio inverts, ranking the arm with the fewest in-flight sagas worst. Shape C is where that metric becomes measurable.",
-"domain_row_vocabulary": {
+      "domain_row_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
         "_note": "Same application as the spring_axon_jdbc arm; the difference is the Axon deployment unit (§1), not the domain writes.",
         "verified_on": "2026-08-21",
@@ -1845,6 +1845,330 @@
       "host_runtime_version": "0.7.0",
       "host_runtime_mode": "compatibility",
       "saga_orchestration": "flow-native"
+    },
+    "exeris_community_h1_park250_v3": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "protocol_note": "h1 because k6 CANNOT drive cleartext HTTP/2 (verified: curl --http2-prior-knowledge and h2load both negotiate h2c against the same endpoint where k6 gets HTTP/1.1; grafana/k6#970 open since 2019). All three targets DO serve h2c, so this is a driver limit, not a target limit. h1-for-all is fair because it is identical on every stack; an h2c track needs a different driver and its own profile key.",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "resolution_model": "inline",
+      "resolution_model_note": "CONTRACT-v2 section 3 request-response: the POST /api/v1/orders body carries the terminal outcome, so k6 never polls. Uniform across all three contracts as of 2026-07-30 - previously exeris-community and spring-hibernate were polled with 1 s quantization, which made their measured saga duration a flat ~1010 ms of client sleep.",
+      "load_model": "constant-arrival-rate",
+      "measurement_arrival_rate_per_s": 50,
+      "arrival_rate_note": "50 sessions/s chosen from a measured sweep (3/25/50/100/200). 50 is the highest rate clean on ALL stacks: at 100 exeris-community loses its entire measurement phase to connection resets. VU counts are a POOL CEILING under this executor, not concurrency - the previous virtual_users:100 field described a closed-loop model this scenario does not run.",
+      "measured_peak_concurrency": 342,
+      "graph_backend": "none",
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 300,
+      "measurement_window_seconds": 900,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park250-v3-recon",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "descriptive_only",
+      "claim_scope": "non_eligible",
+      "supersedes_note": "Derived from exeris_community_h1_park100_v3 on 2026-08-21 by changing ONLY the park depth to 250 ms.",
+      "target_app": "exeris-community",
+      "framework": "exeris-community",
+      "saga_orchestration": "flow-native",
+      "event_backend": "events-l3-outbox",
+      "comparison_class": "platform-natural-stack",
+      "claim_scope_note": "Correctness/capacity recon only. Not comparison-eligible and not a latency or throughput source under any circumstances: the park depth is a harness constant that dominates every duration measured under it.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
+      "superseded_contract": "exeris_community_h2c_v1",
+      "workload_shape": "C-approach-recon-park250",
+      "workload_shape_note": "RECON, not a publishable shape. §2.1 defines shape B at ~100 ms and shape C as a long park released by the harness; these three sit between them and exist for one purpose: shape B's in-flight population is rate x saga duration, which at 38/s and a 100 ms park is 5-14 sagas — measured 2026-08-21 to be too small to rank restart survival (the same arm, same config, gave 0/5 and 5/7 on consecutive runs). The ladder finds the park depth at which the cohort is large enough to measure, and whether the stack starts holding resources per parked saga before it gets there. §2.1 phase C of shape C is where this metric is declared to live, at N = 10 000+; these runs are the approach to it. NEVER aggregate with shape B or with each other, and never quote latency from them.",
+      "domain_row_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
+        "_note": "CORRECTED 2026-08-21 after the fail-closed guard caught the omission on the first run: this arm DOES persist the authorization outcome, via OrderSagaOrchestrator.settlePayment writing PAYMENT_AUTHORIZED/PAYMENT_DECLINED through SETTLE_PARKED_PAYMENT_SQL - a compare-and-set on the parked row, not an updateStatus() call, which is why enumerating updateStatus() sites missed it. The earlier claim here that exeris writes one fewer UPDATE per saga than spring/quarkus was wrong in our own favour. Measured n_tup_upd per inserted order on 2026-08-21: restate 4.00, spring-axon 5.00 (both arms), quarkus-lra 5.93, exeris-community 6.00 - this arm writes the MOST, and only restate writes four.",
+        "verified_on": "2026-08-21",
+        "verified_from": "targets/exeris-community-app/src/main/java/.../saga/OrderSagaOrchestrator.java updateStatus() call sites",
+        "table": "orders",
+        "column": "status",
+        "on_undeclared_token": "fail_closed",
+        "compensated_tokens": [
+          "CANCELLED"
+        ],
+        "_compensated_tokens_note": "The subset of terminal_tokens that means the backward-recovery path RAN and left the domain row in a compensated state. Verified 2026-08-21: every arm writes CANCELLED as the last compensation step. Used by the §4.1 gate as a corroboration leg, because the gate's observed_compensations counts a CLIENT-VISIBLE token, and on 2026-08-21 quarkus-lra passed 310/310 on that token with zero compensated rows in the store.",
+        "terminal_tokens": [
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "PAYMENT_AUTHORIZED",
+          "PAYMENT_DECLINED",
+          "PAYMENT_REFUNDED",
+          "CONFIRMED"
+        ]
+      },
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      },
+      "payment_callback_delay_ms": 250,
+      "_shape_note": "CONTRACT-v2 §2.1 shape B (short park): S_pay dispatches to the external payment gateway and parks; the gateway answers after ~100 ms. Every stack implements dispatch -> park -> external event -> wake, so they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2, straight-through, retired) nor with shape A (…-park1-v3, ~1 ms park). CORRECTED 2026-08-20 (v2.2): these ids were renamed park1 -> park100 on 2026-08-19 because the roster had always run a 100 ms park under shape-A ids - the label was wrong, not the workload. That rename moved the ids and the note but left workload_shape=A-minimal-park and payment_callback_delay_ms=1 in every entry, so the machine-readable shape still said A while the id and the run said B. §8 requires every reported figure to name its shape, and a consumer reading these fields would have named it wrong. Shape-B metric rules apply: end-to-end latency is SECONDARY and must be reported alongside the 100 ms delay; the headline metrics are CPU per saga and resources held per in-flight saga.",
+      "cooldown_seconds": 30
+    },
+    "exeris_community_h1_park500_v3": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "protocol_note": "h1 because k6 CANNOT drive cleartext HTTP/2 (verified: curl --http2-prior-knowledge and h2load both negotiate h2c against the same endpoint where k6 gets HTTP/1.1; grafana/k6#970 open since 2019). All three targets DO serve h2c, so this is a driver limit, not a target limit. h1-for-all is fair because it is identical on every stack; an h2c track needs a different driver and its own profile key.",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "resolution_model": "inline",
+      "resolution_model_note": "CONTRACT-v2 section 3 request-response: the POST /api/v1/orders body carries the terminal outcome, so k6 never polls. Uniform across all three contracts as of 2026-07-30 - previously exeris-community and spring-hibernate were polled with 1 s quantization, which made their measured saga duration a flat ~1010 ms of client sleep.",
+      "load_model": "constant-arrival-rate",
+      "measurement_arrival_rate_per_s": 50,
+      "arrival_rate_note": "50 sessions/s chosen from a measured sweep (3/25/50/100/200). 50 is the highest rate clean on ALL stacks: at 100 exeris-community loses its entire measurement phase to connection resets. VU counts are a POOL CEILING under this executor, not concurrency - the previous virtual_users:100 field described a closed-loop model this scenario does not run.",
+      "measured_peak_concurrency": 342,
+      "graph_backend": "none",
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 300,
+      "measurement_window_seconds": 900,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park500-v3-recon",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "descriptive_only",
+      "claim_scope": "non_eligible",
+      "supersedes_note": "Derived from exeris_community_h1_park100_v3 on 2026-08-21 by changing ONLY the park depth to 500 ms.",
+      "target_app": "exeris-community",
+      "framework": "exeris-community",
+      "saga_orchestration": "flow-native",
+      "event_backend": "events-l3-outbox",
+      "comparison_class": "platform-natural-stack",
+      "claim_scope_note": "Correctness/capacity recon only. Not comparison-eligible and not a latency or throughput source under any circumstances: the park depth is a harness constant that dominates every duration measured under it.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
+      "superseded_contract": "exeris_community_h2c_v1",
+      "workload_shape": "C-approach-recon-park500",
+      "workload_shape_note": "RECON, not a publishable shape. §2.1 defines shape B at ~100 ms and shape C as a long park released by the harness; these three sit between them and exist for one purpose: shape B's in-flight population is rate x saga duration, which at 38/s and a 100 ms park is 5-14 sagas — measured 2026-08-21 to be too small to rank restart survival (the same arm, same config, gave 0/5 and 5/7 on consecutive runs). The ladder finds the park depth at which the cohort is large enough to measure, and whether the stack starts holding resources per parked saga before it gets there. §2.1 phase C of shape C is where this metric is declared to live, at N = 10 000+; these runs are the approach to it. NEVER aggregate with shape B or with each other, and never quote latency from them.",
+      "domain_row_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
+        "_note": "CORRECTED 2026-08-21 after the fail-closed guard caught the omission on the first run: this arm DOES persist the authorization outcome, via OrderSagaOrchestrator.settlePayment writing PAYMENT_AUTHORIZED/PAYMENT_DECLINED through SETTLE_PARKED_PAYMENT_SQL - a compare-and-set on the parked row, not an updateStatus() call, which is why enumerating updateStatus() sites missed it. The earlier claim here that exeris writes one fewer UPDATE per saga than spring/quarkus was wrong in our own favour. Measured n_tup_upd per inserted order on 2026-08-21: restate 4.00, spring-axon 5.00 (both arms), quarkus-lra 5.93, exeris-community 6.00 - this arm writes the MOST, and only restate writes four.",
+        "verified_on": "2026-08-21",
+        "verified_from": "targets/exeris-community-app/src/main/java/.../saga/OrderSagaOrchestrator.java updateStatus() call sites",
+        "table": "orders",
+        "column": "status",
+        "on_undeclared_token": "fail_closed",
+        "compensated_tokens": [
+          "CANCELLED"
+        ],
+        "_compensated_tokens_note": "The subset of terminal_tokens that means the backward-recovery path RAN and left the domain row in a compensated state. Verified 2026-08-21: every arm writes CANCELLED as the last compensation step. Used by the §4.1 gate as a corroboration leg, because the gate's observed_compensations counts a CLIENT-VISIBLE token, and on 2026-08-21 quarkus-lra passed 310/310 on that token with zero compensated rows in the store.",
+        "terminal_tokens": [
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "PAYMENT_AUTHORIZED",
+          "PAYMENT_DECLINED",
+          "PAYMENT_REFUNDED",
+          "CONFIRMED"
+        ]
+      },
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      },
+      "payment_callback_delay_ms": 500,
+      "_shape_note": "CONTRACT-v2 §2.1 shape B (short park): S_pay dispatches to the external payment gateway and parks; the gateway answers after ~100 ms. Every stack implements dispatch -> park -> external event -> wake, so they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2, straight-through, retired) nor with shape A (…-park1-v3, ~1 ms park). CORRECTED 2026-08-20 (v2.2): these ids were renamed park1 -> park100 on 2026-08-19 because the roster had always run a 100 ms park under shape-A ids - the label was wrong, not the workload. That rename moved the ids and the note but left workload_shape=A-minimal-park and payment_callback_delay_ms=1 in every entry, so the machine-readable shape still said A while the id and the run said B. §8 requires every reported figure to name its shape, and a consumer reading these fields would have named it wrong. Shape-B metric rules apply: end-to-end latency is SECONDARY and must be reported alongside the 100 ms delay; the headline metrics are CPU per saga and resources held per in-flight saga.",
+      "cooldown_seconds": 30
+    },
+    "exeris_community_h1_park1000_v3": {
+      "scenario_id": "e2e-shop-order-saga",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "transport_mode": "loopback-h1",
+      "protocol_note": "h1 because k6 CANNOT drive cleartext HTTP/2 (verified: curl --http2-prior-knowledge and h2load both negotiate h2c against the same endpoint where k6 gets HTTP/1.1; grafana/k6#970 open since 2019). All three targets DO serve h2c, so this is a driver limit, not a target limit. h1-for-all is fair because it is identical on every stack; an h2c track needs a different driver and its own profile key.",
+      "benchmark_family": "runtime-k6-e2e",
+      "jvm_class": "jvm",
+      "resolution_model": "inline",
+      "resolution_model_note": "CONTRACT-v2 section 3 request-response: the POST /api/v1/orders body carries the terminal outcome, so k6 never polls. Uniform across all three contracts as of 2026-07-30 - previously exeris-community and spring-hibernate were polled with 1 s quantization, which made their measured saga duration a flat ~1010 ms of client sleep.",
+      "load_model": "constant-arrival-rate",
+      "measurement_arrival_rate_per_s": 50,
+      "arrival_rate_note": "50 sessions/s chosen from a measured sweep (3/25/50/100/200). 50 is the highest rate clean on ALL stacks: at 100 exeris-community loses its entire measurement phase to connection resets. VU counts are a POOL CEILING under this executor, not concurrency - the previous virtual_users:100 field described a closed-loop model this scenario does not run.",
+      "measured_peak_concurrency": 342,
+      "graph_backend": "none",
+      "ramp_up_seconds": 60,
+      "warmup_seconds": 300,
+      "measurement_window_seconds": 900,
+      "think_time_ms_min": 800,
+      "think_time_ms_max": 2500,
+      "payment_fail_rate": 0.03,
+      "payload_profile": "orders-aggregate-v1",
+      "required_profile": "perf-box-amd64",
+      "workload_profile_key": "e2e-shop-order-saga-community-h1-loopback-runtime-k6-r38-park1000-v3-recon",
+      "seed_manifest_refs": {
+        "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+        "manifest_version": "1",
+        "verification_script": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh"
+      },
+      "fairness_gates": {
+        "min_completed_orders": 900,
+        "error_rate_max": 0.02,
+        "saga_success_rate_min": 0.98,
+        "compensation_invocation_rate_max": 0.05,
+        "ci_level": 0.95,
+        "relative_error_pct_max": 15
+      },
+      "maturity": "descriptive_only",
+      "claim_scope": "non_eligible",
+      "supersedes_note": "Derived from exeris_community_h1_park100_v3 on 2026-08-21 by changing ONLY the park depth to 1000 ms.",
+      "target_app": "exeris-community",
+      "framework": "exeris-community",
+      "saga_orchestration": "flow-native",
+      "event_backend": "events-l3-outbox",
+      "comparison_class": "platform-natural-stack",
+      "claim_scope_note": "Correctness/capacity recon only. Not comparison-eligible and not a latency or throughput source under any circumstances: the park depth is a harness constant that dominates every duration measured under it.",
+      "per_step_metric_claim_scope": {
+        "auth_latency_ms": "comparison_eligible",
+        "cart_add_latency_ms": "comparison_eligible",
+        "cart_get_latency_ms": "comparison_eligible",
+        "recommend_latency_ms": "comparison_eligible_platform_natural_only",
+        "order_create_latency_ms": "descriptive_per_stack_only_execution_not_equivalent",
+        "order_poll_latency_ms": "not_applicable_inline_resolution"
+      },
+      "per_step_metric_claim_scope_note": "recommend_latency_ms is platform-natural ONLY: the stacks do NOT issue the same work. quarkus/spring send ONE Cypher query expressing the two-hop join server-side; exeris-community issues 1+N traversals because GraphTraversal (exeris-kernel-spi) carries exactly one GraphEdgeDescriptor and no API accepts a heterogeneous edge path. Measured throughput-matched: 2.6x the Neo4j CPU and 2.5x the latency for exeris. Do not read it as runtime speed. order_create_latency_ms IS eligible now - it was earned by making every stack section-3 compliant, not by relabelling.",
+      "superseded_contract": "exeris_community_h2c_v1",
+      "workload_shape": "C-approach-recon-park1000",
+      "workload_shape_note": "RECON, not a publishable shape. §2.1 defines shape B at ~100 ms and shape C as a long park released by the harness; these three sit between them and exist for one purpose: shape B's in-flight population is rate x saga duration, which at 38/s and a 100 ms park is 5-14 sagas — measured 2026-08-21 to be too small to rank restart survival (the same arm, same config, gave 0/5 and 5/7 on consecutive runs). The ladder finds the park depth at which the cohort is large enough to measure, and whether the stack starts holding resources per parked saga before it gets there. §2.1 phase C of shape C is where this metric is declared to live, at N = 10 000+; these runs are the approach to it. NEVER aggregate with shape B or with each other, and never quote latency from them.",
+      "domain_row_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
+        "_note": "CORRECTED 2026-08-21 after the fail-closed guard caught the omission on the first run: this arm DOES persist the authorization outcome, via OrderSagaOrchestrator.settlePayment writing PAYMENT_AUTHORIZED/PAYMENT_DECLINED through SETTLE_PARKED_PAYMENT_SQL - a compare-and-set on the parked row, not an updateStatus() call, which is why enumerating updateStatus() sites missed it. The earlier claim here that exeris writes one fewer UPDATE per saga than spring/quarkus was wrong in our own favour. Measured n_tup_upd per inserted order on 2026-08-21: restate 4.00, spring-axon 5.00 (both arms), quarkus-lra 5.93, exeris-community 6.00 - this arm writes the MOST, and only restate writes four.",
+        "verified_on": "2026-08-21",
+        "verified_from": "targets/exeris-community-app/src/main/java/.../saga/OrderSagaOrchestrator.java updateStatus() call sites",
+        "table": "orders",
+        "column": "status",
+        "on_undeclared_token": "fail_closed",
+        "compensated_tokens": [
+          "CANCELLED"
+        ],
+        "_compensated_tokens_note": "The subset of terminal_tokens that means the backward-recovery path RAN and left the domain row in a compensated state. Verified 2026-08-21: every arm writes CANCELLED as the last compensation step. Used by the §4.1 gate as a corroboration leg, because the gate's observed_compensations counts a CLIENT-VISIBLE token, and on 2026-08-21 quarkus-lra passed 310/310 on that token with zero compensated rows in the store.",
+        "terminal_tokens": [
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "PAYMENT_AUTHORIZED",
+          "PAYMENT_DECLINED",
+          "PAYMENT_REFUNDED",
+          "CONFIRMED"
+        ]
+      },
+      "terminal_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
+        "resolution_model": "inline_with_polled_fallback",
+        "terminal_field": "status",
+        "poll_terminal_field": "status",
+        "terminal_tokens": {
+          "COMPLETED": "COMPLETED",
+          "COMPENSATED": "COMPENSATED",
+          "FAILED_UNRECOVERED": "FAILED_UNRECOVERED"
+        },
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "COMPENSATING",
+          "COMPLETING",
+          "ACCEPTED",
+          "PARKED"
+        ]
+      },
+      "payment_callback_delay_ms": 1000,
+      "_shape_note": "CONTRACT-v2 §2.1 shape B (short park): S_pay dispatches to the external payment gateway and parks; the gateway answers after ~100 ms. Every stack implements dispatch -> park -> external event -> wake, so they execute the same SHAPE of work. Graph removed from the scenario (§2). Results under this key MUST NOT be aggregated with shape A0 (…-inline-r50-v2, straight-through, retired) nor with shape A (…-park1-v3, ~1 ms park). CORRECTED 2026-08-20 (v2.2): these ids were renamed park1 -> park100 on 2026-08-19 because the roster had always run a 100 ms park under shape-A ids - the label was wrong, not the workload. That rename moved the ids and the note but left workload_shape=A-minimal-park and payment_callback_delay_ms=1 in every entry, so the machine-readable shape still said A while the id and the run said B. §8 requires every reported figure to name its shape, and a consumer reading these fields would have named it wrong. Shape-B metric rules apply: end-to-end latency is SECONDARY and must be reported alongside the 100 ms delay; the headline metrics are CPU per saga and resources held per in-flight saga.",
+      "cooldown_seconds": 30
     }
   },
   "baseline_only_contracts": {

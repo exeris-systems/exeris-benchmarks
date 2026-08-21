@@ -1179,11 +1179,13 @@ PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-100}"
 # latency is a legitimate headline" and shape B "latency is dominated by the gateway
 # delay... report it only alongside the delay" -- so the wrong label grants permission
 # to headline a number that is mostly a constant.
-case "$CONTRACT_ID" in
-  *_park1_v3)   _expected_delay_ms=1 ;;
-  *_park100_v3) _expected_delay_ms=100 ;;
-  *)            _expected_delay_ms="" ;;   # shape C / non-parking ids: harness-controlled
-esac
+# Parse the park depth out of the id rather than enumerating it. The enumerated form had
+# the defect it was written to prevent: a new `_park250_v3` id fell through to the wildcard
+# and ran UNCHECKED, so the very next shape added would silently reintroduce the drift.
+_expected_delay_ms=""
+if [[ "$CONTRACT_ID" =~ _park([0-9]+)_v3$ ]]; then
+  _expected_delay_ms="${BASH_REMATCH[1]}"
+fi
 if [[ -n "$_expected_delay_ms" && "$PAYMENT_STUB_DELAY_MS" != "$_expected_delay_ms" ]]; then
   echo "ERROR: workload-shape mismatch (CONTRACT-v2 §2.1)." >&2
   echo "ERROR:   contract id '${CONTRACT_ID}' declares a ${_expected_delay_ms} ms payment-gateway park," >&2

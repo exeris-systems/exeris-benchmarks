@@ -1673,7 +1673,7 @@ PY
   decline_id="$(printf '%s\n' "$ids" | sed -n 1p)"
   success_id="$(printf '%s\n' "$ids" | sed -n 2p)"
 
-  local _pid _cart _body _observed _expected _oid
+  local _pid _cart _body _observed _expected _oid _poll_oid _poll_body
   _pid="$(jq -r '.[0].id // empty' "$RECOMMEND_PREFLIGHT_BODY_JSON" 2>/dev/null || true)"
   [[ -n "$_pid" ]] || { echo "vocabulary preflight: no product id from the recommendation preflight" >&2; return 1; }
 
@@ -1681,25 +1681,60 @@ PY
     _oid="$(printf '%s' "$_case" | cut -d: -f2)"
     _expected="$(printf '%s' "$_case" | cut -d: -f3)"
 
+    # snake_case, matching k6.js exactly. The preflight sent camelCase (productId / orderId /
+    # cartId) while the measured workload sends product_id / order_id / cart_id, so it validated
+    # a request shape the campaign never sends. Every arm accepts snake_case by construction —
+    # that is what k6 drives through every campaign — so aligning the preflight to the workload
+    # can only narrow the gap between what is checked and what is run.
+    # A FRESH USER PER CASE. The two cases used to share one identity, and therefore one cart.
+    # k6 registers a new user every iteration, so a cart never carries an order across
+    # submissions in the measured workload — but the preflight submitted both orders from the
+    # same cart, and at least one stack (spring-on-exeris) treats that as the SAME order: the
+    # success case POSTed order_id=preflight-vocab-i0 and got back
+    # {"order_id":"preflight-vocab-i3","status":"COMPENSATED"} — the decline case's order,
+    # replayed. The preflight was measuring its own state leak.
+    #
+    # This was invisible for as long as the poll used the client id: it read order_not_found,
+    # reported the declared field as '<absent>', and looked exactly like a stack that never
+    # reaches COMPLETED. Two defects, one masking the other.
+    local _u _tok_case
+    _u="vocab_${RUN_TIMESTAMP_UTC}_${_case%%:*}_$$"
+    _tok_case="$(curl -sS $CURL_INSECURE_OPT -X POST "$base/api/v1/auth/register" \
+      -H 'content-type: application/json' \
+      --data-binary "$(jq -nc --arg u "$_u" --arg e "${_u}@example.test" --arg p "benchmark-pass-123" '{username:$u,email:$e,password:$p}')" \
+      | jq -r '.token // empty')"
+    [[ -n "$_tok_case" ]] || { echo "vocabulary preflight: could not register a fresh identity for the ${_case%%:*} case" >&2; return 1; }
+    token="$_tok_case"
+
     curl -sS $CURL_INSECURE_OPT -o /dev/null -X POST "$base/api/v1/cart/add" \
       -H "Authorization: Bearer $token" -H 'content-type: application/json' \
-      --data-binary "$(jq -nc --arg p "$_pid" '{productId:$p,quantity:1}')" || return 1
+      --data-binary "$(jq -nc --arg p "$_pid" '{product_id:$p,quantity:1}')" || return 1
     _cart="$(curl -sS $CURL_INSECURE_OPT -X GET "$base/api/v1/cart" \
       -H "Authorization: Bearer $token" | jq -r '.cart_id // .id // empty')"
     [[ -n "$_cart" ]] || { echo "vocabulary preflight: no cart id" >&2; return 1; }
 
     _body="$(curl -sS $CURL_INSECURE_OPT -X POST "$base/api/v1/orders" \
+      -H "Idempotency-Key: ${_oid}" \
       -H "Authorization: Bearer $token" -H 'content-type: application/json' \
-      --data-binary "$(jq -nc --arg o "$_oid" --arg c "$_cart" '{orderId:$o,cartId:$c,paymentMethod:"CARD"}')")"
+      --data-binary "$(jq -nc --arg o "$_oid" --arg c "$_cart" '{order_id:$o,cart_id:$c,payment_method:"CARD"}')")"
     _observed="$(printf '%s' "$_body" | jq -r --arg f "$VOCAB_FIELD" '.[$f] // empty')"
+    # Poll the id the SERVER echoed back, falling back to the client id — the same resolution
+    # k6.js uses (extractOrderId(orderRes) || clientOrderId). The preflight polled ONLY the client
+    # id, so against any stack that keys /status on its own identifier it queried an order that
+    # does not exist, read {"error":"order_not_found"}, and reported the declared field as
+    # '<absent>' — indistinguishable from a stack that never reaches the terminal state, which is
+    # the one thing this preflight exists to tell apart.
+    _poll_oid="$(printf '%s' "$_body" | jq -r '.order_id // .id // empty' 2>/dev/null)"
+    [[ -n "$_poll_oid" ]] || _poll_oid="$_oid"
 
     # Inline is the declared model, but the declaration also permits a polled
     # fallback, so a non-terminal inline answer is followed up rather than failed.
     if [[ "$_observed" != "$_expected" ]]; then
       local _n=0
       while (( _n < 30 )); do
-        _observed="$(curl -sS $CURL_INSECURE_OPT -X GET "$base/api/v1/orders/${_oid}/status" \
-          -H "Authorization: Bearer $token" | jq -r --arg f "$VOCAB_FIELD" '.[$f] // empty')"
+        _poll_body="$(curl -sS $CURL_INSECURE_OPT -X GET "$base/api/v1/orders/${_poll_oid}/status" \
+          -H "Authorization: Bearer $token")"
+        _observed="$(printf '%s' "$_poll_body" | jq -r --arg f "$VOCAB_FIELD" '.[$f] // empty')"
         [[ "$_observed" == "$_expected" ]] && break
         _n=$((_n+1)); sleep 1
       done
@@ -1711,6 +1746,14 @@ PY
       echo "ERROR:   declared field ${VOCAB_FIELD}" >&2
       echo "ERROR:   expected token ${_expected}" >&2
       echo "ERROR:   observed       '${_observed:-<absent>}'" >&2
+      # Print what was actually seen. '<absent>' alone cannot distinguish "the stack never
+      # reached the terminal state" from "we asked the wrong question": an error body such as
+      # {"error":"order_not_found"} also carries no such field. Diagnosing that took five probe
+      # rounds once; the raw bodies make it one.
+      echo "ERROR:   polled id      ${_poll_oid:-$_oid}" >&2
+      echo "ERROR:   client id      ${_oid}" >&2
+      echo "ERROR:   order response ${_body:-<empty>}" >&2
+      echo "ERROR:   last poll body ${_poll_body:-<not polled: order response was terminal-shaped>}" >&2
       echo "ERROR: the declaration in scenario.json does not describe what this stack emits." >&2
       echo "ERROR: Running anyway would produce a compensation count that cannot be trusted" >&2
       echo "ERROR: in either direction — the exact failure 3.1 exists to prevent." >&2

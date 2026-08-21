@@ -110,6 +110,16 @@ _census() {
          from (select status, count(*) n from orders group by status) s"
 }
 
+# The identities of the sagas that were in flight at the crash. Counting non-terminal rows
+# before and after answers "how many are stuck NOW", which is not the question: k6 keeps
+# submitting through the restart, so a post-drain count is a mix of sagas that failed to
+# resume and sagas that merely arrived late. On 2026-08-21 exeris went 3 -> 3, which reads
+# as "resumed nothing" and is equally consistent with "resumed all three and stranded three
+# new ones". Only the id list distinguishes those.
+_nonterminal_ids() {
+  _psql "select id from orders where status not in (${TERMINAL_SQL})" | tr -d ''
+}
+
 # Per-arm write census on the domain table. exeris/restate persist four status transitions
 # per successful saga, spring/quarkus five (they also persist the authorization outcome),
 # and §2 declares no required sequence — so the difference gets measured here rather than
@@ -170,6 +180,7 @@ echo "Target up as pid ${TARGET_PID}; waiting ${CRASH_AT_SECONDS}s before crashi
 sleep "$CRASH_AT_SECONDS"
 
 IFS='|' read -r PRE_BREAKDOWN PRE_TOTAL PRE_NONTERMINAL PRE_UNKNOWN <<< "$(_census)"
+PRE_NONTERM_IDS="$(_nonterminal_ids | paste -sd',' -)"
 echo "Pre-crash: orders=${PRE_TOTAL:-0} non-terminal=${PRE_NONTERMINAL:-0} (${PRE_BREAKDOWN})"
 [[ -n "${PRE_UNKNOWN:-}" ]] && echo "  WARNING: undeclared status token(s) present: ${PRE_UNKNOWN}"
 
@@ -243,7 +254,16 @@ sleep "$DRAIN_SECONDS"
 IFS='|' read -r POST_BREAKDOWN POST_TOTAL POST_NONTERMINAL POST_UNKNOWN <<< "$(_census)"
 DUP_STEPS="$(_duplicate_payment_steps)"
 WRITES_AFTER="$(_orders_write_counters)"
+# Of the sagas that were in flight at the crash, how many reached a terminal state?
+COHORT_SIZE=0; COHORT_RESOLVED=""; COHORT_STILL=""
+if [[ -n "$PRE_NONTERM_IDS" ]]; then
+  COHORT_SIZE="$(printf '%s' "$PRE_NONTERM_IDS" | tr ',' '
+' | grep -c .)"
+  COHORT_RESOLVED="$(_psql "select count(*) from orders where id in (${PRE_NONTERM_IDS}) and status in (${TERMINAL_SQL})")"
+  COHORT_STILL="$(   _psql "select count(*) from orders where id in (${PRE_NONTERM_IDS}) and status not in (${TERMINAL_SQL})")"
+fi
 echo "Post-recovery: orders=${POST_TOTAL:-0} non-terminal=${POST_NONTERMINAL:-0} (${POST_BREAKDOWN})"
+echo "In-flight cohort at crash: ${COHORT_SIZE} sagas -> resolved=${COHORT_RESOLVED:-n/a} still-stuck=${COHORT_STILL:-n/a}"
 [[ -n "${POST_UNKNOWN:-}" ]] && echo "  WARNING: undeclared status token(s) present: ${POST_UNKNOWN}"
 echo "Orders with duplicated PAYMENT_REQUESTED (re-execution signal): ${DUP_STEPS}"
 
@@ -273,6 +293,7 @@ jq -n \
   --arg term_tokens "$(_vocab terminal_tokens | paste -sd',' -)" \
   --arg healthy "${RECOVERED_HEALTHY:-false}" --arg raff "${RECOVERED_AFFINITY:-}" \
   --arg w_before "${WRITES_BEFORE:-}" --arg w_after "${WRITES_AFTER:-}" \
+  --arg coh_n "${COHORT_SIZE:-0}" --arg coh_res "${COHORT_RESOLVED:-}" --arg coh_still "${COHORT_STILL:-}" \
   --argjson drain "$DRAIN_SECONDS" \
   --arg coords "${CRASHED_COORDINATORS:-}" \
   --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -304,6 +325,12 @@ jq -n \
        note: "pg_stat_user_tables on orders: n_tup_ins|n_tup_upd|n_tup_hot_upd. Counters are not reset, so only the after-minus-before delta is meaningful. exeris/restate persist four status transitions per successful saga, spring/quarkus five; §2 declares no required sequence, so this measures the difference instead of arguing it from source.",
        before: (if $w_before == "" then null else $w_before end),
        after:  (if $w_after  == "" then null else $w_after  end)
+     },
+     in_flight_cohort_at_crash: {
+       note: "The sagas non-terminal at the pre-crash census, tracked BY ID. This is the resumption question; the raw post-drain count is not, because load continues through the restart and mixes late arrivals into it.",
+       size:              ($coh_n    | tonumber? // 0),
+       resolved_by_drain: ($coh_res  | tonumber? // null),
+       still_nonterminal: ($coh_still| tonumber? // null)
      },
      orders_with_duplicate_payment_step: ($dup | tonumber? // null),
      verdict:

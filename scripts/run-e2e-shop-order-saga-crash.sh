@@ -23,11 +23,13 @@ CRASH_SCOPE="app"
 CRASH_AT_SECONDS=45      # into the run, i.e. inside the measurement window
 DRAIN_SECONDS=120        # after restart, before judging "stuck"
 OUTPUT_DIR=""
-GRAPH_TRACK="neo4j"
+GRAPH_TRACK="none"       # v2.1 removed the graph from this scenario entirely (§2)
 
 PG_CONTAINER="exeris-e2e-saga-postgres"
 AXON_CONTAINER="exeris-e2e-saga-axonserver"
-NEO4J_CONTAINER="exeris-e2e-saga-neo4j"
+LRA_CONTAINER="exeris-e2e-saga-lra-coordinator"
+RESTATE_CONTAINER="exeris-e2e-saga-restate-server"
+CRASHED_COORDINATORS=""
 
 usage() {
   cat <<'EOF'
@@ -38,7 +40,7 @@ Usage: run-e2e-shop-order-saga-crash.sh --target-app <id> --contract-id <id> [op
   --crash-at-seconds <n>    when to crash, measured from k6 start (default 45)
   --drain-seconds <n>       wait after restart before judging (default 120)
   --output-dir <path>       required
-  --graph-track <name>      default neo4j
+  --graph-track <name>      default none (v2.1 removed the graph from this scenario)
 EOF
 }
 
@@ -122,8 +124,18 @@ echo "=== CRASH (scope=${CRASH_SCOPE}) ==="
 kill -9 "$TARGET_PID" 2>/dev/null || true
 if [[ "$CRASH_SCOPE" == "stack" ]]; then
   # SIGKILL the stores too — no graceful shutdown, no flush.
+  # Kill whichever coordinator this arm actually runs, not only Axon Server. The roster now has
+  # three different ones (Axon Server, the LRA coordinator, restate-server) and two arms with
+  # none at all; killing a container the arm does not use tests nothing, and NOT killing the one
+  # it does use turns a W3b into a W3a wearing the wrong label.
   docker kill "$PG_CONTAINER" >/dev/null 2>&1 || true
-  docker kill "$AXON_CONTAINER" >/dev/null 2>&1 || true
+  for _coord in "$AXON_CONTAINER" "$LRA_CONTAINER" "$RESTATE_CONTAINER"; do
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$_coord" 2>/dev/null || true)" == "true" ]]; then
+      echo "  killing coordinator: $_coord"
+      docker kill "$_coord" >/dev/null 2>&1 || true
+      CRASHED_COORDINATORS="${CRASHED_COORDINATORS:+$CRASHED_COORDINATORS,}$_coord"
+    fi
+  done
 fi
 CRASH_EPOCH="$(date +%s)"
 sleep 5
@@ -131,7 +143,10 @@ sleep 5
 if [[ "$CRASH_SCOPE" == "stack" ]]; then
   echo "Restarting stores..."
   docker start "$PG_CONTAINER" >/dev/null 2>&1 || true
-  docker start "$AXON_CONTAINER" >/dev/null 2>&1 || true
+  IFS="," read -ra _cc <<< "${CRASHED_COORDINATORS:-}"
+  for _coord in "${_cc[@]:-}"; do
+    [[ -n "$_coord" ]] && docker start "$_coord" >/dev/null 2>&1 || true
+  done
   for _ in $(seq 1 60); do
     docker exec "$PG_CONTAINER" pg_isready -U postgres >/dev/null 2>&1 && break
     sleep 2
@@ -142,11 +157,11 @@ fi
 # for recovery. Recovery is what is under test, so the target must come back.
 wait "$BASELINE_PID" 2>/dev/null || true
 echo "Restarting target for recovery..."
+# The recovery restart used to force a Neo4j graph backend here. The graph was removed from
+# this scenario in v2.1 (§2), so those exports configured a backend the run does not have and
+# the recovered target would not match the one that crashed — which is the whole point of the
+# comparison. The env file alone is now authoritative, exactly as on the original start.
 ( set -a; . "runtime/drivers/env/$(jq -r --arg id "$TARGET_APP" '.targets[]|select(.target_id==$id)|.env_file' runtime/drivers/target-asset-matrix.json | xargs basename)"; set +a
-  export EXERIS_SUBSYSTEMS="http,persistence,graph,flow,events,crypto"
-  export EXERIS_GRAPH_BACKEND_TYPE=neo4j
-  export EXERIS_GRAPH_NEO4J_URI=bolt://localhost:7687 EXERIS_GRAPH_NEO4J_USER=neo4j
-  export EXERIS_GRAPH_NEO4J_PASSWORD=password EXERIS_GRAPH_NEO4J_DATABASE=neo4j
   eval "$EXTERNAL_START_CMD" ) >> "$BASELINE_LOG" 2>&1 || true
 
 echo "Draining ${DRAIN_SECONDS}s for saga recovery..."
@@ -164,6 +179,7 @@ jq -n \
   --arg pre_b "$PRE_BREAKDOWN" --arg post_b "$POST_BREAKDOWN" \
   --arg dup "$DUP_STEPS" --argjson crash_epoch "${CRASH_EPOCH:-0}" \
   --argjson drain "$DRAIN_SECONDS" \
+  --arg coords "${CRASHED_COORDINATORS:-}" \
   --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{
      schema_version: "1",
@@ -177,6 +193,7 @@ jq -n \
        end),
      target_app: $target, contract_id: $contract,
      crash_epoch_s: $crash_epoch, drain_seconds: $drain,
+     coordinators_crashed: ($coords | split(",") | map(select(. != ""))),
      nonterminal_orders_pre_crash:  ($pre  | tonumber? // null),
      nonterminal_orders_post_drain: ($post | tonumber? // null),
      order_status_pre_crash:  $pre_b,

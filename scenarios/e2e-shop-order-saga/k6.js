@@ -717,7 +717,22 @@ export default function () {
     // Issued (saga_issued_total already incremented above) but the submission was
     // refused, so no terminal outcome can ever arrive. Counted, or the O0 identity
     // would not balance and every rejected submission would read as detector_fault.
-    sagaSubmitRejectedTotal.add(1);
+    //
+    // TAGGED with the same oidx as saga_issued_total, added 2026-08-21, because O0 balancing
+    // was not the only thing these orders affect. The §4.1 expected-decline count is computed
+    // by applying fnv1a64 to the WHOLE issued-id list, and a refused submission is in that
+    // list — so a refused order whose hash marks it for decline inflates `expected` while
+    // being structurally incapable of ever producing a compensation. The gate then reports a
+    // shortfall the stack could not have avoided.
+    //
+    // Measured on quarkus-lra-jdbc, the only arm that gets any 503s: 1024m rep-3 had 68
+    // submit-rejected and came up exactly 2 compensations short (68 x 0.03 = 2.04); 256m
+    // rep-3 had 3 rejected and came up 1 short. Every rep with a small rejected count
+    // (1, 5, 8, 13) passed. That is the §4.1 population being one order wider than the set
+    // that can answer it, not a stack failing to compensate.
+    //
+    // The tag lets the gate subtract the declines among refused submissions from `expected`.
+    sagaSubmitRejectedTotal.add(1, { oidx: String(exec.scenario.iterationInTest) });
     classifyFailure(orderRes);
     return;
   }

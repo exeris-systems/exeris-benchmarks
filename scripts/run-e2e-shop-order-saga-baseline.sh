@@ -2636,6 +2636,38 @@ else
         GATE_REASON="fnv1a64.py --ids-file did not produce an integer (output: ${GATE_EXPECTED:-empty})"
         GATE_EXPECTED=""
       fi
+
+      # §4.1 scopes exactness to "the actually-issued population". An order REFUSED at
+      # submission is in that population — saga_issued_total increments before the submit
+      # check — but it can never produce a compensation, because no saga ever started. So a
+      # refused order whose fnv1a64 marks it for decline inflates `expected` by one against
+      # an `observed` that is structurally incapable of matching it, and the gate reports a
+      # shortfall the stack could not have avoided.
+      #
+      # Measured on quarkus-lra-jdbc, the only arm taking any 503s, across both 2026-08-20
+      # campaigns: 68 refused -> exactly 2 compensations short (68 x 0.03 = 2.04); 3 refused
+      # -> 1 short; and every rep with 1, 5, 8 or 13 refused passed. Two "correctness
+      # failures" on the same arm, in two independent campaigns, both explained by the
+      # population being one order wider than the set that can answer the question.
+      #
+      # Subtract exactly the declines among refused submissions — computed by the same
+      # normative helper over the same id space, never by estimating 3% of the refused count.
+      # Runs that predate the oidx tag on saga_submit_rejected_total leave the adjustment at
+      # zero and behave as before, so this cannot silently change an old verdict.
+      GATE_REJECTED_IDS_FILE="$LOGS_DIR/gate-submit-rejected-order-ids.txt"
+      jq -r 'select(.type=="Point" and .metric=="saga_submit_rejected_total")
+             | (.data.tags.oidx // "")
+             | select(. != "")' "$K6_OUTPUT_JSON" 2>/dev/null | tr -d '' > "$GATE_REJECTED_IDS_FILE" || true
+      GATE_EXPECTED_UNADJUSTED="$GATE_EXPECTED"
+      GATE_DECLINE_UNREACHABLE=0
+      if [[ -s "$GATE_REJECTED_IDS_FILE" && "$GATE_EXPECTED" =~ ^[0-9]+$ ]]; then
+        _unreachable="$(python3 "$FNV1A64_HELPER" --ids-file "$GATE_REJECTED_IDS_FILE" 2>/dev/null || true)"
+        if [[ "$_unreachable" =~ ^[0-9]+$ ]] && (( _unreachable > 0 )); then
+          GATE_DECLINE_UNREACHABLE="$_unreachable"
+          GATE_EXPECTED=$(( GATE_EXPECTED - _unreachable ))
+          echo "Correctness gate: ${_unreachable} of $(wc -l < "$GATE_REJECTED_IDS_FILE" | tr -d " ") submission-refused orders were decline-destined; expected ${GATE_EXPECTED_UNADJUSTED} -> ${GATE_EXPECTED} (§4.1 actually-issued population excludes orders that never started a saga)."
+        fi
+      fi
     elif [[ "$GATE_STATUS" == "error" ]]; then
       : # already failed closed above
     else

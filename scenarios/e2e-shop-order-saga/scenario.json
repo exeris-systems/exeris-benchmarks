@@ -1018,6 +1018,30 @@
       "superseded_contract": "exeris_community_h2c_v1",
       "workload_shape": "B-short-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape B — short park (~100 ms). Answers: what does one asynchronous hop cost, and does the engine handle it without pinning a resource per in-flight saga? Meaningful: CPU per saga, resources held while parked (threads, DB connections, sockets), wake throughput. Read with care: end-to-end latency is dominated by the gateway delay, identical on every stack, so it loses most of its discriminating power — report it only alongside the delay. LIMITATION measured 2026-08-20: at the §2 normative rate the in-flight saga population is 4.7–16.7, at which 'resources held per in-flight saga' does NOT discriminate thread-per-saga from state-per-saga — observed thread counts are dominated by fixed framework pools (66–115 threads regardless of 4.7 vs 16.7 in flight) and the ratio inverts, ranking the arm with the fewest in-flight sagas worst. Shape C is where that metric becomes measurable.",
+"domain_row_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
+        "_note": "Does not persist the authorization outcome as a row state: PAYMENT_PROCESSING goes straight to CONFIRMED or PAYMENT_REFUNDED. That is one fewer UPDATE per saga than the spring and quarkus arms, and §2 declares no required state sequence to say which is correct — see the write-census in the W3a artifacts.",
+        "verified_on": "2026-08-21",
+        "verified_from": "targets/exeris-community-app/src/main/java/.../saga/OrderSagaOrchestrator.java updateStatus() call sites",
+        "table": "orders",
+        "column": "status",
+        "on_undeclared_token": "fail_closed",
+        "compensated_tokens": [
+          "CANCELLED"
+        ],
+        "_compensated_tokens_note": "The subset of terminal_tokens that means the backward-recovery path RAN and left the domain row in a compensated state. Verified 2026-08-21: every arm writes CANCELLED as the last compensation step. Used by the §4.1 gate as a corroboration leg, because the gate's observed_compensations counts a CLIENT-VISIBLE token, and on 2026-08-21 quarkus-lra passed 310/310 on that token with zero compensated rows in the store.",
+        "terminal_tokens": [
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "PAYMENT_REFUNDED",
+          "CONFIRMED"
+        ]
+      },
       "terminal_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
         "resolution_model": "inline_with_polled_fallback",
@@ -1348,6 +1372,30 @@
         "order_create_latency_ms": "descriptive_single_stack_only",
         "order_poll_latency_ms": "descriptive_single_stack_only"
       },
+"domain_row_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
+        "_note": "Same four-update path as exeris-community; see that arm's note.",
+        "verified_on": "2026-08-21",
+        "verified_from": "targets/restate-benchmark-app/src/main/java/.../saga/OrderSagaSqlSteps.java updateOrderStatus() call sites",
+        "table": "orders",
+        "column": "status",
+        "on_undeclared_token": "fail_closed",
+        "compensated_tokens": [
+          "CANCELLED"
+        ],
+        "_compensated_tokens_note": "The subset of terminal_tokens that means the backward-recovery path RAN and left the domain row in a compensated state. Verified 2026-08-21: every arm writes CANCELLED as the last compensation step. Used by the §4.1 gate as a corroboration leg, because the gate's observed_compensations counts a CLIENT-VISIBLE token, and on 2026-08-21 quarkus-lra passed 310/310 on that token with zero compensated rows in the store.",
+        "terminal_tokens": [
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "PAYMENT_REFUNDED",
+          "CONFIRMED"
+        ]
+      },
       "terminal_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
         "resolution_model": "inline_with_polled_fallback",
@@ -1435,6 +1483,33 @@
       "superseded_contract": "quarkus_lra_h1_park100_v3",
       "workload_shape": "B-short-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape B — short park (~100 ms). Answers: what does one asynchronous hop cost, and does the engine handle it without pinning a resource per in-flight saga? Meaningful: CPU per saga, resources held while parked (threads, DB connections, sockets), wake throughput. Read with care: end-to-end latency is dominated by the gateway delay, identical on every stack, so it loses most of its discriminating power — report it only alongside the delay. LIMITATION measured 2026-08-20: at the §2 normative rate the in-flight saga population is 4.7–16.7, at which 'resources held per in-flight saga' does NOT discriminate thread-per-saga from state-per-saga — observed thread counts are dominated by fixed framework pools (66–115 threads regardless of 4.7 vs 16.7 in flight) and the ratio inverts, ranking the arm with the fewest in-flight sagas worst. Shape C is where that metric becomes measurable.",
+"domain_row_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
+        "_note": "Writes FAILED, not FAILED_UNRECOVERED (markOrderFailed); the crash runner's hardcoded guess had the latter. PAYMENT_DECLINED is NON-terminal by this arm's own definition: OrderSagaLraParticipant.status() maps CANCELLED/PAYMENT_REFUNDED to Compensated and lets PAYMENT_DECLINED fall through to Active. MEASURED 2026-08-21 on a clean no-crash run: 311 declines, 310 client-observed COMPENSATED, gate PASS, and 0 CANCELLED / 0 PAYMENT_REFUNDED / 0 ORDER_COMPENSATED in the store — this arm reports a compensation it does not perform, so declined orders stay here permanently.",
+        "verified_on": "2026-08-21",
+        "verified_from": "targets/quarkus-benchmark-app-tuned/src/main/java/.../axon/OrderSagaStepService.java setString(1,...) sites",
+        "table": "orders",
+        "column": "status",
+        "on_undeclared_token": "fail_closed",
+        "compensated_tokens": [
+          "CANCELLED"
+        ],
+        "_compensated_tokens_note": "The subset of terminal_tokens that means the backward-recovery path RAN and left the domain row in a compensated state. Verified 2026-08-21: every arm writes CANCELLED as the last compensation step. Used by the §4.1 gate as a corroboration leg, because the gate's observed_compensations counts a CLIENT-VISIBLE token, and on 2026-08-21 quarkus-lra passed 310/310 on that token with zero compensated rows in the store.",
+        "terminal_tokens": [
+          "COMPLETED",
+          "CANCELLED",
+          "FAILED"
+        ],
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "PAYMENT_AUTHORIZED",
+          "PAYMENT_DECLINED",
+          "PAYMENT_REFUNDED",
+          "CONFIRMED"
+        ]
+      },
       "terminal_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
         "resolution_model": "inline_with_polled_fallback",
@@ -1520,6 +1595,32 @@
       "superseded_contract": "spring_axon_h1_park100_v3",
       "workload_shape": "B-short-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape B — short park (~100 ms). Answers: what does one asynchronous hop cost, and does the engine handle it without pinning a resource per in-flight saga? Meaningful: CPU per saga, resources held while parked (threads, DB connections, sockets), wake throughput. Read with care: end-to-end latency is dominated by the gateway delay, identical on every stack, so it loses most of its discriminating power — report it only alongside the delay. LIMITATION measured 2026-08-20: at the §2 normative rate the in-flight saga population is 4.7–16.7, at which 'resources held per in-flight saga' does NOT discriminate thread-per-saga from state-per-saga — observed thread counts are dominated by fixed framework pools (66–115 threads regardless of 4.7 vs 16.7 in flight) and the ratio inverts, ranking the arm with the fewest in-flight sagas worst. Shape C is where that metric becomes measurable.",
+"domain_row_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
+        "_note": "Persists the authorization outcome as a row state (PaymentCallbackController:74), so five UPDATEs per saga against exeris/restate's four.",
+        "verified_on": "2026-08-21",
+        "verified_from": "targets/spring-benchmark-app-jdbc/src/main/java/.../axon/{InventoryService,PaymentService,PaymentCallbackController,OrderConfirmationService}.java",
+        "table": "orders",
+        "column": "status",
+        "on_undeclared_token": "fail_closed",
+        "compensated_tokens": [
+          "CANCELLED"
+        ],
+        "_compensated_tokens_note": "The subset of terminal_tokens that means the backward-recovery path RAN and left the domain row in a compensated state. Verified 2026-08-21: every arm writes CANCELLED as the last compensation step. Used by the §4.1 gate as a corroboration leg, because the gate's observed_compensations counts a CLIENT-VISIBLE token, and on 2026-08-21 quarkus-lra passed 310/310 on that token with zero compensated rows in the store.",
+        "terminal_tokens": [
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "PAYMENT_AUTHORIZED",
+          "PAYMENT_DECLINED",
+          "PAYMENT_REFUNDED",
+          "CONFIRMED"
+        ]
+      },
       "terminal_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
         "resolution_model": "inline_with_polled_fallback",
@@ -1603,6 +1704,32 @@
       "superseded_contract": "spring_axon_embedded_h1_park100_v3",
       "workload_shape": "B-short-park",
       "workload_shape_note": "CONTRACT-v2 §2.1 shape B — short park (~100 ms). Answers: what does one asynchronous hop cost, and does the engine handle it without pinning a resource per in-flight saga? Meaningful: CPU per saga, resources held while parked (threads, DB connections, sockets), wake throughput. Read with care: end-to-end latency is dominated by the gateway delay, identical on every stack, so it loses most of its discriminating power — report it only alongside the delay. LIMITATION measured 2026-08-20: at the §2 normative rate the in-flight saga population is 4.7–16.7, at which 'resources held per in-flight saga' does NOT discriminate thread-per-saga from state-per-saga — observed thread counts are dominated by fixed framework pools (66–115 threads regardless of 4.7 vs 16.7 in flight) and the ratio inverts, ranking the arm with the fewest in-flight sagas worst. Shape C is where that metric becomes measurable.",
+"domain_row_vocabulary": {
+        "_comment": "CONTRACT-v2 §3.1 discipline applied to the DOMAIN ROW. This is a DIFFERENT vocabulary from terminal_vocabulary above: that one describes the HTTP response field, where COMPENSATED is a terminal token that never appears in the orders table, while CANCELLED appears in the table and is unknown to it. Reading one for the other is a category error, and the W3a crash runner made it by hardcoding a guess. Verified 2026-08-21 against the status write sites named in verified_from. A consumer MUST fail closed on any status token observed in the table that is in neither list, rather than bucketing it as terminal.",
+        "_note": "Same application as the spring_axon_jdbc arm; the difference is the Axon deployment unit (§1), not the domain writes.",
+        "verified_on": "2026-08-21",
+        "verified_from": "same application jar as spring_axon_jdbc_h1_park100_v3 (targets/spring-benchmark-app-jdbc)",
+        "table": "orders",
+        "column": "status",
+        "on_undeclared_token": "fail_closed",
+        "compensated_tokens": [
+          "CANCELLED"
+        ],
+        "_compensated_tokens_note": "The subset of terminal_tokens that means the backward-recovery path RAN and left the domain row in a compensated state. Verified 2026-08-21: every arm writes CANCELLED as the last compensation step. Used by the §4.1 gate as a corroboration leg, because the gate's observed_compensations counts a CLIENT-VISIBLE token, and on 2026-08-21 quarkus-lra passed 310/310 on that token with zero compensated rows in the store.",
+        "terminal_tokens": [
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "non_terminal_tokens": [
+          "SAGA_INITIATED",
+          "INVENTORY_RESERVED",
+          "PAYMENT_PROCESSING",
+          "PAYMENT_AUTHORIZED",
+          "PAYMENT_DECLINED",
+          "PAYMENT_REFUNDED",
+          "CONFIRMED"
+        ]
+      },
       "terminal_vocabulary": {
         "_comment": "CONTRACT-v2 §3.1 (normative): declared, never inferred. The harness MUST read this and MUST NOT guess either the field or the tokens. Verified against target sources on 2026-07-31; a stack whose declaration is contradicted at preflight does not run. Adding tolerance for a second field name instead of a declaration is what let a blind detector report a clean zero for a whole campaign.",
         "resolution_model": "inline_with_polled_fallback",

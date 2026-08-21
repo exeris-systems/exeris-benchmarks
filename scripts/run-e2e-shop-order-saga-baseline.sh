@@ -2841,14 +2841,55 @@ else
   fi
 fi
 
+# CONTRACT-v2 §4.1 corroboration leg (added 2026-08-21).
+#
+# GATE_OBSERVED counts a CLIENT-VISIBLE terminal token. That is not the same claim as "the
+# backward-recovery path ran": on 2026-08-21 a clean quarkus-lra run reported 310 of 310
+# compensations and passed this gate, while the domain store held 311 PAYMENT_DECLINED rows
+# and zero CANCELLED, zero PAYMENT_REFUNDED and zero ORDER_COMPENSATED — the arm returns
+# COMPENSATED on the strength of `lraClient.cancel()` being ACCEPTED, and the coordinator's
+# compensation callback never lands. An oracle satisfiable by an acknowledgement is not an
+# oracle for the work.
+#
+# The rule is deliberately qualitative, not a tuned threshold: a POSITIVE client-observed
+# count against a store showing ZERO compensated rows is unambiguous. A partial gap could be
+# ordinary write-visibility timing, so it is reported, not judged.
+GATE_DOMAIN_COMPENSATED=""
+GATE_COMPENSATED_TOKENS="$(jq -r --arg c "$CONTRACT_ID"   '.fixed_contracts[$c].domain_row_vocabulary.compensated_tokens // [] | .[]'   scenarios/e2e-shop-order-saga/scenario.json 2>/dev/null | sed "s/.*/'&'/" | paste -sd',' -)"
+if [[ -n "$GATE_COMPENSATED_TOKENS" ]]; then
+  GATE_DOMAIN_COMPENSATED="$(docker exec exeris-e2e-saga-postgres psql -U postgres -tAc     "select count(*) from orders where status in (${GATE_COMPENSATED_TOKENS})" 2>/dev/null | tr -d ' 
+' || true)"
+fi
+
 if [[ -n "$GATE_EXPECTED" ]]; then
   if [[ "$GATE_OBSERVED" == "$GATE_EXPECTED" ]]; then
     GATE_STATUS="pass"
     GATE_REASON="observed_compensations == expected_declines (${GATE_OBSERVED}); issued=${GATE_ISSUED}${GATE_POP_COUNTS:+ (${GATE_POP_COUNTS})} seed=${GATE_ORDER_SEED} fault=${FAULT_MODE}"
   else
-    GATE_STATUS="fail"
+    GATE_STATUS="fail"; GATE_FAIL_KIND="count_mismatch"
     GATE_REASON="observed_compensations=${GATE_OBSERVED} != expected_declines=${GATE_EXPECTED} (issued=${GATE_ISSUED}${GATE_POP_COUNTS:+ (${GATE_POP_COUNTS})} seed=${GATE_ORDER_SEED} fault=${FAULT_MODE}); CONTRACT-v2 s4.1 requires exact equality"
   fi
+  if [[ "$GATE_STATUS" == "pass" && "${GATE_OBSERVED:-0}" =~ ^[0-9]+$ && "${GATE_OBSERVED:-0}" -gt 0 ]]; then
+    if [[ "$GATE_DOMAIN_COMPENSATED" == "0" ]]; then
+      GATE_STATUS="fail"; GATE_FAIL_KIND="uncorroborated"
+      GATE_REASON="observed_compensations=${GATE_OBSERVED} matches expected_declines, but the domain store holds ZERO rows in a compensated terminal state (${GATE_COMPENSATED_TOKENS}). The client-visible token was emitted without the backward-recovery path running; s4.1 is not satisfied by an acknowledgement."
+    elif [[ -z "$GATE_DOMAIN_COMPENSATED" ]]; then
+      GATE_REASON="${GATE_REASON}; domain corroboration NOT MEASURED (no compensated_tokens declared or psql unavailable)"
+    else
+      GATE_REASON="${GATE_REASON}; domain-corroborated (${GATE_DOMAIN_COMPENSATED} compensated rows)"
+    fi
+  fi
+fi
+
+# A deliberately injected crash makes the exact-equality leg inapplicable by construction:
+# SIGKILL mid-run strands whatever declines were in flight, so observed < expected is the
+# fault doing its job, not a defect. Reporting that as `fail` marked every arm of the
+# 2026-08-21 W3a campaign runner_status=compensation_mismatch and made five correctness
+# runs read as five broken runs. The numbers are kept; only the verdict changes, and ONLY
+# for the count leg — a store with zero compensated rows is still a failure under any fault.
+if [[ -n "${BENCH_SAGA_FAULT_INJECTION:-}" && "$GATE_STATUS" == "fail" && "${GATE_FAIL_KIND:-}" == "count_mismatch" ]]; then
+  GATE_STATUS="skipped"
+  GATE_REASON="not applicable: fault injection declared (BENCH_SAGA_FAULT_INJECTION=${BENCH_SAGA_FAULT_INJECTION}). ${GATE_REASON}"
 fi
 
 case "$GATE_STATUS" in
@@ -2871,7 +2912,10 @@ jq -n \
   --arg pop_source       "$GATE_POPULATION_SOURCE" \
   --arg density_note     "$GATE_DENSITY_NOTE" \
   --arg fault_mode       "$FAULT_MODE" \
+  --arg fault_injection  "${BENCH_SAGA_FAULT_INJECTION:-}" \
   --arg durability_tier  "$DURABILITY_TIER" \
+  --arg domain_compensated "${GATE_DOMAIN_COMPENSATED:-}" \
+  --arg compensated_tokens "${GATE_COMPENSATED_TOKENS:-}" \
   --arg durability_tier_source "$DURABILITY_TIER_SOURCE" \
   --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{
@@ -2881,9 +2925,16 @@ jq -n \
     contract_ref:     "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
     decline_rule:     "fnv1a64(orderId) mod 1000 < 30 (unsigned, FNV-1a 64 over UTF-8 bytes)",
     fault_mode:       $fault_mode,
+    fault_injection:  (if $fault_injection == "" then null else $fault_injection end),
     durability_tier:  $durability_tier,
     durability_tier_source: $durability_tier_source,
     status:           $status,
+    domain_corroboration: {
+      note: "observed_compensations counts a client-visible token; this leg counts rows left in a compensated terminal state in the domain store. A positive observed count against zero such rows fails the gate — see the 2026-08-21 quarkus-lra finding.",
+      compensated_tokens: $compensated_tokens,
+      compensated_rows: (if $domain_compensated == "" then null else ($domain_compensated | tonumber? // null) end),
+      measured: ($domain_compensated != "")
+    },
     pass_fail:        (if $status == "pass" then "pass" elif $status == "fail" then "fail" else "not_evaluated" end),
     expected:         (if $expected == "" then null else ($expected | tonumber) end),
     observed:         (if $observed == "" then null else ($observed | tonumber) end),

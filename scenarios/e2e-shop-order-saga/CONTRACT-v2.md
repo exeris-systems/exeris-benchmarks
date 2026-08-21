@@ -673,6 +673,33 @@ The remaining rules apply to every shape:
   timeline. Until then, no Exeris result may be juxtaposed with published
   replicated-cluster numbers of any other stack.
 - ≥ 5 measured runs after discarded warm-up; variance reported.
+- **Two CPU-allocation models, and they must never be mixed (added 2026-08-21, v2.2).**
+  A pinned benchmark has to choose what "fair" means, and the honest answer differs
+  between a cost question and a capacity question. This contract uses both models and
+  labels every result with the one it was measured under.
+
+  **Matched-conditions model — for per-saga cost (CPU per saga, RSS, latency).** Every
+  arm gets the SAME pin sets, and a set its deployment does not use simply stays idle:
+  a two-process arm leaves the coordinator's cores unused. Only under identical
+  conditions is "this arm costs 12.6 ms of CPU per saga and that one 45.2" a statement
+  about the arms rather than about their allowances. Every campaign to date is this
+  model.
+
+  **Whole-machine model — for the capacity ceiling.** Each deployment is given the whole
+  box and allocates it as its own architecture requires, so a two-process arm's target
+  receives the cores a three-process arm must hand to its coordinator. Under the
+  matched-conditions model those cores would sit idle and the ceiling measured would be
+  of a machine we deliberately hobbled — which answers no question anyone has.
+
+  **This will favour the arms with fewer processes, and that is the measurement, not a
+  thumb on the scale.** §1 makes the *minimal production-plausible deployment* the unit
+  of comparison. An architecture that needs no separate coordinator does not pay for one
+  in RAM, in processes, or in cores, and a ceiling number that hides the third of those
+  while reporting the first two is inconsistent with itself. State the allocation per arm
+  in the results table so the reader can see exactly what each deployment was given.
+
+  Ceilings from the two models are not comparable and must not appear in one table.
+
 - **Apparatus-limitation labels (added 2026-08-20, v2.2).** A known limitation of the
   measuring apparatus is carried by the **metric**, not by the run, and never by silence.
   A run whose numbers stand under a bounded, direction-known limitation is not a retraction

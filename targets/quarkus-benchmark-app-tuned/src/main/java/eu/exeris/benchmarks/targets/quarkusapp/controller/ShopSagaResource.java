@@ -61,8 +61,18 @@ public class ShopSagaResource {
     // CONTRACT-v2 §9(a): the LRA participant callbacks MUST live on the same class as
     // the @LRA method — Quarkus fails the build otherwise. They delegate immediately;
     // the unwind logic stays in OrderSagaLraParticipant where it can be found by name.
+    // @Consumes(WILDCARD) is load-bearing, not tidying. The class carries
+    // @Consumes(APPLICATION_JSON), these callbacks inherit it, and the coordinator's
+    // compensate PUT carries no JSON body — so JAX-RS rejected it with 415 before the
+    // method ever ran. Measured 2026-08-21 against a local coordinator with io.narayana
+    // at DEBUG:  LRAParticipantRecord.doEnd put .../order-saga/compensate failed with
+    // status: 415.  The visible effect: this arm reported COMPENSATED to the client (the
+    // app only checks that cancel() was ACCEPTED) while the domain store held 0
+    // compensated rows against 121 expected declines, in every run, under load and on a
+    // single request alike.
     @PUT
     @Path("/lra/order-saga/compensate")
+    @Consumes(MediaType.WILDCARD)
     @Compensate
     public Response lraCompensate(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
         return lraParticipant.compensate(lraId);
@@ -70,6 +80,7 @@ public class ShopSagaResource {
 
     @PUT
     @Path("/lra/order-saga/complete")
+    @Consumes(MediaType.WILDCARD)
     @Complete
     public Response lraComplete(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
         return lraParticipant.complete(lraId);
@@ -77,6 +88,7 @@ public class ShopSagaResource {
 
     @PUT
     @Path("/lra/order-saga/status")
+    @Consumes(MediaType.WILDCARD)
     @Status
     public Response lraStatus(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
         return lraParticipant.status(lraId);

@@ -1996,18 +1996,70 @@ fi
 #
 # Fails closed: a partially-pinned deployment is worse than an unpinned one, because the
 # metadata would claim isolation the run did not have.
-if [[ -n "${BENCH_BACKEND_CPUS:-}" ]]; then
-  for _c in exeris-e2e-saga-postgres exeris-e2e-saga-payment-gateway             exeris-e2e-saga-axonserver exeris-e2e-saga-lra-coordinator             exeris-e2e-saga-restate-server; do
-    if docker inspect -f '{{.State.Running}}' "$_c" >/dev/null 2>&1; then
-      if ! docker update --cpuset-cpus "$BENCH_BACKEND_CPUS" "$_c" >/dev/null 2>&1; then
-        echo "ERROR: could not pin $_c to CPUs ${BENCH_BACKEND_CPUS}." >&2
-        echo "ERROR: refusing to run a partially-pinned deployment — the metadata would claim" >&2
-        echo "ERROR: an isolation this run does not have." >&2
-        exit 76
-      fi
+# PER-ROLE PINS (added 2026-08-21). One shared backend set was not enough, and the reason is
+# measurable rather than theoretical. Until now postgres, the payment gateway and whichever
+# coordinator an arm needs all shared 6,7,14,15 — four threads, two physical cores with SMT.
+# So a three-process arm crowded its coordinator onto the same two physical cores its own
+# Postgres occupied, and a two-process arm had nothing to crowd. Process count is exactly what
+# CONTRACT-v2 §1 makes the unit of comparison, so the apparatus penalised the architecture under
+# test in the same direction as the claim.
+#
+# The evidence is the payment gateway, which does IDENTICAL work on every arm by construction.
+# Measured over both 2026-08-20 campaigns its CPU per saga spanned 1.165-1.481 ms, a 25-27 %
+# spread against within-arm repeat spreads under 2 %, ordered exactly by backend-set load and
+# fitting gateway_s = 51.80 + 0.01466 x backend_set_s with R^2 = 0.943. Two competing
+# explanations were then eliminated by measurement, not argument:
+#
+#   - different offered load?  No. Gateway requests per saga = 1.0000 on every arm.
+#   - foreign work on the set? No. busy(6,7,14,15) minus the sum of every cgroup confined
+#                                 there leaves -0.5 %, i.e. zero within sampling granularity.
+#
+# What remains is mutual interference between the measured containers themselves, and the fix
+# for that is topological, not statistical: give each measured container its own physical core.
+# No coefficient correction is applied anywhere — the fit was taken on a 52 s container and
+# extrapolating it to a 165-900 s one across a 17x range, on n=5, with SMT as the mechanism,
+# is not warranted.
+#
+# Sibling pairs on this box are (N, N+8), verified from thread_siblings_list, so every set
+# below is whole physical cores and no two measured containers share one.
+#
+# The control that says whether this worked is free and already instrumented: the gateway
+# spread must fall to the within-arm spread, under ~2 %. If it does not, the premise is wrong
+# and requests-per-saga is where to look next.
+#
+# Each role falls back to BENCH_BACKEND_CPUS, so an unchanged caller keeps the old behaviour
+# and old runs stay reproducible.
+_pin_pg="${BENCH_PG_CPUS:-${BENCH_BACKEND_CPUS:-}}"
+_pin_gw="${BENCH_GATEWAY_CPUS:-${BENCH_BACKEND_CPUS:-}}"
+_pin_coord="${BENCH_COORDINATOR_CPUS:-${BENCH_BACKEND_CPUS:-}}"
+if [[ -n "$_pin_pg$_pin_gw$_pin_coord" ]]; then
+  _pin_one() {   # $1 = container, $2 = cpuset, $3 = role label
+    [[ -z "$2" ]] && return 0
+    docker inspect -f '{{.State.Running}}' "$1" >/dev/null 2>&1 || return 0
+    if ! docker update --cpuset-cpus "$2" "$1" >/dev/null 2>&1; then
+      echo "ERROR: could not pin $1 ($3) to CPUs $2." >&2
+      echo "ERROR: refusing to run a partially-pinned deployment — the metadata would claim" >&2
+      echo "ERROR: an isolation this run does not have." >&2
+      exit 76
     fi
-  done
-  echo "Backend containers pinned to CPUs ${BENCH_BACKEND_CPUS}."
+    # Verify what the kernel actually applied rather than trusting the request. A cpuset is
+    # intersected with the inherited affinity mask, so a container can end up on fewer cores
+    # than asked for without docker reporting an error.
+    local _eff
+    _eff="$(docker exec "$1" sh -lc 'cat /sys/fs/cgroup/cpuset.cpus.effective 2>/dev/null' 2>/dev/null | tr -d '
+')"
+    if [[ -n "$_eff" ]]; then
+      echo "  pinned $3 ($1) -> requested $2, effective ${_eff}"
+    else
+      echo "  pinned $3 ($1) -> requested $2 (effective set unreadable)"
+    fi
+  }
+  echo "Pinning backend containers per role:"
+  _pin_one exeris-e2e-saga-postgres        "$_pin_pg"    postgres
+  _pin_one exeris-e2e-saga-payment-gateway "$_pin_gw"    payment-gateway
+  _pin_one exeris-e2e-saga-axonserver      "$_pin_coord" coordinator
+  _pin_one exeris-e2e-saga-lra-coordinator "$_pin_coord" coordinator
+  _pin_one exeris-e2e-saga-restate-server  "$_pin_coord" coordinator
 fi
 
 # Payment gateway sampler (parking workload only).
@@ -2657,7 +2709,8 @@ else
       GATE_REJECTED_IDS_FILE="$LOGS_DIR/gate-submit-rejected-order-ids.txt"
       jq -r 'select(.type=="Point" and .metric=="saga_submit_rejected_total")
              | (.data.tags.oidx // "")
-             | select(. != "")' "$K6_OUTPUT_JSON" 2>/dev/null | tr -d '' > "$GATE_REJECTED_IDS_FILE" || true
+             | select(. != "")' "$K6_OUTPUT_JSON" 2>/dev/null | tr -d '
+' > "$GATE_REJECTED_IDS_FILE" || true
       GATE_EXPECTED_UNADJUSTED="$GATE_EXPECTED"
       GATE_DECLINE_UNREACHABLE=0
       if [[ -s "$GATE_REJECTED_IDS_FILE" && "$GATE_EXPECTED" =~ ^[0-9]+$ ]]; then

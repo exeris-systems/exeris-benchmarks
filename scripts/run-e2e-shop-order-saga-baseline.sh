@@ -2285,8 +2285,184 @@ if [[ -n "$HOST_MPSTAT_PID" ]]; then
   HOST_MPSTAT_PID=""
 fi
 
+# Which stack-specific engines belong to THIS arm's §1 deployment unit. Do not re-derive it:
+# the sampler start gates above already made that decision (_deployment_uses_axon_server,
+# _deployment_uses_lra_coordinator, and the explicit axon-embedded exclusion), so read their
+# result. Every container in this compose stack is up on every run, so asking `docker ps`
+# instead would put another arm's engine inside this arm's unit — which is the exact error
+# that once charged quarkus-lra for an Axon Server it does not use. Captured here because
+# _stop_container_samplers blanks these pids.
+# if/fi, not `[[ ... ]] && x`: this script runs under `set -euo pipefail`, and a trailing
+# && whose left side is false returns 1 as the statement status, which errexit turns into an
+# aborted run. It would have fired on every arm that has no Axon Server.
+_settle_unit_engines=""
+if [[ -n "${AXON_STATS_PID:-}" ]]; then      _settle_unit_engines+="exeris-e2e-saga-axonserver "; fi
+if [[ -n "${RESTATE_STATS_PID:-}" ]]; then   _settle_unit_engines+="exeris-e2e-saga-restate-server "; fi
+if [[ -n "${LRA_COORD_STATS_PID:-}" ]]; then _settle_unit_engines+="exeris-e2e-saga-lra-coordinator "; fi
+
 # Stop the container/backend samplers (same helper the EXIT trap uses).
 _stop_container_samplers
+
+# --- CONTRACT-v2 §8 post-load settle window ---------------------------------
+#
+# Sampling that stops when k6 stops measures the cost of a stack that has not
+# finished working. Measured 2026-08-21 on quarkus-lra at 70 sessions/s: the
+# Narayana LRA coordinator's RSS peaked at 341 MB inside the measurement window
+# and was still climbing ~1.2 MB/s at ~6% of a core SEVEN MINUTES after the last
+# request, settling at 834 MB -- 2.4x the number the footprint recorded. A
+# deployment-unit comparison built on the in-window figure understates whichever
+# stack defers the most work, which is the opposite of what §1 is for.
+#
+# So: after the measurement samplers are closed, keep watching until the saga
+# engines go quiet, and record what happens in SEPARATE artifacts. The in-window
+# numbers keep their exact meaning; the drain is a second axis and is never
+# summed into the first.
+#
+# Idle is evaluated on the STACK-SPECIFIC engines (Axon Server, restate-server,
+# LRA coordinator) AND the target JVM -- never on containers alone. exeris runs
+# its saga in-process, so a detector that watched only containers would report
+# "settled instantly" for the one arm whose work it could not see, which is the
+# blind-detector mistake this campaign has already made twice. Postgres and the
+# gateway are sampled but NOT gated on: autovacuum would hold the gate open
+# forever and neither is the thing deferring saga work.
+SETTLE_CSV="$LOGS_DIR/post-load-settle.csv"
+SETTLE_JSON="$OUTPUT_DIR/post-load-settle.json"
+if [[ "${BENCH_SETTLE_ENABLED:-1}" == "1" ]]; then
+  _settle_max="${BENCH_SETTLE_MAX_SECONDS:-600}"
+  _settle_pct="${BENCH_SETTLE_IDLE_PCT:-3.0}"
+  _settle_need="${BENCH_SETTLE_IDLE_SAMPLES:-5}"
+  _settle_interval="${BENCH_SETTLE_INTERVAL_SECONDS:-3}"
+
+  _settle_engines=""
+  for _c in ${_settle_unit_engines:-}; do
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$_c"; then
+      _settle_engines="${_settle_engines}${_c} "
+    fi
+  done
+  # An arm with no external engine (axon-embedded, exeris) legitimately has an empty set here.
+  # It is then gated on its target JVM alone, which is correct: that is where its saga engine
+  # lives. It is NOT a reason to fall back to "every engine container that happens to be up".
+  _settle_watched="$_settle_engines"
+  for _c in exeris-e2e-saga-postgres exeris-e2e-saga-payment-gateway exeris-e2e-saga-neo4j; do
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$_c"; then
+      _settle_watched="${_settle_watched}${_c} "
+    fi
+  done
+
+  # Target pid via the port it actually listens on, not the pid file: the pid
+  # file has been observed to name a wrapper while the JVM ran under another pid
+  # (see runtime/drivers/stop-target.sh).
+  _settle_port=""
+  if [[ "$BASE_URL" =~ :([0-9]+)(/|$) ]]; then _settle_port="${BASH_REMATCH[1]}"; fi
+  _settle_target_pid=""
+  if [[ -n "$_settle_port" ]]; then
+    _settle_target_pid="$(ss -ltnp 2>/dev/null | grep ":${_settle_port} " | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2 || true)"
+  fi
+
+  # utime+stime out of /proc/<pid>/stat. The comm field is parenthesised and may
+  # contain spaces, so drop everything through the final ") " before counting:
+  # after that, state is $1, so utime (field 14) is $12 and stime (15) is $13.
+  _settle_jiffies() {
+    local raw rest
+    raw="$(cat "/proc/$1/stat" 2>/dev/null || true)"
+    if [[ -z "$raw" ]]; then printf '0'; return 0; fi
+    rest="${raw#*) }"
+    printf '%s' "$rest" | awk '{print $12+$13}'
+    return 0
+  }
+
+  # A gate with nothing to watch is not a gate. If this arm has no engine container in its
+  # unit AND its target pid could not be resolved, the loop goes quiet immediately and would
+  # report settled=true having observed nothing at all -- the blind-detector failure this
+  # campaign has now hit three times. Record it and refuse the clean verdict.
+  _settle_blind="false"
+  if [[ -z "${_settle_engines// /}" && -z "$_settle_target_pid" ]]; then _settle_blind="true"; fi
+
+  _settle_hz="$(getconf CLK_TCK 2>/dev/null || echo 100)"
+  echo "epoch_ms,component,cpu_pct,mem_mb" > "$SETTLE_CSV"
+  echo "Post-load settle window: watching [${_settle_engines:-none}] + target pid ${_settle_target_pid:-unknown}, max ${_settle_max}s, idle<${_settle_pct}% x${_settle_need}."
+
+  _settle_start_epoch="$(date +%s)"
+  _settle_quiet=0
+  _settle_settled="false"
+  _settle_prev_jiff="$(_settle_jiffies "${_settle_target_pid:-0}")"
+  _settle_tgt_jiff0="$_settle_prev_jiff"
+  while :; do
+    sleep "$_settle_interval"
+    _settle_now="$(date +%s)"
+    _settle_elapsed=$(( _settle_now - _settle_start_epoch ))
+    _settle_busy=0
+
+    if [[ -n "$_settle_watched" ]]; then
+      while IFS=, read -r _n _cpu _mem; do
+        [[ -z "$_n" ]] && continue
+        printf '%s,%s,%s,%s\n' "$(( _settle_now * 1000 ))" "$_n" "$_cpu" "$_mem" >> "$SETTLE_CSV"
+        case " $_settle_engines " in
+          *" $_n "*)
+            if awk -v c="$_cpu" -v t="$_settle_pct" 'BEGIN{exit !(c+0 > t+0)}'; then _settle_busy=1; fi
+            ;;
+        esac
+      done < <(timeout 20 docker stats --no-stream --format '{{.Name}},{{.CPUPerc}},{{.MemUsage}}' $_settle_watched 2>/dev/null \
+                 | sed 's/%//; s| / [0-9.]*[A-Za-z]*$||; s/MiB//; s/GiB/*1024/' \
+                 | awk -F, '{m=$3; if (m ~ /\*1024/) { sub(/\*1024/,"",m); m=m*1024 } printf "%s,%s,%.2f\n", $1, $2, m+0}' || true)
+    fi
+
+    if [[ -n "$_settle_target_pid" ]]; then
+      _settle_jiff="$(_settle_jiffies "$_settle_target_pid")"
+      _settle_tgt_pct="$(awk -v a="$_settle_prev_jiff" -v b="$_settle_jiff" -v i="$_settle_interval" -v hz="$_settle_hz" \
+        'BEGIN{ printf "%.2f", 100.0*((b-a)/hz)/i }')"
+      _settle_prev_jiff="$_settle_jiff"
+      printf '%s,%s,%s,%s\n' "$(( _settle_now * 1000 ))" "target-jvm" "$_settle_tgt_pct" "" >> "$SETTLE_CSV"
+      if awk -v c="$_settle_tgt_pct" -v t="$_settle_pct" 'BEGIN{exit !(c+0 > t+0)}'; then _settle_busy=1; fi
+    fi
+
+    if [[ "$_settle_busy" -eq 0 ]]; then
+      _settle_quiet=$(( _settle_quiet + 1 ))
+    else
+      _settle_quiet=0
+    fi
+    if [[ "$_settle_quiet" -ge "$_settle_need" ]]; then _settle_settled="true"; break; fi
+    if [[ "$_settle_elapsed" -ge "$_settle_max" ]]; then _settle_settled="false"; break; fi
+  done
+  if [[ "$_settle_blind" == "true" ]]; then _settle_settled="false"; fi
+  _settle_seconds=$(( $(date +%s) - _settle_start_epoch ))
+  _settle_tgt_core_s="$(awk -v a="$_settle_tgt_jiff0" -v b="$(_settle_jiffies "${_settle_target_pid:-0}")" -v hz="$_settle_hz" \
+    'BEGIN{ printf "%.3f", (b-a)/hz }')"
+
+  jq -n \
+    --arg contract "$CONTRACT_ID" --arg target "$TARGET_APP" \
+    --argjson settle_seconds "${_settle_seconds:-0}" \
+    --argjson settled "${_settle_settled}" \
+    --argjson idle_pct "${_settle_pct}" \
+    --argjson idle_samples "${_settle_need}" \
+    --argjson max_seconds "${_settle_max}" \
+    --argjson target_cpu_core_seconds "${_settle_tgt_core_s:-0}" \
+    --arg engines "${_settle_engines:-}" \
+    --argjson watched_nothing "${_settle_blind}" \
+    --slurpfile rows <(awk -F, 'NR>1 && $2!="" {print}' "$SETTLE_CSV" \
+        | awk -F, '{c[$2]++; if($3+0>mx[$2]) mx[$2]=$3+0; s[$2]+=$3+0; if($4!="" && $4+0>mm[$2]) mm[$2]=$4+0}
+                   END{printf "["; f=1; for (k in c){ if(!f) printf ","; f=0;
+                     printf "{\"component\":\"%s\",\"samples\":%d,\"cpu_pct_max\":%.2f,\"cpu_pct_avg\":%.2f,\"rss_mb_max\":%.2f}", k, c[k], mx[k], s[k]/c[k], mm[k] } printf "]"}') \
+    '{
+      schema_version: "1",
+      contract_ref: "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#8",
+      contract_id: $contract,
+      target_app: $target,
+      axis: "post_load_settle",
+      settle_seconds: $settle_seconds,
+      settled: $settled,
+      idle_definition: { cpu_pct_below: $idle_pct, consecutive_samples: $idle_samples, cap_seconds: $max_seconds },
+      watched_nothing: $watched_nothing,
+      deployment_unit_engines: ($engines | split(" ") | map(select(length > 0))),
+      gated_on: ($engines | split(" ") | map(select(length > 0)) + ["target-jvm"]),
+      target_cpu_core_seconds_after_load: $target_cpu_core_seconds,
+      components: $rows[0],
+      unit_note: "components[] also carries containers sampled for context: Postgres, the gateway, and any engine owned by ANOTHER arm sharing this compose stack. Per CONTRACT-v2 section 1, only deployment_unit_engines plus target-jvm belong to THIS arm. Taking a max across components[] without that filter reports a foreign idle container as a cost of this arm. NOTE: no apostrophes in this string - the jq program is bash single-quoted, and one apostrophe here silently broke this rollup once already, in the same file that already carries this warning on the footprint rollup.",
+      note: "SEPARATE AXIS from deployment-footprint.json, which covers the measurement window only. Never sum the two: this window has no load and no iteration denominator, so a per-saga figure derived from it is meaningless. settled=false means the cap was hit and the numbers are a lower bound, not a resting state. Postgres and the payment gateway are sampled here but not gated on - autovacuum would hold the gate open indefinitely and neither defers saga work."
+    }' > "$SETTLE_JSON" 2>/dev/null || echo '{"schema_version":"1","axis":"post_load_settle","error":"rollup failed"}' > "$SETTLE_JSON"
+
+  echo "Post-load settle: ${_settle_seconds}s, settled=${_settle_settled}. -> $SETTLE_JSON"
+fi
 
 # --- CONTRACT-v2 §1/§8 whole-deployment footprint rollup --------------------
 #

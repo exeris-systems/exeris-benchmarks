@@ -781,6 +781,56 @@ Adding an arm to §1 does not empty this register; it moves one entry out of it.
 entries are added whenever a cheaper configuration of a measured stack is identified,
 including our own.
 
+### 9(f) Harness knobs applied outside the contract (added 2026-08-21, v2.3)
+
+(a)–(e) are per-stack properties. This subsection covers knobs **the harness sets**,
+which are not contract-declared, which materially move results, and which were
+therefore invisible in every artifact that did not stamp them. A knob that changes a
+number and appears in no artifact is indistinguishable from a knob that does not exist.
+
+| Knob | Value | Scope | Status |
+|---|---|---|---|
+| `EXERIS_DB_POOL_MAX_SIZE` | **256** (pinned 2026-08-21) | every arm, symmetric | declared |
+| `EXERIS_HTTP_MAX_CONNECTIONS` | **8192** (`exeris-community-runtime.env`) | exeris arm only | declared asymmetry, direction undetermined |
+| `K6_{WARMUP,MEASURE,COOLDOWN}_VUS_{PRE,MAX}` | `maxVUs = rate × 16`, `preAllocatedVUs = maxVUs` | driver, symmetric | declared |
+
+**`EXERIS_DB_POOL_MAX_SIZE` = 256.** This is the value the arms' own configuration
+ships with — `EXERIS_DB_POOL_MAX_SIZE:-256` in the driver env files, and
+`${EXERIS_DB_POOL_MAX_SIZE:${EXERIS_DB_POOL_MAX:256}}` in the Quarkus arm's
+`application.properties`. The capacity ladders of 2026-08-21 ran at **32**, which is
+not a mild deviation but an eightfold reduction below the shipped default, applied to
+every arm. It is not a neutral reduction either: at 200 sessions/s the exeris arm sat
+at exactly 32 of 32 Postgres backends, and connection acquisition off its
+`exeris-flow--*` threads became a race — the same rung produced 0.00 % errors in one
+run and 49.10 % with 156 acquisition failures in another. Any number taken at pool 32
+describes that configuration and must be labelled with it.
+
+The ceiling is not free to raise arbitrarily: this hardware profile runs Postgres with
+`max_connections = 300`, which is a **shared** budget. The harness's own census, gate
+and sampler connections come out of the same 300, so a pool at or near 300 starves them
+and fails the run for a harness reason wearing a target's label. 256 leaves ~41
+backends of headroom.
+
+**`EXERIS_HTTP_MAX_CONNECTIONS` = 8192.** Set for the exeris arm only. The
+corresponding limit is not set for the other arms, so this is a **declared asymmetry**.
+Its direction is deliberately *not* claimed here: whether 8192 is generous, neutral or
+restrictive relative to the other stacks depends on their own defaults, which this repo
+has not established, and the kernel's own default is not determinable from anything
+committed here. It is recorded as an asymmetry pending that determination rather than
+filed under (d), because filing it as tuning-in-our-favour would assert a direction the
+evidence does not carry — and so would filing it as harmless.
+
+**VU pool sizing.** Under `constant-arrival-rate` the VU pool is a hard ceiling on
+concurrency, and the requirement is `rate × iteration_duration`. Measured on this
+workload at 200/s: `iteration_duration` avg 6646 ms, p95 8275 ms — so ~1330 VUs on
+average and ~1655 at p95. The earlier rule (`maxVUs = rate × 8`, `preAllocatedVUs`
+half of that) pre-allocated **below** the average requirement and dropped 1328
+iterations, which the ladder then reported as the target missing its rate. Every rung
+must therefore carry `iter_p95_ms` and `vus_peak`, and a rung that drops iterations
+while sitting at its VU ceiling must be labelled as driver-limited, never folded in
+with target backpressure. A ladder that cannot separate those two reports the driver's
+limit as the target's ceiling.
+
 ## 10. Retroactive validity of v1 results
 
 | v1 result class | Status under v2 |
@@ -791,6 +841,14 @@ including our own.
 | Any mixed-population latency table | invalid under v2, do not cite |
 
 ## 11. Change log
+
+- **2.3** — §9(f) added: harness knobs applied outside the contract, with
+  `EXERIS_DB_POOL_MAX_SIZE` pinned at the arms' own shipped default of 256 (the
+  2026-08-21 ladders ran at 32, eightfold below it), `EXERIS_HTTP_MAX_CONNECTIONS`
+  recorded as a declared asymmetry of undetermined direction rather than filed as
+  tuning in our favour, and k6 VU-pool sizing tied to measured `iteration_duration`
+  with `iter_p95_ms` / `vus_peak` required per rung so a driver limit can never be
+  reported as a target ceiling.
 
 - **2.2** — Axon embedded promoted from §9(e) to a measured arm, as a distinct
   2-process deployment unit that must never be collapsed with the Axon Server row

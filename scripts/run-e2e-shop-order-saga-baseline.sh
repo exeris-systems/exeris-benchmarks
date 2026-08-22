@@ -2327,6 +2327,7 @@ _stop_container_samplers
 # forever and neither is the thing deferring saga work.
 SETTLE_CSV="$LOGS_DIR/post-load-settle.csv"
 SETTLE_JSON="$OUTPUT_DIR/post-load-settle.json"
+RETENTION_CSV="$LOGS_DIR/post-load-retention.csv"
 if [[ "${BENCH_SETTLE_ENABLED:-1}" == "1" ]]; then
   _settle_max="${BENCH_SETTLE_MAX_SECONDS:-600}"
   _settle_pct="${BENCH_SETTLE_IDLE_PCT:-3.0}"
@@ -2425,6 +2426,63 @@ if [[ "${BENCH_SETTLE_ENABLED:-1}" == "1" ]]; then
     if [[ "$_settle_elapsed" -ge "$_settle_max" ]]; then _settle_settled="false"; break; fi
   done
   if [[ "$_settle_blind" == "true" ]]; then _settle_settled="false"; fi
+  # --- retention probe -----------------------------------------------------
+  #
+  # A resting footprint has two very different explanations and docker stats cannot tell
+  # them apart: live state the engine still needs, or heap it simply has not collected.
+  # Page cache is a third, and MemUsage includes it. So read the cgroup split (anon vs
+  # file), ask the JVM for a full collection, and read it again. Measured by hand on
+  # 2026-08-21: one coordinator sat at 1 055 MB anon against 124 MB of file cache and a
+  # forced GC moved it from 1 125 to 1 155 MB -- released nothing. That reading existed
+  # only in a terminal, which under this repo's own traceability rule makes it unusable.
+  # It is an artifact now.
+  #
+  # The target JVM is probed on the same terms as any engine container. An arm whose saga
+  # engine is in-process would otherwise be the one arm whose retention goes unmeasured,
+  # and that arm is ours.
+  echo "component,phase,anon_bytes,file_bytes,rss_kb,gc_invoked" > "$RETENTION_CSV"
+
+  _cg_mem() {
+    local cid base
+    cid="$(docker inspect -f '{{.Id}}' "$1" 2>/dev/null || true)"
+    if [[ -z "$cid" ]]; then printf '0 0'; return 0; fi
+    for base in "/sys/fs/cgroup/system.slice/docker-${cid}.scope" "/sys/fs/cgroup/memory/docker/${cid}"; do
+      if [[ -r "$base/memory.stat" ]]; then
+        awk '$1=="anon"{a=$2} $1=="file"{f=$2} END{printf "%d %d", a+0, f+0}' "$base/memory.stat"
+        return 0
+      fi
+    done
+    printf '0 0'
+    return 0
+  }
+  _proc_rss_kb() {
+    local v
+    v="$(awk '/^VmRSS:/{print $2}' "/proc/$1/status" 2>/dev/null || true)"
+    printf '%s' "${v:-0}"
+    return 0
+  }
+
+  for _c in ${_settle_engines:-}; do
+    read -r _a0 _f0 <<< "$(_cg_mem "$_c")"
+    printf '%s,before,%s,%s,,\n' "$_c" "$_a0" "$_f0" >> "$RETENTION_CSV"
+    _gc="no"
+    if timeout 30 docker exec "$_c" sh -c 'jcmd 1 GC.run' >/dev/null 2>&1; then _gc="yes"; fi
+    sleep 6
+    read -r _a1 _f1 <<< "$(_cg_mem "$_c")"
+    printf '%s,after,%s,%s,,%s\n' "$_c" "$_a1" "$_f1" "$_gc" >> "$RETENTION_CSV"
+  done
+
+  if [[ -n "$_settle_target_pid" ]]; then
+    printf 'target-jvm,before,,,%s,\n' "$(_proc_rss_kb "$_settle_target_pid")" >> "$RETENTION_CSV"
+    _gc="no"
+    _jcmd="${JAVA_HOME:-/opt/jdk26}/bin/jcmd"
+    if [[ -x "$_jcmd" ]]; then
+      if timeout 30 "$_jcmd" "$_settle_target_pid" GC.run >/dev/null 2>&1; then _gc="yes"; fi
+    fi
+    sleep 6
+    printf 'target-jvm,after,,,%s,%s\n' "$(_proc_rss_kb "$_settle_target_pid")" "$_gc" >> "$RETENTION_CSV"
+  fi
+
   _settle_seconds=$(( $(date +%s) - _settle_start_epoch ))
   _settle_tgt_core_s="$(awk -v a="$_settle_tgt_jiff0" -v b="$(_settle_jiffies "${_settle_target_pid:-0}")" -v hz="$_settle_hz" \
     'BEGIN{ printf "%.3f", (b-a)/hz }')"
@@ -2438,6 +2496,7 @@ if [[ "${BENCH_SETTLE_ENABLED:-1}" == "1" ]]; then
     --argjson max_seconds "${_settle_max}" \
     --argjson target_cpu_core_seconds "${_settle_tgt_core_s:-0}" \
     --arg engines "${_settle_engines:-}" \
+    --slurpfile retention <(awk -F, 'NR>1{printf "%s{\"component\":\"%s\",\"phase\":\"%s\",\"anon_bytes\":%d,\"file_bytes\":%d,\"rss_kb\":%d,\"gc_invoked\":\"%s\"}", (n++?",":"["), $1, $2, $3+0, $4+0, $5+0, ($6==""?"n/a":$6)} END{printf "%s\n", (n?"]":"[]")}' "$RETENTION_CSV") \
     --argjson watched_nothing "${_settle_blind}" \
     --slurpfile rows <(awk -F, 'NR>1 && $2!="" {print}' "$SETTLE_CSV" \
         | awk -F, '{c[$2]++; if($3+0>mx[$2]) mx[$2]=$3+0; s[$2]+=$3+0; if($4!="" && $4+0>mm[$2]) mm[$2]=$4+0}
@@ -2453,6 +2512,8 @@ if [[ "${BENCH_SETTLE_ENABLED:-1}" == "1" ]]; then
       settled: $settled,
       idle_definition: { cpu_pct_below: $idle_pct, consecutive_samples: $idle_samples, cap_seconds: $max_seconds },
       watched_nothing: $watched_nothing,
+      retention: $retention[0],
+      retention_note: "anon vs file separates live state from reclaimable page cache; gc_invoked records whether a full collection was actually requested. A resting footprint that survives a forced GC is retained state, not uncollected garbage. rss_kb is populated for the target JVM only, anon/file for containers only - the two are read from different interfaces and must not be compared as if they were one number.",
       deployment_unit_engines: ($engines | split(" ") | map(select(length > 0))),
       gated_on: ($engines | split(" ") | map(select(length > 0)) + ["target-jvm"]),
       target_cpu_core_seconds_after_load: $target_cpu_core_seconds,

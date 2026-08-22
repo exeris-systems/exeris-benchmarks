@@ -1,0 +1,55 @@
+{
+  "schema_version": "1",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#8",
+  "contract_id": "spring_axon_jdbc_h1_park1_v3",
+  "target_app": "spring-axon-jdbc",
+  "axis": "post_load_settle",
+  "settle_seconds": 20,
+  "settled": true,
+  "idle_definition": {
+    "cpu_pct_below": 3.0,
+    "consecutive_samples": 4,
+    "cap_seconds": 150
+  },
+  "watched_nothing": false,
+  "deployment_unit_engines": [
+    "exeris-e2e-saga-axonserver"
+  ],
+  "gated_on": [
+    "exeris-e2e-saga-axonserver",
+    "target-jvm"
+  ],
+  "target_cpu_core_seconds_after_load": 0.210,
+  "components": [
+    {
+      "component": "exeris-e2e-saga-postgres",
+      "samples": 4,
+      "cpu_pct_max": 9.12,
+      "cpu_pct_avg": 4.73,
+      "rss_mb_max": 173.40
+    },
+    {
+      "component": "target-jvm",
+      "samples": 4,
+      "cpu_pct_max": 2.67,
+      "cpu_pct_avg": 1.75,
+      "rss_mb_max": 0.00
+    },
+    {
+      "component": "exeris-e2e-saga-payment-gateway",
+      "samples": 4,
+      "cpu_pct_max": 7.84,
+      "cpu_pct_avg": 3.92,
+      "rss_mb_max": 14.98
+    },
+    {
+      "component": "exeris-e2e-saga-axonserver",
+      "samples": 4,
+      "cpu_pct_max": 2.37,
+      "cpu_pct_avg": 1.30,
+      "rss_mb_max": 1075.20
+    }
+  ],
+  "unit_note": "components[] also carries containers sampled for context: Postgres, the gateway, and any engine owned by ANOTHER arm sharing this compose stack. Per CONTRACT-v2 section 1, only deployment_unit_engines plus target-jvm belong to THIS arm. Taking a max across components[] without that filter reports a foreign idle container as a cost of this arm. NOTE: no apostrophes in this string - the jq program is bash single-quoted, and one apostrophe here silently broke this rollup once already, in the same file that already carries this warning on the footprint rollup.",
+  "note": "SEPARATE AXIS from deployment-footprint.json, which covers the measurement window only. Never sum the two: this window has no load and no iteration denominator, so a per-saga figure derived from it is meaningless. settled=false means the cap was hit and the numbers are a lower bound, not a resting state. Postgres and the payment gateway are sampled here but not gated on - autovacuum would hold the gate open indefinitely and neither defers saga work."
+}

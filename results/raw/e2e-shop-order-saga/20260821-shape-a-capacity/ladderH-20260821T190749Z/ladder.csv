@@ -1,0 +1,10 @@
+arm,pool,rate,configured_rate,achieved_rate,exit,orders,error_rate,dropped,iter_p95_ms,vus_peak,pg_backends_max,conn_x,gate,domain,lg_cpu4,lg_cpu12,tgt_cpu,pg_cpu,coord_cpu,gw_cpu,settle_s,settled,engine_rss_after_mb,verdict
+restate,256,50,50.00,50.0,0,6006,0.00%,0,8485,357,33,0,pass,182,6.3,6.4,6.2,5.8,7.4,3.0,20,true,325.80,CLEAN
+restate,256,100,100.00,100.0,0,12004,0.00%,0,8503,711,41,0,pass,368,11.2,11.2,9.5,9.8,11.7,4.0,20,true,331.50,CLEAN
+restate,256,150,150.00,150.0,0,18005,0.00%,0,8537,1059,52,0,pass,536,16.2,16.0,11.4,14.4,15.3,5.1,20,true,399.80,CLEAN
+spring-axon-jdbc,256,50,50.00,49.0,0,5886,0.00%,119,25136,1046,49,0,pass,177,7.3,5.6,19.9,15.0,11.6,3.7,20,true,974.20,VU-LIMITED
+spring-axon-jdbc,256,100,100.00,6.5,0,779,95.93%,4577,30001,3200,56,0,pass,9,4.9,4.7,21.2,5.5,6.7,2.9,20,true,902.30,VU-LIMITED
+spring-axon-jdbc,256,150,150.00,4.4,0,524,98.72%,6787,30001,4800,59,0,pass,5,4.0,3.3,58.6,4.2,4.2,2.5,156,?,1022.00,VU-LIMITED
+spring-axon-embedded-jdbc,256,50,50.00,49.8,0,5976,0.00%,27,23199,1047,45,0,pass,181,5.1,5.0,14.1,16.3,1.2,2.8,30,true,175.90,VU-LIMITED
+spring-axon-embedded-jdbc,256,100,100.00,8.7,0,1042,93.40%,4517,30002,3189,53,0,pass,15,2.5,2.4,59.7,3.6,1.1,2.0,156,?,175.30,VU-LIMITED
+spring-axon-embedded-jdbc,256,150,150.00,5.7,0,680,98.24%,6756,30001,4800,58,0,pass,6,2.9,2.9,60.6,3.2,1.2,1.9,156,?,170.60,VU-LIMITED

@@ -1,0 +1,58 @@
+{
+  "schema_version": "1",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#8",
+  "contract_id": "spring_axon_embedded_jdbc_h1_park1_v3",
+  "target_app": "spring-axon-embedded-jdbc",
+  "axis": "post_load_settle",
+  "settle_seconds": 156,
+  "settled": false,
+  "idle_definition": {
+    "cpu_pct_below": 3.0,
+    "consecutive_samples": 4,
+    "cap_seconds": 150
+  },
+  "gated_on": [
+    "exeris-e2e-saga-restate-server",
+    "exeris-e2e-saga-lra-coordinator",
+    "target-jvm"
+  ],
+  "target_cpu_core_seconds_after_load": 593.630,
+  "components": [
+    {
+      "component": "exeris-e2e-saga-postgres",
+      "samples": 31,
+      "cpu_pct_max": 8.87,
+      "cpu_pct_avg": 3.24,
+      "rss_mb_max": 189.00
+    },
+    {
+      "component": "target-jvm",
+      "samples": 31,
+      "cpu_pct_max": 640.67,
+      "cpu_pct_avg": 638.26,
+      "rss_mb_max": 0.00
+    },
+    {
+      "component": "exeris-e2e-saga-payment-gateway",
+      "samples": 31,
+      "cpu_pct_max": 8.35,
+      "cpu_pct_avg": 3.20,
+      "rss_mb_max": 16.31
+    },
+    {
+      "component": "exeris-e2e-saga-restate-server",
+      "samples": 31,
+      "cpu_pct_max": 2.31,
+      "cpu_pct_avg": 0.94,
+      "rss_mb_max": 175.30
+    },
+    {
+      "component": "exeris-e2e-saga-lra-coordinator",
+      "samples": 31,
+      "cpu_pct_max": 1.12,
+      "cpu_pct_avg": 0.17,
+      "rss_mb_max": 135.30
+    }
+  ],
+  "note": "SEPARATE AXIS from deployment-footprint.json, which covers the measurement window only. Never sum the two: this window has no load and no iteration denominator, so a per-saga figure derived from it is meaningless. settled=false means the cap was hit and the numbers are a lower bound, not a resting state. Postgres and the payment gateway are sampled here but not gated on - autovacuum would hold the gate open indefinitely and neither defers saga work."
+}

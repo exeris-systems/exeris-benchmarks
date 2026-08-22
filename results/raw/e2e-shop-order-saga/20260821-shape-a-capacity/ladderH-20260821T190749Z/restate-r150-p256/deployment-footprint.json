@@ -1,0 +1,74 @@
+{
+  "schema_version": "1",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#1",
+  "contract_id": "restate_saga_h1_park1_v3",
+  "target_app": "restate",
+  "target": {
+    "component": "target-jvm",
+    "role": "target",
+    "cores_used_avg": 0.8131,
+    "rss_mb_max": 394.8
+  },
+  "components": [
+    {
+      "component": "exeris-e2e-saga-postgres",
+      "role": "shared-backend",
+      "sample_span_seconds": 131.4,
+      "cpu_pct_avg": 59.97,
+      "cpu_pct_max": 143.8,
+      "rss_mb_avg": 172.25,
+      "rss_mb_max": 218.6,
+      "cpu_core_seconds": 78.80058000000001
+    },
+    {
+      "component": "exeris-e2e-saga-restate-server",
+      "role": "stack-specific",
+      "sample_span_seconds": 129.4,
+      "cpu_pct_avg": 40.99,
+      "cpu_pct_max": 56.1,
+      "rss_mb_avg": 319.04,
+      "rss_mb_max": 439.0,
+      "cpu_core_seconds": 53.04106000000001
+    },
+    {
+      "component": "exeris-e2e-saga-payment-gateway",
+      "role": "shared-external",
+      "sample_span_seconds": 129.4,
+      "cpu_pct_avg": 11.19,
+      "cpu_pct_max": 20.7,
+      "rss_mb_avg": 15.58,
+      "rss_mb_max": 16.6,
+      "cpu_core_seconds": 14.47986
+    }
+  ],
+  "iterations": 18003,
+  "postgres_connections": {
+    "pool_max_configured": 256,
+    "peak_backends": 51.0,
+    "peak_active": 30.0,
+    "server_max_connections": 300,
+    "pool_capped": false,
+    "note": "client backends only, sampled at 1 Hz for the whole run (includes warmup and cooldown). NOTE: keep this string free of single quotes — the jq program is bash single-quoted, and an apostrophe here silently broke the whole rollup once."
+  },
+  "sum_container_cpu_pct_avg": 112.15,
+  "sum_container_rss_mb_max": 674.2,
+  "sum_container_cpu_core_seconds": 146.32150000000001,
+  "container_cpu_core_seconds_per_iteration": 0.008127617619285675,
+  "backend_idle_baseline": {
+    "captured_at_utc": "2026-08-21T19:16:06Z",
+    "note": "Sampled after backend readiness and before load. Postgres RSS is mostly fixed shared_buffers and identical across stacks; subtract this to get the attributable part.",
+    "backends": {
+      "exeris-e2e-saga-postgres": {
+        "cpu_pct_idle": 8.71,
+        "mem_usage_idle_raw": "65.26MiB"
+      }
+    }
+  },
+  "interpretation": {
+    "why": "CONTRACT-v2 §1 makes the unit of comparison the whole deployment. exeris-community runs the saga in-process and checkpoints flow state to Postgres; the Axon stacks run saga progression in a separate Axon Server container. Target-JVM-only figures measure where the work lives, not what it costs.",
+    "rss_caveat": "sum_container_rss_mb_max includes Postgres, whose RSS is dominated by fixed shared_buffers and is near-identical on every stack. Summing it raw COMPRESSES real between-stack differences; use backend_idle_baseline to take the delta, and prefer CPU for shared backends.",
+    "cpu_note": "Container CPU is summed without correction: a shared backend's CPU under load is attributable to the stack driving it.",
+    "units": "cpu_pct is docker-stats percent-of-one-core; target cores_used_avg is cores. Do not add the two without converting."
+  },
+  "generated_at_utc": "2026-08-21T19:18:41Z"
+}

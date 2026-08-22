@@ -15,6 +15,10 @@ claim_scope: exploratory
 reproducibility_status: complete
 comparison_axis: within-tier-cross-framework
 hardware_profile: perf-box-amd64
+status: retired
+retired_on: 2026-07-31
+retired_reason: five-independent-invalidators
+citable: false
 ---
 
 > # ⛔ RETIRED — 2026-07-31. Do not cite any figure from this report.

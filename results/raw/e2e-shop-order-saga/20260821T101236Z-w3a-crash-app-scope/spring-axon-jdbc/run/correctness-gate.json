@@ -1,0 +1,34 @@
+{
+  "schema_version": "1",
+  "gate_id": "contract_v2_s4_1_exact_compensation",
+  "gate_name": "observed_compensations == expected_declines",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
+  "decline_rule": "fnv1a64(orderId) mod 1000 < 30 (unsigned, FNV-1a 64 over UTF-8 bytes)",
+  "fault_mode": "terminal",
+  "fault_injection": "crash-scope-app",
+  "durability_tier": "T2-fsync-node-durable-postgres",
+  "durability_tier_source": "default:postgres-synchronous-commit-on",
+  "status": "skipped",
+  "domain_corroboration": {
+    "note": "observed_compensations counts a client-visible token; this leg counts rows left in a compensated terminal state in the domain store. A positive observed count against zero such rows fails the gate — see the 2026-08-21 quarkus-lra finding.",
+    "compensated_tokens": "'CANCELLED'",
+    "compensated_rows": 120,
+    "measured": true
+  },
+  "pass_fail": "not_evaluated",
+  "expected": 121,
+  "observed": 119,
+  "issued_orders": 4166,
+  "order_seed": "exeris-saga-v2",
+  "order_id_format": "{seed}-{scenario}-i{index}",
+  "issued_by_scenario": {
+    "measurement": 1886,
+    "warmup": 2280
+  },
+  "density_note": null,
+  "population_source": "ids_file",
+  "population_assumption": "none: the oracle ran over the exactly-issued orderId list reconstructed from the oidx-tagged saga_issued_total samples in the k6 NDJSON stream (fnv1a64.py --ids-file). Iterations that aborted before order creation contribute no sample and are correctly absent from the population.",
+  "helper_ref": "tools/bench/lib/fnv1a64.py",
+  "reason": "not applicable: fault injection declared (BENCH_SAGA_FAULT_INJECTION=crash-scope-app). observed_compensations=119 != expected_declines=121 (issued=4166 (measurement=1886,warmup=2280) seed=exeris-saga-v2 fault=terminal); CONTRACT-v2 s4.1 requires exact equality; domain-corroborated (120 compensated rows)",
+  "generated_at_utc": "2026-08-21T10:33:41Z"
+}

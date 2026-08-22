@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "exeris_community_h1_park100_v3",
+  "target_app": "exeris-community",
+  "graph_track": "none",
+  "fault_mode": "terminal",
+  "hardware_profile": "perf-box-amd64",
+  "claim_scope": "exploratory",
+  "correctness_gate_status": "pass",
+  "rejection_codes": [],
+  "reason": "eligible"
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": "1",
+  "gate_id": "contract_v2_s4_1_exact_compensation",
+  "gate_name": "observed_compensations == expected_declines",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
+  "decline_rule": "fnv1a64(orderId) mod 1000 < 30 (unsigned, FNV-1a 64 over UTF-8 bytes)",
+  "fault_mode": "terminal",
+  "durability_tier": "T2-fsync-node-durable-postgres",
+  "durability_tier_source": "default:postgres-synchronous-commit-on",
+  "status": "pass",
+  "pass_fail": "pass",
+  "expected": 1398,
+  "observed": 1398,
+  "issued_orders": 46743,
+  "order_seed": "exeris-saga-v2",
+  "order_id_format": "{seed}-{scenario}-i{index}",
+  "issued_by_scenario": {
+    "cooldown": 1141,
+    "measurement": 34201,
+    "warmup": 11401
+  },
+  "density_note": null,
+  "population_source": "ids_file",
+  "population_assumption": "none: the oracle ran over the exactly-issued orderId list reconstructed from the oidx-tagged saga_issued_total samples in the k6 NDJSON stream (fnv1a64.py --ids-file). Iterations that aborted before order creation contribute no sample and are correctly absent from the population.",
+  "helper_ref": "tools/bench/lib/fnv1a64.py",
+  "reason": "observed_compensations == expected_declines (1398); issued=46743 (cooldown=1141,measurement=34201,warmup=11401) seed=exeris-saga-v2 fault=terminal",
+  "generated_at_utc": "2026-08-20T09:57:49Z"
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version":         "1",
+  "scenario_id":            "e2e-shop-order-saga",
+  "campaign_ts":            "20260820T082846Z",
+  "generated_at_utc":       "2026-08-20T14:03:21Z",
+  "commit_sha":             "80330016b3ed31744ff77c933bcfd8b87398f872",
+  "targets":                "exeris-community,quarkus-lra-jdbc,spring-axon-jdbc,spring-axon-embedded-jdbc,restate",
+  "graph_track":            "none",
+  "fault_mode":             "terminal",
+  "repeats":                3,
+  "hardware_profile":       "perf-box-amd64",
+  "contract_id_mode":       "auto-derived-per-target",
+  "contract_id_fallback":   "exeris_community_h1_v2",
+  "jfr_max_size_mb":        256,
+  "db_pool_max":            32,
+  "seed_verification_skipped": false,
+  "server_cpu_affinity":    "",
+  "cgroup_memory_limit_mb": null,
+  "cgroup_cpu_quota_pct":   null,
+  "output_dir":             "/home/bench/saga-campaign-k011-20260820T082846Z",
+  "status_csv":             "/home/bench/saga-campaign-k011-20260820T082846Z/status.csv"
+}

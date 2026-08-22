@@ -1,0 +1,181 @@
+{
+  "schema_version": "1",
+  "gate_id": "contract_v2_s4_1_exact_compensation_campaign_rollup",
+  "gate_name": "every rep: observed_compensations == expected_declines",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
+  "scope_note": "Count-granularity O2 rollup only. NOT a comparative strict-gate verdict and NOT evidence of O1/O3 or LIFO ordering; see CONTRACT-v2-IMPLEMENTATION.md s7.",
+  "scenario_id": "e2e-shop-order-saga",
+  "campaign_ts": "20260820T175303Z",
+  "fault_mode": "terminal",
+  "graph_track": "none",
+  "reps_total": 15,
+  "baseline_only_targets": [],
+  "comparison_eligible_targets_note": "Presence here means only that a target has a fixed_contracts row for this graph track. Comparative eligibility additionally requires the strict-gate artifacts, which this campaign does NOT emit.",
+  "verdict_counts": {
+    "fail": 1,
+    "pass": 14
+  },
+  "durability_tiers": [
+    "T2-fsync-node-durable",
+    "T2-fsync-node-durable-postgres"
+  ],
+  "durability_tier_classes": [
+    "T2"
+  ],
+  "durability_tier_uniform": true,
+  "durability_labels_uniform": false,
+  "campaign_gate_status": "fail",
+  "reps": [
+    {
+      "rep": 1,
+      "target_app": "exeris-community",
+      "contract_id": "exeris_community_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 2,
+      "target_app": "exeris-community",
+      "contract_id": "exeris_community_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 3,
+      "target_app": "exeris-community",
+      "contract_id": "exeris_community_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 1,
+      "target_app": "quarkus-lra-jdbc",
+      "contract_id": "quarkus_lra_jdbc_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 2,
+      "target_app": "quarkus-lra-jdbc",
+      "contract_id": "quarkus_lra_jdbc_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 3,
+      "target_app": "quarkus-lra-jdbc",
+      "contract_id": "quarkus_lra_jdbc_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "compensation_mismatch",
+      "baseline_exit_code": 3,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "fail"
+    },
+    {
+      "rep": 1,
+      "target_app": "spring-axon-jdbc",
+      "contract_id": "spring_axon_jdbc_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 2,
+      "target_app": "spring-axon-jdbc",
+      "contract_id": "spring_axon_jdbc_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 3,
+      "target_app": "spring-axon-jdbc",
+      "contract_id": "spring_axon_jdbc_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 1,
+      "target_app": "spring-axon-embedded-jdbc",
+      "contract_id": "spring_axon_embedded_jdbc_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 2,
+      "target_app": "spring-axon-embedded-jdbc",
+      "contract_id": "spring_axon_embedded_jdbc_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 3,
+      "target_app": "spring-axon-embedded-jdbc",
+      "contract_id": "spring_axon_embedded_jdbc_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable-postgres",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 1,
+      "target_app": "restate",
+      "contract_id": "restate_saga_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 2,
+      "target_app": "restate",
+      "contract_id": "restate_saga_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable",
+      "correctness_gate": "pass"
+    },
+    {
+      "rep": 3,
+      "target_app": "restate",
+      "contract_id": "restate_saga_h1_park100_v3",
+      "baseline_only": false,
+      "runner_status": "clean",
+      "baseline_exit_code": 0,
+      "durability_tier": "T2-fsync-node-durable",
+      "correctness_gate": "pass"
+    }
+  ],
+  "generated_at_utc": "2026-08-20T23:28:02Z"
+}

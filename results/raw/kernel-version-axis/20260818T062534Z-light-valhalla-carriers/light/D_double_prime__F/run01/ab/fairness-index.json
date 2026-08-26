@@ -1,0 +1,45 @@
+{
+  "error_symmetry": 1.0000,
+  "latency_symmetry": 1.0000,
+  "throughput_confidence": 1.0000,
+  "db_config_symmetry": 1.0000,
+  "db_config": {
+    "status": "ok",
+    "a": {
+      "jdbc_base_url": "jdbc:postgresql://localhost:5432/benchmark_db",
+      "fairness_params": {
+        "preferQueryMode": "extended",
+        "prepareThreshold": "1",
+        "defaultRowFetchSize": "0",
+        "adaptiveFetch": "false"
+      },
+      "fairness_params_missing": [],
+      "fairness_params_complete": true,
+      "env_digest": "sha256:ed40d049c239ec486c83d4e8e7e04fbfae54ae47c6e3f085c3e0744c54eef363",
+      "captured_at": "2026-08-18T11:09:14Z",
+      "note": "Fingerprint of the EXERIS_DB_* environment this harness passes down to both arms (secrets excluded). Both arms inherit one environment, so equality alone proves nothing — fairness_params_complete is the check that catches an un-normalized URL."
+    },
+    "b": {
+      "jdbc_base_url": "jdbc:postgresql://localhost:5432/benchmark_db",
+      "fairness_params": {
+        "preferQueryMode": "extended",
+        "prepareThreshold": "1",
+        "defaultRowFetchSize": "0",
+        "adaptiveFetch": "false"
+      },
+      "fairness_params_missing": [],
+      "fairness_params_complete": true,
+      "env_digest": "sha256:ed40d049c239ec486c83d4e8e7e04fbfae54ae47c6e3f085c3e0744c54eef363",
+      "captured_at": "2026-08-18T11:09:14Z",
+      "note": "Fingerprint of the EXERIS_DB_* environment this harness passes down to both arms (secrets excluded). Both arms inherit one environment, so equality alone proves nothing — fairness_params_complete is the check that catches an un-normalized URL."
+    }
+  },
+  "composite_score": 0.9000,
+  "interpretation": "highly_fair",
+  "computed_at": "2026-08-18T11:09:14Z",
+  "targets": [
+    "entity-read-by-id-20260818-102850-000000",
+    "entity-read-by-id-20260818-102850-000000"
+  ],
+  "asymmetry_notes": []
+}

@@ -1,0 +1,44 @@
+{
+  "source_stream": "db-cpuset-mpstat.csv",
+  "samples": 901,
+  "cpus_in_set": 8,
+  "busy_pct_mean": 92.77,
+  "busy_pct_min": 41.08,
+  "busy_pct_p50": 92.91,
+  "busy_pct_p95": 93.82,
+  "busy_pct_max": 94.88,
+  "component_pct_mean": {
+    "usr": 35.81,
+    "sys": 41.09,
+    "iowait": 0.00,
+    "soft": 15.86,
+    "irq": 0.00,
+    "steal": 0.00,
+    "nice": 0.00,
+    "guest": 0.00,
+    "gnice": 0.00
+  },
+  "per_cpu_busy_pct_mean": {
+    "4": 92.78,
+    "5": 92.82,
+    "6": 92.77,
+    "7": 92.72,
+    "12": 92.77,
+    "13": 92.80,
+    "14": 92.77,
+    "15": 92.72
+  },
+  "role": "db",
+  "ceiling_reading": "db_near_saturation",
+  "ceiling_reading_threshold_note": "db_saturated at busy_pct_mean >= 95, db_near_saturation >= 80. When saturated, throughput ratios between arms read the Postgres ceiling and cpu/req is the sound comparator.",
+  "sampler_meta": {
+  "resolved_cpuset": "4-7,12-15",
+  "source": "docker-hostconfig",
+  "cpuset_is_restricted": true,
+  "db_cpu_attributable": true,
+  "interval_seconds": 1,
+  "window": "measurement",
+  "target_id": "exeris-k0111pv-j28p",
+  "sampler_started": true
+}
+}

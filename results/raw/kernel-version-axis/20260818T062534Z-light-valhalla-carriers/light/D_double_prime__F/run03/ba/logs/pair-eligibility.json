@@ -1,0 +1,50 @@
+{
+  "scenario_id": "entity-read-by-id",
+  "contract_id": "fixed_contract_cross_runtime_h1_single_read_v1",
+  "target_a_input": "exeris-k0111pv-j28p",
+  "target_b_input": "exeris-k0110-j28p",
+  "target_a_canonical": "exeris-k0111pv-j28p",
+  "target_b_canonical": "exeris-k0110-j28p",
+  "pair_eligible": true,
+  "claim_policy": {
+    "target_a_claim_scope": "comparison_eligible",
+    "target_b_claim_scope": "comparison_eligible",
+    "claim_eligible_run": true
+  },
+  "checks": {
+    "compatible_targets": {
+      "pass": true,
+      "reason": "both targets listed in compatible_targets"
+    },
+    "same_tier": {
+      "pass": true,
+      "reason": "same tier (community)"
+    },
+    "same_protocol_mode": {
+      "pass": true,
+      "reason": "same protocol_mode (h1)"
+    },
+    "target_contract_scope": {
+      "pass": true,
+      "reason": "no per-target contract restriction applies"
+    },
+    "runnable_targets": {
+      "pass": true,
+      "reason": "both targets resolved as runnable"
+    },
+    "allowed_pairs": {
+      "pass": true,
+      "reason": "pair declared in allowed_pairs",
+      "pair_id": "exeris-k0110-j28p__exeris-k0111pv-j28p",
+      "workload_profile_key": "entity-read-by-id-community-h1-loopback-runtime-wrk"
+    },
+    "forbidden_pair": {
+      "pass": true,
+      "reason": "pair is not forbidden"
+    },
+    "claim_policy_required": {
+      "pass": true,
+      "reason": "pair claim eligibility requirement disabled"
+    }
+  }
+}

@@ -1,0 +1,195 @@
+{
+  "schema_version": "1",
+  "axis_id": "kernel-version-0.10.2-vs-0.11.0",
+  "tier": "community",
+  "comparison_axis": "within-tier",
+  "track_family": "exploratory",
+  "description": "Kernel-line axis for the 0.11 release: eu.exeris:0.10.2 vs eu.exeris:0.11.0 vs eu.exeris.preview:0.11.0. The three coordinates cannot share a JDK, so the axis is run as a ladder in which every leg moves exactly one variable.",
+  "why_a_ladder": [
+    "Class-file version plus the preview bit pin each kernel coordinate to a JDK: 0.10.2 is major 70 with 9/285 preview classes (JDK 26 only), mainline 0.11.0 is major 69 with no preview classes (JDK 25 through 28), preview/0.11.0 is major 72 with 95/306 preview classes (JDK 28 EA only).",
+    "A direct 0.10.2 vs preview/0.11.0 comparison therefore moves kernel version, JDK, and language/runtime feature set at once, and no part of the difference can be attributed.",
+    "Mainline 0.11.0 is the only coordinate that loads on more than one JDK, which makes it the bridge arm. Every leg below holds everything constant except the named variable.",
+    "The public SPI of mainline and preview 0.11.0 is identical apart from four records that become value class (TlsHandshakeResult, TlsShutdownResult, EventEngineStats, MemoryStats), so no application source differs across any arm."
+  ],
+  "arms": [
+    {
+      "arm": "A",
+      "target_id": "exeris-k0102-j26p",
+      "port": 9020,
+      "staged_jar": "targets/_staging/exeris-community-app-k0.10.2-r26p.jar",
+      "kernel_group_id": "eu.exeris",
+      "kernel_version": "0.10.2",
+      "jdk_feature": 26,
+      "jdk_home_var": "JDK26_HOME",
+      "enable_preview_flag": true,
+      "app_compiler_release": 26,
+      "role": "baseline: the kernel line currently pinned by every other community target"
+    },
+    {
+      "arm": "B",
+      "target_id": "exeris-k0110-j26p",
+      "port": 9021,
+      "staged_jar": "targets/_staging/exeris-community-app-k0.11.0-r26p.jar",
+      "kernel_group_id": "eu.exeris",
+      "kernel_version": "0.11.0",
+      "jdk_feature": 26,
+      "jdk_home_var": "JDK26_HOME",
+      "enable_preview_flag": true,
+      "app_compiler_release": 26,
+      "role": "the release delta: identical app release, JDK and JVM flags as A, only the kernel version moves"
+    },
+    {
+      "arm": "C-prime",
+      "target_id": "exeris-k0110-j26",
+      "port": 9022,
+      "staged_jar": "targets/_staging/exeris-community-app-k0.11.0-r25.jar",
+      "kernel_group_id": "eu.exeris",
+      "kernel_version": "0.11.0",
+      "jdk_feature": 26,
+      "jdk_home_var": "JDK26_HOME",
+      "enable_preview_flag": false,
+      "app_compiler_release": 25,
+      "role": "bridge between the JDK-26 pair and the JDK ladder: same JDK as B, app dropped to release 25 and the preview flag removed"
+    },
+    {
+      "arm": "C",
+      "target_id": "exeris-k0110-j25",
+      "port": 9023,
+      "staged_jar": "targets/_staging/exeris-community-app-k0.11.0-r25.jar",
+      "kernel_group_id": "eu.exeris",
+      "kernel_version": "0.11.0",
+      "jdk_feature": 25,
+      "jdk_home_var": "JDK25_HOME",
+      "enable_preview_flag": false,
+      "app_compiler_release": 25,
+      "role": "the shipping configuration: mainline 0.11.0 on the JDK 25 LTS, no preview anywhere"
+    },
+    {
+      "arm": "D",
+      "target_id": "exeris-k0110-j28",
+      "port": 9024,
+      "staged_jar": "targets/_staging/exeris-community-app-k0.11.0-r25.jar",
+      "kernel_group_id": "eu.exeris",
+      "kernel_version": "0.11.0",
+      "jdk_feature": 28,
+      "jdk_home_var": "JDK28_HOME",
+      "enable_preview_flag": false,
+      "app_compiler_release": 25,
+      "role": "the JDK delta: byte-identical artifact to C, only the JVM feature release moves"
+    },
+    {
+      "arm": "D-prime",
+      "target_id": "exeris-k0110-j28f",
+      "port": 9025,
+      "staged_jar": "targets/_staging/exeris-community-app-k0.11.0-r25.jar",
+      "kernel_group_id": "eu.exeris",
+      "kernel_version": "0.11.0",
+      "jdk_feature": 28,
+      "jdk_home_var": "JDK28_HOME",
+      "enable_preview_flag": true,
+      "app_compiler_release": 25,
+      "role": "the flag tax: byte-identical artifact to D on the same JDK, with only the preview flag toggled on. The flag is not free - it changes what the JVM will share from the default CDS archive - so this leg keeps that cost out of the Valhalla number"
+    },
+    {
+      "arm": "D-double-prime",
+      "target_id": "exeris-k0110-j28p",
+      "port": 9026,
+      "staged_jar": "targets/_staging/exeris-community-app-k0.11.0-r28p.jar",
+      "kernel_group_id": "eu.exeris",
+      "kernel_version": "0.11.0",
+      "jdk_feature": 28,
+      "jdk_home_var": "JDK28_HOME",
+      "enable_preview_flag": true,
+      "app_compiler_release": 28,
+      "role": "the recompile tax: same kernel as D-prime, but the app rebuilt at release 28 with preview. 30 of its 40 class files come out preview-marked from unchanged source (JEP 401 changes how the class-file format is read), so this cost belongs to the recompile, not to the preview kernel"
+    },
+    {
+      "arm": "E",
+      "target_id": "exeris-k0110pv-j28p",
+      "port": 9027,
+      "staged_jar": "targets/_staging/exeris-community-app-kpv0.11.0-r28p.jar",
+      "kernel_group_id": "eu.exeris.preview",
+      "kernel_version": "0.11.0",
+      "jdk_feature": 28,
+      "jdk_home_var": "JDK28_HOME",
+      "enable_preview_flag": true,
+      "app_compiler_release": 28,
+      "role": "the preview kernel at its FIRST cut: identical app build, JDK and flags as D-double-prime, only the kernel coordinate moves. Carries StructuredTaskScope plus six value classes - none of the six on a request path, which is why this arm alone cannot answer the Valhalla question. Arm F is the one that can."
+    },
+    {
+      "arm": "F",
+      "target_id": "exeris-k0111pv-j28p",
+      "port": 9028,
+      "staged_jar": "targets/_staging/exeris-community-app-kpv0.11.1-r28p.jar",
+      "kernel_group_id": "eu.exeris.preview",
+      "kernel_version": "0.11.1",
+      "jdk_feature": 28,
+      "jdk_home_var": "JDK28_HOME",
+      "enable_preview_flag": true,
+      "app_compiler_release": 28,
+      "role": "the preview kernel with the carrier sweep: 159 JEP 401 value classes (157 value records plus RouteRequirement and CoreSslHandles) against E's six. Unlike E's six, these sit on the measured request path - HttpRequest, HttpResponse, HttpHeader, HttpStatus, RouteMatch, PathTemplate, Http1RequestParser, ReadResult, NativeTcpStreamPendingWrite, RequestPersistenceSession. There is no mainline 0.11.1: this version exists only under eu.exeris.preview."
+    }
+  ],
+  "legs": [
+    {
+      "leg": "A->B",
+      "isolates": "kernel version 0.10.2 -> 0.11.0",
+      "held_constant": "app compiler release (26), JDK (26), preview flag (on)",
+      "claim": "the release delta"
+    },
+    {
+      "leg": "B->C-prime",
+      "isolates": "app compiler release 26 -> 25 and the preview flag going off",
+      "held_constant": "kernel (mainline 0.11.0), JDK (26)",
+      "claim": "control - connects the JDK-26 pair to the JDK ladder; a large effect here means the ladder legs cannot be chained to the release delta"
+    },
+    {
+      "leg": "C-prime->C",
+      "isolates": "JDK 26 -> 25",
+      "held_constant": "artifact (byte-identical staged jar), kernel, flags",
+      "claim": "cost of staying on the LTS"
+    },
+    {
+      "leg": "C-prime->D",
+      "isolates": "JDK 26 -> 28 EA",
+      "held_constant": "artifact (byte-identical staged jar), kernel, flags",
+      "claim": "the JDK delta"
+    },
+    {
+      "leg": "D->D-prime",
+      "isolates": "the preview flag alone",
+      "held_constant": "artifact (byte-identical staged jar), kernel, JDK",
+      "claim": "flag tax, chiefly the default CDS archive"
+    },
+    {
+      "leg": "D-prime->D-double-prime",
+      "isolates": "app recompiled at release 28 with preview (30/40 class files become preview-marked)",
+      "held_constant": "kernel (mainline 0.11.0), JDK (28), preview flag (on)",
+      "claim": "recompile tax"
+    },
+    {
+      "leg": "D-double-prime->E",
+      "isolates": "kernel coordinate eu.exeris -> eu.exeris.preview (Valhalla value classes + StructuredTaskScope)",
+      "held_constant": "app build, JDK (28), preview flag (on)",
+      "claim": "the Valhalla + structured-concurrency delta - the headline number for the preview line"
+    },
+    {
+      "leg": "E->F",
+      "isolates": "the JEP 401 carrier sweep: 6 -> 159 value classes, of which the new ones are on the request path",
+      "held_constant": "kernel groupId (eu.exeris.preview), JDK (28 EA), preview flag (on), app build (release 28 + preview)",
+      "claim": "the cleanest Valhalla leg this axis can produce - same coordinate, same toolchain, the value modifier is the variable. NOT a pure modifier delta: the same patch also carries the FileSink poison-pill fix and the CommunityRotatingKeySet CAS removal, both off the measured cleartext read path but both real code changes. Report the leg as 'preview 0.11.0 -> 0.11.1', never as 'value classes alone'."
+    },
+    {
+      "leg": "D-double-prime->F",
+      "isolates": "kernel coordinate eu.exeris:0.11.0 -> eu.exeris.preview:0.11.1 (StructuredTaskScope + the full carrier sweep)",
+      "held_constant": "app build, JDK (28), preview flag (on)",
+      "claim": "distributed line vs the full preview line - the headline figure for adopting the preview coordinate. Measured directly rather than summed from D-double-prime->E and E->F, so it does not inherit either leg's error."
+    }
+  ],
+  "known_confounds": [
+    "JDK 28 is an early-access build (28-ea+10-569) and JDK 25/26 are GA. EA builds may carry diagnostics and JIT tuning that GA does not, so every leg crossing into JDK 28 inherits an EA-vs-GA difference that no arm here can separate out.",
+    "Arm A is the only one whose staged jar shades a kernel with preview class files at major 70; it cannot be moved to any other JDK, so the release delta is only ever measurable at JDK 26.",
+    "Community persistence is JDBC over HikariCP, so on a DB-bound contract most of the response time is Postgres and kernel-internal effects compress. Read the light contract and the agent-free scenarios before the aggregate read.",
+    "The E->F patch is not modifier-only. Alongside the 159 value-class declarations it carries a FileSink shutdown fix (the poison pill was compared by identity, which value semantics breaks) and removes a compareAndSet on a record in CommunityRotatingKeySet. Both are off the measured cleartext read path - telemetry is disabled in the run env and key rotation is not on the entity-read path - but neither is nothing, so E->F is 'preview 0.11.0 -> 0.11.1', not 'the value modifier'."
+  ]
+}

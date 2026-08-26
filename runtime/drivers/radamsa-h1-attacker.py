@@ -84,27 +84,51 @@ def mutate(seed_bytes: bytes, seed_value: str) -> bytes:
 
 
 def fire_one(host: str, port: int, payload: bytes, timeout: float) -> str:
-    """Returns one of: 'response', 'hang', 'crash'."""
+    """Classify ONE attack outcome from the target's point of view.
+
+    The original taxonomy returned 'crash' for an empty response, for
+    ConnectionReset/BrokenPipe, and for any OSError -- i.e. it reported the
+    ATTACKER's socket outcome as a target crash. Measured against a healthy
+    target: 9 of 40 mutations produced a close-without-response and 8 timed out,
+    while the target answered /health in 7 ms throughout and its log carried only
+    whitelisted Http1ParseException. Closing the connection on an unparseable
+    request is specified behaviour (RFC 9112 §2.2), not a crash, and reporting it
+    as one made the scenario classify a correct rejection as a finding.
+
+    The distinction that matters is WHERE the failure happens:
+
+      connect() fails      -> the listener is gone. Real signal.
+      fails after connect  -> the server closed on bad input. Expected.
+
+    Returns: 'refused' | 'rejected' | 'timeout' | '5xx' | 'response'
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        sock.connect((host, port))
-        sock.sendall(payload)
         try:
+            sock.connect((host, port))
+        except OSError:
+            # No listener, backlog exhausted, or the process is gone.
+            return "refused"
+        try:
+            sock.sendall(payload)
             data = sock.recv(4096)
-            sock.close()
             if not data:
-                return "crash"
+                return "rejected"
             if data.startswith(b"HTTP/1.") and b" 5" in data[:32]:
                 return "5xx"
             return "response"
         except socket.timeout:
+            return "timeout"
+        except (ConnectionResetError, BrokenPipeError):
+            return "rejected"
+        except OSError:
+            return "rejected"
+    finally:
+        try:
             sock.close()
-            return "hang"
-    except (ConnectionResetError, BrokenPipeError):
-        return "crash"
-    except OSError:
-        return "crash"
+        except OSError:
+            pass
 
 
 def main() -> int:
@@ -144,6 +168,8 @@ def main() -> int:
 
     iterations = 0
     crashes = 0
+    rejected = 0
+    responses = 0
     hangs = 0
     five_xx = 0
 
@@ -169,12 +195,16 @@ def main() -> int:
 
         outcome = fire_one(host, port, payload,
                            args.socket_timeout_seconds)
-        if outcome == "hang":
+        if outcome == "timeout":
             hangs += 1
-        elif outcome == "crash":
+        elif outcome == "refused":
             crashes += 1
+        elif outcome == "rejected":
+            rejected += 1
         elif outcome == "5xx":
             five_xx += 1
+        else:
+            responses += 1
 
         iterations += 1
         elapsed = time.monotonic() - loop_start
@@ -187,6 +217,8 @@ def main() -> int:
         "crash_count": crashes,
         "hang_count": hangs,
         "five_xx_count": five_xx,
+        "rejected_count": rejected,
+        "response_count": responses,
         "duration_seconds": duration,
         "radamsa_seed": args.radamsa_seed,
     }, sys.stdout)

@@ -175,6 +175,13 @@ ITERATIONS_TOTAL=$(jq -r '.iterations_total // 0' "$ATTACKER_OUT")
 CRASH_COUNT=$(jq -r '.crash_count // 0' "$ATTACKER_OUT")
 HANG_COUNT=$(jq -r '.hang_count // 0' "$ATTACKER_OUT")
 FIVE_XX_COUNT=$(jq -r '.five_xx_count // 0' "$ATTACKER_OUT")
+# Rejections and plain responses are EXPECTED outcomes, not findings: closing the connection on
+# an unparseable request is specified behaviour. They are not in the findings schema (which is
+# additionalProperties:false), so they ride in `notes` -- without them a reader cannot tell a
+# campaign the target absorbed from one it barely saw.
+REJECTED_COUNT=$(jq -r '.rejected_count // 0' "$ATTACKER_OUT")
+RESPONSE_COUNT=$(jq -r '.response_count // 0' "$ATTACKER_OUT")
+CAMPAIGN_NOTES="expected outcomes (not findings): ${REJECTED_COUNT} connection-close rejections, ${RESPONSE_COUNT} well-formed responses. crash_count counts CONNECT failures only (listener gone); a close after connect is the server correctly refusing malformed input."
 
 if [[ "$RSS_BEFORE" == "unobtained" || "$RSS_AFTER" == "unobtained" ]]; then
   RSS_OBTAINED=false
@@ -258,6 +265,7 @@ jq -n \
   --argjson probe_duration_ms "$DESTR_PROBE_DURATION_MS" \
   --arg probe_alive "$DESTR_PROBE_ALIVE" \
   --arg degradation "$DEGRADATION" \
+  --arg notes "$CAMPAIGN_NOTES" \
   --arg jfr_path "${JFR_OUT:-}" \
   --arg radamsa_seed "$RADAMSA_SEED" \
   '{
@@ -302,6 +310,7 @@ jq -n \
       jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end)
     },
     degradation_class: $degradation,
+    notes: $notes,
     tolerance: {
       rss_growth_pct_max: 5,
       max_unexpected_crashes: 0

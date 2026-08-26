@@ -19,11 +19,17 @@ summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entir
 # (CI [+5.93 %, +7.63 %]) while its component -- adaptorCount -- is far tighter. Quote the adapter
 # count when one number has to travel alone.
 #
-# But quote it as 150, not 151.2, and do NOT call it deterministic. Every arm takes one of exactly
-# two values 7 apart -- E {820,827}, D'' {805,812}, F {970,977} -- with the low value appearing in
-# four different arm/slot combinations. Per-pair deltas are [150,150,150,150,157,150]: modal and
-# median 150, mean 151.2, and the mean corresponds to no observation. The claim that survives is a
-# RATIO in 5 of 6 pairs, not a fixed count. See 4.1.
+# But quote it as 150, do NOT call it deterministic, and do NOT let it travel without naming its
+# campaign. Two things bound it. (1) The pair of values is not a property of the runtime. Within
+# the campaign each arm sits at one of two states 7 apart -- E {820,827}, D'' {805,812},
+# F {970,977} -- but the -Xlog:class+load probe found D'' at 803 as well, so
+# "one of exactly two values" describes the campaign's conditions. What IS a runtime property is
+# that the count is ADDITIVE OVER CONDITIONAL-LOADING CLUSTERS -- which is why a third value reads
+# as a promotion of that model, not a retraction of it. (2) The number is campaign-specific: the
+# telemetry-silenced campaign puts the same arms at E 828 / F 972, delta 144, so adaptorCount
+# depends on the JFR configuration and the two campaigns' adapter figures are not comparable.
+# Per-pair deltas in 20260818 are [150,150,150,150,157,150]; 150 is the difference of the fullest
+# observed states, and the mean 151.2 corresponds to no observation. See 4.1.
 authors:
   - Arkadiusz Przychocki
 track: Community
@@ -475,7 +481,7 @@ rule out a confound on this line item. Ranked by attribution strength:
 
 | item | size | attribution |
 |---|---|---|
-| **+150 adapters** | — | **strongest**: the difference between each arm's fullest observed state, named mechanism, one more than the +149 carriers measured from the two jars. Not a fixed count — every arm takes one of two values 7 apart, F included — and campaign-specific: the telemetry-silenced campaign gives 144 (§4.1) |
+| **+150 adapters** | — | **strongest**: the difference between each arm's fullest observed state, named mechanism, one more than the +149 carriers measured from the two jars. Not a fixed count — within the campaign each arm sits at one of two states 7 apart, F included, and the probe found a third — and campaign-specific: the telemetry-silenced campaign gives 144 (§4.1) |
 | +188.9 kB Metaspace | 0.18 MB | strong: flat class count settles it |
 | +1149.6 kB code cache | 1.15 MB | **weaker**: 6/6 with an interval excluding zero, but ~147 of the +297 entries are compiled methods that the release step's non-carrier changes could also produce |
 
@@ -795,9 +801,16 @@ promote them and §2.3 shows the run-set drift that explains them.
 
 §4's adapter result does not rest on an interval at all, and deliberately so: the counts are
 bimodal, so a t-interval on their mean bounds a mixture proportion rather than a magnitude (§4.1).
-What carries it is that **every one of the twelve observations is one of two values 7 apart**, and
-that the modal deltas close on themselves arithmetically. That is a stronger form of evidence than
-a p-value, and it is immune to multiplicity because it is not a test.
+What carries it is that **every one of campaign 20260818's twelve observations is one of two values
+7 apart**, and that the arithmetic of the fullest observed states closes on itself. Being a count
+rather than an inference, it is immune to multiplicity: there is no test here, so there is nothing
+to correct.
+
+Immunity to multiplicity is not generality, though, and the two must not be run together. §4.1's
+cross-campaign control puts these same two arms at 828 and 972 under a different JFR configuration.
+So what the twelve observations establish firmly is a property of **that campaign** — and the
+runtime-level claim is the weaker, more portable one: that the count is additive over
+conditional-loading clusters.
 
 **Not measured, and therefore not claimed.**
 
@@ -831,10 +844,12 @@ a p-value, and it is immune to multiplicity because it is not a test.
 **Every entry below marked "review pass" happened *before* this report was published.** No version
 carrying the figures they correct was ever distributed; the list records what was caught while the
 document was still private, in the order each fix exposed the next. Read it as the audit trail of
-a single pre-publication review, not as corrections to a circulated text.
+a single pre-publication review, not as corrections to a circulated text. Entries marked **post-merge**
+are the exception: they were made after the report landed on `main`, and are labelled as such.
 
 | date | change |
 |---|---|
+| 2026-08-26 | **Post-merge**, editorial-scope only — no figure changes. Two surfaces the eighth pass left behind, both saying more about `adaptorCount` than §4.1 now allows. The frontmatter's own trap note still read "every arm takes one of exactly two values 7 apart" and "the claim that survives is a RATIO in 5 of 6 pairs"; the probe's third value (803) and the telemetry-silenced campaign's 828/972 had already retired both, and since that note is an instruction to the next editor, the stale version would have argued against the body. It now carries the two live bounds — the pair is a campaign condition, not a runtime property, and the figure is campaign-specific — and names the additive-over-clusters model as the part that is a runtime property. §7's multiplicity paragraph closed on "a stronger form of evidence than a p-value", which no longer fits a quantity the same report says depends on the recording configuration; the immunity-to-multiplicity argument is kept intact and unchanged, but the strength is now scoped to campaign 20260818, with the additive-over-clusters reading named as the weaker, portable claim. Without this, §7 and the eighth revision entry asserted different things about one number. |
 | 2026-08-26 | Eighth pass — **confirmatory control across campaigns, and a comparability warning**. §3's telemetry-silenced campaign was queried for adapter counts as an independent test of the conditional-loading mechanism. Both saturation values moved: E 827→**828**, F 977→**972**, delta 150→**144**. So **`adaptorCount` depends on the JFR configuration, not only on the code** — the instrument entered the quantity it measures, and adapter numbers are not comparable across campaigns, exactly as §3.1 says of allocation. The direction is not uniform (F −5, E +1), so this is not "telemetry adds adapters"; what survives unchanged is the **step**, −7 in both arms of a campaign with no `eu.exeris.*` events, which means the cluster behind the seven is *not* the JFR event classes the probe identified. Three consequences recorded: adapter figures are now framed as each arm's **fullest observed state** rather than its mode (numerically identical, physically justified, and "observed" because the probe never reached D″'s 812 in six runs); the 1:1 reading is **narrowed** to "these two classes carry two adapters", since seven could be three classes contributing 3+2+2; and the third value 803 is recorded as a **promotion** of the model — "additive over conditional-loading clusters" is a runtime property that predicts a third value, where "one of two values 7 apart" merely described twelve observations. §7 gains **equal instrumentation coverage between arms** as an unmeasured assumption. |
 | 2026-08-26 | Editorial pass over §4.1, which had accumulated six revisions and started contradicting itself. Its opening sentence ended in an edit fragment and pointed at an adapter row that no longer exists in that table; the adapter values were restated three times over; and the paragraph announcing "three things" was followed by eight. Counted announcements have now been replaced with an uncounted one, since that number had drifted three times. The frontmatter `summary` opened with "in 6 of 6 pairs with intervals that exclude zero" and then led with adapters, which are 5 of 6 and carry no interval — the two clauses are now attached to the items they actually describe. Minor: `~146` unified to **147** across four places (296.7 entries less 150 adapters); §7 now names the single promoted test (§4.1's Metaspace growth) rather than leaving it to inference; §5.2's lead sentence had lost its predicate to an earlier insertion; a triple em-dash in TL;DR item 3. **The revision history now states plainly that every "review pass" entry is pre-publication** — no version carrying the corrected figures was ever distributed, and without that line the list reads as corrections to a circulated text. |
 | 2026-08-26 | Seventh pass — **the set difference, measured**. A dedicated probe (arm D″, `-Xlog:class+load=info`, 90 s, repeated) produced two runs of one binary differing by 2 adapters, and diffing their class-load sets settles the question the counters could not. Raw: **a net of −1 class hides 932 absent and 931 extra**, overwhelmingly `java.lang.invoke` `LambdaForm` and hidden classes whose names carry a per-run address — so every class-count delta in this report measures that churn, and the earlier −4.6 / −6.5 / −5.4 mechanism reading is **withdrawn**. Excluding generated classes, the same two runs differ by **exactly 2 classes, none extra**, and they are a coherent cluster: `HttpAggregateBufferForcedReleaseEvent` and `HttpAggregateBufferHeldEvent` in `eu.exeris.kernel.core.http.jfr`. Controls are exact — two independent pairs agreeing on the adapter count have **byte-identical** stable sets (3990, zero difference either way). So the rule is **one adapter per conditionally-loaded class**, established at the 2-adapter scale; the 7-step predicts seven such classes and remains unobserved, because the probe never reached 812 at any duration. The probe also produced a third value, 803, so "one of exactly two values 7 apart" is now scoped to the campaign's conditions rather than stated as a property of the runtime. |

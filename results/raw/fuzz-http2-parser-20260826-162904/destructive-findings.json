@@ -1,0 +1,32 @@
+{
+  "schema_version": "1",
+  "run_id": "fuzz-http2-parser-20260826-162904-cb3345640ddc",
+  "scenario": "fuzz-http2-parser",
+  "campaign_kind": "jazzer-parser",
+  "duration_seconds": 63,
+  "claim_scope": "exploratory",
+  "comparison_axis": "standalone",
+  "findings": {
+    "iterations_total": 130832392,
+    "crash_count": 0,
+    "oom_count": 0,
+    "hang_count": 0,
+    "unique_crash_signatures": 0,
+    "mean_time_to_crash_us": null,
+    "leak_count_delta": 0
+  },
+  "degradation_class": "stable",
+  "tool_versions": {
+    "exeris-benchmarks": "cb3345640ddc",
+    "jazzer": "0.22.1",
+    "exeris-kernel": "0.11.0"
+  },
+  "seeds": {
+    "jazzer_seed_corpus_sha256": "69fe544debc0726cb16a5af5c0d4ae4cb4f96f451db94c3fd7de668219babcd4"
+  },
+  "tolerance": {
+    "max_unexpected_crashes": 0,
+    "max_hang_count": 0
+  },
+  "publication_mode": "internal-only"
+}

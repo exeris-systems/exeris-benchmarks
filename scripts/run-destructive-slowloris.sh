@@ -7,6 +7,7 @@
 #   ./scripts/run-destructive-slowloris.sh \
 #       --base-url http://127.0.0.1:8080 \
 #       --target-repo <repo-id> \
+#       --target-commit <sha> \
 #       --target-mode pure|compat|native|jdbc-bridge|baseline-db \
 #       --target-tier community|enterprise \
 #       [--target-pid <pid>] \
@@ -28,6 +29,7 @@ source "$ROOT/tools/bench/lib/readiness.sh"
 BASE_URL=""
 TARGET_PID=""
 TARGET_REPO=""
+TARGET_COMMIT="${BENCH_TARGET_COMMIT:-}"
 TARGET_MODE=""
 TARGET_TIER=""
 CONNECTIONS=1000
@@ -42,6 +44,8 @@ while [[ $# -gt 0 ]]; do
     --base-url)        BASE_URL="$2";        shift 2 ;;
     --target-pid)      TARGET_PID="$2";      shift 2 ;;
     --target-repo)     TARGET_REPO="$2";     shift 2 ;;
+    --target-commit)   TARGET_COMMIT="$2";   shift 2 ;;
+    --harness-sha)     BENCH_HARNESS_SHA="$2"; export BENCH_HARNESS_SHA; shift 2 ;;
     --target-mode)     TARGET_MODE="$2";     shift 2 ;;
     --target-tier)     TARGET_TIER="$2";     shift 2 ;;
     --connections)     CONNECTIONS="$2";     shift 2 ;;
@@ -71,7 +75,27 @@ command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 required" >&2; exit 1; }
 
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
-GIT_SHA7="$(git -C "$ROOT" rev-parse --short=7 HEAD 2>/dev/null || echo 'nogit')"
+# Two repositories, two identities, and neither may be silently absent. commit_sha sits next to
+# repo: $target_repo, so it must be the TARGET's commit -- but this line filled it with the
+# HARNESS revision, and fell back to the literal "nogit" whenever git failed. It always failed on
+# the perf-box, whose copy of this repo is an rsync target rather than a checkout, so every real
+# run would have recorded a result that satisfies the schema while carrying no traceable
+# revision at all. Same defect as scripts/run-fuzz-campaign.sh had; a shared helper in
+# tools/bench/lib/ is the obvious follow-up once these land.
+HARNESS_SHA="${BENCH_HARNESS_SHA:-$(git -C "$ROOT" rev-parse --short=12 HEAD 2>/dev/null || true)}"
+if [[ -z "$HARNESS_SHA" ]]; then
+  echo "ERROR: cannot determine the harness commit ($ROOT is not a git checkout)." >&2
+  echo "       Pass --harness-sha <sha> or set BENCH_HARNESS_SHA. Refusing to record 'nogit':" >&2
+  echo "       a destructive finding that cannot be traced to a revision cannot be re-bisected." >&2
+  exit 1
+fi
+if [[ -z "$TARGET_COMMIT" ]]; then
+  echo "ERROR: --target-commit required (reproducibility metadata)." >&2
+  echo "       commit_sha describes repo '$TARGET_REPO', so it must be that repo's commit," >&2
+  echo "       not the harness revision." >&2
+  exit 1
+fi
+GIT_SHA7="$HARNESS_SHA"
 RUN_ID="destructive-slowloris-h1-${TIMESTAMP}-${GIT_SHA7}"
 if [[ -z "$OUTPUT_DIR" ]]; then
   OUTPUT_DIR="$ROOT/results/raw/destructive-slowloris-h1-${TIMESTAMP}"
@@ -157,7 +181,8 @@ FINDINGS_FILE="$OUTPUT_DIR/destructive-findings.json"
 jq -n \
   --arg run_id "$RUN_ID" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --arg sha "$GIT_SHA7" \
+  --arg sha "$TARGET_COMMIT" \
+  --arg harness_sha "$HARNESS_SHA" \
   --arg target_repo "$TARGET_REPO" \
   --arg target_mode "$TARGET_MODE" \
   --arg target_tier "$TARGET_TIER" \

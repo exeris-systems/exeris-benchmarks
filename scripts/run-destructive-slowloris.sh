@@ -23,6 +23,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=tools/bench/lib/destructive.sh
 source "$ROOT/tools/bench/lib/destructive.sh"
+# shellcheck source=tools/bench/lib/identity.sh
+source "$ROOT/tools/bench/lib/identity.sh"
 # shellcheck source=tools/bench/lib/readiness.sh
 source "$ROOT/tools/bench/lib/readiness.sh"
 
@@ -82,19 +84,8 @@ TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 # run would have recorded a result that satisfies the schema while carrying no traceable
 # revision at all. Same defect as scripts/run-fuzz-campaign.sh had; a shared helper in
 # tools/bench/lib/ is the obvious follow-up once these land.
-HARNESS_SHA="${BENCH_HARNESS_SHA:-$(git -C "$ROOT" rev-parse --short=12 HEAD 2>/dev/null || true)}"
-if [[ -z "$HARNESS_SHA" ]]; then
-  echo "ERROR: cannot determine the harness commit ($ROOT is not a git checkout)." >&2
-  echo "       Pass --harness-sha <sha> or set BENCH_HARNESS_SHA. Refusing to record 'nogit':" >&2
-  echo "       a destructive finding that cannot be traced to a revision cannot be re-bisected." >&2
-  exit 1
-fi
-if [[ -z "$TARGET_COMMIT" ]]; then
-  echo "ERROR: --target-commit required (reproducibility metadata)." >&2
-  echo "       commit_sha describes repo '$TARGET_REPO', so it must be that repo's commit," >&2
-  echo "       not the harness revision." >&2
-  exit 1
-fi
+HARNESS_SHA="$(bench_harness_sha "$ROOT")" || exit 1
+TARGET_COMMIT="$(bench_require_target_sha "$TARGET_COMMIT" --target-commit)" || exit 1
 GIT_SHA7="$HARNESS_SHA"
 RUN_ID="destructive-slowloris-h1-${TIMESTAMP}-${GIT_SHA7}"
 if [[ -z "$OUTPUT_DIR" ]]; then

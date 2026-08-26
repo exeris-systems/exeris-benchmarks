@@ -1,0 +1,28 @@
+{
+  "schema_version": "1",
+  "run_id": "fuzz-http1-headers-20260826-183644-bda040fc37de",
+  "timestamp": "2026-08-26T18:37:50Z",
+  "scenario": "fuzz-http1-headers",
+  "tool": "jazzer",
+  "env_ref": "",
+  "target": {
+    "repo": "exeris-kernel",
+    "commit_sha": "5e29ae675020",
+    "mode": "pure",
+    "tier": "community",
+    "protocol": "h1"
+  },
+  "comparison_axis": "standalone",
+  "execution_class": "exploratory",
+  "claim_scope": "exploratory",
+  "final_reason": "ok",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "run_config": {
+    "duration_seconds": 60
+  },
+  "metrics": {
+    "total_requests": 116183303,
+    "total_errors": 0
+  }
+}

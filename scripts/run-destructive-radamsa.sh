@@ -22,6 +22,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=tools/bench/lib/destructive.sh
 source "$ROOT/tools/bench/lib/destructive.sh"
+# shellcheck source=tools/bench/lib/identity.sh
+source "$ROOT/tools/bench/lib/identity.sh"
 # shellcheck source=tools/bench/lib/readiness.sh
 source "$ROOT/tools/bench/lib/readiness.sh"
 
@@ -38,6 +40,18 @@ DURATION=120
 COOLDOWN=30
 HEALTH_PATH="/health"
 OUTPUT_DIR=""
+# Concurrency. The first campaign was single-threaded and every timeout blocked it for the full
+# socket deadline: 60 timeouts x 2.0 s consumed the entire 120 s window, so 500 rps was requested
+# and 3.4 achieved. Mutant generation was NOT the cause -- radamsa costs 3.1 ms per spawn, 1.1 %
+# of that window. Sizing: 500 rps x 14.4 % incomplete mutants x 2.0 s = 144 worker-seconds per
+# wall second, so 256 covers the declared profile with headroom. Undersizing is not silent --
+# the attacker reports backlog_skips and achieved_rps.
+WORKERS=256
+SOCKET_TIMEOUT=2.0
+# Mutants per radamsa invocation. Batching costs 1.13 ms/mutant against 3.1 ms per spawn; at
+# 500 rps the spawn path alone would need 1.55 CPU-seconds per wall second. Part of the
+# reproducibility key: (seed, chunk size, index) determines the bytes.
+MUTANT_CHUNK_SIZE=2048
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,6 +65,9 @@ while [[ $# -gt 0 ]]; do
     --target-mode)   TARGET_MODE="$2";   shift 2 ;;
     --target-tier)   TARGET_TIER="$2";   shift 2 ;;
     --rps)           RPS="$2";           shift 2 ;;
+    --workers)       WORKERS="$2";       shift 2 ;;
+    --socket-timeout) SOCKET_TIMEOUT="$2"; shift 2 ;;
+    --mutant-chunk-size) MUTANT_CHUNK_SIZE="$2"; shift 2 ;;
     --duration)      DURATION="$2";      shift 2 ;;
     --cooldown)      COOLDOWN="$2";      shift 2 ;;
     --health-path)   HEALTH_PATH="$2";   shift 2 ;;
@@ -81,7 +98,8 @@ case "$PROTOCOL" in
 esac
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 required" >&2; exit 1; }
-command -v radamsa >/dev/null 2>&1 || { echo "ERROR: radamsa not in PATH" >&2; exit 1; }
+RADAMSA_BIN="$(bench_require_radamsa)" || exit 1
+export RADAMSA_BIN
 
 SCENARIO_ID="destructive-radamsa-${PROTOCOL}"
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
@@ -92,19 +110,8 @@ TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 # run would have recorded a result that satisfies the schema while carrying no traceable
 # revision at all. Same defect as scripts/run-fuzz-campaign.sh had; a shared helper in
 # tools/bench/lib/ is the obvious follow-up once these land.
-HARNESS_SHA="${BENCH_HARNESS_SHA:-$(git -C "$ROOT" rev-parse --short=12 HEAD 2>/dev/null || true)}"
-if [[ -z "$HARNESS_SHA" ]]; then
-  echo "ERROR: cannot determine the harness commit ($ROOT is not a git checkout)." >&2
-  echo "       Pass --harness-sha <sha> or set BENCH_HARNESS_SHA. Refusing to record 'nogit':" >&2
-  echo "       a destructive finding that cannot be traced to a revision cannot be re-bisected." >&2
-  exit 1
-fi
-if [[ -z "$TARGET_COMMIT" ]]; then
-  echo "ERROR: --target-commit required (reproducibility metadata)." >&2
-  echo "       commit_sha describes repo '$TARGET_REPO', so it must be that repo's commit," >&2
-  echo "       not the harness revision." >&2
-  exit 1
-fi
+HARNESS_SHA="$(bench_harness_sha "$ROOT")" || exit 1
+TARGET_COMMIT="$(bench_require_target_sha "$TARGET_COMMIT" --target-commit)" || exit 1
 GIT_SHA7="$HARNESS_SHA"
 RUN_ID="${SCENARIO_ID}-${TIMESTAMP}-${GIT_SHA7}"
 if [[ -z "$OUTPUT_DIR" ]]; then
@@ -135,13 +142,16 @@ fi
 ATTACKER_PY="$ROOT/runtime/drivers/radamsa-${PROTOCOL}-attacker.py"
 ATTACKER_OUT="$OUTPUT_DIR/radamsa-stdout.json"
 
-echo "=== Radamsa $PROTOCOL attack: ${RPS} rps × ${DURATION}s, seed=${RADAMSA_SEED} ==="
+echo "=== Radamsa $PROTOCOL attack: ${RPS} rps × ${DURATION}s, ${WORKERS} workers, seed=${RADAMSA_SEED} ==="
 set +e
 python3 "$ATTACKER_PY" \
     --base-url "$BASE_URL" \
     --rps "$RPS" \
     --attack-duration-seconds "$DURATION" \
     --radamsa-seed "$RADAMSA_SEED" \
+    --workers "$WORKERS" \
+    --socket-timeout-seconds "$SOCKET_TIMEOUT" \
+    --mutant-chunk-size "$MUTANT_CHUNK_SIZE" \
     > "$ATTACKER_OUT" 2> "$OUTPUT_DIR/radamsa-stderr.txt"
 ATTACKER_RC=$?
 set -e
@@ -181,7 +191,22 @@ FIVE_XX_COUNT=$(jq -r '.five_xx_count // 0' "$ATTACKER_OUT")
 # campaign the target absorbed from one it barely saw.
 REJECTED_COUNT=$(jq -r '.rejected_count // 0' "$ATTACKER_OUT")
 RESPONSE_COUNT=$(jq -r '.response_count // 0' "$ATTACKER_OUT")
-CAMPAIGN_NOTES="expected outcomes (not findings): ${REJECTED_COUNT} connection-close rejections, ${RESPONSE_COUNT} well-formed responses. crash_count counts CONNECT failures only (listener gone); a close after connect is the server correctly refusing malformed input."
+# A read timeout on a mutant that never terminated its request is the target correctly waiting
+# for the rest of it -- the ATTACKER gave up first. Measured 2026-08-26: 60 of 410 mutants (14.6 %)
+# timed out at a 2 s deadline and every one was charged to hang_count, while the target answered
+# /health in 8 ms; independently, 14.4 % of radamsa's mutants from this seed carry no terminated
+# request. hang_count now counts only timeouts on COMPLETE requests, where the target owed an
+# answer. `incomplete-wait` is disclosed, not hidden -- it is an attack-shape fact worth reading.
+INCOMPLETE_WAIT_COUNT=$(jq -r '.incomplete_wait_count // 0' "$ATTACKER_OUT")
+# Achieved rate, worker count and pacing pressure: the campaign's declared rps is a REQUEST, and a
+# run that could not reach it must say so rather than let the scenario's profile stand in for what
+# happened. Concurrency is part of the stimulus, so it travels with the result.
+ACHIEVED_RPS=$(jq -r '(.achieved_rps // 0) | . * 10 | round / 10' "$ATTACKER_OUT")
+WORKERS_USED=$(jq -r '.workers // 0' "$ATTACKER_OUT")
+BACKLOG_SKIPS=$(jq -r '.backlog_skips // 0' "$ATTACKER_OUT")
+GENERATOR_FAILURES=$(jq -r '.generator_failures // 0' "$ATTACKER_OUT")
+MUTANT_STREAM=$(jq -r '.mutant_stream // "unknown"' "$ATTACKER_OUT")
+CAMPAIGN_NOTES="expected outcomes (not findings): ${REJECTED_COUNT} connection-close rejections, ${RESPONSE_COUNT} well-formed responses, ${INCOMPLETE_WAIT_COUNT} incomplete-wait timeouts (mutant never terminated its request; the target was correctly waiting, the attacker gave up at the socket deadline -- whether the target EVER times out an incomplete request is destructive-slowloris-h1's question, not this one). crash_count counts CONNECT failures only (listener gone); a close after connect is the server correctly refusing malformed input. hang_count counts timeouts on COMPLETE requests only. rate: ${ACHIEVED_RPS}/${RPS} rps achieved with ${WORKERS_USED} workers, ${BACKLOG_SKIPS} pacing skips, ${GENERATOR_FAILURES} generator failures. mutant_stream=${MUTANT_STREAM} (streams are not byte-comparable across ids)."
 
 if [[ "$RSS_BEFORE" == "unobtained" || "$RSS_AFTER" == "unobtained" ]]; then
   RSS_OBTAINED=false
@@ -268,6 +293,7 @@ jq -n \
   --arg notes "$CAMPAIGN_NOTES" \
   --arg jfr_path "${JFR_OUT:-}" \
   --arg radamsa_seed "$RADAMSA_SEED" \
+  --argjson incomplete_wait "$INCOMPLETE_WAIT_COUNT" \
   '{
     schema_version: "1",
     run_id: $run_id,
@@ -281,6 +307,7 @@ jq -n \
       crash_count: $crash,
       oom_count: 0,
       hang_count: $hang,
+      incomplete_wait_count: $incomplete_wait,
       unique_crash_signatures: 0,
       mean_time_to_crash_us: null,
       leak_count_delta: 0

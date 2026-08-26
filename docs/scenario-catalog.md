@@ -155,7 +155,8 @@ All entries below emit `claim_scope=exploratory`, `comparison_axis=standalone`, 
 
 | Scenario | Tier / Family | Driver | What it stresses |
 |---|---|---|---|
-| `fuzz-http1-parser` | community / micro | Jazzer + JUnit 5 | `Http1RequestParser.parseRequestLine` / `parseHeaders` |
+| `fuzz-http1-parser` | community / micro | Jazzer + JUnit 5 | `Http1RequestParser.parseRequestLine` |
+| `fuzz-http1-headers` | community / micro | Jazzer + JUnit 5 | `Http1RequestParser.parseHeaders`, including the `String` materialisation the visitor does not avoid |
 | `fuzz-http2-parser` | community / micro | Jazzer + JUnit 5 | `Http2FrameParser.parseHeader` |
 | `destructive-slowloris-h1` | community / runtime | `runtime/drivers/slowloris.py` | Half-open connection eviction; RSS leak under sustained slow-headers |
 | `destructive-radamsa-h1` | community / runtime | `runtime/drivers/radamsa-h1-attacker.py` | HTTP/1.1 parser robustness against radamsa-mutated requests |
@@ -164,12 +165,24 @@ All entries below emit `claim_scope=exploratory`, `comparison_axis=standalone`, 
 
 Drivers:
 
-- `scripts/run-fuzz-campaign.sh <scenario-dir>` — Jazzer
-- `scripts/run-destructive-slowloris.sh --base-url ... --target-repo ... --target-mode ... --target-tier ...`
-- `scripts/run-destructive-radamsa.sh --base-url ... --protocol h1|h2 --radamsa-seed ... --target-repo ... --target-mode ... --target-tier ...`
-- `scripts/run-arena-lifecycle-leak.sh --base-url ... --target-pid ... --radamsa-seed ... --target-repo ... --target-mode ... --target-tier ...`
+- `scripts/run-fuzz-campaign.sh <scenario-dir> --kernel-version ... --kernel-commit ... --harness-sha ...` — Jazzer
+- `scripts/run-destructive-slowloris.sh --base-url ... --target-repo ... --target-commit ... --target-mode ... --target-tier ...`
+- `scripts/run-destructive-radamsa.sh --base-url ... --protocol h1|h2 --radamsa-seed ... --target-repo ... --target-commit ... --target-mode ... --target-tier ...`
+- `scripts/run-arena-lifecycle-leak.sh --base-url ... --target-pid ... --radamsa-seed ... --target-repo ... --target-commit ... --target-mode ... --target-tier ...`
 
-The three runners require `--target-repo`/`--target-mode`/`--target-tier` because the harness cannot introspect which app is behind `BASE_URL`; silently labeling the wrong repo/mode/tier in `result.json` would corrupt reproducibility metadata and cross-stack comparability.
+The runners require `--target-repo`/`--target-commit`/`--target-mode`/`--target-tier` because the harness cannot introspect which app is behind `BASE_URL`; silently labeling the wrong repo/mode/tier in `result.json` would corrupt reproducibility metadata and cross-stack comparability. `--target-commit` and the harness revision are **two separate identities** and neither is inferred from the other — `tools/bench/lib/identity.sh` owns both, after four copies of one `|| echo 'nogit'` fallback each wrote schema-valid results carrying no traceable revision.
+
+**Campaign length is not a flag** for the Jazzer runner. It comes from `@FuzzTest(maxDuration = "...")` on the test class; `--duration` is refused because it could not be honoured. `JAZZER_FUZZ=1` is exported by the runner — without it Jazzer replays the seed corpus in regression mode and exits.
+
+### Radamsa driver: rate, concurrency and the timeout split
+
+The declared `requests_per_second` in these scenarios is a **requested** rate. Until 2026-08-26 the driver was single-threaded, so every read timeout blocked it for the full socket deadline: the first campaign requested 500 rps and achieved 3.4, with 60 timeouts x 2.0 s consuming the entire 120 s window. Mutant generation was **not** the cause — radamsa costs 3.1 ms per spawn, 1.1 % of that window. The driver now fires from a worker pool, generates mutants in batches on a background thread (1.13 ms/mutant), and reports `achieved_rps` and `backlog_skips` so a run that cannot reach its profile says so.
+
+Concurrency is part of the stimulus, not a harness detail, so `concurrent_connections` is recorded in the scenario and the achieved figure travels with the result.
+
+`hang_count` counts read timeouts only where the payload **completed a request** and the target therefore owed an answer. A timeout on a truncated mutant is `incomplete_wait_count`: the target is correctly waiting for the rest and the attacker gave up at its socket deadline. This is the timeout-side twin of the `rejected`-vs-`crash` correction — measured on the first campaign, 14.6 % of iterations timed out while ~10 % of that seed's mutants carry no terminated request, and the target answered `/health` in 8 ms throughout. `incomplete_wait_count` does **not** establish that a target is healthy: whether it ever times out an incomplete request is `destructive-slowloris-h1`'s question.
+
+Mutant streams carry a `mutant_stream` id. Batched generation produces different bytes from the pre-2026-08-26 per-iteration seeding for the same seed, so `per-iteration-v1` and `batched-v2` runs are **not byte-comparable**.
 
 Cross-stack destructive comparisons require explicit timeout / connection-limit / radamsa-seed normalization — see methodology doc.
 

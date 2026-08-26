@@ -1,9 +1,9 @@
 {
-  "scenario_id": "fuzz-http1-parser",
+  "scenario_id": "fuzz-http1-headers",
   "version": "1",
   "benchmark_family": "micro",
   "target_classification": "micro-parser-robustness",
-  "description": "Jazzer-driven byte[] fuzz against eu.exeris.kernel.core.http.http1.Http1RequestParser.parseRequestLine. This scenario drives Http1RequestParserFuzzTest and the REQUEST LINE only; it previously claimed 'parseRequestLine + parseHeaders' while no scenario drove the header parser at all, so the 119.9 M inputs of the 2026-08-26 campaign never reached parseHeaders. Header-block coverage is scenario fuzz-http1-headers. Each fuzz iteration wraps the mutated byte[] in a confined Arena MemorySegment and invokes the parser. Whitelisted throwables (Http1ParseException, IndexOutOfBoundsException, IllegalArgumentException, BufferUnderflowException) are recorded but do NOT count as findings. Any other Throwable (NPE, AssertionError, OOM, StackOverflow, VirtualMachineError) is a finding.",
+  "description": "Jazzer-driven byte[] fuzz against eu.exeris.kernel.core.http.http1.Http1RequestParser.parseHeaders — the HEADER BLOCK, distinct from fuzz-http1-parser's request line. Each iteration wraps the mutated byte[] in a confined Arena MemorySegment and parses it with a MAX_HEADERS=64 / MAX_HEADER_SIZE=4096 bound and a no-op HeaderVisitor. The visitor is a no-op but the path is not free of allocation: parseHeaders materialises name and value as Strings BEFORE calling the visitor, so this scenario covers the header allocation path as well as the parse path. Whitelisted throwables (Http1ParseException, IndexOutOfBoundsException, IllegalArgumentException, BufferUnderflowException) are recorded but do NOT count as findings. Any other Throwable (NPE, AssertionError, OOM, StackOverflow, VirtualMachineError) is a finding.",
   "mode": "fuzz-campaign",
   "tier": "community",
   "driver": ["jazzer"],
@@ -11,9 +11,9 @@
   "loopback": false,
   "fuzz": {
     "tool": "jazzer",
-    "test_class": "eu.exeris.benchmarks.micro.fuzz.Http1RequestParserFuzzTest",
+    "test_class": "eu.exeris.benchmarks.micro.fuzz.Http1HeaderParserFuzzTest",
     "default_duration_seconds": 60,
-    "seed_corpus_dir": "src/test/resources/eu/exeris/benchmarks/micro/fuzz/Http1RequestParserFuzzTest",
+    "seed_corpus_dir": "src/test/resources/eu/exeris/benchmarks/micro/fuzz/Http1HeaderParserFuzzTest",
     "expected_throwables": [
       "eu.exeris.kernel.core.http.http1.Http1RequestParser$Http1ParseException",
       "java.lang.IndexOutOfBoundsException",

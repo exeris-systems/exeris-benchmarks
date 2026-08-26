@@ -15,7 +15,11 @@
     "attack_duration_seconds": 600,
     "cooldown_seconds": 60,
     "force_gc_iterations": 2,
-    "radamsa_seed": "REQUIRED"
+    "radamsa_seed": "REQUIRED",
+    "concurrent_connections": 256,
+    "socket_timeout_seconds": 2.0,
+    "rate_note": "500 rps x 600 s = 300 000 iterations. Under the pre-2026-08-26 single-threaded driver that was ~24 h of wall clock at the achieved 3.4 rps, so this scenario could not run as written -- it was blocked on the driver, not on the target. requests_per_second is a REQUESTED rate. Until 2026-08-26 the driver was single-threaded and every read timeout blocked it for the full socket deadline, so the first campaign requested 500 and achieved 3.4 (60 timeouts x 2.0 s consumed the whole 120 s window; radamsa generation was 1.1 % of it). The driver now fires from a worker pool and reports achieved_rps and backlog_skips -- a run that cannot reach this rate says so instead of letting this number stand in for what happened.",
+    "concurrency_note": "Concurrency is part of the stimulus, not a harness detail: N connections at once is a different attack from N in sequence. It travels with the result and belongs in any comparison. Sizing: rps x incomplete-mutant fraction x socket timeout gives the worker-seconds per wall second the timeouts alone consume."
   },
   "instrumentation": {
     "rss_sampling": "MANDATORY — before attack, end of attack window, post-cooldown after forced GC",

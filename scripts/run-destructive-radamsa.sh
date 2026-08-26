@@ -10,6 +10,7 @@
 #       --protocol h1|h2 \
 #       --radamsa-seed <seed> \
 #       --target-repo <repo-id> \
+#       --target-commit <sha> \
 #       --target-mode pure|compat|native|jdbc-bridge|baseline-db \
 #       --target-tier community|enterprise \
 #       [--target-pid <pid>] \
@@ -29,6 +30,7 @@ PROTOCOL=""
 RADAMSA_SEED=""
 TARGET_PID=""
 TARGET_REPO=""
+TARGET_COMMIT="${BENCH_TARGET_COMMIT:-}"
 TARGET_MODE=""
 TARGET_TIER=""
 RPS=500
@@ -44,6 +46,8 @@ while [[ $# -gt 0 ]]; do
     --radamsa-seed)  RADAMSA_SEED="$2";  shift 2 ;;
     --target-pid)    TARGET_PID="$2";    shift 2 ;;
     --target-repo)   TARGET_REPO="$2";   shift 2 ;;
+    --target-commit) TARGET_COMMIT="$2"; shift 2 ;;
+    --harness-sha)   BENCH_HARNESS_SHA="$2"; export BENCH_HARNESS_SHA; shift 2 ;;
     --target-mode)   TARGET_MODE="$2";   shift 2 ;;
     --target-tier)   TARGET_TIER="$2";   shift 2 ;;
     --rps)           RPS="$2";           shift 2 ;;
@@ -81,7 +85,27 @@ command -v radamsa >/dev/null 2>&1 || { echo "ERROR: radamsa not in PATH" >&2; e
 
 SCENARIO_ID="destructive-radamsa-${PROTOCOL}"
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
-GIT_SHA7="$(git -C "$ROOT" rev-parse --short=7 HEAD 2>/dev/null || echo 'nogit')"
+# Two repositories, two identities, and neither may be silently absent. commit_sha sits next to
+# repo: $target_repo, so it must be the TARGET's commit -- but this line filled it with the
+# HARNESS revision, and fell back to the literal "nogit" whenever git failed. It always failed on
+# the perf-box, whose copy of this repo is an rsync target rather than a checkout, so every real
+# run would have recorded a result that satisfies the schema while carrying no traceable
+# revision at all. Same defect as scripts/run-fuzz-campaign.sh had; a shared helper in
+# tools/bench/lib/ is the obvious follow-up once these land.
+HARNESS_SHA="${BENCH_HARNESS_SHA:-$(git -C "$ROOT" rev-parse --short=12 HEAD 2>/dev/null || true)}"
+if [[ -z "$HARNESS_SHA" ]]; then
+  echo "ERROR: cannot determine the harness commit ($ROOT is not a git checkout)." >&2
+  echo "       Pass --harness-sha <sha> or set BENCH_HARNESS_SHA. Refusing to record 'nogit':" >&2
+  echo "       a destructive finding that cannot be traced to a revision cannot be re-bisected." >&2
+  exit 1
+fi
+if [[ -z "$TARGET_COMMIT" ]]; then
+  echo "ERROR: --target-commit required (reproducibility metadata)." >&2
+  echo "       commit_sha describes repo '$TARGET_REPO', so it must be that repo's commit," >&2
+  echo "       not the harness revision." >&2
+  exit 1
+fi
+GIT_SHA7="$HARNESS_SHA"
 RUN_ID="${SCENARIO_ID}-${TIMESTAMP}-${GIT_SHA7}"
 if [[ -z "$OUTPUT_DIR" ]]; then
   OUTPUT_DIR="$ROOT/results/raw/${SCENARIO_ID}-${TIMESTAMP}"
@@ -133,10 +157,31 @@ echo "=== Liveness probe: GET ${BASE_URL%/}${HEALTH_PATH} ==="
 destructive_liveness_probe "$BASE_URL" "$HEALTH_PATH" 200 1000 || true
 echo "  status=$DESTR_PROBE_STATUS duration_ms=$DESTR_PROBE_DURATION_MS alive=$DESTR_PROBE_ALIVE"
 
+# The attacker writes its summary as JSON on stdout. If it died -- a rejected radamsa seed,
+# a missing binary, an unreachable target -- that file is empty, every counter below becomes
+# an empty string, and jq --argjson aborts with "invalid JSON text" after leaving two 0-byte
+# artifacts behind. Measured on the first real run of this scenario. Check before parsing, and
+# emit nothing rather than something unreadable.
+if [[ ! -s "$ATTACKER_OUT" ]] || ! jq -e . "$ATTACKER_OUT" >/dev/null 2>&1; then
+  echo "" >&2
+  echo "ERROR: the attacker produced no usable JSON summary ($ATTACKER_OUT)." >&2
+  echo "       The campaign did not complete; NOT writing result.json or the findings sidecar." >&2
+  echo "       Attacker stderr:" >&2
+  tail -n 20 "$OUTPUT_DIR/radamsa-stderr.txt" >&2 2>/dev/null || true
+  rm -f "$OUTPUT_DIR/result.json" "$OUTPUT_DIR/destructive-findings.json"
+  exit 1
+fi
 ITERATIONS_TOTAL=$(jq -r '.iterations_total // 0' "$ATTACKER_OUT")
 CRASH_COUNT=$(jq -r '.crash_count // 0' "$ATTACKER_OUT")
 HANG_COUNT=$(jq -r '.hang_count // 0' "$ATTACKER_OUT")
 FIVE_XX_COUNT=$(jq -r '.five_xx_count // 0' "$ATTACKER_OUT")
+# Rejections and plain responses are EXPECTED outcomes, not findings: closing the connection on
+# an unparseable request is specified behaviour. They are not in the findings schema (which is
+# additionalProperties:false), so they ride in `notes` -- without them a reader cannot tell a
+# campaign the target absorbed from one it barely saw.
+REJECTED_COUNT=$(jq -r '.rejected_count // 0' "$ATTACKER_OUT")
+RESPONSE_COUNT=$(jq -r '.response_count // 0' "$ATTACKER_OUT")
+CAMPAIGN_NOTES="expected outcomes (not findings): ${REJECTED_COUNT} connection-close rejections, ${RESPONSE_COUNT} well-formed responses. crash_count counts CONNECT failures only (listener gone); a close after connect is the server correctly refusing malformed input."
 
 if [[ "$RSS_BEFORE" == "unobtained" || "$RSS_AFTER" == "unobtained" ]]; then
   RSS_OBTAINED=false
@@ -164,7 +209,7 @@ jq -n \
   --arg run_id "$RUN_ID" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg scenario "$SCENARIO_ID" \
-  --arg sha "$GIT_SHA7" \
+  --arg sha "$TARGET_COMMIT" \
   --arg transport_mode "$TRANSPORT_MODE" \
   --arg protocol "$PROTOCOL" \
   --arg target_repo "$TARGET_REPO" \
@@ -220,6 +265,7 @@ jq -n \
   --argjson probe_duration_ms "$DESTR_PROBE_DURATION_MS" \
   --arg probe_alive "$DESTR_PROBE_ALIVE" \
   --arg degradation "$DEGRADATION" \
+  --arg notes "$CAMPAIGN_NOTES" \
   --arg jfr_path "${JFR_OUT:-}" \
   --arg radamsa_seed "$RADAMSA_SEED" \
   '{
@@ -264,6 +310,7 @@ jq -n \
       jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end)
     },
     degradation_class: $degradation,
+    notes: $notes,
     tolerance: {
       rss_growth_pct_max: 5,
       max_unexpected_crashes: 0

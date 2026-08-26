@@ -152,7 +152,14 @@ def main() -> int:
         # Each iteration mutates with a slightly different seed derived from
         # the base seed + iteration number — this keeps the campaign
         # reproducible while still exploring the mutator space.
-        mutant_seed = f"{args.radamsa_seed}.{iterations}"
+        # radamsa's --seed accepts integers only. This was f"{seed}.{iterations}", a dotted
+        # string radamsa rejects with "The argument '--seed' did not accept '424242.1'" and
+        # exit 127 -- which reads like "command not found" and is not: it is radamsa's own
+        # usage-error code. The driver aborted on the first iteration, so it had never run.
+        # The mix keeps per-iteration seeds deterministic (same base + same index -> same
+        # bytes, which is what --radamsa-seed exists to guarantee) while decorrelating
+        # neighbouring campaigns instead of merely offsetting them by one.
+        mutant_seed = str((int(args.radamsa_seed) * 1_000_003 + iterations) % (2**31 - 1))
         try:
             payload = mutate(SEED_REQUEST, mutant_seed)
         except subprocess.TimeoutExpired:

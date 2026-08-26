@@ -157,6 +157,20 @@ echo "=== Liveness probe: GET ${BASE_URL%/}${HEALTH_PATH} ==="
 destructive_liveness_probe "$BASE_URL" "$HEALTH_PATH" 200 1000 || true
 echo "  status=$DESTR_PROBE_STATUS duration_ms=$DESTR_PROBE_DURATION_MS alive=$DESTR_PROBE_ALIVE"
 
+# The attacker writes its summary as JSON on stdout. If it died -- a rejected radamsa seed,
+# a missing binary, an unreachable target -- that file is empty, every counter below becomes
+# an empty string, and jq --argjson aborts with "invalid JSON text" after leaving two 0-byte
+# artifacts behind. Measured on the first real run of this scenario. Check before parsing, and
+# emit nothing rather than something unreadable.
+if [[ ! -s "$ATTACKER_OUT" ]] || ! jq -e . "$ATTACKER_OUT" >/dev/null 2>&1; then
+  echo "" >&2
+  echo "ERROR: the attacker produced no usable JSON summary ($ATTACKER_OUT)." >&2
+  echo "       The campaign did not complete; NOT writing result.json or the findings sidecar." >&2
+  echo "       Attacker stderr:" >&2
+  tail -n 20 "$OUTPUT_DIR/radamsa-stderr.txt" >&2 2>/dev/null || true
+  rm -f "$OUTPUT_DIR/result.json" "$OUTPUT_DIR/destructive-findings.json"
+  exit 1
+fi
 ITERATIONS_TOTAL=$(jq -r '.iterations_total // 0' "$ATTACKER_OUT")
 CRASH_COUNT=$(jq -r '.crash_count // 0' "$ATTACKER_OUT")
 HANG_COUNT=$(jq -r '.hang_count // 0' "$ATTACKER_OUT")

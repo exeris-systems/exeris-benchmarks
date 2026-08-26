@@ -313,7 +313,6 @@ adapter generation are finished, so the tail sample is the correct instrument he
 | loaded classes | 4691.8 | 4692.7 | +0.8 | +0.018 % | [−0.048, +0.083] | −2 / +4 |
 | **code cache used** | 16 961 kB | 18 111 kB | **+1149.6 kB** | +6.777 % | [+5.928, +7.627] | **−0 / +6** |
 | code cache entries | 7413.0 | 7709.7 | +296.7 | +4.003 % | [+3.638, +4.368] | −0 / +6 |
-| **adapters** *(bimodal — see below)* | 825.8 | 977.0 | +151.2 | +18.306 % | [+17.874, +18.738] | −0 / +6 |
 | **Metaspace used** | 20 279 kB | 20 468 kB | **+188.9 kB** | +0.932 % | [+0.822, +1.041] | **−0 / +6** |
 | Metaspace committed | 20 875 kB | 21 035 kB | +160.0 kB | +0.767 % | [+0.496, +1.038] | −0 / +6 |
 | non-class metadata (`dataSpace`) | 16 367 kB | 16 560 kB | +192.4 kB | +1.176 % | [+1.047, +1.304] | −0 / +6 |
@@ -323,15 +322,26 @@ Every cell above is an arithmetic mean over the six pairs. That is the right sum
 kilobyte rows and the **wrong one for the adapter row**, which is why that row is struck through
 in bold nowhere else in this report.
 
-Adapter counts are **bimodal**. Each arm takes one of exactly two values, 7 apart, and the mean
-lands between them — a value the system never produces: E is 825.8 but observes only {820, **827**},
-D″ is 809.7 but observes only {805, **812**}, F is 975.8 in §4.2 but observes only {970, **977**}.
-The confidence interval inherits the problem: **on a bimodal mean, `[+17.874, +18.738] %` bounds
-how often the anomaly occurred, not how many adapters there are.** It is a mixture proportion
-wearing the notation of a magnitude, and it should not be read as one.
+**Adapters are not in that table at all**, and this is the reason. Their counts are bimodal:
+each arm takes one of exactly two values, 7 apart, so a mean lands between them at a value the
+system never produces, and a confidence interval on such a mean bounds **how often the anomaly
+occurred, not how many adapters there are** — a mixture proportion wearing the notation of a
+magnitude. §7 states that the adapter result is not an inference; a row carrying `±CI` alongside
+the kilobyte rows would say the opposite while looking like the rest of the table.
 
-Every adapter figure in this report is therefore the **mode**, and the modal arithmetic closes on
-itself where the mean does not:
+The honest shape is the observations themselves, over all 12 runs:
+
+| arm | observed values | counts | modal value |
+|---|---|---|---|
+| D″ | 805, 812 | 2 × 805, 4 × 812 | **812** |
+| E | 820, 827 | 1 × 820, 5 × 827 | **827** |
+| F (leg E→F) | 977 | 6 × 977 | **977** |
+| F (leg D″→F) | 970, 977 | 1 × 970, 5 × 977 | **977** |
+
+**Modal deltas: E→F = 150, D″→F = 165.** No percentage, no interval — these are counts of a thing
+the JVM either emits or does not.
+
+The modal arithmetic also closes on itself where the mean does not:
 
 | | modal | mean |
 |---|---|---|
@@ -343,7 +353,8 @@ itself where the mean does not:
 The last two rows must agree, and modally they do. The mean route reports the same quantity as
 15.0 one way and 16.1 the other — noise where the data has structure.
 
-Four things in that table are worth stating separately.
+Three things in that table, and one about the adapters beside it, are worth stating
+separately.
 
 **The class count does not change.** +0.8 classes with signs split −2/+4 is noise. The two arms
 load the same classes; only what the JVM stores *about* them differs.
@@ -353,10 +364,10 @@ load the same classes; only what the JVM stores *about* them differs.
 holds everything else, including value-class layout information and calling-convention adapters —
 grows +192.4 kB. That split is the signature of the effect, not a rounding artefact.
 
-**Nothing here is deterministic, including F — and the anomaly has a fixed size.** F reports 977
-in all six runs *of this leg*, but 970 once in D″→F (§4.2), so "the adapter count is deterministic"
-is a statement about one leg, not about F. Across all four arm-columns every observation takes one
-of exactly two values, **always 7 apart**: E ∈ {820, 827}, D″ ∈ {805, 812}, F ∈ {970, 977}. The low
+**Nothing about the adapters is deterministic, including F — but the anomaly has a fixed size.**
+F reports 977 in all six runs *of this leg*, and 970 once in D″→F, so "the adapter count is
+deterministic" is a statement about one leg, not about F. Across all four arm-columns every observation takes one
+of exactly two values, **always 7 apart** (counts in the table above). The low
 value occurs four times in four different arm/slot combinations — E at `run03/ab`, D″ at `run02/ab`
 *and* `run03/ba`, F at `run03/ab` of the other leg — so it is not a slot effect either. It reads as
 one code path carrying seven adapter boundaries, reached or not, independently of arm and position.
@@ -365,7 +376,8 @@ Code-cache **entries** do not track it: E's 820-adapter run has the *highest* en
 six (7458 against a 7413 mean) while D″'s two 805-adapter runs have its two lowest. So seven
 missing adapters is not "seven fewer things compiled".
 
-**Loaded classes do track it, in every column that has an anomaly:**
+**Loaded-class counts move with it, but the counter cannot explain it — and this report's own
+control is what rules the counter out.** The anomalous runs do load fewer classes:
 
 | column | classes at the modal adapter count | at the anomaly | Δ |
 |---|---|---|---|
@@ -373,11 +385,24 @@ missing adapters is not "seven fewer things compiled".
 | D″ | 4670.0 | 4663.5 | −6.5 |
 | F (D″→F) | 4693.4 | 4688 | −5.4 |
 
-And the control holds: in E→F, F's adapter count is constant at 977 while its loaded-class count
-spans 4691–4694, so a ±3 class swing does **not** move adapters. Seven adapters travel with
-**five to six classes**, not with one and not with class-count noise. That reads as a
-conditionally-loaded cluster carrying seven scalarised call boundaries between them — which
-sharpens the open question rather than closing it.
+Those deltas are **averages of integer counts**, and a noisy continuous quantity cannot account
+for a discrete constant one: the adapter step is exactly 7, three times over. The control settles
+it — in leg E→F, F's class count spans 4691–4694 while its adapter count never leaves 977. If this
+were dose–response, a 3-class swing would move adapters by roughly four; it moves them by **zero**.
+
+So it is not *how many* classes load, it is *which* — and a counter cannot answer that. A net −5
+is equally consistent with "five classes absent" and with "nine absent, four extra", explanations
+with nothing in common. **The number needed here is a set difference, not a delta**, exactly as
+the source/bytecode reconciliation in §5.1 had to compare sets rather than totals.
+
+That measurement is not available from these recordings: `jdk.ClassLoad` and `jdk.ClassDefine`
+carry **zero events** in every one of them — both are off by default even under `profile`, for
+volume — so only the nameless periodic counter survives. Answering it needs a fresh pair under
+`-Xlog:class+load=info` and a diff of the loaded-class *sets* between an anomalous and a normal run
+of the same arm. A coherent cluster (one package, one subsystem) would be a mechanism; five
+unrelated classes would mean this correlation was an artefact of counting. Note the sampling cost:
+the anomaly appeared in 1 of 6 runs for E and 2 of 6 for D″, so a single pair is unlikely to
+capture one.
 
 E reports 827 five times and **820 once**. The
 per-pair deltas are therefore `[150, 150, 150, 150, 157, 150]`: **modal and median 150**, mean
@@ -431,7 +456,6 @@ travel alone, quote the adapter count**, not the megabyte.
 |---|---|---|---|---|---|---|
 | loaded classes | 4667.8 | 4692.5 | +24.7 | +0.528 % | [+0.445, +0.612] | −0 / +6 |
 | code cache used | 17 030 kB | 18 181 kB | +1151.2 kB | +6.771 % | [+5.483, +8.060] | −0 / +6 |
-| adapters *(bimodal: D″ {805,**812**}, F {970,**977**}; modal delta **165**)* | 809.7 | 975.8 | +166.2 | +20.525 % | [+19.757, +21.294] | −0 / +6 |
 | Metaspace used | 20 186 kB | 20 465 kB | +279.0 kB | +1.382 % | [+1.308, +1.456] | −0 / +6 |
 
 This leg loads **25 more classes**, so its Metaspace delta is not attributable to the value
@@ -762,6 +786,7 @@ a p-value, and it is immune to multiplicity because it is not a test.
 
 | date | change |
 |---|---|
+| 2026-08-26 | Sixth review pass. **The adapter row is out of §4.1's and §4.2's mean-tables entirely.** §7 already stated the adapter result is not an inference, yet the row still carried a 95 % CI beside the kilobyte rows — the same over-claim as the retracted mean, harder to spot because it looked like the rest of the table. Adapters now get their own table: observed values, their counts across all 12 runs, and the modal deltas 150 and 165, with no percentage and no interval. **The class-count correlation is downgraded from mechanism to counter artefact**, on this report's own control: −4.6 / −6.5 / −5.4 are averages of integer counts, and a noisy continuous quantity cannot explain a step that is exactly 7 three times over — while F's class count spans 3 in leg E→F with the adapter count never moving, so a dose–response reading predicts ~4 adapters where zero are observed. It is not how many classes load but *which*, and a net −5 is equally consistent with "five absent" and "nine absent, four extra". That needs a **set difference, not a delta** — the same move §5.1 required — and it is unavailable here: `jdk.ClassLoad` and `jdk.ClassDefine` carry zero events in every recording. Recorded as a `-Xlog:class+load=info` follow-up, with the sampling cost noted (the anomaly appears in 1 of 6 runs). |
 | 2026-08-26 | Fifth review pass, two structural corrections. **Every adapter figure is now the mode, not the mean.** The counts are bimodal with a quantum of 7 — E {820,**827**}, D″ {805,**812**}, F {970,**977**} — so the reported means (825.8, 809.7, 975.8) were values the system never produces, and a t-interval on such a mean bounds a **mixture proportion, not a magnitude**: `[+17.874, +18.738] %` says how often the anomaly occurred. §7's multiplicity paragraph no longer leans on that interval; the adapter result rests on all twelve observations being one of two values, which is not a test and so is immune to multiplicity. The modal arithmetic also closes on itself where the mean does not: modal deltas 150 and 165 differ by 15, exactly the difference of the arm modes, while the mean route gives 15.0 one way and 16.1 the other. **New measurement:** loaded-class count tracks the anomaly in every column that has one (−4.6, −6.5, −5.4 classes for −7 adapters) while F's constant 977 spans a 3-class range — so seven adapters travel with five to six classes, not one, and not with class-count noise. §5.4's caption contradicted its own footnote about what `−` meant; the blank cells are now split into `✗` (no valid layout — size) and `?` (not emitted, undecidable here), with the whole `NULL_FREE_NON_ATOMIC` column marked `?` because the supporting probe measures **array allocation, a different path from field-layout emission**. Restated as a yes/no question for `valhalla-dev`. |
 | 2026-08-26 | Fourth review pass. §5.1 **corrected on a matter of fact**: it claimed two identity records in `src/main` and none in kernel runtime. There are **three**, and `SubsystemTopologicalSorter$DependencyGraph` (`exeris-kernel-core`) is kernel runtime — excused in `IDENTITY_BY_DESIGN` because its `Map` is mutated in place, so that map is empty in four modules and holds one entry in core. The section now also states the mutability→identity property directly: `DependencyGraph` and `LoanedBuffer` are unrelated subsystems refused for the same reason. Both ends of the 159/155 reconciliation are now **measured** — a bytecode walk over the two shaded jars reports 6 value classes in arm E and 155 in arm F, with nothing from `kafka`/`testkit`, so 149 is measured rather than subtracted. §4.1's "the adapter count is deterministic" is **withdrawn**: every arm takes one of two values exactly 7 apart (E {820,827}, D″ {805,812}, F {970,977}), the low value appears in four different arm/slot combinations, and code-cache entries do not track it — E's 820-adapter run has its *highest* entry count. What survives is a modal ratio in 5 of 6 pairs. §4.2's own numbers are promoted to a point: D″ and E carry 6 value classes each yet differ by ~15 adapters, so `adaptorCount` is not a function of carrier count. |
 | 2026-08-26 | Third review pass, adapter arithmetic. The headline adapter delta was quoted as **+151.2 — a mean of `[150,150,150,150,157,150]` that matches no observation**; it is now **150**, the modal and median per-pair value, and the excess over the 149 converted carriers is **one, not two**. The variance was also mis-attributed: F is stable at 977 across this leg, and the outlier is a *baseline* run generating 7 fewer adapters. §4.1 now says F's count is stable while the delta is not, and records the lazy-adapter-materialisation reading as an explicit hypothesis rather than a finding — with the D″→F leg's own F=970 outlier noted as consistent with it. Corrected in §4.1 body, the attribution table, TL;DR and the frontmatter `summary`; the frontmatter trap note now scopes "977 in all six" to the E→F leg. |

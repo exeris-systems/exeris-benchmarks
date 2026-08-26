@@ -385,10 +385,10 @@ per-pair deltas are therefore `[150, 150, 150, 150, 157, 150]`: **modal and medi
 converted carriers** that is an excess of **one**, not two.
 
 **`adaptorCount` is demonstrably not a function of value-class count**, and this report's own
-§4.2 shows it: D″ averages 809.7 adapters and E averages 825.8 while **both carry exactly 6 value
-classes** (measured from their jars). Roughly 15 adapters separate them, and the only difference
-between those arms is mainline versus preview kernel code. The same 15 explains why the two legs'
-deltas differ — 151.2 against 166.2 — without any carrier being involved.
+§4.2 shows it: D″ sits at 812 adapters and E at 827 while **both carry exactly 6 value classes**
+(measured from their jars). Exactly 15 adapters separate them, and the only difference between
+those arms is mainline versus preview kernel code. The same 15 is why the two legs' modal deltas
+differ — 150 against 165 — without any carrier being involved.
 
 Put beside the 7-apart binary above, a reading suggests itself — untested here, so stated as a
 hypothesis: adapters are materialised **lazily, at the first crossing of a scalarised /

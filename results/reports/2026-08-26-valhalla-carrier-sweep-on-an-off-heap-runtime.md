@@ -5,7 +5,7 @@ categories:
   - performance
   - benchmarking
   - jvm
-summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entire memory model is Panama MemorySegment, measured on JDK 28 EA against its own immediately-preceding tag. Throughput, CPU per request and p99 do not move outside +/-2.4 %. Allocation per request falls 1.0 % over a full 900 s window, with a confidence interval that crosses zero; a first attempt read a rotated 2 % tail and overstated that threefold. What does move, in 6 of 6 pairs with intervals that exclude zero, is the non-heap footprint, led by +150 calling-convention adapters -- the modal per-pair delta, in 5 of 6 pairs, one more than the +149 carriers measured from the two jars -- plus +0.18 MB of Metaspace at an unchanged loaded-class count. Code cache grows +1.15 MB on the same evidence, but roughly half its new entries are compiled methods the release step's non-carrier changes could also produce, so that item carries weaker attribution. Around 1.3 MB of permanent cost against a transient 43 B/req allocation saving. Measured by type, byte arrays and Strings are 28 % of what the request path allocates and the converted carriers about 6 %. The mechanism was named on panama-dev in 2020 and explained in 2022; this report measures it."
+summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entire memory model is Panama MemorySegment, measured on JDK 28 EA against its own immediately-preceding tag. Throughput, CPU per request and p99 do not move outside +/-2.4 %. Allocation per request falls 1.0 % over a full 900 s window, with a confidence interval that crosses zero; a first attempt read a rotated 2 % tail and overstated that threefold. What moves is the non-heap footprint, and it moves as a cost. Adapters lead it: +150, the modal per-pair delta in 5 of 6 pairs, one more than the +149 carriers measured from the two jars -- and not an interval estimate at all, because the counts are bimodal and a mean of them is a value the JVM never produces. Metaspace adds +0.18 MB at an unchanged loaded-class count, this one in 6 of 6 pairs with an interval excluding zero. Code cache grows +1.15 MB on the same 6-of-6 evidence, but roughly half its new entries are compiled methods the release step's non-carrier changes could also produce, so that item carries weaker attribution. Around 1.3 MB of permanent cost against a transient 43 B/req allocation saving. Measured by type, byte arrays and Strings are 28 % of what the request path allocates and the converted carriers about 6 %. The mechanism was named on panama-dev in 2020 and explained in 2022; this report measures it."
 # The summary must not say "Valhalla does not work" or "Valhalla failed". The body says something
 # narrower and stronger: on THIS class of runtime -- data off-heap behind a sealed, 9-leaf
 # MemorySegment -- the current model has nothing to flatten, and the sweep is net-negative on
@@ -74,10 +74,10 @@ memory model is `MemorySegment`.*
    A first attempt on a rotated 2 % tail reported −2.8 % and was wrong by roughly threefold —
    which is itself the lesson. Treated as a signal, not a finding.
 3. **The measurable, repeatable effect is a cost, not a saving.** The sweep adds **+150
-   calling-convention adapters** — the modal per-pair delta, in 5 of 6 pairs — one more than the
-   +149 carriers measured from the two jars —
-   and **+0.18 MB Metaspace at an unchanged loaded-class count**. Code cache grows **+1.15 MB** on
-   the same 6-of-6 evidence, but ~146 of its +297 new entries are compiled methods that the
+   calling-convention adapters** (the modal per-pair delta, in 5 of 6 pairs, one more than the
+   +149 carriers measured from the two jars) and **+0.18 MB Metaspace at an unchanged
+   loaded-class count**. Code cache grows **+1.15 MB** on
+   the same 6-of-6 evidence, but ~147 of its +297 new entries are compiled methods that the
    release step's non-carrier changes could also produce, so that one item carries **weaker
    attribution** (§4.1). Total ≈1.3 MB of permanent non-heap footprint, bought with a transient
    43 B/req allocation saving.
@@ -318,16 +318,15 @@ adapter generation are finished, so the tail sample is the correct instrument he
 | non-class metadata (`dataSpace`) | 16 367 kB | 16 560 kB | +192.4 kB | +1.176 % | [+1.047, +1.304] | −0 / +6 |
 | compressed class space | 3911.6 kB | 3908.1 kB | **−3.5 kB** | −0.089 % | [−0.135, −0.043] | −6 / +0 |
 
-Every cell above is an arithmetic mean over the six pairs. That is the right summary for the
-kilobyte rows and the **wrong one for the adapter row**, which is why that row is struck through
-in bold nowhere else in this report.
+Every cell above is an arithmetic mean over the six pairs — the right summary for kilobytes, and
+the reason **adapters are deliberately absent from that table**.
 
-**Adapters are not in that table at all**, and this is the reason. Their counts are bimodal:
-each arm takes one of exactly two values, 7 apart, so a mean lands between them at a value the
-system never produces, and a confidence interval on such a mean bounds **how often the anomaly
-occurred, not how many adapters there are** — a mixture proportion wearing the notation of a
-magnitude. §7 states that the adapter result is not an inference; a row carrying `±CI` alongside
-the kilobyte rows would say the opposite while looking like the rest of the table.
+Adapter counts are bimodal: each arm takes one of two values, 7 apart, so a mean lands between
+them at a value the system never produces, and a confidence interval on such a mean bounds **how
+often the anomaly occurred, not how many adapters there are** — a mixture proportion wearing the
+notation of a magnitude. §7 states that the adapter result is not an inference at all; a row
+carrying `±CI` beside the kilobyte rows would say the opposite while looking like the rest of the
+table.
 
 The honest shape is the observations themselves, over all 12 runs:
 
@@ -353,8 +352,9 @@ The modal arithmetic also closes on itself where the mean does not:
 The last two rows must agree, and modally they do. The mean route reports the same quantity as
 15.0 one way and 16.1 the other — noise where the data has structure.
 
-Three things in that table, and one about the adapters beside it, are worth stating
-separately.
+What follows takes the two tables apart in turn: what the kilobyte figures show, what the adapter
+figures show, what explains the adapter anomaly, and why the two cost items are not attributed
+equally well.
 
 **The class count does not change.** +0.8 classes with signs split −2/+4 is noise. The two arms
 load the same classes; only what the JVM stores *about* them differs.
@@ -364,14 +364,13 @@ load the same classes; only what the JVM stores *about* them differs.
 holds everything else, including value-class layout information and calling-convention adapters —
 grows +192.4 kB. That split is the signature of the effect, not a rounding artefact.
 
-**Nothing about the adapters is deterministic, including F — but the anomaly has a fixed size.**
-F reports 977 in all six runs *of this leg*, and 970 once in D″→F, so "the adapter count is
-deterministic" is a statement about one leg, not about F. Across all four arm-columns every campaign observation takes
-one of exactly two values, **always 7 apart** (counts in the table above) — though a probe under
-different conditions produced a third, so this is a property of these runs, not of the runtime. The low
-value occurs four times in four different arm/slot combinations — E at `run03/ab`, D″ at `run02/ab`
-*and* `run03/ba`, F at `run03/ab` of the other leg — so it is not a slot effect either. It reads as
-one code path carrying seven adapter boundaries, reached or not, independently of arm and position.
+**The anomaly has a fixed size and no fixed home.** Nothing here is deterministic, F included:
+it reads 977 six times on this leg and 970 once on the other, so "the adapter count is
+deterministic" was only ever a statement about one leg. The low value appears four times in four
+different arm/slot combinations — E at `run03/ab`, D″ at `run02/ab` *and* `run03/ba`, F at
+`run03/ab` of the other leg — so it is not a slot effect either. What is fixed is the **step**: 7,
+every time. It reads as one code path carrying seven adapter boundaries, reached or not,
+independently of arm and position.
 
 Code-cache **entries** do not track it: E's 820-adapter run has the *highest* entry count of E's
 six (7458 against a 7413 mean) while D″'s two 805-adapter runs have its two lowest. So seven
@@ -446,7 +445,7 @@ rule out a confound on this line item. Ranked by attribution strength:
 |---|---|---|
 | **+150 adapters** (modal) | — | **strongest**: 5 of 6 pairs, named mechanism, one more than the +149 carriers measured from the two jars. Not deterministic — every arm takes one of two values 7 apart, F included (970 once in §4.2) — so this is a claim about the modal ratio, not about a fixed count |
 | +188.9 kB Metaspace | 0.18 MB | strong: flat class count settles it |
-| +1149.6 kB code cache | 1.15 MB | **weaker**: 6/6 with an interval excluding zero, but ~146 of the +297 entries are compiled methods that the release step's non-carrier changes could also produce |
+| +1149.6 kB code cache | 1.15 MB | **weaker**: 6/6 with an interval excluding zero, but ~147 of the +297 entries are compiled methods that the release step's non-carrier changes could also produce |
 
 **The total.** ≈1.31 MB of permanent non-heap footprint, against 43 B/req of allocation that never
 becomes resident memory at a fixed heap. The RSS point estimate on this leg moved +4.25 MB
@@ -522,7 +521,10 @@ exception; two independent ones read as a property of what the model can express
 
 ### 5.2 Classified by what Valhalla can actually do with them
 
-Of the 156 classifiable `value record` declarations (157 declared, less the one with no components — see §5.1). Note this is a **different population** from the jar's 155, not an off-by-one: it counts the 4 carriers `kafka` and `testkit` declare but this app never ships, and excludes the 2 hand-written `value class`es, which the jar does contain:
+The 156 classifiable `value record` declarations — 157 declared, less the one with no components
+(§5.1) — break down as follows. This is a **different population** from the jar's 155, not an
+off-by-one: it counts the 4 carriers `kafka` and `testkit` declare but this app never ships, and
+excludes the 2 hand-written `value class`es, which the jar does contain.
 
 | component shape | count | share | what flattening can do |
 |---|---|---|---|
@@ -754,7 +756,8 @@ Field and array flat-layout behaviour under `-XX:+PrintFieldLayout` and
 archive (§5.5).
 
 **On multiplicity.** Sections 2–4 run on the order of twenty paired t-tests at α = 0.05, and this
-report promotes findings from exactly one of them. §2.1's two marginal exclusions clear zero by
+report promotes a finding from exactly one: **§4.1's Metaspace growth**, +188.9 kB at an unchanged
+loaded-class count, 6 of 6 pairs, CI [+0.822 %, +1.041 %]. §2.1's two marginal exclusions clear zero by
 0.09 pp and 0.07 pp and would not survive the mildest correction, which is why §2.1 declines to
 promote them and §2.3 shows the run-set drift that explains them.
 
@@ -788,15 +791,21 @@ a p-value, and it is immune to multiplicity because it is not a test.
 
 ## Revision history
 
+**Every entry below marked "review pass" happened *before* this report was published.** No version
+carrying the figures they correct was ever distributed; the list records what was caught while the
+document was still private, in the order each fix exposed the next. Read it as the audit trail of
+a single pre-publication review, not as corrections to a circulated text.
+
 | date | change |
 |---|---|
+| 2026-08-26 | Editorial pass over §4.1, which had accumulated six revisions and started contradicting itself. Its opening sentence ended in an edit fragment and pointed at an adapter row that no longer exists in that table; the adapter values were restated three times over; and the paragraph announcing "three things" was followed by eight. Counted announcements have now been replaced with an uncounted one, since that number had drifted three times. The frontmatter `summary` opened with "in 6 of 6 pairs with intervals that exclude zero" and then led with adapters, which are 5 of 6 and carry no interval — the two clauses are now attached to the items they actually describe. Minor: `~146` unified to **147** across four places (296.7 entries less 150 adapters); §7 now names the single promoted test (§4.1's Metaspace growth) rather than leaving it to inference; §5.2's lead sentence had lost its predicate to an earlier insertion; a triple em-dash in TL;DR item 3. **The revision history now states plainly that every "review pass" entry is pre-publication** — no version carrying the corrected figures was ever distributed, and without that line the list reads as corrections to a circulated text. |
 | 2026-08-26 | Seventh pass — **the set difference, measured**. A dedicated probe (arm D″, `-Xlog:class+load=info`, 90 s, repeated) produced two runs of one binary differing by 2 adapters, and diffing their class-load sets settles the question the counters could not. Raw: **a net of −1 class hides 932 absent and 931 extra**, overwhelmingly `java.lang.invoke` `LambdaForm` and hidden classes whose names carry a per-run address — so every class-count delta in this report measures that churn, and the earlier −4.6 / −6.5 / −5.4 mechanism reading is **withdrawn**. Excluding generated classes, the same two runs differ by **exactly 2 classes, none extra**, and they are a coherent cluster: `HttpAggregateBufferForcedReleaseEvent` and `HttpAggregateBufferHeldEvent` in `eu.exeris.kernel.core.http.jfr`. Controls are exact — two independent pairs agreeing on the adapter count have **byte-identical** stable sets (3990, zero difference either way). So the rule is **one adapter per conditionally-loaded class**, established at the 2-adapter scale; the 7-step predicts seven such classes and remains unobserved, because the probe never reached 812 at any duration. The probe also produced a third value, 803, so "one of exactly two values 7 apart" is now scoped to the campaign's conditions rather than stated as a property of the runtime. |
 | 2026-08-26 | Sixth review pass. **The adapter row is out of §4.1's and §4.2's mean-tables entirely.** §7 already stated the adapter result is not an inference, yet the row still carried a 95 % CI beside the kilobyte rows — the same over-claim as the retracted mean, harder to spot because it looked like the rest of the table. Adapters now get their own table: observed values, their counts across all 12 runs, and the modal deltas 150 and 165, with no percentage and no interval. **The class-count correlation is downgraded from mechanism to counter artefact**, on this report's own control: −4.6 / −6.5 / −5.4 are averages of integer counts, and a noisy continuous quantity cannot explain a step that is exactly 7 three times over — while F's class count spans 3 in leg E→F with the adapter count never moving, so a dose–response reading predicts ~4 adapters where zero are observed. It is not how many classes load but *which*, and a net −5 is equally consistent with "five absent" and "nine absent, four extra". That needs a **set difference, not a delta** — the same move §5.1 required — and it is unavailable here: `jdk.ClassLoad` and `jdk.ClassDefine` carry zero events in every recording. Recorded as a `-Xlog:class+load=info` follow-up, with the sampling cost noted (the anomaly appears in 1 of 6 runs). |
 | 2026-08-26 | Fifth review pass, two structural corrections. **Every adapter figure is now the mode, not the mean.** The counts are bimodal with a quantum of 7 — E {820,**827**}, D″ {805,**812**}, F {970,**977**} — so the reported means (825.8, 809.7, 975.8) were values the system never produces, and a t-interval on such a mean bounds a **mixture proportion, not a magnitude**: `[+17.874, +18.738] %` says how often the anomaly occurred. §7's multiplicity paragraph no longer leans on that interval; the adapter result rests on all twelve observations being one of two values, which is not a test and so is immune to multiplicity. The modal arithmetic also closes on itself where the mean does not: modal deltas 150 and 165 differ by 15, exactly the difference of the arm modes, while the mean route gives 15.0 one way and 16.1 the other. **New measurement:** loaded-class count tracks the anomaly in every column that has one (−4.6, −6.5, −5.4 classes for −7 adapters) while F's constant 977 spans a 3-class range — so seven adapters travel with five to six classes, not one, and not with class-count noise. §5.4's caption contradicted its own footnote about what `−` meant; the blank cells are now split into `✗` (no valid layout — size) and `?` (not emitted, undecidable here), with the whole `NULL_FREE_NON_ATOMIC` column marked `?` because the supporting probe measures **array allocation, a different path from field-layout emission**. Restated as a yes/no question for `valhalla-dev`. |
 | 2026-08-26 | Fourth review pass. §5.1 **corrected on a matter of fact**: it claimed two identity records in `src/main` and none in kernel runtime. There are **three**, and `SubsystemTopologicalSorter$DependencyGraph` (`exeris-kernel-core`) is kernel runtime — excused in `IDENTITY_BY_DESIGN` because its `Map` is mutated in place, so that map is empty in four modules and holds one entry in core. The section now also states the mutability→identity property directly: `DependencyGraph` and `LoanedBuffer` are unrelated subsystems refused for the same reason. Both ends of the 159/155 reconciliation are now **measured** — a bytecode walk over the two shaded jars reports 6 value classes in arm E and 155 in arm F, with nothing from `kafka`/`testkit`, so 149 is measured rather than subtracted. §4.1's "the adapter count is deterministic" is **withdrawn**: every arm takes one of two values exactly 7 apart (E {820,827}, D″ {805,812}, F {970,977}), the low value appears in four different arm/slot combinations, and code-cache entries do not track it — E's 820-adapter run has its *highest* entry count. What survives is a modal ratio in 5 of 6 pairs. §4.2's own numbers are promoted to a point: D″ and E carry 6 value classes each yet differ by ~15 adapters, so `adaptorCount` is not a function of carrier count. |
 | 2026-08-26 | Third review pass, adapter arithmetic. The headline adapter delta was quoted as **+151.2 — a mean of `[150,150,150,150,157,150]` that matches no observation**; it is now **150**, the modal and median per-pair value, and the excess over the 149 converted carriers is **one, not two**. The variance was also mis-attributed: F is stable at 977 across this leg, and the outlier is a *baseline* run generating 7 fewer adapters. §4.1 now says F's count is stable while the delta is not, and records the lazy-adapter-materialisation reading as an explicit hypothesis rather than a finding — with the D″→F leg's own F=970 outlier noted as consistent with it. Corrected in §4.1 body, the attribution table, TL;DR and the frontmatter `summary`; the frontmatter trap note now scopes "977 in all six" to the E→F leg. |
 | 2026-08-26 | Second review pass. §4.1's attribution ranking **propagated to the two surfaces that had not carried it** — the frontmatter `summary` and TL;DR still said "at an unchanged loaded-class count" over all three cost items, which is the claim §4.1 had already withdrawn for the code cache; both now lead with the adapter count. §6's packing **corrected**: deriving the value offset from the name's is invalid because RFC 9110 permits arbitrary optional whitespace after the colon, and 16-bit offsets cannot reach the parser's 819 200-byte worst case either — replaced with `nameOff:32 \| nameLen:14 \| valLen:14 \| ows:4`, which spends length headroom (2× rather than 8×) to buy an explicit OWS field. §5.2 now says why its 156 is a different population from the jar's 155 rather than an off-by-one. |
-| 2026-08-26 | Review pass. Carrier counts reconciled in a new §5.1 — 159 declared in source, 4 not shipped in this app, **155 in arm F's jar**, which is now the stated leading number; the earlier per-module table (72/35/19) came from a grep that dropped `/* default */`-prefixed declarations. §4.1 now **ranks its two cost items by attribution strength**: the flat class count settles Metaspace but does not cover the code cache, ~146 of whose +297 entries are compiled methods the release step's non-carrier changes could also produce. §2.3 added: arm F's own values differ between the two legs by 1.44 % on p99 — more than either leg's p99 delta — which is internal evidence for §2.1's refusal. §3.3's carrier table was missing its tenth row. §5.4 gained a note on what `−` means. §6 finishes the packing arithmetic: `nameOff:32 \| nameLen:16 \| valLen:16` is exactly 64 bits and covers the parser's own 8 192-byte limit with 8× margin. §7 gained a multiplicity paragraph. |
+| 2026-08-26 | Review pass. Carrier counts reconciled in a new §5.1 — 159 declared in source, 4 not shipped in this app, **155 in arm F's jar**, which is now the stated leading number; the earlier per-module table (72/35/19) came from a grep that dropped `/* default */`-prefixed declarations. §4.1 now **ranks its two cost items by attribution strength**: the flat class count settles Metaspace but does not cover the code cache, ~147 of whose +297 entries are compiled methods the release step's non-carrier changes could also produce. §2.3 added: arm F's own values differ between the two legs by 1.44 % on p99 — more than either leg's p99 delta — which is internal evidence for §2.1's refusal. §3.3's carrier table was missing its tenth row. §5.4 gained a note on what `−` means. §6 finishes the packing arithmetic: `nameOff:32 \| nameLen:16 \| valLen:16` is exactly 64 bits and covers the parser's own 8 192-byte limit with 8× margin. §7 gained a multiplicity paragraph. |
 | 2026-08-26 | §3 **re-measured and replaced**. The original allocation table came from recordings that had rotated to a 17-18 s tail of a 900 s window; it reported −2.76 % / ≈134 B per request. A second campaign (`20260826T070108Z-light-alloc-untruncated`, 6/6 `comparison_eligible`) with the kernel's own JFR telemetry silenced and `maxsize=2g` retained the full 1200 s and reports **−0.96 % / ≈43 B**. The tail overstated the effect threefold. §3.3 (allocation by type) is new and makes §6's `readAscii` claim measured rather than derived. Finding the defect that blocked the first attempt — a duplicated JFR start in `run-comparative.sh` that ignored `tools/bench/lib/jfr.sh`'s knobs — cost one discarded campaign launch. |
 | 2026-08-26 | §5.4 added: flat-layout behaviour measured directly with `-XX:+PrintFieldLayout` / `-XX:+PrintFlatArrayLayout`. It **corrected two claims** in the first draft (§5.2, §6): `FlatArrayElementMaxOops = 4` is necessary but not sufficient, a plain `HttpHeader[]` does **not** flatten, and the proposed 16-byte `HeaderSpan` has no valid flat array layout in any mode. The binding constraint for arrays is total element size ≤ 8 bytes. |
 | 2026-08-26 | First publication. Campaign `20260818T062534Z-light-valhalla-carriers` (12/12 `comparison_eligible`). §4 (non-heap cost) and §5.3 (JDK-level census) are new measurements taken for this report, not re-analysis of the campaign's headline metrics. |

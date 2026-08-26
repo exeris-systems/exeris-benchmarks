@@ -366,8 +366,9 @@ grows +192.4 kB. That split is the signature of the effect, not a rounding artef
 
 **Nothing about the adapters is deterministic, including F — but the anomaly has a fixed size.**
 F reports 977 in all six runs *of this leg*, and 970 once in D″→F, so "the adapter count is
-deterministic" is a statement about one leg, not about F. Across all four arm-columns every observation takes one
-of exactly two values, **always 7 apart** (counts in the table above). The low
+deterministic" is a statement about one leg, not about F. Across all four arm-columns every campaign observation takes
+one of exactly two values, **always 7 apart** (counts in the table above) — though a probe under
+different conditions produced a third, so this is a property of these runs, not of the runtime. The low
 value occurs four times in four different arm/slot combinations — E at `run03/ab`, D″ at `run02/ab`
 *and* `run03/ba`, F at `run03/ab` of the other leg — so it is not a slot effect either. It reads as
 one code path carrying seven adapter boundaries, reached or not, independently of arm and position.
@@ -376,51 +377,54 @@ Code-cache **entries** do not track it: E's 820-adapter run has the *highest* en
 six (7458 against a 7413 mean) while D″'s two 805-adapter runs have its two lowest. So seven
 missing adapters is not "seven fewer things compiled".
 
-**Loaded-class counts move with it, but the counter cannot explain it — and this report's own
-control is what rules the counter out.** The anomalous runs do load fewer classes:
+**Loaded-class *counts* explain nothing, and a set difference explains it exactly.** A dedicated
+probe settled this: arm D″ booted with `-Xlog:class+load=info`, driven for 90 s, repeated. Adapter
+counts came out 805 five times and 803 once, so two runs of one binary under one configuration
+differed by 2 adapters — a clean, small case to diff.
 
-| column | classes at the modal adapter count | at the anomaly | Δ |
+Comparing the raw class-load sets of those two runs:
+
+| | classes | only here | net |
 |---|---|---|---|
-| E | 4692.6 | 4688 | −4.6 |
-| D″ | 4670.0 | 4663.5 | −6.5 |
-| F (D″→F) | 4693.4 | 4688 | −5.4 |
+| 805-run | 4966 | 932 | |
+| 803-run | 4965 | 931 | **−1** |
 
-Those deltas are **averages of integer counts**, and a noisy continuous quantity cannot account
-for a discrete constant one: the adapter step is exactly 7, three times over. The control settles
-it — in leg E→F, F's class count spans 4691–4694 while its adapter count never leaves 977. If this
-were dose–response, a 3-class swing would move adapters by roughly four; it moves them by **zero**.
+**A net of −1 hides 932 absent and 931 extra.** The churn is overwhelmingly `java.lang.invoke`
+(392 vs 390) — `LambdaForm` and hidden classes, whose names carry a per-JVM-run address and
+therefore differ between *any* two runs of the same binary. Every class-count delta in this
+report's tables is measuring that churn. It cannot support an inference, and the earlier reading
+of −4.6 / −6.5 / −5.4 classes as a mechanism is **withdrawn**.
 
-So it is not *how many* classes load, it is *which* — and a counter cannot answer that. A net −5
-is equally consistent with "five classes absent" and with "nine absent, four extra", explanations
-with nothing in common. **The number needed here is a set difference, not a delta**, exactly as
-the source/bytecode reconciliation in §5.1 had to compare sets rather than totals.
+Excluding generated and hidden classes, the same two runs give a different picture entirely:
 
-That measurement is not available from these recordings: `jdk.ClassLoad` and `jdk.ClassDefine`
-carry **zero events** in every one of them — both are off by default even under `profile`, for
-volume — so only the nameless periodic counter survives. Answering it needs a fresh pair under
-`-Xlog:class+load=info` and a diff of the loaded-class *sets* between an anomalous and a normal run
-of the same arm. A coherent cluster (one package, one subsystem) would be a mechanism; five
-unrelated classes would mean this correlation was an artefact of counting. Note the sampling cost:
-the anomaly appeared in 1 of 6 runs for E and 2 of 6 for D″, so a single pair is unlikely to
-capture one.
+| | stable classes | only here |
+|---|---|---|
+| 805-run | 3990 | **2** |
+| 803-run | 3988 | **0** |
 
-E reports 827 five times and **820 once**. The
-per-pair deltas are therefore `[150, 150, 150, 150, 157, 150]`: **modal and median 150**, mean
-151.2 — a mean that corresponds to no observation and should not be quoted. Against **+149
-converted carriers** that is an excess of **one**, not two.
+Two classes absent, none extra, and they are a coherent cluster in one package:
 
-**`adaptorCount` is demonstrably not a function of value-class count**, and this report's own
-§4.2 shows it: D″ sits at 812 adapters and E at 827 while **both carry exactly 6 value classes**
-(measured from their jars). Exactly 15 adapters separate them, and the only difference between
-those arms is mainline versus preview kernel code. The same 15 is why the two legs' modal deltas
-differ — 150 against 165 — without any carrier being involved.
+```
+eu.exeris.kernel.core.http.jfr.HttpAggregateBufferForcedReleaseEvent
+eu.exeris.kernel.core.http.jfr.HttpAggregateBufferHeldEvent
+```
 
-Put beside the 7-apart binary above, a reading suggests itself — untested here, so stated as a
-hypothesis: adapters are materialised **lazily, at the first crossing of a scalarised /
-non-scalarised boundary**, rather than eagerly per value class. That would make `adaptorCount`
-partly a measure of which boundaries a run actually reached, which fits a fixed 7-adapter path
-appearing or not, and fits the count moving with code shape rather than carrier count. It does
-*not* fit a per-class model at all.
+**Two fewer adapters, exactly two fewer classes — one adapter per class.** And the controls are
+exact: two independent pairs of runs that *agree* on the adapter count have **byte-identical**
+stable class sets, 3990 each, zero difference in either direction. Equal adapter count implies
+equal class set; unequal implies a difference of precisely the same size.
+
+So the answer to "how many classes" was never available from a counter — it is **which** classes,
+and here they are conditionally-loaded JFR *event* classes for the HTTP aggregate-buffer path,
+which load only when a buffer is actually held or forcibly released. Part of the adapter count is
+therefore instrumentation reaching a state, not application work.
+
+Two limits on this, both real. The probe is a different configuration from the campaign — one JVM,
+unpinned, 90–300 s — and it **never reached 812**, at either duration, so the 7-adapter step itself
+is not reproduced here; the 1:1 rule is established at the 2-adapter scale and *predicts* seven
+conditionally-loaded classes behind the seven, which remains unobserved. And the probe produced a
+third value, 803, so "one of exactly two values" is a statement about the campaign's conditions,
+not a property of the runtime.
 
 The mechanism behind the adapters themselves is named, and that part is not a hypothesis: `InlineTypePassFieldsAsArgs = true` and
 `InlineTypeReturnedAsFields = true` are both on by default on this build (§5.3), so every value
@@ -786,6 +790,7 @@ a p-value, and it is immune to multiplicity because it is not a test.
 
 | date | change |
 |---|---|
+| 2026-08-26 | Seventh pass — **the set difference, measured**. A dedicated probe (arm D″, `-Xlog:class+load=info`, 90 s, repeated) produced two runs of one binary differing by 2 adapters, and diffing their class-load sets settles the question the counters could not. Raw: **a net of −1 class hides 932 absent and 931 extra**, overwhelmingly `java.lang.invoke` `LambdaForm` and hidden classes whose names carry a per-run address — so every class-count delta in this report measures that churn, and the earlier −4.6 / −6.5 / −5.4 mechanism reading is **withdrawn**. Excluding generated classes, the same two runs differ by **exactly 2 classes, none extra**, and they are a coherent cluster: `HttpAggregateBufferForcedReleaseEvent` and `HttpAggregateBufferHeldEvent` in `eu.exeris.kernel.core.http.jfr`. Controls are exact — two independent pairs agreeing on the adapter count have **byte-identical** stable sets (3990, zero difference either way). So the rule is **one adapter per conditionally-loaded class**, established at the 2-adapter scale; the 7-step predicts seven such classes and remains unobserved, because the probe never reached 812 at any duration. The probe also produced a third value, 803, so "one of exactly two values 7 apart" is now scoped to the campaign's conditions rather than stated as a property of the runtime. |
 | 2026-08-26 | Sixth review pass. **The adapter row is out of §4.1's and §4.2's mean-tables entirely.** §7 already stated the adapter result is not an inference, yet the row still carried a 95 % CI beside the kilobyte rows — the same over-claim as the retracted mean, harder to spot because it looked like the rest of the table. Adapters now get their own table: observed values, their counts across all 12 runs, and the modal deltas 150 and 165, with no percentage and no interval. **The class-count correlation is downgraded from mechanism to counter artefact**, on this report's own control: −4.6 / −6.5 / −5.4 are averages of integer counts, and a noisy continuous quantity cannot explain a step that is exactly 7 three times over — while F's class count spans 3 in leg E→F with the adapter count never moving, so a dose–response reading predicts ~4 adapters where zero are observed. It is not how many classes load but *which*, and a net −5 is equally consistent with "five absent" and "nine absent, four extra". That needs a **set difference, not a delta** — the same move §5.1 required — and it is unavailable here: `jdk.ClassLoad` and `jdk.ClassDefine` carry zero events in every recording. Recorded as a `-Xlog:class+load=info` follow-up, with the sampling cost noted (the anomaly appears in 1 of 6 runs). |
 | 2026-08-26 | Fifth review pass, two structural corrections. **Every adapter figure is now the mode, not the mean.** The counts are bimodal with a quantum of 7 — E {820,**827**}, D″ {805,**812**}, F {970,**977**} — so the reported means (825.8, 809.7, 975.8) were values the system never produces, and a t-interval on such a mean bounds a **mixture proportion, not a magnitude**: `[+17.874, +18.738] %` says how often the anomaly occurred. §7's multiplicity paragraph no longer leans on that interval; the adapter result rests on all twelve observations being one of two values, which is not a test and so is immune to multiplicity. The modal arithmetic also closes on itself where the mean does not: modal deltas 150 and 165 differ by 15, exactly the difference of the arm modes, while the mean route gives 15.0 one way and 16.1 the other. **New measurement:** loaded-class count tracks the anomaly in every column that has one (−4.6, −6.5, −5.4 classes for −7 adapters) while F's constant 977 spans a 3-class range — so seven adapters travel with five to six classes, not one, and not with class-count noise. §5.4's caption contradicted its own footnote about what `−` meant; the blank cells are now split into `✗` (no valid layout — size) and `?` (not emitted, undecidable here), with the whole `NULL_FREE_NON_ATOMIC` column marked `?` because the supporting probe measures **array allocation, a different path from field-layout emission**. Restated as a yes/no question for `valhalla-dev`. |
 | 2026-08-26 | Fourth review pass. §5.1 **corrected on a matter of fact**: it claimed two identity records in `src/main` and none in kernel runtime. There are **three**, and `SubsystemTopologicalSorter$DependencyGraph` (`exeris-kernel-core`) is kernel runtime — excused in `IDENTITY_BY_DESIGN` because its `Map` is mutated in place, so that map is empty in four modules and holds one entry in core. The section now also states the mutability→identity property directly: `DependencyGraph` and `LoanedBuffer` are unrelated subsystems refused for the same reason. Both ends of the 159/155 reconciliation are now **measured** — a bytecode walk over the two shaded jars reports 6 value classes in arm E and 155 in arm F, with nothing from `kafka`/`testkit`, so 149 is measured rather than subtracted. §4.1's "the adapter count is deterministic" is **withdrawn**: every arm takes one of two values exactly 7 apart (E {820,827}, D″ {805,812}, F {970,977}), the low value appears in four different arm/slot combinations, and code-cache entries do not track it — E's 820-adapter run has its *highest* entry count. What survives is a modal ratio in 5 of 6 pairs. §4.2's own numbers are promoted to a point: D″ and E carry 6 value classes each yet differ by ~15 adapters, so `adaptorCount` is not a function of carrier count. |

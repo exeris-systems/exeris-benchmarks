@@ -5,7 +5,7 @@ categories:
   - performance
   - benchmarking
   - jvm
-summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entire memory model is Panama MemorySegment, measured on JDK 28 EA against its own immediately-preceding tag. Throughput, CPU per request and p99 do not move outside +/-2.4 %. Allocation per request falls 1.0 % over a full 900 s window, with a confidence interval that crosses zero; a first attempt read a rotated 2 % tail and overstated that threefold. What does move, in 6 of 6 pairs with intervals that exclude zero, is the non-heap footprint, led by +151 calling-convention adapters -- a deterministic count matching the +149 converted carriers -- plus +0.18 MB of Metaspace at an unchanged loaded-class count. Code cache grows +1.15 MB on the same evidence, but roughly half its new entries are compiled methods the release step's non-carrier changes could also produce, so that item carries weaker attribution. Around 1.3 MB of permanent cost against a transient 43 B/req allocation saving. Measured by type, byte arrays and Strings are 28 % of what the request path allocates and the converted carriers about 6 %. The mechanism was named on panama-dev in 2020 and explained in 2022; this report measures it."
+summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entire memory model is Panama MemorySegment, measured on JDK 28 EA against its own immediately-preceding tag. Throughput, CPU per request and p99 do not move outside +/-2.4 %. Allocation per request falls 1.0 % over a full 900 s window, with a confidence interval that crosses zero; a first attempt read a rotated 2 % tail and overstated that threefold. What does move, in 6 of 6 pairs with intervals that exclude zero, is the non-heap footprint, led by +150 calling-convention adapters -- the modal per-pair delta, one more than the +149 converted carriers -- plus +0.18 MB of Metaspace at an unchanged loaded-class count. Code cache grows +1.15 MB on the same evidence, but roughly half its new entries are compiled methods the release step's non-carrier changes could also produce, so that item carries weaker attribution. Around 1.3 MB of permanent cost against a transient 43 B/req allocation saving. Measured by type, byte arrays and Strings are 28 % of what the request path allocates and the converted carriers about 6 %. The mechanism was named on panama-dev in 2020 and explained in 2022; this report measures it."
 # The summary must not say "Valhalla does not work" or "Valhalla failed". The body says something
 # narrower and stronger: on THIS class of runtime -- data off-heap behind a sealed, 9-leaf
 # MemorySegment -- the current model has nothing to flatten, and the sweep is net-negative on
@@ -16,9 +16,13 @@ summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entir
 # summary must not carry it as a finding. It is NOT in the summary above -- keep it that way.
 #
 # Third trap: the +1.15 MB code-cache figure is the ONLY headline whose interval is wide
-# (CI [+5.93 %, +7.63 %]) while its component -- adaptorCount -- is deterministic (977 in all six
-# F runs). Quote the adapter count when one number has to travel alone; it is the one that
-# cannot be argued with.
+# (CI [+5.93 %, +7.63 %]) while its component -- adaptorCount -- is far tighter. Quote the adapter
+# count when one number has to travel alone.
+#
+# But quote it as 150, not 151.2. F is 977 in all six runs OF THE E->F LEG (in D''->F it is 970
+# once), while E is 827 five times and 820 once, so the per-pair deltas are
+# [150,150,150,150,157,150]: modal and median 150, mean 151.2. The mean corresponds to no
+# observation. See 4.1 -- F's count is stable, the DELTA is not.
 authors:
   - Arkadiusz Przychocki
 track: Community
@@ -68,8 +72,8 @@ memory model is `MemorySegment`.*
    consistent with header elimination on the request-path carriers; the interval crosses zero.
    A first attempt on a rotated 2 % tail reported −2.8 % and was wrong by roughly threefold —
    which is itself the lesson. Treated as a signal, not a finding.
-3. **The measurable, repeatable effect is a cost, not a saving.** The sweep adds **+151
-   calling-convention adapters** — 977 in all six F runs, matching the +149 converted carriers —
+3. **The measurable, repeatable effect is a cost, not a saving.** The sweep adds **+150
+   calling-convention adapters** (modal per-pair delta), one more than the +149 converted carriers —
    and **+0.18 MB Metaspace at an unchanged loaded-class count**. Code cache grows **+1.15 MB** on
    the same 6-of-6 evidence, but ~146 of its +297 new entries are compiled methods that the
    release step's non-carrier changes could also produce, so that one item carries **weaker
@@ -313,6 +317,11 @@ adapter generation are finished, so the tail sample is the correct instrument he
 | non-class metadata (`dataSpace`) | 16 367 kB | 16 560 kB | +192.4 kB | +1.176 % | [+1.047, +1.304] | −0 / +6 |
 | compressed class space | 3911.6 kB | 3908.1 kB | **−3.5 kB** | −0.089 % | [−0.135, −0.043] | −6 / +0 |
 
+Every cell above is an arithmetic mean over the six pairs, which is the right summary for the
+kilobyte rows and the wrong one for the adapter row: the per-pair adapter deltas are
+`[150, 150, 150, 150, 157, 150]`, so **+151.2 is a mean that matches no observation**. Quote
+**150**. The rest of this section, and every other surface in this report, uses that value.
+
 Four things in that table are worth stating separately.
 
 **The class count does not change.** +0.8 classes with signs split −2/+4 is noise. The two arms
@@ -323,10 +332,21 @@ load the same classes; only what the JVM stores *about* them differs.
 holds everything else, including value-class layout information and calling-convention adapters —
 grows +192.4 kB. That split is the signature of the effect, not a rounding artefact.
 
-**The adapter count is deterministic.** F reports **977 adapters in all six runs**; E reports 827
-in five and 820 in one. +151 adapters against **+149 converted carriers** is a near one-to-one
-correspondence — the two-adapter excess is not accounted for here and is not needed for the
-argument — and it has a named cause: `InlineTypePassFieldsAsArgs = true` and
+**F's adapter count is stable; the delta is not — and the variance sits on the baseline side.**
+F reports **977 in all six runs of this leg**; E reports 827 five times and **820 once**. The
+per-pair deltas are therefore `[150, 150, 150, 150, 157, 150]`: **modal and median 150**, mean
+151.2 — a mean that corresponds to no observation and should not be quoted. Against **+149
+converted carriers** that is an excess of **one**, not two.
+
+Where the variance sits is the interesting part. It is one *baseline* run generating **7 fewer**
+adapters, not F generating more. A plausible reading — untested here, so stated as a hypothesis —
+is that adapters are materialised lazily at the first crossing of a scalarised/non-scalarised
+boundary rather than eagerly per value class, which would make `adaptorCount` partly a measure of
+which paths a run actually reached. That predicts exactly this shape: F at full coverage every
+time because it has 155 carriers on the request path, E occasionally short because it has 6. The
+D″→F leg is consistent with it — there F itself reads 970 once.
+
+The mechanism behind the adapters themselves is named, and that part is not a hypothesis: `InlineTypePassFieldsAsArgs = true` and
 `InlineTypeReturnedAsFields = true` are both on by default on this build (§5.3), so every value
 class gets a scalarised calling convention — and every boundary between a scalarised and a
 non-scalarised call site needs an adapter. **This is the same machinery that produces the 43 B/req
@@ -337,14 +357,14 @@ That argument — same classes, different metadata — settles Metaspace: `Klass
 per-class, the count is flat, so the +188.9 kB is metadata about unchanged classes.
 
 It does **not** settle the code cache. Code cache gained **+296.7 entries**, of which adapters
-explain 151; the remaining ~146 are compiled methods. A method-body change in an already-loaded
+explain ~150; the remaining ~147 are compiled methods. A method-body change in an already-loaded
 class moves the code cache without moving the class count — and §1 states that this release step
 also carries a `FileSink` change and `CommunityRotatingKeySet`. So the flat class count does not
 rule out a confound on this line item. Ranked by attribution strength:
 
 | item | size | attribution |
 |---|---|---|
-| **+151 adapters** | — | **unassailable**: deterministic (977 in 6 of 6 F runs), named mechanism, numerically matched to +149 carriers |
+| **+150 adapters** (modal) | — | **strongest**: F stable at 977 across 6 of 6 runs on this leg, named mechanism, one more than the +149 carriers. The delta itself varies (one pair at 157), so quote the modal value, not the 151.2 mean |
 | +188.9 kB Metaspace | 0.18 MB | strong: flat class count settles it |
 | +1149.6 kB code cache | 1.15 MB | **weaker**: 6/6 with an interval excluding zero, but ~146 of the +297 entries are compiled methods that the release step's non-carrier changes could also produce |
 
@@ -653,6 +673,7 @@ promote them and §2.3 shows the run-set drift that explains them.
 
 | date | change |
 |---|---|
+| 2026-08-26 | Third review pass, adapter arithmetic. The headline adapter delta was quoted as **+151.2 — a mean of `[150,150,150,150,157,150]` that matches no observation**; it is now **150**, the modal and median per-pair value, and the excess over the 149 converted carriers is **one, not two**. The variance was also mis-attributed: F is stable at 977 across this leg, and the outlier is a *baseline* run generating 7 fewer adapters. §4.1 now says F's count is stable while the delta is not, and records the lazy-adapter-materialisation reading as an explicit hypothesis rather than a finding — with the D″→F leg's own F=970 outlier noted as consistent with it. Corrected in §4.1 body, the attribution table, TL;DR and the frontmatter `summary`; the frontmatter trap note now scopes "977 in all six" to the E→F leg. |
 | 2026-08-26 | Second review pass. §4.1's attribution ranking **propagated to the two surfaces that had not carried it** — the frontmatter `summary` and TL;DR still said "at an unchanged loaded-class count" over all three cost items, which is the claim §4.1 had already withdrawn for the code cache; both now lead with the adapter count. §6's packing **corrected**: deriving the value offset from the name's is invalid because RFC 9110 permits arbitrary optional whitespace after the colon, and 16-bit offsets cannot reach the parser's 819 200-byte worst case either — replaced with `nameOff:32 \| nameLen:14 \| valLen:14 \| ows:4`, which spends length headroom (2× rather than 8×) to buy an explicit OWS field. §5.2 now says why its 156 is a different population from the jar's 155 rather than an off-by-one. |
 | 2026-08-26 | Review pass. Carrier counts reconciled in a new §5.1 — 159 declared in source, 4 not shipped in this app, **155 in arm F's jar**, which is now the stated leading number; the earlier per-module table (72/35/19) came from a grep that dropped `/* default */`-prefixed declarations. §4.1 now **ranks its two cost items by attribution strength**: the flat class count settles Metaspace but does not cover the code cache, ~146 of whose +297 entries are compiled methods the release step's non-carrier changes could also produce. §2.3 added: arm F's own values differ between the two legs by 1.44 % on p99 — more than either leg's p99 delta — which is internal evidence for §2.1's refusal. §3.3's carrier table was missing its tenth row. §5.4 gained a note on what `−` means. §6 finishes the packing arithmetic: `nameOff:32 \| nameLen:16 \| valLen:16` is exactly 64 bits and covers the parser's own 8 192-byte limit with 8× margin. §7 gained a multiplicity paragraph. |
 | 2026-08-26 | §3 **re-measured and replaced**. The original allocation table came from recordings that had rotated to a 17-18 s tail of a 900 s window; it reported −2.76 % / ≈134 B per request. A second campaign (`20260826T070108Z-light-alloc-untruncated`, 6/6 `comparison_eligible`) with the kernel's own JFR telemetry silenced and `maxsize=2g` retained the full 1200 s and reports **−0.96 % / ≈43 B**. The tail overstated the effect threefold. §3.3 (allocation by type) is new and makes §6's `readAscii` claim measured rather than derived. Finding the defect that blocked the first attempt — a duplicated JFR start in `run-comparative.sh` that ignored `tools/bench/lib/jfr.sh`'s knobs — cost one discarded campaign launch. |

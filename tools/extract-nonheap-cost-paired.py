@@ -1,5 +1,7 @@
 import json, re, subprocess, os, statistics
-C = "/home/bench/exeris-benchmarks/results/raw/kernel-version-axis/20260818T062534Z-light-valhalla-carriers"
+import sys
+C = sys.argv[1] if len(sys.argv) > 1 else \
+    "/home/bench/exeris-benchmarks/results/raw/kernel-version-axis/20260818T062534Z-light-valhalla-carriers"
 JFR = "/opt/jdk28/bin/jfr"
 
 def jprint(f, ev):
@@ -44,6 +46,8 @@ legs = {}
 for leg in ("E__F", "D_double_prime__F"):
     rows = []
     base = os.path.join(C, "light", leg)
+    if not os.path.isdir(base):
+        continue          # a campaign may declare only one leg
     for run in sorted(os.listdir(base)):
         for order in ("ab", "ba"):
             d = os.path.join(base, run, order)

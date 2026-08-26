@@ -1,0 +1,22 @@
+{
+  "claim_status": "comparison_eligible",
+  "reason": "all_gates_passed",
+  "track_id": "track-light-E__F-ab-02",
+  "pair_id": "entity-read-by-id-fixed_contract_cross_runtime_h1_single_read_v1-exeris-k0110pv-j28p__exeris-k0111pv-j28p",
+  "pair_order": "ab",
+  "rejection_codes": [],
+  "failed_request_rate_pct": {
+    "target_a": "0.0000",
+    "target_b": "0.0000",
+    "threshold_pct": "2"
+  },
+  "latency_percentile_eligibility": {
+    "publishable": false,
+    "reason": "closed_loop_driver_at_saturation",
+    "driver_mode": "closed",
+    "cores_used_target_a": "3.7781",
+    "cores_used_target_b": "3.7791",
+    "pinned_cpus": "4",
+    "note": "Closed-loop percentiles at saturation are queue-depth/throughput, not service time. Throughput and resource metrics are unaffected."
+  }
+}

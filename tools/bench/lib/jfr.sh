@@ -77,7 +77,20 @@ bench_start_jfr_recording() {
         _extra_settings_arg=" settings=${_lib_repo_root}/env/jfr-steady-state.jfc"
       fi
     fi
-    if jcmd "$pid" "JFR.start name=${recording_name} settings=${settings}${_extra_settings_arg} disk=true" \
+    # Recording size cap. jcmd JFR.start with no maxsize= takes JFR's 250MB default and
+    # ROTATES: the recording silently keeps only the tail. On an Exeris target that is not a
+    # theoretical risk — the kernel's own eu.exeris.persistence.* events are ~5-6 commits per
+    # request and filled 240MB of the 250MB budget in one measured run, leaving a ~2% tail of a
+    # 900s window. Any per-window rate read off such a recording is a tail sample, not a mean.
+    # BENCH_JFR_MAXSIZE (e.g. "2g", "512m") lifts the cap; unset preserves the 250MB default so
+    # every existing campaign keeps its current behaviour. Pair it with
+    # BENCH_JFR_EXTRA_SETTINGS=env/jfr-no-exeris-telemetry.jfc to remove the cause rather than
+    # widen the symptom. See docs/methodology.md.
+    local _maxsize_arg=""
+    if [[ -n "${BENCH_JFR_MAXSIZE:-}" ]]; then
+      _maxsize_arg=" maxsize=${BENCH_JFR_MAXSIZE}"
+    fi
+    if jcmd "$pid" "JFR.start name=${recording_name} settings=${settings}${_extra_settings_arg}${_maxsize_arg} disk=true" \
         >> "${logs_dir}/jfr-start.txt" 2>&1; then
       start_success=true
       note="${recording_already_present:+replaced existing recording; }recording started"

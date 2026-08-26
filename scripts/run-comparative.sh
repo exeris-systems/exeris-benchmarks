@@ -1672,7 +1672,21 @@ ensure_jfr_recording_started() {
       note="recording already present"
     else
       start_attempted=true
-      if jcmd "$pid" "JFR.start name=${recording_name} settings=profile disk=true" >> "${outdir}/jfr-start.txt" 2>&1; then
+      # This is a SECOND implementation of the JFR start that tools/bench/lib/jfr.sh already
+      # provides, and it silently ignored that lib's knobs until 2026-08-26: a campaign that
+      # exported BENCH_JFR_EXTRA_SETTINGS and BENCH_JFR_MAXSIZE got neither, because the
+      # comparative path never sources the lib. It cost a launched campaign to find.
+      # Both knobs are honoured here with the same semantics as the lib:
+      #   BENCH_JFR_EXTRA_SETTINGS — an overlay .jfc chained AFTER settings=profile, so its
+      #     entries win (e.g. env/jfr-no-exeris-telemetry.jfc to silence eu.exeris.* events).
+      #   BENCH_JFR_MAXSIZE — lifts JFR's 250MB default, which ROTATES and silently keeps only
+      #     the tail. Measured: 17-18s retained out of a 900s window on an Exeris target.
+      # Unset leaves the previous behaviour byte-identical, so existing campaigns are unaffected.
+      _cmp_jfr_extra=""
+      [[ -n "${BENCH_JFR_EXTRA_SETTINGS:-}" ]] && _cmp_jfr_extra=" settings=${BENCH_JFR_EXTRA_SETTINGS}"
+      _cmp_jfr_maxsize=""
+      [[ -n "${BENCH_JFR_MAXSIZE:-}" ]] && _cmp_jfr_maxsize=" maxsize=${BENCH_JFR_MAXSIZE}"
+      if jcmd "$pid" "JFR.start name=${recording_name} settings=profile${_cmp_jfr_extra}${_cmp_jfr_maxsize} disk=true" >> "${outdir}/jfr-start.txt" 2>&1; then
         start_success=true
         note="recording started"
       else

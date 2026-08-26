@@ -1,0 +1,26 @@
+{
+  "target_a_input": "exeris-k0110-j28p",
+  "target_b_input": "exeris-k0111pv-j28p",
+  "target_a_contract": {
+    "target_id": "exeris-k0110-j28p",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/exeris-k0110-j28p.env",
+    "profile_id": "exeris-k0110-j28p",
+    "compose_file": "",
+    "jar_path": "/home/bench/exeris-benchmarks/targets/_staging/exeris-community-app-k0.11.0-r28p.jar",
+    "health_url": "http://localhost:9026/health"
+  },
+  "target_b_contract": {
+    "target_id": "exeris-k0111pv-j28p",
+    "tier": "community",
+    "protocol_mode": "h1",
+    "launcher_mode": "external",
+    "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/exeris-k0111pv-j28p.env",
+    "profile_id": "exeris-k0111pv-j28p",
+    "compose_file": "",
+    "jar_path": "/home/bench/exeris-benchmarks/targets/_staging/exeris-community-app-kpv0.11.1-r28p.jar",
+    "health_url": "http://localhost:9028/health"
+  }
+}

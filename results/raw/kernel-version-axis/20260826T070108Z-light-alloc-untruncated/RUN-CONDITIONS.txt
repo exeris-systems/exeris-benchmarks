@@ -1,0 +1,23 @@
+PURPOSE: re-measure allocation/GC for the E->F carrier sweep WITHOUT JFR rotation.
+The 20260818 campaign retained 17-18s of a 900s window (~2% tail). Root cause: the kernel's
+own eu.exeris.persistence.* events (~5-6 commits/request) filled 240MB of JFR's 250MB default.
+
+INSTRUMENT CHANGES vs 20260818T062534Z (both arms identically):
+  BENCH_JFR_EXTRA_SETTINGS=env/jfr-no-exeris-telemetry.jfc   (disables eu.exeris.*)
+  BENCH_JFR_MAXSIZE=2g                                       (lifts the rotation cap)
+=> absolute alloc/req is NOT comparable with 20260818; the E-vs-F DELTA is the deliverable.
+=> NOT POOLABLE with 20260818T062534Z-light-valhalla-carriers.
+
+UNCHANGED vs 20260818: arms, contract, heap, core partition, DB fences.
+EXERIS_JAVA_OPTS=-Xms256m -Xmx256m   (matched fixed heap)
+SERVER_CPU_AFFINITY=0-1,8-9   LOADGEN_CPU_AFFINITY=2-3,10-11   db cpuset=4-7,12-15
+backend_network_mode=bridge (exeris-benchmark-db on compose_default), as on 20260818
+contract=light  fixed_contract_cross_runtime_h1_single_read_v1  warm 300 / meas 900
+legs=E->F   repeats=3 (A/B and B/A each) => n=6 pairs
+
+BOX STATE: the exeris-e2e-saga-* stack (4 containers, host-net PG holding 5432, pinned to
+6,7,14,15) was stopped for this run. That stack was started ~2026-08-23, i.e. it was NOT
+present during the 20260818 campaign either - stopping it restores the 20260818 condition
+rather than introducing a new one. Restore with: docker start exeris-e2e-saga-postgres
+exeris-e2e-saga-lra-coordinator exeris-e2e-saga-restate-server exeris-e2e-saga-payment-gateway
+boot-verify: arms E and F both VERIFIED immediately before launch.

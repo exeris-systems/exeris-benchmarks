@@ -1,0 +1,9 @@
+EXERIS_JAVA_OPTS=-Xms256m -Xmx256m   (matched fixed heap; RSS is meaningless without it)
+SERVER_CPU_AFFINITY=0-1,8-9
+LOADGEN_CPU_AFFINITY=2-3,10-11
+db cpuset=4-7,12-15 (pinned)
+contract=light  fixed_contract_cross_runtime_h1_single_read_v1  warm 300 / meas 900
+legs=E->F (carrier sweep), D-double-prime->F (distributed vs full preview)
+Same heap and partition as 20260812T223959Z-light-matched-heap, so D-double-prime->E from that
+campaign and D-double-prime->F here are read under the same conditions - but they are still
+separate campaigns, not a paired measurement.

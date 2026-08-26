@@ -33,14 +33,30 @@
     <exeris.kernel.version>0.10.2</exeris.kernel.version>
   </properties>
 
+  <!--
+    eu.exeris:* and eu.exeris.preview:* are published to GitHub Packages, not Central. Without this
+    the build resolves only from Central and works purely by accident on a machine whose ~/.m2
+    already holds the kernel from earlier work, then fails the moment a new version appears - which
+    is exactly how preview 0.11.1 failed here. Credentials come from -s .github/maven-settings-gpr.xml
+    (server ids must match the repository ids below).
+  -->
+  <repositories>
+    <repository>
+      <id>github-exeris-kernel</id>
+      <url>https://maven.pkg.github.com/exeris-systems/exeris-kernel</url>
+      <releases><enabled>true</enabled></releases>
+      <snapshots><enabled>true</enabled></snapshots>
+    </repository>
+  </repositories>
+
   <dependencies>
     <dependency>
-      <groupId>eu.exeris</groupId>
+      <groupId>${exeris.kernel.groupId}</groupId>
       <artifactId>exeris-kernel-spi</artifactId>
       <version>${exeris.kernel.version}</version>
     </dependency>
     <dependency>
-      <groupId>eu.exeris</groupId>
+      <groupId>${exeris.kernel.groupId}</groupId>
       <artifactId>exeris-kernel-core</artifactId>
       <version>${exeris.kernel.version}</version>
     </dependency>
@@ -52,7 +68,7 @@
       one-line change here with zero source changes.
     -->
     <dependency>
-      <groupId>eu.exeris</groupId>
+      <groupId>${exeris.kernel.groupId}</groupId>
       <artifactId>exeris-kernel-community</artifactId>
       <version>${exeris.kernel.version}</version>
       <scope>runtime</scope>
@@ -105,7 +121,7 @@
         <version>${maven.compiler.plugin.version}</version>
         <configuration>
           <release>${maven.compiler.release}</release>
-          <enablePreview>true</enablePreview>
+          <enablePreview>${exeris.compiler.enablePreview}</enablePreview>
         </configuration>
       </plugin>
       <plugin>

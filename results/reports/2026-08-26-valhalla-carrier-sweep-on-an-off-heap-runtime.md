@@ -5,7 +5,7 @@ categories:
   - performance
   - benchmarking
   - jvm
-summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entire memory model is Panama MemorySegment, measured on JDK 28 EA against its own immediately-preceding tag. Throughput, CPU per request and p99 do not move outside +/-2.4 %. Allocation per request falls 1.0 % over a full 900 s window, with a confidence interval that crosses zero; a first attempt read a rotated 2 % tail and overstated that threefold. What does move, in 6 of 6 pairs with intervals that exclude zero, is the non-heap footprint, led by +150 calling-convention adapters -- the modal per-pair delta, one more than the +149 converted carriers -- plus +0.18 MB of Metaspace at an unchanged loaded-class count. Code cache grows +1.15 MB on the same evidence, but roughly half its new entries are compiled methods the release step's non-carrier changes could also produce, so that item carries weaker attribution. Around 1.3 MB of permanent cost against a transient 43 B/req allocation saving. Measured by type, byte arrays and Strings are 28 % of what the request path allocates and the converted carriers about 6 %. The mechanism was named on panama-dev in 2020 and explained in 2022; this report measures it."
+summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entire memory model is Panama MemorySegment, measured on JDK 28 EA against its own immediately-preceding tag. Throughput, CPU per request and p99 do not move outside +/-2.4 %. Allocation per request falls 1.0 % over a full 900 s window, with a confidence interval that crosses zero; a first attempt read a rotated 2 % tail and overstated that threefold. What does move, in 6 of 6 pairs with intervals that exclude zero, is the non-heap footprint, led by +150 calling-convention adapters -- the modal per-pair delta, in 5 of 6 pairs, one more than the +149 carriers measured from the two jars -- plus +0.18 MB of Metaspace at an unchanged loaded-class count. Code cache grows +1.15 MB on the same evidence, but roughly half its new entries are compiled methods the release step's non-carrier changes could also produce, so that item carries weaker attribution. Around 1.3 MB of permanent cost against a transient 43 B/req allocation saving. Measured by type, byte arrays and Strings are 28 % of what the request path allocates and the converted carriers about 6 %. The mechanism was named on panama-dev in 2020 and explained in 2022; this report measures it."
 # The summary must not say "Valhalla does not work" or "Valhalla failed". The body says something
 # narrower and stronger: on THIS class of runtime -- data off-heap behind a sealed, 9-leaf
 # MemorySegment -- the current model has nothing to flatten, and the sweep is net-negative on
@@ -19,10 +19,11 @@ summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entir
 # (CI [+5.93 %, +7.63 %]) while its component -- adaptorCount -- is far tighter. Quote the adapter
 # count when one number has to travel alone.
 #
-# But quote it as 150, not 151.2. F is 977 in all six runs OF THE E->F LEG (in D''->F it is 970
-# once), while E is 827 five times and 820 once, so the per-pair deltas are
-# [150,150,150,150,157,150]: modal and median 150, mean 151.2. The mean corresponds to no
-# observation. See 4.1 -- F's count is stable, the DELTA is not.
+# But quote it as 150, not 151.2, and do NOT call it deterministic. Every arm takes one of exactly
+# two values 7 apart -- E {820,827}, D'' {805,812}, F {970,977} -- with the low value appearing in
+# four different arm/slot combinations. Per-pair deltas are [150,150,150,150,157,150]: modal and
+# median 150, mean 151.2, and the mean corresponds to no observation. The claim that survives is a
+# RATIO in 5 of 6 pairs, not a fixed count. See 4.1.
 authors:
   - Arkadiusz Przychocki
 track: Community
@@ -73,7 +74,8 @@ memory model is `MemorySegment`.*
    A first attempt on a rotated 2 % tail reported −2.8 % and was wrong by roughly threefold —
    which is itself the lesson. Treated as a signal, not a finding.
 3. **The measurable, repeatable effect is a cost, not a saving.** The sweep adds **+150
-   calling-convention adapters** (modal per-pair delta), one more than the +149 converted carriers —
+   calling-convention adapters** — the modal per-pair delta, in 5 of 6 pairs — one more than the
+   +149 carriers measured from the two jars —
    and **+0.18 MB Metaspace at an unchanged loaded-class count**. Code cache grows **+1.15 MB** on
    the same 6-of-6 evidence, but ~146 of its +297 new entries are compiled methods that the
    release step's non-carrier changes could also produce, so that one item carries **weaker
@@ -332,19 +334,35 @@ load the same classes; only what the JVM stores *about* them differs.
 holds everything else, including value-class layout information and calling-convention adapters —
 grows +192.4 kB. That split is the signature of the effect, not a rounding artefact.
 
-**F's adapter count is stable; the delta is not — and the variance sits on the baseline side.**
-F reports **977 in all six runs of this leg**; E reports 827 five times and **820 once**. The
+**Nothing here is deterministic, including F — and the anomaly has a fixed size.** F reports 977
+in all six runs *of this leg*, but 970 once in D″→F (§4.2), so "the adapter count is deterministic"
+is a statement about one leg, not about F. Across all four arm-columns every observation takes one
+of exactly two values, **always 7 apart**: E ∈ {820, 827}, D″ ∈ {805, 812}, F ∈ {970, 977}. The low
+value occurs four times in four different arm/slot combinations — E at `run03/ab`, D″ at `run02/ab`
+*and* `run03/ba`, F at `run03/ab` of the other leg — so it is not a slot effect either. It reads as
+one code path carrying seven adapter boundaries, reached or not, independently of arm and position.
+
+Code-cache entries do **not** track it, which rules out the simplest reading. E's 820-adapter run
+has the **highest** entry count of E's six (7458 vs a 7413 mean); D″'s two 805-adapter runs have its
+two **lowest**. Seven missing adapters is therefore not "seven fewer things compiled".
+
+E reports 827 five times and **820 once**. The
 per-pair deltas are therefore `[150, 150, 150, 150, 157, 150]`: **modal and median 150**, mean
 151.2 — a mean that corresponds to no observation and should not be quoted. Against **+149
 converted carriers** that is an excess of **one**, not two.
 
-Where the variance sits is the interesting part. It is one *baseline* run generating **7 fewer**
-adapters, not F generating more. A plausible reading — untested here, so stated as a hypothesis —
-is that adapters are materialised lazily at the first crossing of a scalarised/non-scalarised
-boundary rather than eagerly per value class, which would make `adaptorCount` partly a measure of
-which paths a run actually reached. That predicts exactly this shape: F at full coverage every
-time because it has 155 carriers on the request path, E occasionally short because it has 6. The
-D″→F leg is consistent with it — there F itself reads 970 once.
+**`adaptorCount` is demonstrably not a function of value-class count**, and this report's own
+§4.2 shows it: D″ averages 809.7 adapters and E averages 825.8 while **both carry exactly 6 value
+classes** (measured from their jars). Roughly 15 adapters separate them, and the only difference
+between those arms is mainline versus preview kernel code. The same 15 explains why the two legs'
+deltas differ — 151.2 against 166.2 — without any carrier being involved.
+
+Put beside the 7-apart binary above, a reading suggests itself — untested here, so stated as a
+hypothesis: adapters are materialised **lazily, at the first crossing of a scalarised /
+non-scalarised boundary**, rather than eagerly per value class. That would make `adaptorCount`
+partly a measure of which boundaries a run actually reached, which fits a fixed 7-adapter path
+appearing or not, and fits the count moving with code shape rather than carrier count. It does
+*not* fit a per-class model at all.
 
 The mechanism behind the adapters themselves is named, and that part is not a hypothesis: `InlineTypePassFieldsAsArgs = true` and
 `InlineTypeReturnedAsFields = true` are both on by default on this build (§5.3), so every value
@@ -364,7 +382,7 @@ rule out a confound on this line item. Ranked by attribution strength:
 
 | item | size | attribution |
 |---|---|---|
-| **+150 adapters** (modal) | — | **strongest**: F stable at 977 across 6 of 6 runs on this leg, named mechanism, one more than the +149 carriers. The delta itself varies (one pair at 157), so quote the modal value, not the 151.2 mean |
+| **+150 adapters** (modal) | — | **strongest**: 5 of 6 pairs, named mechanism, one more than the +149 carriers measured from the two jars. Not deterministic — every arm takes one of two values 7 apart, F included (970 once in §4.2) — so this is a claim about the modal ratio, not about a fixed count |
 | +188.9 kB Metaspace | 0.18 MB | strong: flat class count settles it |
 | +1149.6 kB code cache | 1.15 MB | **weaker**: 6/6 with an interval excluding zero, but ~146 of the +297 entries are compiled methods that the release step's non-carrier changes could also produce |
 
@@ -402,29 +420,44 @@ javadoc mentions of `{@code value record}`):
 | module | `value record` | `value class` | identity records | in arm F's jar |
 |---|---|---|---|---|
 | `exeris-kernel-spi` | 78 | 1 | **0** | yes |
-| `exeris-kernel-core` | 40 | 1 | **0** | yes |
+| `exeris-kernel-core` | 40 | 1 | **1** (excused) | yes |
 | `exeris-kernel-community` | 35 | 0 | **0** | yes |
 | `exeris-kernel-community-kafka` | 3 | 0 | **0** | no — not on the app's path |
 | `exeris-kernel-community-testkit` | 1 | 0 | **0** | no — test scope |
-| **declared total** | **157** | **2** | **0** | |
+| **declared total** | **157** | **2** | **1** | |
 
-**159 declared, 4 not shipped in this app, 155 in the jar — the reconciliation is exact.** Arm E's
-jar carries 6, so the sweep converted **149**, which is the figure §4.1 compares against.
+**Both ends of the reconciliation are measured, not subtracted.** A bytecode walk over the two
+shaded jars — counting classes that lack `ACC_IDENTITY`, excluding interfaces, which never carry
+it — reports **6** kernel value classes in arm E's jar and **155** in arm F's, out of 13 514 class
+files each. The 155 split as spi 79 / core 41 / community 35, matching the per-module source census
+exactly, and **nothing from `kafka` or `testkit` appears**: those four carriers are precisely the
+159 − 155 difference. So the sweep converted **149**, and that is the figure §4.1 compares against.
 
 The one remaining number, §5.2's **156**, is those 157 records minus `ChoreographyDecision.Ignore`,
 the single component-less record — §5.2 classifies carriers *by their components*, so a record with
-none is not classifiable.
+none is not classifiable. Note also that a bytecode census counts *class files* (904 across the five
+modules, nested classes included) while the table above counts *declarations* in 699 source files:
+different populations, not a discrepancy.
 
-**Nothing is left to convert, and this is asserted rather than sampled.** The only identity records
-anywhere in `src/main` are two, and neither is kernel runtime: `RequiresRoleProcessor.MethodDescriptor`
-in `exeris-kernel-build-config` (a build-time annotation processor) and `AllocEvent` in
-`tools/jfr-reporter` (a diagnostics tool). Inside the kernel modules the count is zero, and the
-kernel enforces it with `ValhallaValueCarrierRegistryTest`: a reflective sweep with a non-vacuity
-floor, asserting in the strong direction that *every* discovered record is a value class unless
-excused by name in `IDENTITY_BY_DESIGN` — which is empty — plus the reverse assertion so the
-exclusion map cannot rot into stale to-dos.
+**Three identity records remain in `src/main` repo-wide, and one of them is kernel runtime.**
+`SubsystemTopologicalSorter$DependencyGraph` in `exeris-kernel-core` — excused in
+`IDENTITY_BY_DESIGN` because its `Map` components are mutated in place by `runKahnBfs`;
+`RequiresRoleProcessor$MethodDescriptor` in `exeris-kernel-build-config`, a build-time annotation
+processor; and `AllocEvent` in `tools/jfr-reporter`, outside the reactor. So `IDENTITY_BY_DESIGN`
+is empty in SPI, community, kafka and testkit, and carries exactly one entry in core.
 
-**So the sweep is complete, and it bought what §2 and §4 measured.**
+That is a documented boundary rather than a gap, because `ValhallaValueCarrierRegistryTest` asserts
+in **both** directions: every discovered record must be a value class unless excused by name, *and*
+every excused record must still be an identity class — so the exclusion map cannot rot into stale
+to-dos, and converting `DependencyGraph` without removing its entry would redden.
+
+**And the reason it is excused is the same reason `LoanedBuffer` cannot be one.** `DependencyGraph`
+holds a `Map` mutated in place; `LoanedBuffer` (§5.2) is an `AutoCloseable` with a hand-rolled
+reference count. Two unrelated subsystems — bootstrap ordering and buffer lifetime — hit the same
+wall from opposite directions: **mutable state requires identity**. One such case reads as an
+exception; two independent ones read as a property of what the model can express.
+
+**So the sweep is complete up to that documented boundary, and it bought what §2 and §4 measured.**
 
 ### 5.2 Classified by what Valhalla can actually do with them
 
@@ -673,6 +706,7 @@ promote them and §2.3 shows the run-set drift that explains them.
 
 | date | change |
 |---|---|
+| 2026-08-26 | Fourth review pass. §5.1 **corrected on a matter of fact**: it claimed two identity records in `src/main` and none in kernel runtime. There are **three**, and `SubsystemTopologicalSorter$DependencyGraph` (`exeris-kernel-core`) is kernel runtime — excused in `IDENTITY_BY_DESIGN` because its `Map` is mutated in place, so that map is empty in four modules and holds one entry in core. The section now also states the mutability→identity property directly: `DependencyGraph` and `LoanedBuffer` are unrelated subsystems refused for the same reason. Both ends of the 159/155 reconciliation are now **measured** — a bytecode walk over the two shaded jars reports 6 value classes in arm E and 155 in arm F, with nothing from `kafka`/`testkit`, so 149 is measured rather than subtracted. §4.1's "the adapter count is deterministic" is **withdrawn**: every arm takes one of two values exactly 7 apart (E {820,827}, D″ {805,812}, F {970,977}), the low value appears in four different arm/slot combinations, and code-cache entries do not track it — E's 820-adapter run has its *highest* entry count. What survives is a modal ratio in 5 of 6 pairs. §4.2's own numbers are promoted to a point: D″ and E carry 6 value classes each yet differ by ~15 adapters, so `adaptorCount` is not a function of carrier count. |
 | 2026-08-26 | Third review pass, adapter arithmetic. The headline adapter delta was quoted as **+151.2 — a mean of `[150,150,150,150,157,150]` that matches no observation**; it is now **150**, the modal and median per-pair value, and the excess over the 149 converted carriers is **one, not two**. The variance was also mis-attributed: F is stable at 977 across this leg, and the outlier is a *baseline* run generating 7 fewer adapters. §4.1 now says F's count is stable while the delta is not, and records the lazy-adapter-materialisation reading as an explicit hypothesis rather than a finding — with the D″→F leg's own F=970 outlier noted as consistent with it. Corrected in §4.1 body, the attribution table, TL;DR and the frontmatter `summary`; the frontmatter trap note now scopes "977 in all six" to the E→F leg. |
 | 2026-08-26 | Second review pass. §4.1's attribution ranking **propagated to the two surfaces that had not carried it** — the frontmatter `summary` and TL;DR still said "at an unchanged loaded-class count" over all three cost items, which is the claim §4.1 had already withdrawn for the code cache; both now lead with the adapter count. §6's packing **corrected**: deriving the value offset from the name's is invalid because RFC 9110 permits arbitrary optional whitespace after the colon, and 16-bit offsets cannot reach the parser's 819 200-byte worst case either — replaced with `nameOff:32 \| nameLen:14 \| valLen:14 \| ows:4`, which spends length headroom (2× rather than 8×) to buy an explicit OWS field. §5.2 now says why its 156 is a different population from the jar's 155 rather than an off-by-one. |
 | 2026-08-26 | Review pass. Carrier counts reconciled in a new §5.1 — 159 declared in source, 4 not shipped in this app, **155 in arm F's jar**, which is now the stated leading number; the earlier per-module table (72/35/19) came from a grep that dropped `/* default */`-prefixed declarations. §4.1 now **ranks its two cost items by attribution strength**: the flat class count settles Metaspace but does not cover the code cache, ~146 of whose +297 entries are compiled methods the release step's non-carrier changes could also produce. §2.3 added: arm F's own values differ between the two legs by 1.44 % on p99 — more than either leg's p99 delta — which is internal evidence for §2.1's refusal. §3.3's carrier table was missing its tenth row. §5.4 gained a note on what `−` means. §6 finishes the packing arithmetic: `nameOff:32 \| nameLen:16 \| valLen:16` is exactly 64 bits and covers the parser's own 8 192-byte limit with 8× margin. §7 gained a multiplicity paragraph. |

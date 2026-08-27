@@ -6,35 +6,6 @@ categories:
   - benchmarking
   - jvm
 summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entire memory model is Panama MemorySegment, measured on JDK 28 EA against its own immediately-preceding tag. Throughput, CPU per request and p99 do not move outside +/-2.4 %. Allocation per request falls 1.0 % over a full 900 s window, with a confidence interval that crosses zero; a first attempt read a rotated 2 % tail and overstated that threefold. What moves is the non-heap footprint, and it moves as a cost. Adapters lead it: +150, the difference between each arm's fullest observed state and one more than the +149 carriers measured from the two jars -- not an interval estimate at all, because the counts are bimodal and a mean of them is a value the JVM never produces, and not portable between campaigns: the same two arms read 828 and 972 under a different JFR configuration, so the figure has to be quoted with its campaign named. The recording configuration is the obvious explanation but is not established as the mechanism -- the direction is not uniform, and the 7-step survives in a campaign with no eu.exeris.* events at all. Metaspace adds +0.18 MB at an unchanged loaded-class count, this one in 6 of 6 pairs with an interval excluding zero. Code cache grows +1.15 MB on the same 6-of-6 evidence, but roughly half its new entries are compiled methods the release step's non-carrier changes could also produce, so that item carries weaker attribution. Around 1.3 MB of permanent cost against a transient 43 B/req allocation saving. Measured by type, byte arrays and Strings are 28 % of what the request path allocates and the converted carriers about 6 %. The mechanism was named on panama-dev in 2020 and explained in 2022; this report measures it."
-# The summary must not say "Valhalla does not work" or "Valhalla failed". The body says something
-# narrower and stronger: on THIS class of runtime -- data off-heap behind a sealed, 9-leaf
-# MemorySegment -- the current model has nothing to flatten, and the sweep is net-negative on
-# footprint. Section 6 states the arms cannot speak for heap-resident workloads at all.
-#
-# Second trap: "-1.21 % throughput" on the E->F leg has an interval that excludes zero by 0.09 pp
-# out of four independent tests on the same six pairs. Section 3.2 refuses to promote it and the
-# summary must not carry it as a finding. It is NOT in the summary above -- keep it that way.
-#
-# Third trap: the +1.15 MB code-cache figure is the ONLY headline whose interval is wide
-# (CI [+5.93 %, +7.63 %]) while its component -- adaptorCount -- is far tighter. That tightness is
-# NOT a licence to send the adapter count out on its own: it is campaign-specific (see below), so
-# best-attributed and most portable point at different rows here. When one number has to travel
-# alone it is the +0.18 MB of Metaspace at an unchanged loaded-class count -- 6/6, interval
-# excluding zero, attribution closed by the flat class count, and the only finding s7 promotes.
-#
-# But quote it as 150, do NOT call it deterministic, and do NOT let it travel without naming its
-# campaign. Two things bound it. (1) The pair of values is not a property of the runtime. Within
-# the campaign each arm sits at one of two states 7 apart -- E {820,827}, D'' {805,812},
-# F {970,977} -- but the -Xlog:class+load probe found D'' at 803 as well, so
-# "one of exactly two values" describes the campaign's conditions. What IS a runtime property is
-# that the count is ADDITIVE OVER THE DISTINCT SIGNATURES conditionally-loaded clusters contribute
-# (the unit is measured, not inferred: 60 classes sharing one signature cost 1 adapter, 60 with
-# 60 uncached signatures cost 61 -- tools/probes/adapter-signature-unit/) -- which is why a third value reads
-# as a promotion of that model, not a retraction of it. (2) The number is campaign-specific: the
-# telemetry-silenced campaign puts the same arms at E 828 / F 972, delta 144, so adaptorCount
-# depends on the JFR configuration and the two campaigns' adapter figures are not comparable.
-# Per-pair deltas in 20260818 are [150,150,150,150,157,150]; 150 is the difference of the fullest
-# observed states, and the mean 151.2 corresponds to no observation. See 4.1.
 authors:
   - Arkadiusz Przychocki
 track: Community
@@ -43,14 +14,6 @@ scenario: entity-read-by-id
 comparison_axis: within-tier
 hardware_profile: perf-box-amd64
 reproducibility_status: partial
-# partial, deliberately. Every figure in sections 2-4 was re-derived from
-# results/raw/kernel-version-axis/20260818T062534Z-light-valhalla-carriers/ by an independent
-# pass over result.json and the JFR recordings, not read out of a prior analysis. Section 5's
-# JDK-level facts were measured on the same /opt/jdk28 build that ran the arms. What is NOT
-# complete: section 3 was re-measured on a second campaign (20260826T070108Z) after the first
-# was found to be a rotated 2 % tail, and the two are NOT poolable because silencing the kernel's
-# JFR telemetry also changes the workload -- so the allocation delta rests on one campaign, not
-# two agreeing ones. No second person has re-derived anything.
 ---
 
 # Valhalla optimises the heap. This runtime does not have one.
@@ -898,8 +861,16 @@ document was still private, in the order each fix exposed the next. Read it as t
 a single pre-publication review, not as corrections to a circulated text. Entries marked **post-merge**
 are the exception: they were made after the report landed on `main`, and are labelled as such.
 
+Editor-facing notes for this report — the scope of its conclusion, which figures are not
+promotable, and which single number is safe to quote on its own — live in
+[`docs/REPORT-EDITORIAL-NOTES.md`](../../docs/REPORT-EDITORIAL-NOTES.md). Read them before
+touching the summary or the TL;DR, and correct them in the same pass that corrects the body: one
+of them went stale while the body moved on, and a stale note argues against the text it was
+written to protect.
+
 | date | change |
 |---|---|
+| 2026-08-27 | **Post-merge**, eleventh pass — **the editor notes leave the frontmatter**. Thirty-seven commented lines sat inside the YAML block, and a report's raw view is one click from any link to it, so they were published whether or not they rendered. Two of them were phrased as instructions about the summary — *"the summary must not say 'Valhalla does not work' or 'Valhalla failed'"* and, of the −1.21 % throughput result, *"the summary must not carry it as a finding … keep it that way"*. In context both mean "do not outrun the arms"; quoted alone, both read as message discipline rather than accuracy, and are usable against the work by anyone arguing that its tone is managed. They now live in [`docs/REPORT-EDITORIAL-NOTES.md`](../../docs/REPORT-EDITORIAL-NOTES.md), restated as what the evidence supports: the arms cannot support a claim about Valhalla in general, so the summary stays scoped to this class of runtime; and a 0.09 pp exclusion out of four tests on the same six pairs does not support promotion. Same constraint, phrased to survive being quoted. Size was the second reason — the block had grown an argument about `adaptorCount` with a probe path attached, which is a section, not a field annotation. The `reproducibility_status` note moved with them; its content is already stated in the rendered blockquote under the title, so nothing left the document that a reader could see. Linked from this history, because these notes earn their keep by being close enough to the body to argue with it, and one of them had gone stale while the body moved on. No figure and no body text changes. |
 | 2026-08-27 | **Post-merge**, tenth pass — **the unit of `adaptorCount`, measured**, and three surfaces that disagreed with each other. §4.1 named the mechanism behind the adapters but never the unit of the counter, so its careful "not one adapter per class" rested on caution rather than on what the counter is. It now rests on a measurement: `adaptorCount` counts adapter *blocks*, which `AdapterHandlerLibrary` caches keyed on a method's basic-type signature fingerprint rather than on its declaring class. On the same JDK 28 build the arms ran (`28-ea+10-569`), 3 of 3 runs per condition and identical every time: **60 classes sharing one signature cost 1 adapter; 60 classes with 60 signatures the JVM had certainly not cached (arities 81–140) cost 61, essentially one apiece**. The probe is archived at `tools/probes/adapter-signature-unit/`. That is also where Valhalla's scalarised ↔ buffered translation materialises, which is why §5.3's two flags produce this cost at all. Consequences: (1) the **seventh entry's rule is retired, not narrowed** — it announced "one adapter per conditionally-loaded class" while the body already denied it, and a per-class rate is now shown to be the wrong shape for the quantity; the entry says so and points here. (2) The **"additive over conditional-loading clusters" model is sharpened to the distinct signatures such a cluster contributes**, in the frontmatter trap, §4.1 and §7. (3) §4.1 ended by telling a lone number to travel as the adapter count, two paragraphs after establishing that adapters are not comparable across campaigns — the one figure in that table that *cannot* travel alone. Both §4.1 and the frontmatter's third trap now send **+0.18 MB of Metaspace at an unchanged loaded-class count**: 6/6, interval excluding zero, attribution closed by the flat class count, and already the only finding §7 promotes. Best-attributed and most portable were pointing at different rows, and only one of them can be the number that travels. (4) TL;DR and the frontmatter `summary` both explained the cross-campaign 144 as "the recording configuration changes which classes load" — an explanation §4.1 partly disowns, since the −7 step survives with zero `eu.exeris.*` events and the direction is not uniform (E +1, F −5). Both now state the non-comparability as the finding and the mechanism as unshown, and §7 gains it as an explicit "not measured" bullet. |
 | 2026-08-26 | **Post-merge**, editorial-scope only — no figure changes. Two surfaces the eighth pass left behind, both saying more about `adaptorCount` than §4.1 now allows. The frontmatter's own trap note still read "every arm takes one of exactly two values 7 apart" and "the claim that survives is a RATIO in 5 of 6 pairs"; the probe's third value (803) and the telemetry-silenced campaign's 828/972 had already retired both, and since that note is an instruction to the next editor, the stale version would have argued against the body. It now carries the two live bounds — the pair is a campaign condition, not a runtime property, and the figure is campaign-specific — and names the additive-over-clusters model as the part that is a runtime property. §7's multiplicity paragraph closed on "a stronger form of evidence than a p-value", which no longer fits a quantity the same report says depends on the recording configuration; the immunity-to-multiplicity argument is kept intact and unchanged, but the strength is now scoped to campaign 20260818, with the additive-over-clusters reading named as the weaker, portable claim. Without this, §7 and the eighth revision entry asserted different things about one number. |
 | 2026-08-26 | Eighth pass — **confirmatory control across campaigns, and a comparability warning**. §3's telemetry-silenced campaign was queried for adapter counts as an independent test of the conditional-loading mechanism. Both saturation values moved: E 827→**828**, F 977→**972**, delta 150→**144**. So **`adaptorCount` depends on the JFR configuration, not only on the code** — the instrument entered the quantity it measures, and adapter numbers are not comparable across campaigns, exactly as §3.1 says of allocation. The direction is not uniform (F −5, E +1), so this is not "telemetry adds adapters"; what survives unchanged is the **step**, −7 in both arms of a campaign with no `eu.exeris.*` events, which means the cluster behind the seven is *not* the JFR event classes the probe identified. Three consequences recorded: adapter figures are now framed as each arm's **fullest observed state** rather than its mode (numerically identical, physically justified, and "observed" because the probe never reached D″'s 812 in six runs); the 1:1 reading is **narrowed** to "these two classes carry two adapters", since seven could be three classes contributing 3+2+2; and the third value 803 is recorded as a **promotion** of the model — "additive over conditional-loading clusters" is a runtime property that predicts a third value, where "one of two values 7 apart" merely described twelve observations. §7 gains **equal instrumentation coverage between arms** as an unmeasured assumption. |

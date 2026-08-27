@@ -233,4 +233,5 @@ Follow `docs/regression-policy.md`. Never refresh a baseline to mask a regressio
 - `docs/protocol-comparison-matrix.md` — formal within-tier and cross-tier protocol matrix
 - `docs/tls-zero-copy-benchmark-matrix.md` — TLS A/B/C/D MUST-SHOULD-STRETCH matrix and `scripts/run-tls-matrix.sh` mapping
 - `docs/result-interpretation.md`, `docs/regression-policy.md`, `docs/hardware-profiles.md`
+- `docs/REPORT-EDITORIAL-NOTES.md` — per-report editor notes: scope of each conclusion, which figures are not promotable, which single number is safe to quote alone. **Read before editing a published report's summary or TL;DR.** They live here rather than in report frontmatter because a report's raw view is one click from any link to it, so a note phrased as an instruction about the summary reads as message discipline rather than accuracy, whatever it meant. Phrase every note as what the evidence supports.
 - `.github/copilot-instructions.md` and `.github/instructions/exeris-bench-{core,runtime,reporting}.instructions.md` — authoritative operating rules; on conflict, prefer the **stricter** fairness/reproducibility/confidentiality interpretation

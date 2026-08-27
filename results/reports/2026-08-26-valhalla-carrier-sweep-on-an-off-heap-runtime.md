@@ -5,7 +5,7 @@ categories:
   - performance
   - benchmarking
   - jvm
-summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entire memory model is Panama MemorySegment, measured on JDK 28 EA against its own immediately-preceding tag. Throughput, CPU per request and p99 do not move outside +/-2.4 %. Allocation per request falls 1.0 % over a full 900 s window, with a confidence interval that crosses zero; a first attempt read a rotated 2 % tail and overstated that threefold. What moves is the non-heap footprint, and it moves as a cost. Adapters lead it: +150, the difference between each arm's fullest observed state and one more than the +149 carriers measured from the two jars -- not an interval estimate at all, because the counts are bimodal and a mean of them is a value the JVM never produces, and not portable between campaigns, because the JFR configuration changes which classes load. Metaspace adds +0.18 MB at an unchanged loaded-class count, this one in 6 of 6 pairs with an interval excluding zero. Code cache grows +1.15 MB on the same 6-of-6 evidence, but roughly half its new entries are compiled methods the release step's non-carrier changes could also produce, so that item carries weaker attribution. Around 1.3 MB of permanent cost against a transient 43 B/req allocation saving. Measured by type, byte arrays and Strings are 28 % of what the request path allocates and the converted carriers about 6 %. The mechanism was named on panama-dev in 2020 and explained in 2022; this report measures it."
+summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entire memory model is Panama MemorySegment, measured on JDK 28 EA against its own immediately-preceding tag. Throughput, CPU per request and p99 do not move outside +/-2.4 %. Allocation per request falls 1.0 % over a full 900 s window, with a confidence interval that crosses zero; a first attempt read a rotated 2 % tail and overstated that threefold. What moves is the non-heap footprint, and it moves as a cost. Adapters lead it: +150, the difference between each arm's fullest observed state and one more than the +149 carriers measured from the two jars -- not an interval estimate at all, because the counts are bimodal and a mean of them is a value the JVM never produces, and not portable between campaigns: the same two arms read 828 and 972 under a different JFR configuration, so the figure has to be quoted with its campaign named. The recording configuration is the obvious explanation but is not established as the mechanism -- the direction is not uniform, and the 7-step survives in a campaign with no eu.exeris.* events at all. Metaspace adds +0.18 MB at an unchanged loaded-class count, this one in 6 of 6 pairs with an interval excluding zero. Code cache grows +1.15 MB on the same 6-of-6 evidence, but roughly half its new entries are compiled methods the release step's non-carrier changes could also produce, so that item carries weaker attribution. Around 1.3 MB of permanent cost against a transient 43 B/req allocation saving. Measured by type, byte arrays and Strings are 28 % of what the request path allocates and the converted carriers about 6 %. The mechanism was named on panama-dev in 2020 and explained in 2022; this report measures it."
 # The summary must not say "Valhalla does not work" or "Valhalla failed". The body says something
 # narrower and stronger: on THIS class of runtime -- data off-heap behind a sealed, 9-leaf
 # MemorySegment -- the current model has nothing to flatten, and the sweep is net-negative on
@@ -16,15 +16,20 @@ summary: "A 6-to-155 JEP 401 value-class sweep across an HTTP kernel whose entir
 # summary must not carry it as a finding. It is NOT in the summary above -- keep it that way.
 #
 # Third trap: the +1.15 MB code-cache figure is the ONLY headline whose interval is wide
-# (CI [+5.93 %, +7.63 %]) while its component -- adaptorCount -- is far tighter. Quote the adapter
-# count when one number has to travel alone.
+# (CI [+5.93 %, +7.63 %]) while its component -- adaptorCount -- is far tighter. That tightness is
+# NOT a licence to send the adapter count out on its own: it is campaign-specific (see below), so
+# best-attributed and most portable point at different rows here. When one number has to travel
+# alone it is the +0.18 MB of Metaspace at an unchanged loaded-class count -- 6/6, interval
+# excluding zero, attribution closed by the flat class count, and the only finding s7 promotes.
 #
 # But quote it as 150, do NOT call it deterministic, and do NOT let it travel without naming its
 # campaign. Two things bound it. (1) The pair of values is not a property of the runtime. Within
 # the campaign each arm sits at one of two states 7 apart -- E {820,827}, D'' {805,812},
 # F {970,977} -- but the -Xlog:class+load probe found D'' at 803 as well, so
 # "one of exactly two values" describes the campaign's conditions. What IS a runtime property is
-# that the count is ADDITIVE OVER CONDITIONAL-LOADING CLUSTERS -- which is why a third value reads
+# that the count is ADDITIVE OVER THE DISTINCT SIGNATURES conditionally-loaded clusters contribute
+# (the unit is measured, not inferred: 60 classes sharing one signature cost 1 adapter, 60 with
+# 60 uncached signatures cost 61 -- tools/probes/adapter-signature-unit/) -- which is why a third value reads
 # as a promotion of that model, not a retraction of it. (2) The number is campaign-specific: the
 # telemetry-silenced campaign puts the same arms at E 828 / F 972, delta 144, so adaptorCount
 # depends on the JFR configuration and the two campaigns' adapter figures are not comparable.
@@ -82,9 +87,13 @@ memory model is `MemorySegment`.*
 3. **The measurable, repeatable effect is a cost, not a saving.** The sweep adds **+150
    calling-convention adapters** (the difference between each arm's fullest observed state, one
    more than the +149 carriers measured from the two jars; 144 in the telemetry-silenced campaign,
-   because the recording configuration changes which classes load) and **+0.18 MB Metaspace at an unchanged
-   loaded-class count**. Code cache grows **+1.15 MB** on
-   the same 6-of-6 evidence, but ~147 of its +297 new entries are compiled methods that the
+   so the figure is campaign-specific and the two are not comparable — the recording configuration
+   is the obvious candidate, but the direction is not uniform, E rising by 1 while F falls by 5,
+   and the −7 step survives in a campaign with no `eu.exeris.*` events at all, so that this is the
+   same mechanism the probe identified is **not shown**, §4.1) and **+0.18 MB Metaspace at an
+   unchanged loaded-class count** — the one item here portable enough to quote on its own, 6 of 6
+   with an interval excluding zero. Code cache grows **+1.15 MB** on the same 6-of-6 evidence, but
+   ~147 of its +297 new entries are compiled methods that the
    release step's non-carrier changes could also produce, so that one item carries **weaker
    attribution** (§4.1). Total ≈1.3 MB of permanent non-heap footprint, bought with a transient
    43 B/req allocation saving.
@@ -430,6 +439,30 @@ implies a difference of precisely the same size.
 distinction matters for the 7-step: seven adapters could equally be three classes contributing
 three, two and two boundaries. Nothing here measures a per-class rate.
 
+**And the unit is not the class at all.** `adaptorCount` — the JFR field, sitting beside
+`entryCount` and `methodCount` in `jdk.CodeCacheStatistics` — counts adapter *blocks*, which
+HotSpot's `AdapterHandlerLibrary` caches keyed on a method's basic-type signature fingerprint, not
+on its declaring class. Any number of classes sharing a signature share one block. Measured
+directly on the same JDK 28 build these arms ran (`28-ea+10-569`), three runs per condition,
+identical every time:
+
+| program | classes loaded and called | distinct signatures | adapters | Δ vs baseline |
+|---|---|---|---|---|
+| baseline | 0 | — | 375 | — |
+| 60 classes, one shared signature `(int)int` | 60 | 1 | 376 | **+1** |
+| 60 classes, arities 1–60 | 60 | 60 | 429 | **+54** |
+| 60 classes, arities 81–140 | 60 | 60 | 436 | **+61** |
+
+Sixty classes cost **one** adapter when their signatures agree. When the signatures differ and are
+ones the JVM has certainly not already cached — arities far above anything reached during
+bootstrap — the same sixty classes cost **+61**, essentially one apiece; the low-arity set's +54
+is the same result with roughly seven of its signatures already resident, which is why the third
+row is the cleaner measurement of the rate.
+
+So a per-class rate is not merely unmeasured here; it is the wrong shape for the quantity. The two
+JFR event classes above cost two adapters because they contributed two signatures the JVM had not
+already cached, and the 7-step is seven such signatures, whatever number of classes carries them.
+
 So the answer to "how many classes" was never available from a counter — it is **which** classes,
 and here they are conditionally-loaded JFR *event* classes for the HTTP aggregate-buffer path,
 which load only when a buffer is actually held or forcibly released. Part of the adapter count is
@@ -460,13 +493,15 @@ Two limits remain. The probe is a different configuration again — one JVM, unp
 **never reached 812** at either duration, so the 7-step is not reproduced there. And it produced a
 third value, 803, which is worth reading as a **promotion of the model rather than a retraction**:
 "one of two values, always 7 apart" described twelve observations while sounding like a property of
-the runtime, whereas "additive over clusters of conditionally-loaded classes" *is* a property of the
+the runtime, whereas "additive over the distinct signatures a conditionally-loaded cluster contributes" *is* a property of the
 runtime, and it predicts a third value instead of being refuted by one.
 
 The mechanism behind the adapters themselves is named, and that part is not a hypothesis: `InlineTypePassFieldsAsArgs = true` and
 `InlineTypeReturnedAsFields = true` are both on by default on this build (§5.3), so every value
-class gets a scalarised calling convention — and every boundary between a scalarised and a
-non-scalarised call site needs an adapter. **This is the same machinery that produces the 43 B/req
+class gets a scalarised calling convention — and every *signature* that crosses between a
+scalarised and a non-scalarised call site needs one of the blocks above. That is where a value
+class becomes an adapter: not by existing, but by contributing a calling convention that has to be
+translated between scalarised and buffered form at the boundary. **This is the same machinery that produces the 43 B/req
 allocation saving, billed on the other side of the ledger.**
 
 **The two cost items do not have equal attribution, and the flat class count does not cover both.**
@@ -488,8 +523,17 @@ rule out a confound on this line item. Ranked by attribution strength:
 **The total.** ≈1.31 MB of permanent non-heap footprint, against 43 B/req of allocation that never
 becomes resident memory at a fixed heap. The RSS point estimate on this leg moved +4.25 MB
 (interval crossing zero), so ≈31 % of it is now attributed to a repeatable mechanism — but read
-that total knowing its largest component carries the weakest attribution. **When one number has to
-travel alone, quote the adapter count**, not the megabyte.
+that total knowing its largest component carries the weakest attribution.
+
+**When one number has to travel alone, quote the +0.18 MB of Metaspace at an unchanged
+loaded-class count.** 6 of 6 pairs, CI [+0.822 %, +1.041 %], and the flat class count closes its
+attribution — it is the one item here whose meaning does not depend on how the run was recorded,
+and §7 promotes it for the same reason. Not the megabyte of code cache, whose attribution is the
+weakest of the three. And *not the adapter count*, despite it being the best-attributed item
+**inside** campaign 20260818: this section has just shown that the same two arms read 828 and 972
+under a different JFR configuration, so +150 is the one figure in this table that cannot be
+quoted without naming its campaign. Best-attributed and most portable are different properties,
+and here they point at different rows.
 
 ### 4.2 D″ → F, for completeness
 
@@ -809,8 +853,8 @@ to correct.
 Immunity to multiplicity is not generality, though, and the two must not be run together. §4.1's
 cross-campaign control puts these same two arms at 828 and 972 under a different JFR configuration.
 So what the twelve observations establish firmly is a property of **that campaign** — and the
-runtime-level claim is the weaker, more portable one: that the count is additive over
-conditional-loading clusters.
+runtime-level claim is the weaker, more portable one: that the count is additive over the distinct
+signatures a conditionally-loaded cluster contributes — a unit §4.1 now measures rather than infers.
 
 **Not measured, and therefore not claimed.**
 
@@ -825,6 +869,13 @@ conditional-loading clusters.
 - **The allocation delta on a second, independent campaign.** §3 rests on one campaign
   (20260826T070108Z). It is not poolable with 20260818 because silencing the kernel's own JFR
   telemetry to stop the rotation also removes 5-6 event commits per request from the workload.
+- **Why `adaptorCount` differs between the two campaigns.** §4.1 establishes *that* it does — the
+  same two arms read 827/977 and 828/972 — and the recording configuration is the obvious
+  candidate, since the probe showed conditionally-loaded JFR event classes contributing adapters.
+  But the direction is not uniform (E +1, F −5) and the 7-step survives in a campaign with no
+  `eu.exeris.*` events at all, so the cluster behind the seven is demonstrably not the classes the
+  probe found. That the cross-campaign difference is the *same* mechanism is not shown, and the
+  report does not claim it.
 - **Any individual carrier's allocation delta.** §3.3 shows carriers moving in both directions at
   0.1-1 % shares of a sampling estimator; only the aggregate direction is claimed.
 - **Equal instrumentation coverage between the two arms.** The +150 adapter delta compares each
@@ -849,10 +900,11 @@ are the exception: they were made after the report landed on `main`, and are lab
 
 | date | change |
 |---|---|
+| 2026-08-27 | **Post-merge**, tenth pass — **the unit of `adaptorCount`, measured**, and three surfaces that disagreed with each other. §4.1 named the mechanism behind the adapters but never the unit of the counter, so its careful "not one adapter per class" rested on caution rather than on what the counter is. It now rests on a measurement: `adaptorCount` counts adapter *blocks*, which `AdapterHandlerLibrary` caches keyed on a method's basic-type signature fingerprint rather than on its declaring class. On the same JDK 28 build the arms ran (`28-ea+10-569`), 3 of 3 runs per condition and identical every time: **60 classes sharing one signature cost 1 adapter; 60 classes with 60 signatures the JVM had certainly not cached (arities 81–140) cost 61, essentially one apiece**. The probe is archived at `tools/probes/adapter-signature-unit/`. That is also where Valhalla's scalarised ↔ buffered translation materialises, which is why §5.3's two flags produce this cost at all. Consequences: (1) the **seventh entry's rule is retired, not narrowed** — it announced "one adapter per conditionally-loaded class" while the body already denied it, and a per-class rate is now shown to be the wrong shape for the quantity; the entry says so and points here. (2) The **"additive over conditional-loading clusters" model is sharpened to the distinct signatures such a cluster contributes**, in the frontmatter trap, §4.1 and §7. (3) §4.1 ended by telling a lone number to travel as the adapter count, two paragraphs after establishing that adapters are not comparable across campaigns — the one figure in that table that *cannot* travel alone. Both §4.1 and the frontmatter's third trap now send **+0.18 MB of Metaspace at an unchanged loaded-class count**: 6/6, interval excluding zero, attribution closed by the flat class count, and already the only finding §7 promotes. Best-attributed and most portable were pointing at different rows, and only one of them can be the number that travels. (4) TL;DR and the frontmatter `summary` both explained the cross-campaign 144 as "the recording configuration changes which classes load" — an explanation §4.1 partly disowns, since the −7 step survives with zero `eu.exeris.*` events and the direction is not uniform (E +1, F −5). Both now state the non-comparability as the finding and the mechanism as unshown, and §7 gains it as an explicit "not measured" bullet. |
 | 2026-08-26 | **Post-merge**, editorial-scope only — no figure changes. Two surfaces the eighth pass left behind, both saying more about `adaptorCount` than §4.1 now allows. The frontmatter's own trap note still read "every arm takes one of exactly two values 7 apart" and "the claim that survives is a RATIO in 5 of 6 pairs"; the probe's third value (803) and the telemetry-silenced campaign's 828/972 had already retired both, and since that note is an instruction to the next editor, the stale version would have argued against the body. It now carries the two live bounds — the pair is a campaign condition, not a runtime property, and the figure is campaign-specific — and names the additive-over-clusters model as the part that is a runtime property. §7's multiplicity paragraph closed on "a stronger form of evidence than a p-value", which no longer fits a quantity the same report says depends on the recording configuration; the immunity-to-multiplicity argument is kept intact and unchanged, but the strength is now scoped to campaign 20260818, with the additive-over-clusters reading named as the weaker, portable claim. Without this, §7 and the eighth revision entry asserted different things about one number. |
 | 2026-08-26 | Eighth pass — **confirmatory control across campaigns, and a comparability warning**. §3's telemetry-silenced campaign was queried for adapter counts as an independent test of the conditional-loading mechanism. Both saturation values moved: E 827→**828**, F 977→**972**, delta 150→**144**. So **`adaptorCount` depends on the JFR configuration, not only on the code** — the instrument entered the quantity it measures, and adapter numbers are not comparable across campaigns, exactly as §3.1 says of allocation. The direction is not uniform (F −5, E +1), so this is not "telemetry adds adapters"; what survives unchanged is the **step**, −7 in both arms of a campaign with no `eu.exeris.*` events, which means the cluster behind the seven is *not* the JFR event classes the probe identified. Three consequences recorded: adapter figures are now framed as each arm's **fullest observed state** rather than its mode (numerically identical, physically justified, and "observed" because the probe never reached D″'s 812 in six runs); the 1:1 reading is **narrowed** to "these two classes carry two adapters", since seven could be three classes contributing 3+2+2; and the third value 803 is recorded as a **promotion** of the model — "additive over conditional-loading clusters" is a runtime property that predicts a third value, where "one of two values 7 apart" merely described twelve observations. §7 gains **equal instrumentation coverage between arms** as an unmeasured assumption. |
 | 2026-08-26 | Editorial pass over §4.1, which had accumulated six revisions and started contradicting itself. Its opening sentence ended in an edit fragment and pointed at an adapter row that no longer exists in that table; the adapter values were restated three times over; and the paragraph announcing "three things" was followed by eight. Counted announcements have now been replaced with an uncounted one, since that number had drifted three times. The frontmatter `summary` opened with "in 6 of 6 pairs with intervals that exclude zero" and then led with adapters, which are 5 of 6 and carry no interval — the two clauses are now attached to the items they actually describe. Minor: `~146` unified to **147** across four places (296.7 entries less 150 adapters); §7 now names the single promoted test (§4.1's Metaspace growth) rather than leaving it to inference; §5.2's lead sentence had lost its predicate to an earlier insertion; a triple em-dash in TL;DR item 3. **The revision history now states plainly that every "review pass" entry is pre-publication** — no version carrying the corrected figures was ever distributed, and without that line the list reads as corrections to a circulated text. |
-| 2026-08-26 | Seventh pass — **the set difference, measured**. A dedicated probe (arm D″, `-Xlog:class+load=info`, 90 s, repeated) produced two runs of one binary differing by 2 adapters, and diffing their class-load sets settles the question the counters could not. Raw: **a net of −1 class hides 932 absent and 931 extra**, overwhelmingly `java.lang.invoke` `LambdaForm` and hidden classes whose names carry a per-run address — so every class-count delta in this report measures that churn, and the earlier −4.6 / −6.5 / −5.4 mechanism reading is **withdrawn**. Excluding generated classes, the same two runs differ by **exactly 2 classes, none extra**, and they are a coherent cluster: `HttpAggregateBufferForcedReleaseEvent` and `HttpAggregateBufferHeldEvent` in `eu.exeris.kernel.core.http.jfr`. Controls are exact — two independent pairs agreeing on the adapter count have **byte-identical** stable sets (3990, zero difference either way). So the rule is **one adapter per conditionally-loaded class**, established at the 2-adapter scale; the 7-step predicts seven such classes and remains unobserved, because the probe never reached 812 at any duration. The probe also produced a third value, 803, so "one of exactly two values 7 apart" is now scoped to the campaign's conditions rather than stated as a property of the runtime. |
+| 2026-08-26 | Seventh pass — **the set difference, measured**. A dedicated probe (arm D″, `-Xlog:class+load=info`, 90 s, repeated) produced two runs of one binary differing by 2 adapters, and diffing their class-load sets settles the question the counters could not. Raw: **a net of −1 class hides 932 absent and 931 extra**, overwhelmingly `java.lang.invoke` `LambdaForm` and hidden classes whose names carry a per-run address — so every class-count delta in this report measures that churn, and the earlier −4.6 / −6.5 / −5.4 mechanism reading is **withdrawn**. Excluding generated classes, the same two runs differ by **exactly 2 classes, none extra**, and they are a coherent cluster: `HttpAggregateBufferForcedReleaseEvent` and `HttpAggregateBufferHeldEvent` in `eu.exeris.kernel.core.http.jfr`. Controls are exact — two independent pairs agreeing on the adapter count have **byte-identical** stable sets (3990, zero difference either way). The rule was read at this pass as **one adapter per conditionally-loaded class**, established at the 2-adapter scale, with the 7-step predicting seven such classes and remaining unobserved because the probe never reached 812 at any duration. **That reading did not survive**: the eighth pass narrowed it to "these two classes carry two adapters", and the tenth retired it by measuring the unit — adapter blocks are cached per *signature*, not per class, so a per-class rate was never the right shape for this counter (§4.1). The probe also produced a third value, 803, so "one of exactly two values 7 apart" is now scoped to the campaign's conditions rather than stated as a property of the runtime. |
 | 2026-08-26 | Sixth review pass. **The adapter row is out of §4.1's and §4.2's mean-tables entirely.** §7 already stated the adapter result is not an inference, yet the row still carried a 95 % CI beside the kilobyte rows — the same over-claim as the retracted mean, harder to spot because it looked like the rest of the table. Adapters now get their own table: observed values, their counts across all 12 runs, and the modal deltas 150 and 165, with no percentage and no interval. **The class-count correlation is downgraded from mechanism to counter artefact**, on this report's own control: −4.6 / −6.5 / −5.4 are averages of integer counts, and a noisy continuous quantity cannot explain a step that is exactly 7 three times over — while F's class count spans 3 in leg E→F with the adapter count never moving, so a dose–response reading predicts ~4 adapters where zero are observed. It is not how many classes load but *which*, and a net −5 is equally consistent with "five absent" and "nine absent, four extra". That needs a **set difference, not a delta** — the same move §5.1 required — and it is unavailable here: `jdk.ClassLoad` and `jdk.ClassDefine` carry zero events in every recording. Recorded as a `-Xlog:class+load=info` follow-up, with the sampling cost noted (the anomaly appears in 1 of 6 runs). |
 | 2026-08-26 | Fifth review pass, two structural corrections. **Every adapter figure is now the mode, not the mean.** The counts are bimodal with a quantum of 7 — E {820,**827**}, D″ {805,**812**}, F {970,**977**} — so the reported means (825.8, 809.7, 975.8) were values the system never produces, and a t-interval on such a mean bounds a **mixture proportion, not a magnitude**: `[+17.874, +18.738] %` says how often the anomaly occurred. §7's multiplicity paragraph no longer leans on that interval; the adapter result rests on all twelve observations being one of two values, which is not a test and so is immune to multiplicity. The modal arithmetic also closes on itself where the mean does not: modal deltas 150 and 165 differ by 15, exactly the difference of the arm modes, while the mean route gives 15.0 one way and 16.1 the other. **New measurement:** loaded-class count tracks the anomaly in every column that has one (−4.6, −6.5, −5.4 classes for −7 adapters) while F's constant 977 spans a 3-class range — so seven adapters travel with five to six classes, not one, and not with class-count noise. §5.4's caption contradicted its own footnote about what `−` meant; the blank cells are now split into `✗` (no valid layout — size) and `?` (not emitted, undecidable here), with the whole `NULL_FREE_NON_ATOMIC` column marked `?` because the supporting probe measures **array allocation, a different path from field-layout emission**. Restated as a yes/no question for `valhalla-dev`. |
 | 2026-08-26 | Fourth review pass. §5.1 **corrected on a matter of fact**: it claimed two identity records in `src/main` and none in kernel runtime. There are **three**, and `SubsystemTopologicalSorter$DependencyGraph` (`exeris-kernel-core`) is kernel runtime — excused in `IDENTITY_BY_DESIGN` because its `Map` is mutated in place, so that map is empty in four modules and holds one entry in core. The section now also states the mutability→identity property directly: `DependencyGraph` and `LoanedBuffer` are unrelated subsystems refused for the same reason. Both ends of the 159/155 reconciliation are now **measured** — a bytecode walk over the two shaded jars reports 6 value classes in arm E and 155 in arm F, with nothing from `kafka`/`testkit`, so 149 is measured rather than subtracted. §4.1's "the adapter count is deterministic" is **withdrawn**: every arm takes one of two values exactly 7 apart (E {820,827}, D″ {805,812}, F {970,977}), the low value appears in four different arm/slot combinations, and code-cache entries do not track it — E's 820-adapter run has its *highest* entry count. What survives is a modal ratio in 5 of 6 pairs. §4.2's own numbers are promoted to a point: D″ and E carry 6 value classes each yet differ by ~15 adapters, so `adaptorCount` is not a function of carrier count. |
@@ -863,5 +915,5 @@ are the exception: they were made after the report landed on `main`, and are lab
 | 2026-08-26 | §5.4 added: flat-layout behaviour measured directly with `-XX:+PrintFieldLayout` / `-XX:+PrintFlatArrayLayout`. It **corrected two claims** in the first draft (§5.2, §6): `FlatArrayElementMaxOops = 4` is necessary but not sufficient, a plain `HttpHeader[]` does **not** flatten, and the proposed 16-byte `HeaderSpan` has no valid flat array layout in any mode. The binding constraint for arrays is total element size ≤ 8 bytes. |
 | 2026-08-26 | First publication. Campaign `20260818T062534Z-light-valhalla-carriers` (12/12 `comparison_eligible`). §4 (non-heap cost) and §5.3 (JDK-level census) are new measurements taken for this report, not re-analysis of the campaign's headline metrics. |
 
-**Updated:** 2026-08-26
-*By Arkadiusz Przychocki (updated 2026-08-26)*
+**Updated:** 2026-08-27
+*By Arkadiusz Przychocki (updated 2026-08-27)*

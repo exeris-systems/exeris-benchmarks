@@ -61,159 +61,52 @@ TLS provider/memory/cert config uses tier-specific-then-global precedence (`exer
 
 ## Architecture (big picture)
 
-The repo is a **layered harness around external target apps**, not a product. The flow is:
-
-```
-schemas/  ──►  scenarios/  ──►  runtime/drivers/ + scripts/run-*.sh  ──►  targets/<app> (launched externally)
-                  │                            │
-                  │                            ▼
-                  ▼                       results/raw/*  ──►  scripts/publish-report.sh  ──►  results/reports/, history/
-              docs/scenario-catalog.md                          (publication-mode-aware: public | internal-only | redacted)
-                  │
-                  ▼
-              baselines/<repo>/<mode>/<hardware>.json   (regression reference; never silently updated)
-```
+The repo is a **layered harness around external target apps**, not a product.
 
 Layer responsibilities:
 
-- **`schemas/`** — JSON Schemas every result/env/comparative artifact must validate against (`benchmark-result.schema.json`, `benchmark-env.schema.json`, `comparative-result.schema.json`, `fairness-index.schema.json`, `runtime-execution-profile-matrix.schema.json`, `enterprise-target-contract.schema.json`, etc.). Touching artifact shape almost always means touching a schema.
+- **`schemas/`** — JSON Schemas every result/env/comparative artifact must validate against. Touching artifact shape almost always means touching a schema.
 - **`scenarios/<name>/`** — framework-agnostic workload definitions (path/payload/concurrency). Configs per driver: `wrk.lua`+`wrk.env`, `k6.js`, `h2load.flags`, `hyperfoil.yaml`. Scenario catalog is `docs/scenario-catalog.md`.
 - **`runtime/drivers/`** + **`scripts/run-*.sh`** — execution harnesses (wrk, wrk2, h2load, k6, Hyperfoil, custom probes) that drive a scenario against a *pre-launched* target.
 - **`targets/`** — runnable benchmark apps. Targets are launched externally (the harness does not start them); `targets/launcher-sync-wrapper.sh` only synchronizes readiness for two pre-launched targets and writes timestamps. Common contract: `EXERIS_DB_*`, `EXERIS_PORT`, `java -jar target/<artifact>.jar`.
 - **`micro/jmh/`** — standalone Maven module producing `target/benchmarks.jar` (uber-jar with JMH launcher). It imports Exeris artifacts as dependencies and contains no product source. Stubs marked `// TODO: replace with ExerisXxx(...)` are intentionally wired against snapshots from GitHub Packages.
 - **`compat/`** — pure-mode vs compatibility-mode overhead measurements; results from the two modes **must be stored separately** and labeled.
-- **`results/`** — `raw/` (unmodified tool output, committed for traceability), `reports/` (markdown/generated bundles), `history/` (per-run archive for trends), `constrained/`, `verify-phasemarker/`, `quick-verify-fix-jfr/`.
+- **`results/`** — `raw/` holds unmodified tool output and is committed for traceability; the sibling directories are derived or per-track archives.
 - **`baselines/<repo>/<mode>/<hardware>.json`** — regression references. Update policy in `docs/regression-policy.md`. **Never** update silently to hide a regression.
-- **`tools/`** — `tools/bench/` manifest-driven runners (TLS/JMH), `tools/matrix/` matrix manifests, plus standalone helpers (`benchmark-runner-with-metrics.sh` wrapping `/usr/bin/time -v`, `extract-jfr-metrics.sh`, `compute-fairness-index.sh`, `verify-classification.sh`, `verify-target-asset-matrix.sh`).
-- **`enterprise/`** — parallel tree (`docs/`, `env/`, `micro/`, `results/`, `scripts/`, `targets/`) for the Enterprise track. Subject to confidentiality guard; not part of the public docs path.
+- **`tools/`** — `tools/bench/` manifest-driven runners (TLS/JMH), `tools/matrix/` matrix manifests, plus standalone helpers.
+- **`enterprise/`** — parallel tree mirroring the public one, for the Enterprise track. Subject to confidentiality guard; not part of the public docs path.
 
 The cross-cutting invariant: **every artifact must be traceable to a scenario id, target classification, tier, protocol mode, and reproducibility metadata**. The schemas in `schemas/` enforce this — if you find yourself wanting to skip a field, fix the schema or fix the data, don't bypass the validator.
 
 ## Common commands
 
-### JMH microbenchmarks
+Concrete invocations — JMH, GitHub Packages auth, the wrk/wrk2/h2load/k6 drivers, campaigns
+and matrices, capture/validate/publish, the `tools/` helpers, and baseline updates — live in
+the `benchmark-commands` skill (`.claude/skills/benchmark-commands/SKILL.md`), which loads on
+demand. The rules that constrain them stay here:
 
-```bash
-cd micro/jmh
-mvn clean package -DskipTests          # produces target/benchmarks.jar
-
-# All benchmarks (publishable: ≥3 forks)
-java -jar target/benchmarks.jar -wi 5 -i 10 -f 3
-
-# Single benchmark class
-java -jar target/benchmarks.jar RouteRegistryBenchmark -wi 5 -i 10 -f 3
-
-# Allocation profile (zero-alloc paths must show ≈ 0 B/op)
-java -jar target/benchmarks.jar JsonCodecBenchmark -prof gc -wi 5 -i 10 -f 3
-
-# JSON output for CI / comparison
-java -jar target/benchmarks.jar -rf json -rff results.json -wi 5 -i 10 -f 3
-
-# Repo wrapper
-./scripts/run-jmh.sh RouteRegistryBenchmark
-```
-
-`-f 1` is iteration-only — never use it for anything published into `baselines/`. Standard JVM flags for the JMH module are `-XX:+UseG1GC -XX:+AlwaysPreTouch -Xms256m -Xmx256m` (fixed heap prevents GC-mode switching across forks; bump for larger working sets).
-
-### GitHub Packages auth (required for `eu.exeris:*` snapshots)
-
-`eu.exeris:*` snapshots resolve from GitHub Packages, not Maven Central. Local builds need a PAT with package read access:
-
-```bash
-export GITHUB_ACTOR="<github-username>"
-export GITHUB_TOKEN="ghp_xxx"
-mvn -s .github/maven-settings-gpr.xml -f micro/jmh/pom.xml clean package -DskipTests
-```
-
-The settings file references server IDs `github-exeris-kernel` and `github-exeris-spring-runtime`.
-
-### Runtime / HTTP load benchmarks
-
-```bash
-./scripts/run-wrk.sh         targets/exeris-community-app scenarios/plaintext
-./scripts/run-wrk2.sh        targets/exeris-community-app scenarios/keepalive-steady
-./scripts/run-h2load.sh      targets/exeris-community-app scenarios/multiplex-32
-./scripts/run-k6.sh          targets/exeris-community-app scenarios/json-1kb
-```
-
-Targets must be **launched externally** before running a driver. To synchronize two pre-launched targets:
-
-```bash
-targets/launcher-sync-wrapper.sh \
-  --target-a-id <id> --target-a-port <port> \
-  --target-b-id <id> --target-b-port <port> \
-  --output-dir <path> [--health-path /health] [--sync-timeout-seconds 30]
-```
-
-### Campaign / matrix runs
-
-```bash
-./scripts/run-comparative.sh ...
-./scripts/run-entity-read-by-id-campaign.sh ...
-./scripts/run-e2e-shop-order-saga-campaign.sh --targets <a,b,c> --graph-track <neo4j|...> --profile <id> ...
-./scripts/run-tls-matrix.sh             # see docs/tls-zero-copy-benchmark-matrix.md for label/MUST-SHOULD-STRETCH mapping
-./scripts/run-primary-tls-matrix.sh
-./scripts/run-iso-budget-sweep-ab-ba.sh
-./scripts/run-full-triad-ab-ba.sh
-./scripts/run-guided.sh
-```
-
-### Capture, validate, compare, publish
-
-```bash
-./scripts/capture-env.sh > results/raw/$(date +%Y%m%d-%H%M%S)-env.json
-
-./scripts/compare-results.sh baselines/community/h1/laptop.json results/raw/latest.json
-
-./scripts/validate-comparative-readiness.sh ...
-./scripts/aggregate-comparative-results.sh   ...
-./scripts/aggregate-phases.sh                ...
-./scripts/report-protocol-matrix.sh results/normalized > results/reports/protocol-matrix.md
-
-./scripts/publish-report.sh \
-  --result results/raw/<run>.json \
-  --env    results/raw/<env>.json \
-  --output results/reports/ \
-  --archive results/history/jdk/ \
-  [--publication-mode public|internal-only|redacted] \
-  [--jfr-artifact <path>]
-```
-
-`publish-report.sh` defaults to `--publication-mode public`, which **blocks raw JFR** by extension (case-insensitive `.jfr`) and content signature (`FLR\0`). Use `internal-only` to permit raw JFR for restricted publication, or `redacted` to permit only non-`.jfr` JFR-derived artifacts. Generated reports stamp `publication_mode`, `confidentiality_status`, and `jfr_handling`.
-
-### Tools
-
-```bash
-tools/extract-jfr-metrics.sh <input.jfr> [output.json]   # uses jfr print --json
-tools/compute-fairness-index.sh --result-a A.json --result-b B.json --output fairness-index.json
-tools/verify-classification.sh <status.csv>              # validates runner_status / reproducibility_status / final_reason / claim_scope enums
-tools/verify-target-asset-matrix.sh                      # checks runtime/drivers/target-asset-matrix.json vs scenarios/**/comparative-pair-manifest.json
-tools/benchmark-runner-with-metrics.sh <cmd...>          # wraps with /usr/bin/time -v, writes <output>.with-metrics.json
-
-# JVM footprint attribution — a pair, deliberately split by what they measure:
-tools/extract-footprint-decomposition.sh <nmt-detail.txt[.gz]> <smaps.txt[.gz]> [out.json]
-#   RESIDENT split: heap vs non-heap, and anonymous vs file-backed, by joining smaps Rss
-#   per mapping against the Java Heap address range in NMT's virtual memory map.
-tools/extract-nmt-category-breakdown.sh <nmt-capture.txt[.gz]> [out.json]
-#   COMMITTED split: non-heap by NMT category (class metadata / code / GC / thread / …).
-```
+- **JMH publishable runs need `-f 3` minimum.** `-f 1` is iteration-only — never use it for
+  anything published into `baselines/`. Standard JVM flags for the JMH module are
+  `-XX:+UseG1GC -XX:+AlwaysPreTouch -Xms256m -Xmx256m` (fixed heap prevents GC-mode switching
+  across forks; bump for larger working sets).
+- **Targets are launched externally.** The harness never starts them; drivers assume a
+  pre-launched target, and `targets/launcher-sync-wrapper.sh` only synchronizes readiness.
+- **`eu.exeris:*` snapshots resolve from GitHub Packages, not Maven Central** — local builds
+  need a PAT with package read access and `-s .github/maven-settings-gpr.xml`.
+- **`publish-report.sh` defaults to `--publication-mode public`**, which **blocks raw JFR** by
+  extension (case-insensitive `.jfr`) and content signature (`FLR\0`). Use `internal-only` to
+  permit raw JFR for restricted publication, or `redacted` to permit only non-`.jfr`
+  JFR-derived artifacts. Generated reports stamp `publication_mode`,
+  `confidentiality_status`, and `jfr_handling`.
+- **Never refresh a baseline to mask a regression** — follow `docs/regression-policy.md`.
 
 Never derive a heap/non-heap split by subtracting `-Xmx` from RSS — without `AlwaysPreTouch`,
 `-Xms` commits pages it never touches, so resident < committed and the subtraction can go
-negative (measured: −23 096 kB). And never sum across the two tools: one reports resident
-bytes, the other committed. NMT has no per-category residency, so a category's committed size
-is only an upper bound on its resident size — quote the coverage ratio alongside any category
-claim so the unattributed remainder stays visible.
-
-### Updating a baseline
-
-```bash
-mkdir -p baselines/<repo>/<mode>
-cp results/raw/<run>.json baselines/<repo>/<mode>/<hardware-profile>.json
-git commit -m "chore(baselines): update <repo>/<mode> <hardware-profile> baseline [vX.Y.Z]"
-```
-
-Follow `docs/regression-policy.md`. Never refresh a baseline to mask a regression.
+negative (measured: −23 096 kB). And never sum across the two footprint tools
+(`extract-footprint-decomposition.sh`, `extract-nmt-category-breakdown.sh`): one reports
+resident bytes, the other committed. NMT has no per-category residency, so a category's
+committed size is only an upper bound on its resident size — quote the coverage ratio
+alongside any category claim so the unattributed remainder stays visible.
 
 ## Reporting checklist (before publishing or claiming)
 

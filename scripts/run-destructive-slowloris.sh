@@ -40,6 +40,12 @@ DURATION=120
 COOLDOWN=30
 HEALTH_PATH="/health"
 OUTPUT_DIR=""
+# Warm-up before the RSS baseline. Until 2026-08-26 this sampled a target that had never served a
+# request, so first-load JIT, metaspace fill and heap commit were charged to the attack. Measured
+# on the first slowloris run: RSS +34.9 % against a 5 % tolerance, classifying `leak-suspected`,
+# while the JFR's post-GC heap summary put LIVE HEAP at 9.5 MB. 0 restores the old behaviour.
+WARMUP_SECONDS=30
+WARMUP_RPS=50
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -54,6 +60,8 @@ while [[ $# -gt 0 ]]; do
     --header-delay)    HEADER_DELAY="$2";    shift 2 ;;
     --duration)        DURATION="$2";        shift 2 ;;
     --cooldown)        COOLDOWN="$2";        shift 2 ;;
+    --warmup-seconds)  WARMUP_SECONDS="$2";  shift 2 ;;
+    --warmup-rps)      WARMUP_RPS="$2";      shift 2 ;;
     --health-path)     HEALTH_PATH="$2";     shift 2 ;;
     --output)          OUTPUT_DIR="$2";      shift 2 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
@@ -95,12 +103,33 @@ mkdir -p "$OUTPUT_DIR"
 
 # Auto-detect PID from listening port if not provided — resource sampling
 # is best-effort but a known PID makes it meaningful.
+PORT="$(bench_extract_port_from_url "$BASE_URL")"
 if [[ -z "$TARGET_PID" ]]; then
-  PORT="$(bench_extract_port_from_url "$BASE_URL")"
   TARGET_PID="$(bench_detect_pid_for_port "$PORT" 2>/dev/null || true)"
+fi
+if [[ -n "$TARGET_PID" ]]; then
+  TARGET_PID="$(destructive_resolve_target_pid "$TARGET_PID" "$PORT")" || exit 1
+fi
+
+if [[ "$WARMUP_SECONDS" -gt 0 ]]; then
+  echo "=== Warm-up: ${WARMUP_SECONDS}s of clean ${HEALTH_PATH} at ~${WARMUP_RPS} rps ==="
+  WARMUP_REQUESTS="$(destructive_warmup "$BASE_URL" "$HEALTH_PATH" "$WARMUP_SECONDS" "$WARMUP_RPS")"
+  echo "  ${WARMUP_REQUESTS} warm-up requests; the baseline below is taken on a warm JVM"
+else
+  WARMUP_REQUESTS=0
+  echo "=== Warm-up DISABLED: the baseline is cold and first-load growth will be charged to the attack ==="
 fi
 
 # Pre-attack sampling
+# GC is forced before BOTH samples, so the delta compares two post-collection
+# states -- i.e. memory the target RETAINED, which is what a leak scenario is
+# asking about. Until 2026-08-27 only the final sample was preceded by a forced
+# GC, making the comparison a collected heap against an uncollected one. That is
+# biased toward understating growth, and on destructive-radamsa-h2 it produced a
+# delta of -588 517 376 bytes: the baseline held a full post-warm-up heap and the
+# final sample did not. Artifacts written before this change are not comparable
+# with ones written after it.
+destructive_force_gc "${TARGET_PID:-0}" || true
 read -r RSS_BEFORE VSZ_BEFORE < <(destructive_capture_rss "${TARGET_PID:-0}")
 echo "pre-attack RSS=${RSS_BEFORE} VSZ=${VSZ_BEFORE} pid=${TARGET_PID:-unknown}"
 
@@ -155,14 +184,22 @@ fi
 ATTACKER_JSON="$(cat "$ATTACKER_OUT")"
 ITERATIONS_TOTAL=$(echo "$ATTACKER_JSON" | jq -r '.iterations_total // 0')
 CONNECTIONS_DROPPED=$(echo "$ATTACKER_JSON" | jq -r '.connections_dropped // 0')
+CONNECTIONS_OPENED=$(echo "$ATTACKER_JSON" | jq -r '.connections_opened // 0')
 
+# The hang argument is 0, not $CONNECTIONS_DROPPED. Until 2026-08-27 this
+# passed the dropped-connection count as the hang count, which inverts the
+# scenario's meaning: evicting a half-open connection is the DEFENCE against
+# slowloris, so a target doing the right thing was pushed toward a degraded
+# classification for doing it. connections_dropped is a measurement this
+# scenario reports, not a failure it gates on -- what gates is liveness and
+# the RSS delta.
 if [[ "$RSS_OBTAINED" == "true" ]]; then
-  DEGRADATION="$(destructive_classify 0 0 "$CONNECTIONS_DROPPED" \
+  DEGRADATION="$(destructive_classify 0 0 0 \
       "$RSS_DELTA" 5 "$RSS_BEFORE" "$DESTR_PROBE_ALIVE")"
 else
   # RSS unobtained — skip leak-suspected pathway, don't let the classifier
   # interpret a missing measurement as "stable".
-  DEGRADATION="$(destructive_classify 0 0 "$CONNECTIONS_DROPPED" \
+  DEGRADATION="$(destructive_classify 0 0 0 \
       0 5 0 "$DESTR_PROBE_ALIVE")"
 fi
 
@@ -208,7 +245,7 @@ jq -n \
       total_requests: $iterations,
       total_errors: $crash
     }
-  }' > "$RESULT_FILE"
+  }' | destructive_emit_json "$RESULT_FILE"
 
 jq -n \
   --arg run_id "$RUN_ID" \
@@ -225,6 +262,8 @@ jq -n \
   --arg probe_alive "$DESTR_PROBE_ALIVE" \
   --arg degradation "$DEGRADATION" \
   --arg jfr_path "${JFR_OUT:-}" \
+  --argjson warmup_seconds "$WARMUP_SECONDS" \
+  --argjson connections_opened "$CONNECTIONS_OPENED" \
   '{
     schema_version: "1",
     run_id: $run_id,
@@ -237,7 +276,14 @@ jq -n \
       iterations_total: $iterations,
       crash_count: 0,
       oom_count: 0,
-      hang_count: $connections_dropped,
+      # hang_count carried $connections_dropped until 2026-08-27, which inverts
+      # the scenario: a connection the TARGET closed is the target DEFENDING
+      # itself against slowloris, and recording that as a hang would fail a
+      # target for behaving correctly. This driver has no per-request deadline
+      # of its own, so it has nothing to report as a hang.
+      hang_count: 0,
+      connections_opened: $connections_opened,
+      connections_dropped: $connections_dropped,
       unique_crash_signatures: 0,
       mean_time_to_crash_us: null,
       leak_count_delta: 0
@@ -264,7 +310,8 @@ jq -n \
         end
       ),
       native_heap_committed_bytes_delta: null,
-      jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end)
+      jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end),
+      baseline_warmup_seconds: $warmup_seconds
     },
     degradation_class: $degradation,
     tolerance: {
@@ -272,7 +319,9 @@ jq -n \
       max_hang_count: 0
     },
     publication_mode: "internal-only"
-  }' > "$FINDINGS_FILE"
+  }' | destructive_emit_json "$FINDINGS_FILE"
+
+destructive_validate_findings "$FINDINGS_FILE"
 
 echo ""
 echo "=== Summary ==="

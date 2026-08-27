@@ -164,6 +164,7 @@ class MutantPool:
         self._gen_timeout = gen_timeout
         self._queue: queue.Queue = queue.Queue(maxsize=chunk_size * 2)
         self._stop = threading.Event()
+        self._proc: subprocess.Popen | None = None
         self._failures = 0
         self._failures_lock = threading.Lock()
         self.mutants_generated = 0
@@ -177,19 +178,41 @@ class MutantPool:
 
     def _generate_chunk(self, index: int) -> list[bytes]:
         chunk_seed = (self._base_seed * 1_000_003 + index) % (2 ** 31 - 1)
-        with tempfile.TemporaryDirectory(prefix="radamsa-chunk-") as tmp:
+        # ignore_cleanup_errors: the directory is torn down while a radamsa
+        # child may still be writing into it, which raced to
+        # "OSError: [Errno 39] Directory not empty" at interpreter exit.
+        # close() now reaps the child, but a stale temp dir must never be
+        # able to fail a campaign that already produced its result.
+        with tempfile.TemporaryDirectory(prefix="radamsa-chunk-",
+                                         ignore_cleanup_errors=True) as tmp:
             pattern = os.path.join(tmp, "m-%n")
             try:
-                subprocess.run(
+                proc = subprocess.Popen(
                     [self._binary, "-s", str(chunk_seed),
                      "-n", str(self._chunk_size), "-o", pattern],
-                    input=self._seed_bytes, capture_output=True, check=True,
-                    timeout=self._gen_timeout,
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                 )
+                self._proc = proc
+                try:
+                    proc.communicate(input=self._seed_bytes,
+                                     timeout=self._gen_timeout)
+                finally:
+                    self._proc = None
+                if proc.returncode != 0:
+                    raise subprocess.CalledProcessError(
+                        proc.returncode, self._binary)
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-                # A generator failure is an ATTACKER-side fault. It is counted
-                # and surfaced, never folded into a target-side counter --
-                # the previous drivers charged it to hang_count.
+                if self._stop.is_set():
+                    # close() kills the in-flight child on purpose. Counting
+                    # that as a generator failure reports a normal shutdown as
+                    # an attacker-side fault -- the first campaign after the
+                    # reaping fix logged exactly one such phantom
+                    # ("chunk 31 died with SIGKILL") at the end of its window.
+                    return []
+                # A genuine generator failure is an ATTACKER-side fault. It is
+                # counted and surfaced, never folded into a target-side counter
+                # -- the previous drivers charged it to hang_count.
                 with self._failures_lock:
                     self._failures += 1
                 print(f"WARN: radamsa chunk {index} failed: {exc}", file=sys.stderr)
@@ -231,13 +254,47 @@ class MutantPool:
         except queue.Empty:
             return None
 
-    def close(self) -> None:
+    def close(self, join_timeout: float = 5.0) -> None:
+        """Stop generating and reap the child before the interpreter exits.
+
+        Setting the flag alone was not enough: the producer is a daemon
+        thread, so if it sat in radamsa when main() returned, the thread was
+        killed while its child kept writing files -- which is what raised
+        "Directory not empty" out of a tempfile finalizer, after the campaign
+        summary had already been printed.
+        """
         self._stop.set()
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        self._thread.join(timeout=join_timeout)
+
+
+def read_outcome_http1(sock, framing_complete: bool):
+    """Default classifier: the first bytes back decide the outcome.
+
+    Sound for HTTP/1.x, where a server sends nothing until it has something
+    to say. NOT sound for HTTP/2 -- see read_outcome_h2 in the H2 driver.
+    """
+    data = sock.recv(4096)
+    if not data:
+        return REJECTED
+    if data.startswith(b"HTTP/1.") and b" 5" in data[:32]:
+        return FIVE_XX
+    return RESPONSE
 
 
 def fire_one(host: str, port: int, payload: bytes, timeout: float,
-             framing_complete: bool, preamble: bytes = b"") -> str:
-    """Classify ONE attack outcome from the TARGET's point of view."""
+             framing_complete: bool, preamble: bytes = b"",
+             read_outcome=read_outcome_http1):
+    """Classify ONE attack outcome from the TARGET's point of view.
+
+    Returns either an outcome string or an (outcome, detail) pair; the detail
+    is a free-form label the caller histograms (H2 uses it for GOAWAY codes).
+    """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
     try:
@@ -247,12 +304,7 @@ def fire_one(host: str, port: int, payload: bytes, timeout: float,
             return REFUSED
         try:
             sock.sendall(preamble + payload)
-            data = sock.recv(4096)
-            if not data:
-                return REJECTED
-            if data.startswith(b"HTTP/1.") and b" 5" in data[:32]:
-                return FIVE_XX
-            return RESPONSE
+            return read_outcome(sock, framing_complete)
         except socket.timeout:
             # The target owed an answer only if the mutant completed a
             # request. Otherwise it is correctly waiting for the rest.
@@ -270,7 +322,8 @@ def fire_one(host: str, port: int, payload: bytes, timeout: float,
 
 def run_campaign(*, host: str, port: int, pool: MutantPool, rps: int,
                  duration: float, socket_timeout: float, workers: int,
-                 is_complete, preamble: bytes = b"") -> dict:
+                 is_complete, preamble: bytes = b"",
+                 read_outcome=read_outcome_http1) -> dict:
     """Fire a paced, concurrent campaign and return the JSON summary.
 
     Pacing submits one task every 1/rps seconds. When every worker is busy
@@ -280,6 +333,10 @@ def run_campaign(*, host: str, port: int, pool: MutantPool, rps: int,
     """
     counts = {REFUSED: 0, REJECTED: 0, RESPONSE: 0, FIVE_XX: 0,
               INCOMPLETE_WAIT: 0, HANG: 0}
+    # Free-form per-outcome detail, histogrammed. H2 uses it to record which
+    # GOAWAY error code the target answered with, i.e. which parser layer
+    # rejected the mutant -- the one thing a pure "0 crashes" cannot say.
+    details: dict = {}
     counts_lock = threading.Lock()
     exhausted = threading.Event()
     # In-flight work is tracked with a semaphore, not by rescanning a list of
@@ -292,9 +349,15 @@ def run_campaign(*, host: str, port: int, pool: MutantPool, rps: int,
 
     def task(payload: bytes, complete: bool) -> None:
         try:
-            outcome = fire_one(host, port, payload, socket_timeout, complete, preamble)
+            outcome = fire_one(host, port, payload, socket_timeout, complete,
+                               preamble, read_outcome)
+            detail = None
+            if isinstance(outcome, tuple):
+                outcome, detail = outcome
             with counts_lock:
                 counts[outcome] += 1
+                if detail is not None:
+                    details[detail] = details.get(detail, 0) + 1
         finally:
             slots.release()
 
@@ -355,4 +418,5 @@ def run_campaign(*, host: str, port: int, pool: MutantPool, rps: int,
         "generator_failures": pool.generator_failures,
         "mutant_pool_exhausted": exhausted.is_set(),
         "mutant_stream": MUTANT_STREAM_ID,
+        "outcome_details": dict(sorted(details.items())),
     }

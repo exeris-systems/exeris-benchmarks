@@ -1,0 +1,52 @@
+{
+  "schema_version": "1",
+  "run_id": "arena-lifecycle-leak-20260827-090330-40e96a24fe78",
+  "scenario": "arena-lifecycle-leak",
+  "campaign_kind": "arena-lifecycle",
+  "duration_seconds": 600,
+  "claim_scope": "exploratory",
+  "comparison_axis": "standalone",
+  "findings": {
+    "iterations_total": 299496,
+    "crash_count": 0,
+    "oom_count": 0,
+    "hang_count": 46112,
+    "incomplete_wait_count": 14952,
+    "unique_crash_signatures": 0,
+    "mean_time_to_crash_us": null,
+    "leak_count_delta": 0
+  },
+  "liveness_probe": {
+    "method": "GET",
+    "path": "/health",
+    "status_code": 200,
+    "duration_ms": 7,
+    "expected_status": 200,
+    "expected_max_response_ms": 1000,
+    "asserted_alive": true
+  },
+  "resource_delta": {
+    "rss_bytes_before": 351989760,
+    "rss_bytes_after": 354979840,
+    "rss_bytes_delta": 2990080,
+    "vsz_bytes_before": 23885168640,
+    "vsz_bytes_after": 23885168640,
+    "vsz_bytes_delta": 0,
+    "native_heap_committed_bytes_delta": null,
+    "jfr_recording_path": "/home/bench/exeris-benchmarks/results/raw/arena-lifecycle-leak-20260827-090330/arena-lifecycle.jfr",
+    "baseline_warmup_seconds": 30,
+    "rss_series_samples": 133,
+    "rss_series_early_slope_bytes_per_s": 7475.3,
+    "rss_series_late_slope_bytes_per_s": 6589.9
+  },
+  "degradation_class": "unanswered",
+  "notes": "rate: 499.16/500 rps with 256 workers, 504 pacing skips. expected outcomes (not findings): 43518 rejections, 194914 responses, 14952 incomplete-wait timeouts. hang_count counts timeouts on COMPLETE requests only; at a sustained attack rate it does not separate an unanswered request from a saturated one, so read it against achieved_rps. baseline warm-up: 30s (1109 requests). RSS series: 133 samples, early 7475.3 B/s, late 6589.9 B/s -- a leak holds the late slope near the early one. mutant_stream=batched-v2.",
+  "tolerance": {
+    "rss_growth_pct_max": 5,
+    "native_heap_committed_growth_pct_max": 10
+  },
+  "seeds": {
+    "radamsa_seed": "424242"
+  },
+  "publication_mode": "internal-only"
+}

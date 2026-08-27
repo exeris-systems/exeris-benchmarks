@@ -76,6 +76,21 @@
           "minimum": 0,
           "description": "Iterations that timed out on a payload which did NOT complete a request: the target is correctly waiting for the rest of it and the ATTACKER gave up at its socket deadline. NOT a finding, and deliberately structured rather than left in `notes` -- burying it in prose is how it was mistaken for hang_count in the first place. It does not establish that the target is healthy: whether a target ever times out an incomplete request is what destructive-slowloris-h1 measures."
         },
+        "connections_opened": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "destructive-slowloris-h1 only: half-open connections the attacker established."
+        },
+        "connections_dropped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "destructive-slowloris-h1 only: how many of those the TARGET closed during the attack window -- the one measurement this scenario exists to make. It is also what licenses the `incomplete-wait` outcome in the radamsa drivers: a target that never evicts a half-open connection inside 120 s cannot have been the source of a 2 s attacker-side timeout. The runner read this value from the attacker and then discarded it until 2026-08-27, so the first slowloris artifact recorded connections_dropped nowhere and left `notes` null."
+        },
+        "outcome_details": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "description": "Per-outcome detail histogram, protocol-specific. For destructive-radamsa-h2 the keys are the target's GOAWAY/RST_STREAM error codes (e.g. \"GOAWAY:FRAME_SIZE_ERROR\", \"GOAWAY:COMPRESSION_ERROR\"), which name the layer that rejected the mutant -- framing vs HPACK -- and are the only positive evidence an all-zero crash/hang campaign produces. Absent for H1, whose classifier has no equivalent signal."
+        },
         "unique_crash_signatures": {
           "type": "integer",
           "minimum": 0,
@@ -100,6 +115,11 @@
         "method": { "type": "string", "enum": ["GET", "HEAD", "POST"] },
         "path": { "type": "string" },
         "status_code": { "type": "integer" },
+        "protocol": {
+          "type": "string",
+          "enum": ["h1", "h2", "h2c"],
+          "description": "Protocol the post-attack liveness probe actually spoke. Until 2026-08-26 every probe was plain curl, i.e. HTTP/1.1, including destructive-radamsa-h2 -- so an attack that broke the HTTP/2 frame parser while HTTP/1.1 kept answering would have been recorded as survival. An h2/h2c probe answered over HTTP/1.1 now fails instead of passing quietly."
+        },
         "duration_ms": { "type": "number", "minimum": 0 },
         "expected_status": { "type": "integer" },
         "expected_max_response_ms": { "type": "number", "minimum": 0 },
@@ -124,13 +144,31 @@
         "jfr_recording_path": {
           "type": ["string", "null"],
           "description": "Path to the JFR recording covering the attack window. NEVER published in public mode."
+        },
+        "baseline_warmup_seconds": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Seconds of clean traffic driven BEFORE rss_bytes_before was sampled. 0 or null means the baseline was taken on a target that had never served a request, so first-load JIT, metaspace fill and heap commit are charged to the attack -- measured at +34.9 % RSS on a run whose post-GC live heap was 9.5 MB. Two runs with different values here are not comparable on rss_bytes_delta."
+        },
+        "rss_series_samples": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Number of RSS samples taken across the attack window. null or 0 means no series was recorded, and any claim about growth CORRELATING WITH DURATION is then unsupported by this artifact."
+        },
+        "rss_series_early_slope_bytes_per_s": {
+          "type": ["number", "null"],
+          "description": "Least-squares RSS slope over the first half of the attack window."
+        },
+        "rss_series_late_slope_bytes_per_s": {
+          "type": ["number", "null"],
+          "description": "Least-squares RSS slope over the second half. This pair is the leak-vs-plateau discriminator the arena-lifecycle-leak scenario's FAIL condition requires: a leak holds the late slope near the early one, first-load growth collapses it toward zero. A single before/after delta cannot distinguish them."
         }
       }
     },
     "degradation_class": {
       "type": "string",
-      "enum": ["graceful-shed", "timeout-flood", "crash", "oom", "leak-suspected", "stable"],
-      "description": "Observed failure/degradation classification. 'stable' = target absorbed attack and liveness probe passed within tolerance."
+      "enum": ["graceful-shed", "unanswered", "timeout-flood", "crash", "oom", "leak-suspected", "stable"],
+      "description": "Observed failure/degradation classification. 'stable' = target absorbed attack and liveness probe passed within tolerance. 'unanswered' = the target owed a response to at least one request it was obliged to answer and produced none inside the socket deadline; findings.hang_count carries how many. Until 2026-08-27 hangs were classified 'graceful-shed', which reads as the target deliberately and correctly shedding load -- the opposite of what a hang is. That labelled 8 364 unanswered complete requests, and the four minimal request-line shapes behind them, as healthy behaviour. 'graceful-shed' now means only what its name says: the target stayed alive and rejected or closed rather than leaving requests outstanding."
     },
     "tool_versions": {
       "type": "object",

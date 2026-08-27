@@ -1,0 +1,29 @@
+{
+  "schema_version": "1",
+  "run_id": "destructive-radamsa-h1-20260827-084532-40e96a24fe78",
+  "timestamp": "2026-08-27T08:48:36Z",
+  "scenario": "destructive-radamsa-h1",
+  "tool": "radamsa",
+  "env_ref": "",
+  "transport_mode": "loopback-h1",
+  "target": {
+    "repo": "exeris-kernel",
+    "commit_sha": "5e29ae675020",
+    "mode": "pure",
+    "tier": "community",
+    "protocol": "h1"
+  },
+  "comparison_axis": "standalone",
+  "execution_class": "exploratory",
+  "claim_scope": "exploratory",
+  "final_reason": "ok",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "run_config": {
+    "duration_seconds": 120
+  },
+  "metrics": {
+    "total_requests": 59501,
+    "total_errors": 8366
+  }
+}

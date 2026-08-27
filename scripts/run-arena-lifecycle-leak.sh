@@ -24,16 +24,26 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$ROOT/tools/bench/lib/destructive.sh"
 # shellcheck source=tools/bench/lib/readiness.sh
 source "$ROOT/tools/bench/lib/readiness.sh"
+# shellcheck source=tools/bench/lib/identity.sh
+source "$ROOT/tools/bench/lib/identity.sh"
 
 BASE_URL=""
 TARGET_PID=""
 TARGET_REPO=""
 TARGET_MODE=""
 TARGET_TIER=""
+TARGET_COMMIT="${BENCH_TARGET_COMMIT:-}"
 RADAMSA_SEED=""
 DURATION=600
 COOLDOWN=60
 RPS=500
+# See scripts/run-destructive-radamsa.sh for the sizing arithmetic. This scenario needs it most:
+# 500 rps x 600 s = 300 000 iterations, which the pre-2026-08-26 single-threaded driver would have
+# taken ~24 h to deliver at its achieved 3.4 rps. The scenario was blocked on the driver, not the
+# target, and had never run.
+WORKERS=256
+SOCKET_TIMEOUT=2.0
+MUTANT_CHUNK_SIZE=2048
 HEALTH_PATH="/health"
 MEMSTATS_ENDPOINT=""
 OUTPUT_DIR=""
@@ -45,6 +55,11 @@ while [[ $# -gt 0 ]]; do
     --target-repo)           TARGET_REPO="$2";       shift 2 ;;
     --target-mode)           TARGET_MODE="$2";       shift 2 ;;
     --target-tier)           TARGET_TIER="$2";       shift 2 ;;
+    --target-commit)         TARGET_COMMIT="$2";     shift 2 ;;
+    --harness-sha)           BENCH_HARNESS_SHA="$2"; export BENCH_HARNESS_SHA; shift 2 ;;
+    --workers)               WORKERS="$2";           shift 2 ;;
+    --socket-timeout)        SOCKET_TIMEOUT="$2";    shift 2 ;;
+    --mutant-chunk-size)     MUTANT_CHUNK_SIZE="$2"; shift 2 ;;
     --radamsa-seed)          RADAMSA_SEED="$2";      shift 2 ;;
     --duration)              DURATION="$2";          shift 2 ;;
     --cooldown)              COOLDOWN="$2";          shift 2 ;;
@@ -63,6 +78,7 @@ done
 [[ -z "$TARGET_REPO" ]] && { echo "ERROR: --target-repo required (reproducibility metadata)" >&2; exit 1; }
 [[ -z "$TARGET_MODE" ]] && { echo "ERROR: --target-mode required (pure|compat|...)" >&2; exit 1; }
 [[ -z "$TARGET_TIER" ]] && { echo "ERROR: --target-tier required (community|enterprise)" >&2; exit 1; }
+TARGET_COMMIT="$(bench_require_target_sha "$TARGET_COMMIT" --target-commit)" || exit 1
 case "$TARGET_MODE" in
   pure|compat|native|jdbc-bridge|baseline-db) ;;
   *) echo "ERROR: --target-mode must be one of pure|compat|native|jdbc-bridge|baseline-db (got: '$TARGET_MODE')" >&2; exit 1 ;;
@@ -73,11 +89,17 @@ case "$TARGET_TIER" in
 esac
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 required" >&2; exit 1; }
-command -v radamsa >/dev/null 2>&1 || { echo "ERROR: radamsa not in PATH" >&2; exit 1; }
+RADAMSA_BIN="$(bench_require_radamsa)" || exit 1
+export RADAMSA_BIN
 
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
-GIT_SHA7="$(git -C "$ROOT" rev-parse --short=7 HEAD 2>/dev/null || echo 'nogit')"
-RUN_ID="arena-lifecycle-leak-${TIMESTAMP}-${GIT_SHA7}"
+# Was: git rev-parse ... || echo 'nogit' -- the last of the four copies of that line. It filled
+# commit_sha (which sits next to repo: $target_repo, so it reads as the TARGET's revision) with
+# the HARNESS's, and fell back to a literal that satisfies the schema while carrying no traceable
+# revision. On the perf box, whose copy of this repo is an rsync destination rather than a
+# checkout, the fallback fired on every run. Both identities are now mandatory and separate.
+HARNESS_SHA="$(bench_harness_sha "$ROOT")" || exit 1
+RUN_ID="$(bench_run_id arena-lifecycle-leak "$TIMESTAMP" "$HARNESS_SHA")"
 [[ -z "$OUTPUT_DIR" ]] && OUTPUT_DIR="$ROOT/results/raw/arena-lifecycle-leak-${TIMESTAMP}"
 mkdir -p "$OUTPUT_DIR"
 
@@ -110,7 +132,7 @@ echo "  RSS=${RSS_BEFORE} VSZ=${VSZ_BEFORE} native_heap_committed=${NHC_BEFORE:-
 JFR_OUT="$OUTPUT_DIR/arena-lifecycle.jfr"
 destructive_start_jfr "$TARGET_PID" "$JFR_OUT" arena-lifecycle || JFR_OUT=""
 
-echo "=== Sustained radamsa H1 load: ${RPS} rps × ${DURATION}s ==="
+echo "=== Sustained radamsa H1 load: ${RPS} rps × ${DURATION}s, ${WORKERS} workers ==="
 ATTACKER_OUT="$OUTPUT_DIR/radamsa-stdout.json"
 set +e
 python3 "$ROOT/runtime/drivers/radamsa-h1-attacker.py" \
@@ -118,6 +140,9 @@ python3 "$ROOT/runtime/drivers/radamsa-h1-attacker.py" \
     --rps "$RPS" \
     --attack-duration-seconds "$DURATION" \
     --radamsa-seed "$RADAMSA_SEED" \
+    --workers "$WORKERS" \
+    --socket-timeout-seconds "$SOCKET_TIMEOUT" \
+    --mutant-chunk-size "$MUTANT_CHUNK_SIZE" \
     > "$ATTACKER_OUT" 2> "$OUTPUT_DIR/radamsa-stderr.txt"
 set -e
 
@@ -166,7 +191,7 @@ FINDINGS_FILE="$OUTPUT_DIR/destructive-findings.json"
 jq -n \
   --arg run_id "$RUN_ID" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --arg sha "$GIT_SHA7" \
+  --arg sha "$TARGET_COMMIT" \
   --arg target_repo "$TARGET_REPO" \
   --arg target_mode "$TARGET_MODE" \
   --arg target_tier "$TARGET_TIER" \

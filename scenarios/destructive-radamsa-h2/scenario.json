@@ -15,7 +15,11 @@
     "attack_duration_seconds": 120,
     "cooldown_seconds": 30,
     "radamsa_seed": "REQUIRED — set via --radamsa-seed",
-    "h2c_preface": "PRI * HTTP/2.0\\r\\n\\r\\nSM\\r\\n\\r\\n"
+    "h2c_preface": "PRI * HTTP/2.0\\r\\n\\r\\nSM\\r\\n\\r\\n",
+    "concurrent_connections": 256,
+    "socket_timeout_seconds": 2.0,
+    "rate_note": "requests_per_second is a REQUESTED rate. Until 2026-08-26 the driver was single-threaded and every read timeout blocked it for the full socket deadline, so the first campaign requested 500 and achieved 3.4 (60 timeouts x 2.0 s consumed the whole 120 s window; radamsa generation was 1.1 % of it). The driver now fires from a worker pool and reports achieved_rps and backlog_skips -- a run that cannot reach this rate says so instead of letting this number stand in for what happened.",
+    "concurrency_note": "Concurrency is part of the stimulus, not a harness detail: N connections at once is a different attack from N in sequence. It travels with the result and belongs in any comparison. Sizing: rps x incomplete-mutant fraction x socket timeout gives the worker-seconds per wall second the timeouts alone consume."
   },
   "liveness_probe": {
     "mandatory": true,
@@ -28,7 +32,9 @@
   },
   "tolerance": {
     "rss_growth_pct_max": 5,
-    "max_unexpected_crashes": 0
+    "max_unexpected_crashes": 0,
+    "max_hang_count": 0,
+    "hang_note": "hang_count counts read timeouts on mutants whose frame sequence ended on a frame boundary, where the target owed an answer. A mutant with a truncated final frame leaves the target correctly waiting: incomplete-wait, not a hang."
   },
   "claim_scope": "exploratory",
   "comparison_axis_note": "Cross-stack comparison requires identical --radamsa-seed AND identical H2 server-side limits (max-concurrent-streams, max-frame-size, max-header-list-size). Different limits change what gets rejected at the protocol layer vs the parser layer.",

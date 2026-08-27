@@ -69,7 +69,12 @@
         "hang_count": {
           "type": "integer",
           "minimum": 0,
-          "description": "Iterations that exceeded the per-iteration timeout without returning."
+          "description": "Iterations that exceeded the per-iteration timeout WHILE THE TARGET OWED AN ANSWER -- i.e. the payload completed a request. A timeout on a payload that never terminated its request is incomplete_wait_count, not this. Before that split (2026-08-26) this field counted both, and a campaign whose mutants are ~10 % truncated logged a double-digit hang_count against a target answering its liveness probe in 8 ms."
+        },
+        "incomplete_wait_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Iterations that timed out on a payload which did NOT complete a request: the target is correctly waiting for the rest of it and the ATTACKER gave up at its socket deadline. NOT a finding, and deliberately structured rather than left in `notes` -- burying it in prose is how it was mistaken for hang_count in the first place. It does not establish that the target is healthy: whether a target ever times out an incomplete request is what destructive-slowloris-h1 measures."
         },
         "unique_crash_signatures": {
           "type": "integer",

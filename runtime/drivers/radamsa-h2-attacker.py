@@ -1,68 +1,47 @@
 #!/usr/bin/env python3
 """
-radamsa-h2-attacker.py — fire radamsa-mutated HTTP/2 (H2C cleartext) frames.
+radamsa-h2-attacker.py — fire radamsa-mutated HTTP/2 frames at an H2C target.
 
-REQUIRES: `radamsa` in PATH.
+REQUIRES: `radamsa` on PATH, or RADAMSA_BIN pointing at it.
+Install: https://gitlab.com/akihe/radamsa
 
-Each iteration:
-  1. Open fresh TCP, send the H2C connection preface (NEVER mutated; the
-     target rejects the connection otherwise — testing the preface path is
-     out of scope here).
-  2. Send a radamsa-mutated post-preface stream (SETTINGS + HEADERS + DATA).
-  3. Read response (best-effort).
-  4. Close.
+The H2C connection preface is sent INTACT on every connection; only the
+post-preface frame bytes (SETTINGS + HEADERS) are mutated. A mutated preface
+would just be a TCP-level garbage test and would never reach the frame parser
+or the HPACK decoder, which are what this scenario is about.
 
-The seed is a hand-built minimal valid H2C session for GET /plaintext.
-HPACK Huffman encoding is NOT used. The header block uses static-table
-indexed-name encoding where it exists (:method=GET, :scheme=http, :path
-indexed-name) and "literal without indexing, new name" for :authority —
-all to keep the seed bytewise analyzable for triage.
+The attack engine, the outcome taxonomy, the mutant pool and the concurrency
+model live in lib/radamsa_attack.py, shared with the H1 driver. Until
+2026-08-26 this file was an unrun copy of the H1 design and still carried
+every defect #29 fixed there, plus two of its own:
 
-Output: same JSON shape as radamsa-h1-attacker.py.
+  * the per-iteration seed was f"{seed}.{i}" -- a dotted string radamsa
+    rejects with exit 127, so the campaign died on iteration 1. Its H1 twin
+    is why the H1 driver had never run either.
+  * an empty response, a reset, a broken pipe and ANY OSError all returned
+    "crash", so a target correctly closing on a malformed frame would have
+    been reported as a crash -- and connect() failure, the one outcome that
+    really does mean the listener is gone, was indistinguishable from it.
+  * a radamsa generation timeout was charged to hang_count, i.e. an
+    attacker-side fault reported as a target-side one.
+  * the summary carried no rejected/response counts at all, so the runner's
+    `notes` field had nothing to disclose.
+
+Output: one JSON object on stdout when the attack window closes.
+Exit code: 0 on clean close; non-zero on configuration errors only.
 """
 
 import argparse
-import ipaddress
 import json
-import shutil
-import socket
 import struct
-import subprocess
 import sys
-import time
+from pathlib import Path
 from urllib.parse import urlparse
 
-
-def assert_loopback_or_die(host: str, allow_non_loopback: bool) -> None:
-    """Refuse to attack anything that resolves to a non-loopback address.
-
-    These scripts are committed attack tooling. Accepting arbitrary URLs would
-    make them trivially weaponizable against unrelated hosts; require an
-    explicit opt-in for non-loopback targets so the default cannot be misused.
-    """
-    if allow_non_loopback:
-        return
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror as e:
-        print(f"ERROR: cannot resolve host '{host}': {e}", file=sys.stderr)
-        sys.exit(2)
-    for info in infos:
-        addr = info[4][0]
-        try:
-            if not ipaddress.ip_address(addr).is_loopback:
-                print(
-                    f"ERROR: refusing to attack non-loopback host '{host}' "
-                    f"(resolved to {addr}). Pass --allow-non-loopback to "
-                    f"override (e.g. authorized lab targets).",
-                    file=sys.stderr,
-                )
-                sys.exit(2)
-        except ValueError:
-            print(f"ERROR: cannot parse resolved address '{addr}'",
-                  file=sys.stderr)
-            sys.exit(2)
-
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from radamsa_attack import (  # noqa: E402
+    MutantPool, assert_loopback_or_die, radamsa_binary, run_campaign,
+)
 
 H2C_PREFACE = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
@@ -104,34 +83,33 @@ def build_seed_post_preface() -> bytes:
     return settings + headers_frame
 
 
-def mutate(seed_bytes: bytes, seed_value: str) -> bytes:
-    proc = subprocess.run(
-        ["radamsa", "--seed", seed_value],
-        input=seed_bytes, capture_output=True, check=True, timeout=5.0,
-    )
-    return proc.stdout
+FRAME_HEADER_LEN = 9
 
 
-def fire_one(host: str, port: int, post_preface: bytes,
-             timeout: float) -> str:
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        sock.connect((host, port))
-        sock.sendall(H2C_PREFACE + post_preface)
-        try:
-            data = sock.recv(4096)
-            sock.close()
-            if not data:
-                return "crash"
-            return "response"
-        except socket.timeout:
-            sock.close()
-            return "hang"
-    except (ConnectionResetError, BrokenPipeError):
-        return "crash"
-    except OSError:
-        return "crash"
+def is_complete_frame_sequence(payload: bytes) -> bool:
+    """Does this mutant end on a frame boundary?
+
+    Walks the 9-byte headers and their declared lengths. True only when the
+    last frame ends exactly at the end of the buffer -- i.e. the peer is not
+    owed further bytes. A truncated final frame leaves the target correctly
+    waiting, which is `incomplete-wait`, not a hang.
+
+    Frame-level completeness is the strongest predicate available without
+    modelling stream state; a well-framed but semantically incomplete
+    exchange (HEADERS without END_HEADERS, say) counts as complete here, so
+    the classification errs toward reporting a candidate signal rather than
+    suppressing one.
+    """
+    offset = 0
+    n = len(payload)
+    if n == 0:
+        return False
+    while offset < n:
+        if n - offset < FRAME_HEADER_LEN:
+            return False
+        length = struct.unpack(">I", b"\x00" + payload[offset:offset + 3])[0]
+        offset += FRAME_HEADER_LEN + length
+    return offset == n
 
 
 def main() -> int:
@@ -141,20 +119,27 @@ def main() -> int:
     p.add_argument("--attack-duration-seconds", type=float, default=120.0)
     p.add_argument("--socket-timeout-seconds", type=float, default=2.0)
     p.add_argument("--radamsa-seed", required=True)
+    p.add_argument("--workers", type=int, default=64,
+                   help="Concurrent connections. Part of the campaign's "
+                        "identity — reported in the summary.")
+    p.add_argument("--mutant-chunk-size", type=int, default=2048,
+                   help="Mutants per radamsa invocation. With the seed, this "
+                        "determines the byte stream.")
     p.add_argument("--allow-non-loopback", action="store_true",
                    help="Opt-in: permit a non-loopback target. Default is "
                         "refuse — these scripts are not general-purpose "
                         "attack tools.")
     args = p.parse_args()
 
-    if shutil.which("radamsa") is None:
-        print("ERROR: radamsa not in PATH. Install: "
-              "https://gitlab.com/akihe/radamsa", file=sys.stderr)
+    binary = radamsa_binary()
+    if binary is None:
+        print("ERROR: radamsa not found. Set RADAMSA_BIN or add it to PATH. "
+              "Install: https://gitlab.com/akihe/radamsa", file=sys.stderr)
         return 2
 
     parsed = urlparse(args.base_url)
     if parsed.scheme != "http":
-        print(f"ERROR: only plain http (H2C) supported", file=sys.stderr)
+        print("ERROR: only plain http (H2C) supported", file=sys.stderr)
         return 2
     host = parsed.hostname
     port = parsed.port or 80
@@ -163,47 +148,25 @@ def main() -> int:
         return 2
     assert_loopback_or_die(host, args.allow_non_loopback)
 
-    seed = build_seed_post_preface()
+    try:
+        base_seed = int(args.radamsa_seed)
+    except ValueError:
+        print(f"ERROR: --radamsa-seed must be an integer "
+              f"(got: '{args.radamsa_seed}')", file=sys.stderr)
+        return 2
 
-    start = time.monotonic()
-    deadline = start + args.attack_duration_seconds
-    iteration_period = 1.0 / args.rps if args.rps > 0 else 0.0
-
-    iterations = 0
-    crashes = 0
-    hangs = 0
-
-    while time.monotonic() < deadline:
-        loop_start = time.monotonic()
-        mutant_seed = f"{args.radamsa_seed}.{iterations}"
-        try:
-            payload = mutate(seed, mutant_seed)
-        except subprocess.TimeoutExpired:
-            hangs += 1
-            iterations += 1
-            continue
-
-        outcome = fire_one(host, port, payload,
-                           args.socket_timeout_seconds)
-        if outcome == "hang":
-            hangs += 1
-        elif outcome == "crash":
-            crashes += 1
-
-        iterations += 1
-        elapsed = time.monotonic() - loop_start
-        if iteration_period > elapsed:
-            time.sleep(iteration_period - elapsed)
-
-    duration = time.monotonic() - start
-    json.dump({
-        "iterations_total": iterations,
-        "crash_count": crashes,
-        "hang_count": hangs,
-        "five_xx_count": 0,
-        "duration_seconds": duration,
-        "radamsa_seed": args.radamsa_seed,
-    }, sys.stdout)
+    pool = MutantPool(build_seed_post_preface(), base_seed,
+                      args.mutant_chunk_size, binary)
+    summary = run_campaign(
+        host=host, port=port, pool=pool, rps=args.rps,
+        duration=args.attack_duration_seconds,
+        socket_timeout=args.socket_timeout_seconds,
+        workers=args.workers, is_complete=is_complete_frame_sequence,
+        preamble=H2C_PREFACE,
+    )
+    summary["radamsa_seed"] = args.radamsa_seed
+    summary["mutant_chunk_size"] = args.mutant_chunk_size
+    json.dump(summary, sys.stdout)
     sys.stdout.write("\n")
     return 0
 

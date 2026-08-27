@@ -67,6 +67,23 @@ campaign. Two things bound it.
    [150, 150, 150, 150, 157, 150]; 150 is the difference of the fullest observed states, and the
    mean 151.2 corresponds to no observation. See §4.1.
 
+### The ≤ 8-byte flat-array bound is the default case, not the only case
+
+§5.4 measures that a flat array element must be ≤ 8 bytes, and §6 rejects a 16-byte `HeaderSpan`
+on that basis. Both are true and both are scoped: the bound is a consequence of **atomicity**, and
+non-atomicity is opt-in at the declaration site via
+`@jdk.internal.vm.annotation.LooselyConsistentValue`. None of the probed carriers declares it, so
+none of them is in the case where the bound could lift.
+
+Do not restate this as "16-byte carriers cannot flatten". What the arms support is that they do
+not flatten *in the default, atomic case*, which is the case every shipped application is in —
+Frederic Parain, on `valhalla-dev`: non-atomicity *"is not part of JEP 401 and is not yet a
+supported feature."* That is also why §6's packed-`long` recommendation does not wait on the
+unmeasured case: it is the shape that works against what is shipped.
+
+§7 carries the opted-in behaviour as an explicit "not measured", and §5.4 parks the probe that
+would settle it.
+
 ### Why `reproducibility_status: partial`
 
 Deliberate, and the blockquote under the title states it in the rendered document too. Every

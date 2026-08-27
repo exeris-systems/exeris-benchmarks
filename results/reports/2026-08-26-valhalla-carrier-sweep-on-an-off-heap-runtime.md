@@ -642,42 +642,80 @@ carry two glyphs rather than one:
 
 - **`✗`** — no valid layout of this kind: the payload plus any null marker exceeds what the kind
   can express. Every atomic kind needs to fit one atomically-writable word.
-- **`?`** — HotSpot emitted no layout of this kind, and this report cannot say whether that is
-  because none is possible or because another kind supersedes it. See below; it is an open
-  question, not a finding.
+- **`opt-in`** — HotSpot emitted no layout of this kind because the carrier never asked for one.
+  Non-atomic flattening is opt-in, and none of these carriers declares the opt-in. See below: this
+  column carried `?` until 2026-08-27 and was the report's one open question.
 
 | carrier | payload | NULL_FREE_NON_ATOMIC | NULL_FREE_ATOMIC | NULLABLE_ATOMIC | NULLABLE_NON_ATOMIC |
 |---|---|---|---|---|---|
 | `V4(int)` | 4 B | 4/4 | 4/4 | 8/8 | 5/4 |
-| `V8(int,int)` | 8 B | **?** | 8/8 | ✗ | 9/4 |
-| `V12(int,long)` | 12 B | **?** | ✗ | ✗ | 13/8 |
-| `V16(long,long)` | 16 B | **?** | ✗ | ✗ | 17/8 |
-| `V32(4×long)` | 32 B | **?** | ✗ | ✗ | 33/8 |
-| `HttpHeader(String,String)` | 8 B | **?** | 8/8 | ✗ | 9/4 |
-| `EventDescriptor(4×long,2×int,long)` | 44 B | **?** | ✗ | ✗ | 49/8 |
+| `V8(int,int)` | 8 B | **opt-in** | 8/8 | ✗ | 9/4 |
+| `V12(int,long)` | 12 B | **opt-in** | ✗ | ✗ | 13/8 |
+| `V16(long,long)` | 16 B | **opt-in** | ✗ | ✗ | 17/8 |
+| `V32(4×long)` | 32 B | **opt-in** | ✗ | ✗ | 33/8 |
+| `HttpHeader(String,String)` | 8 B | **opt-in** | 8/8 | ✗ | 9/4 |
+| `EventDescriptor(4×long,2×int,long)` | 44 B | **opt-in** | ✗ | ✗ | 49/8 |
 
-**Why the `NULL_FREE_NON_ATOMIC` column is the open question.** `V8` has no layout of that kind
-yet does have `NULL_FREE_ATOMIC`, which reads backwards: non-atomic is the *weaker* guarantee, so
-a size that the atomic kind can express should be expressible non-atomically too. The natural
-reading is supersession — at 8 bytes the atomic layout fits one word, so the non-atomic variant is
-never needed. And the whole column being empty even where `NULLABLE_NON_ATOMIC` has **no size
-limit at all** (33/8 for a 32-byte payload) points the same way: a generation rule, not a
-capability limit.
+**Why the `NULL_FREE_NON_ATOMIC` column is empty — answered.** This was the report's one open
+question. Put to `valhalla-dev` as a yes/no — *for a value class whose payload fits one word, is
+the absence of a `NULL_FREE_NON_ATOMIC` field layout because no valid layout exists, or because
+the atomic layout supersedes it?* — it turned out to be neither. Frederic Parain, Oracle,
+**27 August 2026**, *"adaptorCount is coverage-dependent; and a PrintFieldLayout question"*:
 
-The evidence for it is real but indirect: asking
+> "Non-atomicity requires an explicit opt-in at the declaration site. The author of a value class
+> must indicate that the class supports non-atomic accesses by annotating it with
+> `@jdk.internal.vm.annotation.LooselyConsistentValue`. **Without this annotation, the JVM will
+> not generate a `NULL_FREE_NON_ATOMIC` layout for the class.**"
+
+None of the carriers above carries that annotation, so the column is empty because the layout was
+never requested. Both readings this report had offered are retired: it is not "no valid layout
+exists", and it is not supersession.
+
+**The indirect array evidence is explained exactly, and it was not supersession either.** Asking
 `ValueClass.newNullRestrictedNonAtomicArray` for an 8-byte two-`String` carrier returns an array
-whose layout kind is **`NULL_FREE_ATOMIC_FLAT`** — a non-atomic request served by an atomic
-layout. **That is array allocation, which is a different path from field-layout emission**, so it
-makes supersession plausible without establishing it for the cells above.
+whose layout kind is `NULL_FREE_ATOMIC_FLAT` — which this report read as a non-atomic request
+served by an atomic layout, and offered as making supersession plausible. It is specified
+behaviour with two conditions, of which the probe met only the second:
 
-Stated as a question with a yes/no answer, which is how it should go to `valhalla-dev`: *for a
-value class whose payload fits one word, is the absence of a `NULL_FREE_NON_ATOMIC` field layout
-because no valid layout exists, or because the atomic layout supersedes it?*
+> "A non-atomic array is created only when both of the following conditions are met: 1. The
+> element class is declared `LooselyConsistent`. 2. The array factory explicitly requests a
+> non-atomic array. **If the first condition is not met, the factory may still return an atomic
+> array. This remains compliant with the requested semantics because it provides stronger
+> guarantees.**"
 
-**`NULLABLE_NON_ATOMIC_FLAT` has no size limit** — even a 32-byte payload gets a valid layout.
-Both *atomic* kinds stop at one word; whether the fourth kind stops or is merely superseded is the
-question above. Three consequences follow, and all three were measured, not
-inferred:
+**And `NULLABLE_NON_ATOMIC`'s missing size limit has a mechanism — a different one.** The report
+recorded that this kind alone has no size ceiling (33/8 for a 32-byte payload) and could not say
+why. It is not the opt-in above:
+
+> "`NULLABLE_NON_ATOMIC` is a special layout used only for non-static strict final fields
+> (JEP 539). Such fields have two distinct phases: during the early larval phase of their
+> declaring class (before 'this' can escape) they may be written but not read. After this phase,
+> they may be read but may no longer be written. Consequently, the write and read phases do not
+> overlap (a memory barrier separates them to ensure consistent global vision of the value).
+> **Because concurrent writes and concurrent read/write operations are impossible for these
+> fields, atomicity is not an issue. They can therefore be flattened without hardware-imposed size
+> limitations**, and C2 can generate code that accesses individual components of the flattened
+> value without first reading the entire value."
+
+That also supplies the mechanism behind the first of the three consequences below, which this
+report could only state as an observed rule: a field flattens only inside a value class because
+that is where strict-final fields, and therefore this layout kind, exist.
+
+One further opt-in, not probed here: *"For fields, `@NullRestricted` also serves as an opt-in to
+non-atomicity. If atomicity is required for a field, declaring it `volatile` opts out of
+flattening and restores atomicity guarantees."*
+
+**And the status of the whole mechanism, which is what §6 turns on:**
+
+> "Just a reminder, non-atomicity is not part of JEP 401 and is not yet a supported feature, even
+> if the Valhalla team is working on incorporating non-atomicity into the Java language."
+
+All quotes verified verbatim against the archive
+([thread](https://mail.openjdk.org/archives/list/valhalla-dev@openjdk.org/thread/XSZUWODG6HMFRFGOKGOUXADD6PC7FTSP/)).
+
+**`NULLABLE_NON_ATOMIC_FLAT` has no size limit** — even a 32-byte payload gets a valid layout,
+for the strict-final reason quoted above. Both *atomic* kinds stop at one word. Three consequences
+follow, and all three were measured, not inferred:
 
 **A field flattens only when the *enclosing* class is itself a value class.** A holder declared as
 an ordinary identity class with six `final` value-typed fields laid out as six plain 4-byte
@@ -696,7 +734,21 @@ flatten — `NULL_FREE_ATOMIC_FLAT`, `NULL_RESTRICTED ATOMIC`, element size 8. T
 still does not, in any array mode.
 
 So `FlatArrayElementMaxOops = 4` is a necessary condition on flat array elements, not a sufficient
-one: the binding constraint is total element size ≤ 8 bytes.
+one: the binding constraint is total element size ≤ 8 bytes — **in the default case, which is the
+one every carrier here is in: no `@LooselyConsistentValue` opt-in**. That bound is a consequence
+of atomicity, so it is exactly the bound the opt-in is there to lift. What an opted-in carrier
+actually gets is unmeasured (§7).
+
+**The repeat this earns.** One probe answers it, and it is small: re-run
+`-XX:+PrintFieldLayout -XX:+PrintFlatArrayLayout` over the same carriers annotated
+`@jdk.internal.vm.annotation.LooselyConsistentValue` — `V16(long,long)` and
+`HeaderSpan(int,int,int,int)` are the two that decide §6's recommendation — and allocate each
+through `ValueClass.newNullRestrictedNonAtomicArray`, which under Fred's two conditions should now
+meet both rather than one. Two questions it settles: whether the `NULL_FREE_NON_ATOMIC` column
+populates at all, and whether a 16-byte element flattens in an array once atomicity is off. Note
+before running it that the annotation is `jdk.internal.vm.annotation`, so the probe needs
+`--add-exports`, and that a positive result would be a measurement of an unsupported feature — see
+§6 for why that does not change the recommendation.
 
 ---
 
@@ -746,6 +798,18 @@ net-negative on footprint.
    nameLen, int valOff, int valLen)` is 16 bytes, and §5.4 measures that a 16-byte carrier has no
    valid flat array layout in any mode — nullable or null-restricted. To flatten in an array the
    payload must fit in 8 bytes.
+
+   **And the way out of that bound is not one this recommendation can take.** The 8-byte ceiling
+   is a consequence of atomicity, which §5.4 now records is opt-out-able: annotate the carrier
+   `@jdk.internal.vm.annotation.LooselyConsistentValue` and the JVM will consider non-atomic
+   layouts, which carry no hardware size limit. A 16-byte `HeaderSpan` might well flatten that
+   way. It would also be built on an internal annotation for a feature Parain states plainly is
+   outside the preview — *"non-atomicity is not part of JEP 401 and is not yet a supported
+   feature, even if the Valhalla team is working on incorporating non-atomicity into the Java
+   language"* (§5.4). So the packed-`long` below is not a workaround for a limit that might lift;
+   it is **the shape that works against what is actually shipped**, and it stays correct whether
+   or not non-atomicity lands. That is the reason to prefer it, and it is worth stating outright
+   because the fit was arrived at by measurement before the mechanism was known.
 
    **That is not a compromise here; it is sufficient — but the obvious packing is wrong.** The
    parser's limits are `DEFAULT_MAX_HEADER_SIZE = 8_192` and `DEFAULT_MAX_HEADERS = 100`, so a
@@ -846,6 +910,13 @@ signatures a conditionally-loaded cluster contributes — a unit §4.1 now measu
   state. That holds across the campaign's runs but is neither enforced nor gated, and §4.1's probe
   shows the fullest state can stay out of reach for six consecutive runs. A leg where one arm
   saturates and the other does not would produce a delta that looks like a carrier effect.
+- **What a `@LooselyConsistentValue` carrier actually lays out.** §5.4's ≤ 8-byte array bound is
+  measured on carriers in the default, atomic case — none of them declares the opt-in that turns
+  non-atomic layouts on, and that opt-in is precisely what lifts the hardware size limit. Whether
+  the `NULL_FREE_NON_ATOMIC` column populates, and whether a 16-byte element flattens in an array
+  once atomicity is off, are unmeasured. §5.4 records the probe that would settle it. It would be
+  a measurement of a feature that is not part of JEP 401 and not supported, which is why §6's
+  recommendation does not wait on it.
 - **Whether flattening changes anything when it *does* engage.** §5.4 establishes where the JVM
   will flatten; no arm in this campaign was built to exploit it, so the performance value of a
   flattened layout on this workload is unmeasured.
@@ -870,6 +941,7 @@ written to protect.
 
 | date | change |
 |---|---|
+| 2026-08-27 | **Post-merge**, twelfth pass — **§5.4's open question is answered, by its author's reply on `valhalla-dev`**, and the answer promotes three separate observations from rule to mechanism. Frederic Parain (Oracle, HotSpot runtime), quoted verbatim against the [archive](https://mail.openjdk.org/archives/list/valhalla-dev@openjdk.org/thread/XSZUWODG6HMFRFGOKGOUXADD6PC7FTSP/): non-atomicity requires an explicit opt-in at the declaration site, `@jdk.internal.vm.annotation.LooselyConsistentValue`, and *"without this annotation, the JVM will not generate a `NULL_FREE_NON_ATOMIC` layout for the class."* So the empty column is a layout never requested — **neither of the two readings this report offered**, "no valid layout exists" and supersession, and both are retired. The `?` glyph, which meant "undecidable here" since the fifth pass, becomes `opt-in`. (1) The indirect array evidence is explained exactly and was also not supersession: a non-atomic array needs the element class declared `LooselyConsistent` **and** the factory to request one, and *"if the first condition is not met, the factory may still return an atomic array"* — the probe met only the second. (2) `NULLABLE_NON_ATOMIC`'s missing size ceiling, recorded with no mechanism, has a different one: it is the layout for non-static strict final fields (JEP 539), whose write and read phases cannot overlap, so *"atomicity is not an issue"* and they flatten *"without hardware-imposed size limitations"*. That also supplies the mechanism behind "a field flattens only inside a value class", which had been an observed rule. (3) §5.4's `≤ 8 bytes` array bound stays true but gains its scope — it is the **default, no-opt-in** case, and that bound is a consequence of the atomicity the opt-in exists to lift. §7 gains what an opted-in carrier lays out as an explicit "not measured", and §5.4 parks the probe that would settle it: the same carriers annotated, `V16(long,long)` and `HeaderSpan(int,int,int,int)` being the two that decide §6, plus null-restricted non-atomic arrays. **§6 gains rather than loses.** Its packed-`long` span was chosen by measurement before the mechanism was known; the 16-byte shape it rejected might flatten under the opt-in, but only on an internal annotation for something Parain states is *"not part of JEP 401 and is not yet a supported feature"*. So the recommendation is the portable one against what is shipped, and §6 now says so outright instead of arriving there by accident. Editorial only — no figure and no measurement changes. |
 | 2026-08-27 | **Post-merge**, eleventh pass — **the editor notes leave the frontmatter**. Thirty-seven commented lines sat inside the YAML block, and a report's raw view is one click from any link to it, so they were published whether or not they rendered. Two of them were phrased as instructions about the summary — *"the summary must not say 'Valhalla does not work' or 'Valhalla failed'"* and, of the −1.21 % throughput result, *"the summary must not carry it as a finding … keep it that way"*. In context both mean "do not outrun the arms"; quoted alone, both read as message discipline rather than accuracy, and are usable against the work by anyone arguing that its tone is managed. They now live in [`docs/REPORT-EDITORIAL-NOTES.md`](../../docs/REPORT-EDITORIAL-NOTES.md), restated as what the evidence supports: the arms cannot support a claim about Valhalla in general, so the summary stays scoped to this class of runtime; and a 0.09 pp exclusion out of four tests on the same six pairs does not support promotion. Same constraint, phrased to survive being quoted. Size was the second reason — the block had grown an argument about `adaptorCount` with a probe path attached, which is a section, not a field annotation. The `reproducibility_status` note moved with them; its content is already stated in the rendered blockquote under the title, so nothing left the document that a reader could see. Linked from this history, because these notes earn their keep by being close enough to the body to argue with it, and one of them had gone stale while the body moved on. No figure and no body text changes. |
 | 2026-08-27 | **Post-merge**, tenth pass — **the unit of `adaptorCount`, measured**, and three surfaces that disagreed with each other. §4.1 named the mechanism behind the adapters but never the unit of the counter, so its careful "not one adapter per class" rested on caution rather than on what the counter is. It now rests on a measurement: `adaptorCount` counts adapter *blocks*, which `AdapterHandlerLibrary` caches keyed on a method's basic-type signature fingerprint rather than on its declaring class. On the same JDK 28 build the arms ran (`28-ea+10-569`), 3 of 3 runs per condition and identical every time: **60 classes sharing one signature cost 1 adapter; 60 classes with 60 signatures the JVM had certainly not cached (arities 81–140) cost 61, essentially one apiece**. The probe is archived at `tools/probes/adapter-signature-unit/`. That is also where Valhalla's scalarised ↔ buffered translation materialises, which is why §5.3's two flags produce this cost at all. Consequences: (1) the **seventh entry's rule is retired, not narrowed** — it announced "one adapter per conditionally-loaded class" while the body already denied it, and a per-class rate is now shown to be the wrong shape for the quantity; the entry says so and points here. (2) The **"additive over conditional-loading clusters" model is sharpened to the distinct signatures such a cluster contributes**, in the frontmatter trap, §4.1 and §7. (3) §4.1 ended by telling a lone number to travel as the adapter count, two paragraphs after establishing that adapters are not comparable across campaigns — the one figure in that table that *cannot* travel alone. Both §4.1 and the frontmatter's third trap now send **+0.18 MB of Metaspace at an unchanged loaded-class count**: 6/6, interval excluding zero, attribution closed by the flat class count, and already the only finding §7 promotes. Best-attributed and most portable were pointing at different rows, and only one of them can be the number that travels. (4) TL;DR and the frontmatter `summary` both explained the cross-campaign 144 as "the recording configuration changes which classes load" — an explanation §4.1 partly disowns, since the −7 step survives with zero `eu.exeris.*` events and the direction is not uniform (E +1, F −5). Both now state the non-comparability as the finding and the mechanism as unshown, and §7 gains it as an explicit "not measured" bullet. |
 | 2026-08-26 | **Post-merge**, editorial-scope only — no figure changes. Two surfaces the eighth pass left behind, both saying more about `adaptorCount` than §4.1 now allows. The frontmatter's own trap note still read "every arm takes one of exactly two values 7 apart" and "the claim that survives is a RATIO in 5 of 6 pairs"; the probe's third value (803) and the telemetry-silenced campaign's 828/972 had already retired both, and since that note is an instruction to the next editor, the stale version would have argued against the body. It now carries the two live bounds — the pair is a campaign condition, not a runtime property, and the figure is campaign-specific — and names the additive-over-clusters model as the part that is a runtime property. §7's multiplicity paragraph closed on "a stronger form of evidence than a p-value", which no longer fits a quantity the same report says depends on the recording configuration; the immunity-to-multiplicity argument is kept intact and unchanged, but the strength is now scoped to campaign 20260818, with the additive-over-clusters reading named as the weaker, portable claim. Without this, §7 and the eighth revision entry asserted different things about one number. |
@@ -877,7 +949,7 @@ written to protect.
 | 2026-08-26 | Editorial pass over §4.1, which had accumulated six revisions and started contradicting itself. Its opening sentence ended in an edit fragment and pointed at an adapter row that no longer exists in that table; the adapter values were restated three times over; and the paragraph announcing "three things" was followed by eight. Counted announcements have now been replaced with an uncounted one, since that number had drifted three times. The frontmatter `summary` opened with "in 6 of 6 pairs with intervals that exclude zero" and then led with adapters, which are 5 of 6 and carry no interval — the two clauses are now attached to the items they actually describe. Minor: `~146` unified to **147** across four places (296.7 entries less 150 adapters); §7 now names the single promoted test (§4.1's Metaspace growth) rather than leaving it to inference; §5.2's lead sentence had lost its predicate to an earlier insertion; a triple em-dash in TL;DR item 3. **The revision history now states plainly that every "review pass" entry is pre-publication** — no version carrying the corrected figures was ever distributed, and without that line the list reads as corrections to a circulated text. |
 | 2026-08-26 | Seventh pass — **the set difference, measured**. A dedicated probe (arm D″, `-Xlog:class+load=info`, 90 s, repeated) produced two runs of one binary differing by 2 adapters, and diffing their class-load sets settles the question the counters could not. Raw: **a net of −1 class hides 932 absent and 931 extra**, overwhelmingly `java.lang.invoke` `LambdaForm` and hidden classes whose names carry a per-run address — so every class-count delta in this report measures that churn, and the earlier −4.6 / −6.5 / −5.4 mechanism reading is **withdrawn**. Excluding generated classes, the same two runs differ by **exactly 2 classes, none extra**, and they are a coherent cluster: `HttpAggregateBufferForcedReleaseEvent` and `HttpAggregateBufferHeldEvent` in `eu.exeris.kernel.core.http.jfr`. Controls are exact — two independent pairs agreeing on the adapter count have **byte-identical** stable sets (3990, zero difference either way). The rule was read at this pass as **one adapter per conditionally-loaded class**, established at the 2-adapter scale, with the 7-step predicting seven such classes and remaining unobserved because the probe never reached 812 at any duration. **That reading did not survive**: the eighth pass narrowed it to "these two classes carry two adapters", and the tenth retired it by measuring the unit — adapter blocks are cached per *signature*, not per class, so a per-class rate was never the right shape for this counter (§4.1). The probe also produced a third value, 803, so "one of exactly two values 7 apart" is now scoped to the campaign's conditions rather than stated as a property of the runtime. |
 | 2026-08-26 | Sixth review pass. **The adapter row is out of §4.1's and §4.2's mean-tables entirely.** §7 already stated the adapter result is not an inference, yet the row still carried a 95 % CI beside the kilobyte rows — the same over-claim as the retracted mean, harder to spot because it looked like the rest of the table. Adapters now get their own table: observed values, their counts across all 12 runs, and the modal deltas 150 and 165, with no percentage and no interval. **The class-count correlation is downgraded from mechanism to counter artefact**, on this report's own control: −4.6 / −6.5 / −5.4 are averages of integer counts, and a noisy continuous quantity cannot explain a step that is exactly 7 three times over — while F's class count spans 3 in leg E→F with the adapter count never moving, so a dose–response reading predicts ~4 adapters where zero are observed. It is not how many classes load but *which*, and a net −5 is equally consistent with "five absent" and "nine absent, four extra". That needs a **set difference, not a delta** — the same move §5.1 required — and it is unavailable here: `jdk.ClassLoad` and `jdk.ClassDefine` carry zero events in every recording. Recorded as a `-Xlog:class+load=info` follow-up, with the sampling cost noted (the anomaly appears in 1 of 6 runs). |
-| 2026-08-26 | Fifth review pass, two structural corrections. **Every adapter figure is now the mode, not the mean.** The counts are bimodal with a quantum of 7 — E {820,**827**}, D″ {805,**812**}, F {970,**977**} — so the reported means (825.8, 809.7, 975.8) were values the system never produces, and a t-interval on such a mean bounds a **mixture proportion, not a magnitude**: `[+17.874, +18.738] %` says how often the anomaly occurred. §7's multiplicity paragraph no longer leans on that interval; the adapter result rests on all twelve observations being one of two values, which is not a test and so is immune to multiplicity. The modal arithmetic also closes on itself where the mean does not: modal deltas 150 and 165 differ by 15, exactly the difference of the arm modes, while the mean route gives 15.0 one way and 16.1 the other. **New measurement:** loaded-class count tracks the anomaly in every column that has one (−4.6, −6.5, −5.4 classes for −7 adapters) while F's constant 977 spans a 3-class range — so seven adapters travel with five to six classes, not one, and not with class-count noise. §5.4's caption contradicted its own footnote about what `−` meant; the blank cells are now split into `✗` (no valid layout — size) and `?` (not emitted, undecidable here), with the whole `NULL_FREE_NON_ATOMIC` column marked `?` because the supporting probe measures **array allocation, a different path from field-layout emission**. Restated as a yes/no question for `valhalla-dev`. |
+| 2026-08-26 | Fifth review pass, two structural corrections. **Every adapter figure is now the mode, not the mean.** The counts are bimodal with a quantum of 7 — E {820,**827**}, D″ {805,**812**}, F {970,**977**} — so the reported means (825.8, 809.7, 975.8) were values the system never produces, and a t-interval on such a mean bounds a **mixture proportion, not a magnitude**: `[+17.874, +18.738] %` says how often the anomaly occurred. §7's multiplicity paragraph no longer leans on that interval; the adapter result rests on all twelve observations being one of two values, which is not a test and so is immune to multiplicity. The modal arithmetic also closes on itself where the mean does not: modal deltas 150 and 165 differ by 15, exactly the difference of the arm modes, while the mean route gives 15.0 one way and 16.1 the other. **New measurement:** loaded-class count tracks the anomaly in every column that has one (−4.6, −6.5, −5.4 classes for −7 adapters) while F's constant 977 spans a 3-class range — so seven adapters travel with five to six classes, not one, and not with class-count noise. §5.4's caption contradicted its own footnote about what `−` meant; the blank cells are now split into `✗` (no valid layout — size) and `?` (not emitted, undecidable here), with the whole `NULL_FREE_NON_ATOMIC` column marked `?` because the supporting probe measures **array allocation, a different path from field-layout emission**. Restated as a yes/no question for `valhalla-dev`. **Asked, and answered on 2026-08-27** — the answer was neither of the two readings, and the `?` cells are now `opt-in`; see the twelfth entry. |
 | 2026-08-26 | Fourth review pass. §5.1 **corrected on a matter of fact**: it claimed two identity records in `src/main` and none in kernel runtime. There are **three**, and `SubsystemTopologicalSorter$DependencyGraph` (`exeris-kernel-core`) is kernel runtime — excused in `IDENTITY_BY_DESIGN` because its `Map` is mutated in place, so that map is empty in four modules and holds one entry in core. The section now also states the mutability→identity property directly: `DependencyGraph` and `LoanedBuffer` are unrelated subsystems refused for the same reason. Both ends of the 159/155 reconciliation are now **measured** — a bytecode walk over the two shaded jars reports 6 value classes in arm E and 155 in arm F, with nothing from `kafka`/`testkit`, so 149 is measured rather than subtracted. §4.1's "the adapter count is deterministic" is **withdrawn**: every arm takes one of two values exactly 7 apart (E {820,827}, D″ {805,812}, F {970,977}), the low value appears in four different arm/slot combinations, and code-cache entries do not track it — E's 820-adapter run has its *highest* entry count. What survives is a modal ratio in 5 of 6 pairs. §4.2's own numbers are promoted to a point: D″ and E carry 6 value classes each yet differ by ~15 adapters, so `adaptorCount` is not a function of carrier count. |
 | 2026-08-26 | Third review pass, adapter arithmetic. The headline adapter delta was quoted as **+151.2 — a mean of `[150,150,150,150,157,150]` that matches no observation**; it is now **150**, the modal and median per-pair value, and the excess over the 149 converted carriers is **one, not two**. The variance was also mis-attributed: F is stable at 977 across this leg, and the outlier is a *baseline* run generating 7 fewer adapters. §4.1 now says F's count is stable while the delta is not, and records the lazy-adapter-materialisation reading as an explicit hypothesis rather than a finding — with the D″→F leg's own F=970 outlier noted as consistent with it. Corrected in §4.1 body, the attribution table, TL;DR and the frontmatter `summary`; the frontmatter trap note now scopes "977 in all six" to the E→F leg. |
 | 2026-08-26 | Second review pass. §4.1's attribution ranking **propagated to the two surfaces that had not carried it** — the frontmatter `summary` and TL;DR still said "at an unchanged loaded-class count" over all three cost items, which is the claim §4.1 had already withdrawn for the code cache; both now lead with the adapter count. §6's packing **corrected**: deriving the value offset from the name's is invalid because RFC 9110 permits arbitrary optional whitespace after the colon, and 16-bit offsets cannot reach the parser's 819 200-byte worst case either — replaced with `nameOff:32 \| nameLen:14 \| valLen:14 \| ows:4`, which spends length headroom (2× rather than 8×) to buy an explicit OWS field. §5.2 now says why its 156 is a different population from the jar's 155 rather than an off-by-one. |

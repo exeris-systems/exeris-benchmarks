@@ -1,0 +1,29 @@
+{
+  "schema_version": "1",
+  "run_id": "arena-lifecycle-leak-20260827-090330-40e96a24fe78",
+  "timestamp": "2026-08-27T09:15:05Z",
+  "scenario": "arena-lifecycle-leak",
+  "tool": "radamsa",
+  "env_ref": "",
+  "transport_mode": "loopback-h1",
+  "target": {
+    "repo": "exeris-kernel",
+    "commit_sha": "5e29ae675020",
+    "mode": "pure",
+    "tier": "community",
+    "protocol": "h1"
+  },
+  "comparison_axis": "standalone",
+  "execution_class": "exploratory",
+  "claim_scope": "exploratory",
+  "final_reason": "ok",
+  "runner_status": "success",
+  "reproducibility_status": "complete",
+  "run_config": {
+    "duration_seconds": 600
+  },
+  "metrics": {
+    "total_requests": 299496,
+    "total_errors": 0
+  }
+}

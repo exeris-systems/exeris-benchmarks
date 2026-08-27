@@ -250,6 +250,23 @@ The scenario now reports `connections_opened` and `connections_dropped` as their
 
 The measurement itself matters beyond this scenario: `connections_dropped: 0` over a 120 s window means the target never evicted a half-open connection, which is what licenses the `incomplete-wait` outcome in the radamsa drivers. A target with no half-open eviction inside 120 s cannot have been the source of a 2 s attacker-side timeout. That value had been read into a shell variable and discarded, so the artifact carried it nowhere and left `notes` null.
 
+### `arena-lifecycle-leak`, run twice on the corrected harness: no leak, and a discriminator that does not discriminate at n = 2
+
+Two 600 s windows, 500 rps, back to back against the same warm process, kernel 0.11.0 (`5e29ae675020`), seed 424242:
+
+| window | iterations | RSS delta | per request | early slope | late slope | late / early |
+|---|---|---|---|---|---|---|
+| A | 299 480 | +4 059 136 B (+1.17 %) | 13.6 B | 5 590.8 B/s | 7 080.1 B/s | **1.27** |
+| B | 299 496 | +2 990 080 B (+0.85 %) | 10.0 B | 7 475.3 B/s | 6 589.9 B/s | **0.88** |
+
+Both sit well inside the scenario's 5 % bound, the second window is *smaller* than the first, and the target's own allocator diagnostic reports `leak_count_delta: 0`. Determinism is close to exact: the two windows agree to 16 iterations in 299 480 and to 2 in a hang count of 46 110, with `incomplete_wait_count` identical at 14 952.
+
+These figures replace **+40.4 %** and **+3.3 %** from the same scenario on the pre-fix harness. Nothing about the target changed; the earlier first window charged first-load cost to the attack and compared an uncollected baseline against a collected final sample.
+
+**The least-squares early/late slope is not a usable leak discriminator here.** It was added to separate "growing" from "plateaued", and on these two windows it points in opposite directions — A accelerating, B decelerating — on the same process, the same workload and the same seed. One window in isolation would have supported either verdict. Quote the delta and the per-request figure, which agree across windows; treat the slope pair as a single noisy observation, not as evidence of shape, unless several windows agree.
+
+**The 46 110 hangs here are not 46 110 retained connections.** The radamsa driver closes every socket in its `finally` block, so a parked connection is released by the attacker at its socket deadline and never accumulates. Retention was demonstrated separately, by a probe that deliberately holds connections open — see the finding above. This scenario shows the parking *rate* (15.4 %, consistent with `destructive-radamsa-h1`'s 14.1 % over a 5× shorter window), not its cost.
+
 ### Two RSS samples, one forced GC
 
 Until 2026-08-27 all three destructive runners forced a GC before the **final** RSS sample and not before the baseline. The reported `rss_bytes_delta` was therefore a collected heap measured against an uncollected one — biased toward understating growth, and capable of any sign at all. On `destructive-radamsa-h2` it read **−588 517 376 bytes**: the baseline held a full post-warm-up heap, the final sample had just been collected.

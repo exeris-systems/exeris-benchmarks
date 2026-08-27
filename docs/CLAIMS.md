@@ -53,9 +53,23 @@ right for the reader of an entry and useless for the reader who wants to know *w
 been wrong about*. They are collected here as well; the per-entry text stays where it is and
 remains authoritative for detail.
 
-**Why a register rather than a list of mistakes.** Twenty-two withdrawals are recorded below, and
-**none of them was ever carried by a distributed artefact in its wrong form.** Two came close and
-are flagged ⚠ rather than cleared:
+**Scope note.** The register is repo-wide, not series-wide. #1–#22 all come from the
+`entity-read-by-id` series; **#23 comes from `e2e-shop-order-saga`** and is the first entry here
+from a different scenario. Nothing about the register's rules changes — the scope was always
+"campaigns in this repo" — but a reader who had assumed otherwise should recalibrate.
+
+**Why a register rather than a list of mistakes.** Twenty-three withdrawals are recorded below.
+**Twenty-two of them were never carried by a distributed artefact in its wrong form. One was.**
+That sentence used to read "none of them", and #23 is why it no longer can:
+
+- **#23 travelled, in its wrong form, to five distribution surfaces**, and sat on them for
+  roughly fifteen weeks — the personal site in both languages, both CV variants, the EN blog
+  post, its PL translation, and the dev.to syndication of the EN post. It is also the entry that
+  most directly contradicts the paragraph below about the review loop running ahead of the
+  publication loop: here it did not. The claim was published in May, quoted onward as
+  `comparison-eligible` copy, and only re-examined in August.
+
+Two earlier entries came close and are flagged ⚠ rather than cleared:
 
 - **#14** sat in a *finished* report — the 2026-07-21 triad, non-DRAFT, `comparison_eligible`,
   `reproducibility_status: complete` — for **~1.6 days across four PRs** before it was corrected.
@@ -93,6 +107,16 @@ That ratio is not luck and it is not modesty: it is the measurable output of the
 running ahead of the publication loop. A lab that never retracts anything is not more careful
 than one that retracts before publishing; it is only less observed.
 
+**#23 is the counter-example, and it belongs next to that sentence rather than in a footnote.**
+The review loop ran ahead of publication on twenty-two claims and behind it on one — and the one
+it ran behind on is the one that reached the most readers. The difference was not diligence, it
+was **instrumentation**: every other entry here was caught by a second derivation, a
+counterbalanced control, or a gate. The saga scenario had none of those in v1 — no exact oracle,
+no expected-count assertion, only a poller whose terminal-state dictionary nobody had reason to
+question. What caught it in the end was building the oracle, not reading the claim harder.
+The rule that generalises: **a claim is only as reviewable as the harness that produced it**, and
+a scenario without a falsifiable gate should not be publishing comparative claims at all.
+
 **The "travelled?" column, and what it can and cannot tell you.** Three exposure surfaces exist,
 and only two are checkable from inside this repo:
 
@@ -102,10 +126,15 @@ and only two are checkable from inside this repo:
 - **A finished report** — anything in `results/reports/` not marked DRAFT. Checkable, and checked
   across all six. This is the column's actual subject; see the caveat above on why that is weaker
   than "released".
-- **The external portfolio registry** (`arkstack-dev/portfolio:CLAIMS.md`) **and outreach drafts.**
-  **Not verifiable from here.** The two planned foojay articles are drafted for Sept–Oct 2026 and
-  have not shipped, so the exposure window is small — but anything marked ⚠ below should be
-  checked against the portfolio registry before it is assumed contained.
+- **The external portfolio registry** (`arkstack-dev/portfolio:CLAIMS.md`), the blog, and
+  outreach drafts. **Not verifiable from here — and on 2026-08-27 it was verified from there, with
+  a bad result.** A sweep of the portfolio and blog repositories found the withdrawn saga figures
+  live as a `comparison-eligible` copy string with three declared consumers, and the underlying
+  table live in the published blog post in both languages plus its dev.to syndication (#23). The
+  standing advice in this bullet — check ⚠ entries against the portfolio registry before assuming
+  they are contained — was correct and had not been acted on. Treat "not verifiable from here" as
+  an instruction to go and look, never as a reason to leave the column optimistic. The two planned
+  foojay articles are drafted for Sept–Oct 2026 and have not shipped.
 
 | # | what was claimed | withdrawn | what replaced it | travelled? |
 |---|---|---|---|---|
@@ -131,6 +160,8 @@ and only two are checkable from inside this repo:
 | 20 | §4.2's *"the two ORM-free stacks sit within roughly **5–15 %**"*, then its replacement *"a **3–17 %** band whose width is entirely the security assumption"* | 2026-08-12 | **two numbers answering two questions, not one band.** As deployed: **17.2 %**. Security-normalised: **3–5 %** (5.0 % light term, 3.1 % heavy variant). The first version's upper bound had no source; the second wrongly called 17.2 % a variant of the assumption when it is the case where the assumption is *not applied* | no — draft only |
 | 21 | Setup's light contract *"~125 B"* | 2026-08-12 | the measured body is **30 B** (`{"id":"1","username":"user_1"}`) — 144 B on the wire without Spring Security's headers, 314 B with them. The figure contradicted §6 inside the same document and matched neither the body nor either full response | no — draft only |
 | 22 | `reproducibility_status: complete` justified as meeting *"exactly the condition this comment used to set"* | 2026-08-12 | the old bar was **"someone ELSE re-derives"** — a condition about a *person*. What happened was a second pass **from the artefacts without reading the report**, on the author's side. Real and valuable, but not third-party review. The field now **defines what "independent" meant** instead of asserting an equivalence between "a second pass" and "a second person" | ⚠ **frontmatter** — a machine-read field that travels to aggregators as "someone checked this". Corrected before distribution |
+| 23 | the **v1 saga correctness asymmetry** — *"both Axon-based stacks report 0% compensations under a configured 3% failure rate"*, the `saga_unresolved` columns (1.82% / 1.22%), the mechanism offered for them (*"the structural signature of async event-sourced dispatch returning before the work is done"*), and the **3.4× / 4.7× whole-deployment density multipliers** derived from the same 2026-05-05 dev-laptop run | 2026-08-27 | **Nothing numeric.** Three defects, any one of which is sufficient: (a) the Quarkus arm never ran an Axon saga — no `@Saga` type exists in that target, the orchestration was hand-rolled over Axon's command bus, so the run is not evidence about Axon Framework and *"Axon" may never appear next to a number from it*; (b) the correctness columns measured **our own harness** — the k6 poller's terminal-state dictionary did not recognise `CANCELLED`, the status a compensated saga wrote, so compensations fired and were scored unresolved (fix recorded in `AxonOrderSagaProjection`); (c) `scenarios/e2e-shop-order-saga/CONTRACT-v2.md` §10 classes the v1 finding **superseded** and any mixed-population latency table **"invalid under v2, do not cite"**. What replaces it is **structural, not a re-derived multiplier**: a saga engine is a deployment decision before a performance one, measured in processes the operator must run (CONTRACT-v2 §1 deployment-unit table). The statistic is replaced by an **exact oracle** — §4.1's deterministic decline set makes the expected compensation count an integer known before the run, so `observed == expected` is a hard assertion and this defect class now fails a gate instead of passing unnoticed. **No comparative saga numbers under contract v2 exist yet** | ⚠⚠ **YES — the only entry in this register that travelled in its wrong form, and it travelled widely.** Live for ~15 weeks (2026-05-14 → 2026-08-27) on: `arkstack-dev/portfolio:CLAIMS.md` as claim `saga-footprint`, **stamped `comparison-eligible`** when the source run stamps `claim_scope: exploratory` on `hardware_profile: dev-laptop`; the site hero + product outcomes, EN and PL; both CV variants (`cv-f`, `cv-r`) including their `<meta name="description">`; the EN blog post `compensation-correctness-saga-benchmark` (`published: true`); its PL translation (marked `published: false`, but that flag filters only RSS in that build — the page was served and linked); and the dev.to syndication of the EN post (`3668798`). All fixed 2026-08-27 except dev.to, which takes a correction note rather than an edit. No *report* in `results/reports/` ever carried it — which is exactly why the "finished report" column was too narrow a test, and why this row reports surfaces instead |
+
 
 **Two entries are worth reading as a pair, because they run in opposite directions.** #14 moved
 *in Exeris's favour*, which
@@ -142,6 +173,24 @@ applied. Both directions cost something, and only one of them looks like careles
 **Standing instruction.** When a retraction is added here, fill the travelled? column at the same
 time. It is the only column that decays — a claim that had not travelled when it was withdrawn
 can travel later if the register is not kept current.
+
+**Second standing instruction, added with #23.** Filling that column means **going and looking**,
+not reasoning about likelihood. The checkable-from-here surfaces (`results/reports/`, git history)
+are the cheap two; the expensive ones are the ones that matter, and they live in other
+repositories. Sweep all of them before writing the column:
+
+- `arkstack-dev/portfolio:CLAIMS.md` — the copy registry, plus its declared consumers
+  (`src/i18n/translations.ts`, `index.html` meta, and every `public/cv*.html`, whose
+  `<meta name="description">` is easy to miss)
+- `blog/src/content/blog/{en,pl}/*.mdx` — and note that `published: false` there filters RSS
+  only; the page is still built, served and linked
+- syndication targets carrying a `devto_id` / `hashnode_id` in a post's frontmatter — these need
+  a correction note, never a silent edit
+- `exeris-docs` — `b2b-technical-whitepaper.md` and `high-level-architecture.md`, which are
+  auto-fetched into the portfolio at `prebuild`, so a stale upstream reappears on the next build
+
+A withdrawal is not complete until every surface above has been checked and the column names what
+was found.
 
 ---
 
@@ -183,6 +232,13 @@ is a cpu/req figure, so it survives the L2 ceiling rule that makes heavy through
   throughput (5.25 vs 15.07 ms at one offered rate); quote the ab–ba range.
 - **Any heavy throughput ratio between a fast and a slow arm.** It reads the Postgres ceiling
   (L2). Use cpu/req.
+- **Anything at all from the 2026-05-05 `e2e-shop-order-saga` run — not "alone", but at all**
+  (register #23). Two rules follow from it and bind every claim in this file: **"Axon" never
+  appears next to a number**, and **no figure may depend on the v1 unresolved-rate gap.** The
+  saga scenario currently has *no* quotable comparative numbers; contract v2 has an oracle and a
+  gate, but no campaign has run through them yet. The quotable saga statement is structural —
+  the engine runs in the application process and adds no process the deployment did not already
+  have — and it cites ADR-013 §3 and CONTRACT-v2 §1, not a measurement.
 
 **The objection this canon will attract, and the honest answer.** A careful reader will say: *your
 own benchmark says the runtime is optimising the smaller third.* That is exactly what it says, and

@@ -44,6 +44,12 @@ RPS=500
 WORKERS=256
 SOCKET_TIMEOUT=2.0
 MUTANT_CHUNK_SIZE=2048
+# Warm-up before the RSS baseline. The 2026-08-26 runs sampled a target that had never served a
+# request, so first-load JIT, metaspace fill and heap commit were all charged to the attack.
+# 0 disables it and reproduces the old behaviour; the emitted result records which was used.
+WARMUP_SECONDS=30
+WARMUP_RPS=50
+RSS_SAMPLE_INTERVAL=5
 HEALTH_PATH="/health"
 MEMSTATS_ENDPOINT=""
 OUTPUT_DIR=""
@@ -60,6 +66,9 @@ while [[ $# -gt 0 ]]; do
     --workers)               WORKERS="$2";           shift 2 ;;
     --socket-timeout)        SOCKET_TIMEOUT="$2";    shift 2 ;;
     --mutant-chunk-size)     MUTANT_CHUNK_SIZE="$2"; shift 2 ;;
+    --warmup-seconds)        WARMUP_SECONDS="$2";    shift 2 ;;
+    --warmup-rps)            WARMUP_RPS="$2";        shift 2 ;;
+    --rss-sample-interval)   RSS_SAMPLE_INTERVAL="$2"; shift 2 ;;
     --radamsa-seed)          RADAMSA_SEED="$2";      shift 2 ;;
     --duration)              DURATION="$2";          shift 2 ;;
     --cooldown)              COOLDOWN="$2";          shift 2 ;;
@@ -73,6 +82,9 @@ done
 
 [[ -z "$BASE_URL"     ]] && { echo "ERROR: --base-url required" >&2; exit 1; }
 [[ -z "$TARGET_PID"   ]] && { echo "ERROR: --target-pid required for RSS/NMT sampling" >&2; exit 1; }
+# This scenario's entire verdict is an RSS/NMT delta, so a pid that is not the
+# server makes the run structurally incapable of failing. Verified, not trusted.
+TARGET_PID="$(destructive_resolve_target_pid "$TARGET_PID"   "$(bench_extract_port_from_url "$BASE_URL")")" || exit 1
 [[ -z "$RADAMSA_SEED" ]] && { echo "ERROR: --radamsa-seed required" >&2; exit 1; }
 # Mandatory target metadata — see run-destructive-radamsa.sh for rationale.
 [[ -z "$TARGET_REPO" ]] && { echo "ERROR: --target-repo required (reproducibility metadata)" >&2; exit 1; }
@@ -120,10 +132,28 @@ probe_memstats() {
   jq -r '.leakCount // 0' "$OUTPUT_DIR/memstats-${label}.json" 2>/dev/null || echo "null"
 }
 
+if [[ "$WARMUP_SECONDS" -gt 0 ]]; then
+  echo "=== Warm-up: ${WARMUP_SECONDS}s of clean ${HEALTH_PATH} at ~${WARMUP_RPS} rps ==="
+  WARMUP_REQUESTS="$(destructive_warmup "$BASE_URL" "$HEALTH_PATH" "$WARMUP_SECONDS" "$WARMUP_RPS")"
+  echo "  ${WARMUP_REQUESTS} warm-up requests; baseline is now taken on a warm JVM"
+else
+  WARMUP_REQUESTS=0
+  echo "=== Warm-up DISABLED (--warmup-seconds 0): the baseline is cold and first-load growth will be charged to the attack ==="
+fi
+
 echo "=== Pre-attack sampling ==="
 # `read` swallows the return code of `destructive_capture_rss` — intentional.
 # A failed sample emits the "unobtained" sentinel rather than aborting under
 # `set -e`; the sentinel is detected below and turned into JSON null.
+# GC is forced before BOTH samples, so the delta compares two post-collection
+# states -- i.e. memory the target RETAINED, which is what a leak scenario is
+# asking about. Until 2026-08-27 only the final sample was preceded by a forced
+# GC, making the comparison a collected heap against an uncollected one. That is
+# biased toward understating growth, and on destructive-radamsa-h2 it produced a
+# delta of -588 517 376 bytes: the baseline held a full post-warm-up heap and the
+# final sample did not. Artifacts written before this change are not comparable
+# with ones written after it.
+destructive_force_gc "$TARGET_PID"
 read -r RSS_BEFORE VSZ_BEFORE < <(destructive_capture_rss "$TARGET_PID")
 NHC_BEFORE="$(destructive_jcmd_native_heap_committed "$TARGET_PID" || echo '')"
 LEAKCOUNT_BEFORE="$(probe_memstats before)"
@@ -131,6 +161,12 @@ echo "  RSS=${RSS_BEFORE} VSZ=${VSZ_BEFORE} native_heap_committed=${NHC_BEFORE:-
 
 JFR_OUT="$OUTPUT_DIR/arena-lifecycle.jfr"
 destructive_start_jfr "$TARGET_PID" "$JFR_OUT" arena-lifecycle || JFR_OUT=""
+
+# This scenario's FAIL condition is "RSS delta CORRELATES WITH ATTACK DURATION". Two points --
+# before and after -- cannot express a correlation: they fit a leak and a plateau equally well,
+# and those are exactly the two hypotheses this run exists to separate.
+RSS_SERIES_FILE="$OUTPUT_DIR/rss-series.txt"
+RSS_SAMPLER_PID="$(destructive_start_rss_series "$TARGET_PID" "$RSS_SERIES_FILE" "$RSS_SAMPLE_INTERVAL")"
 
 echo "=== Sustained radamsa H1 load: ${RPS} rps × ${DURATION}s, ${WORKERS} workers ==="
 ATTACKER_OUT="$OUTPUT_DIR/radamsa-stdout.json"
@@ -150,6 +186,11 @@ echo "=== Cooldown ${COOLDOWN}s ==="
 sleep "$COOLDOWN"
 destructive_force_gc "$TARGET_PID"
 
+destructive_stop_rss_series "${RSS_SAMPLER_PID:-}"
+read -r RSS_SERIES_EARLY_SLOPE RSS_SERIES_LATE_SLOPE RSS_SERIES_SAMPLES \
+  < <(destructive_rss_series_slopes "$RSS_SERIES_FILE")
+echo "RSS series: ${RSS_SERIES_SAMPLES} samples, early ${RSS_SERIES_EARLY_SLOPE} B/s, late ${RSS_SERIES_LATE_SLOPE} B/s"
+
 read -r RSS_AFTER VSZ_AFTER < <(destructive_capture_rss "$TARGET_PID")
 NHC_AFTER="$(destructive_jcmd_native_heap_committed "$TARGET_PID" || echo '')"
 LEAKCOUNT_AFTER="$(probe_memstats after)"
@@ -158,6 +199,21 @@ LEAKCOUNT_AFTER="$(probe_memstats after)"
 destructive_liveness_probe "$BASE_URL" "$HEALTH_PATH" 200 1000 || true
 
 ITERATIONS_TOTAL=$(jq -r '.iterations_total // 0' "$ATTACKER_OUT")
+# The attacker's crash/hang counters were READ NOWHERE and the findings hardcoded zeros, so this
+# scenario was structurally blind to everything except RSS: a run whose listener died in the first
+# second would still have been classified on memory growth alone, and destructive_classify was
+# invoked with three literal 0s. Measured on the first real run, the attacker reported 46 112
+# complete-request timeouts that the artifact recorded as hang_count: 0.
+CRASH_COUNT=$(jq -r '.crash_count // 0' "$ATTACKER_OUT")
+HANG_COUNT=$(jq -r '.hang_count // 0' "$ATTACKER_OUT")
+OOM_COUNT=$(jq -r '.oom_count // 0' "$ATTACKER_OUT")
+INCOMPLETE_WAIT_COUNT=$(jq -r '.incomplete_wait_count // 0' "$ATTACKER_OUT")
+REJECTED_COUNT=$(jq -r '.rejected_count // 0' "$ATTACKER_OUT")
+RESPONSE_COUNT=$(jq -r '.response_count // 0' "$ATTACKER_OUT")
+ACHIEVED_RPS=$(jq -r '(.achieved_rps // 0) | . * 100 | round / 100' "$ATTACKER_OUT")
+BACKLOG_SKIPS=$(jq -r '.backlog_skips // 0' "$ATTACKER_OUT")
+MUTANT_STREAM=$(jq -r '.mutant_stream // "unknown"' "$ATTACKER_OUT")
+ARENA_NOTES="rate: ${ACHIEVED_RPS}/${RPS} rps with ${WORKERS} workers, ${BACKLOG_SKIPS} pacing skips. expected outcomes (not findings): ${REJECTED_COUNT} rejections, ${RESPONSE_COUNT} responses, ${INCOMPLETE_WAIT_COUNT} incomplete-wait timeouts. hang_count counts timeouts on COMPLETE requests only; at a sustained attack rate it does not separate an unanswered request from a saturated one, so read it against achieved_rps. baseline warm-up: ${WARMUP_SECONDS}s (${WARMUP_REQUESTS:-0} requests). RSS series: ${RSS_SERIES_SAMPLES} samples, early ${RSS_SERIES_EARLY_SLOPE} B/s, late ${RSS_SERIES_LATE_SLOPE} B/s -- a leak holds the late slope near the early one. mutant_stream=${MUTANT_STREAM}."
 if [[ "$RSS_BEFORE" == "unobtained" || "$RSS_AFTER" == "unobtained" ]]; then
   RSS_OBTAINED=false
   RSS_DELTA="unobtained"
@@ -177,12 +233,12 @@ fi
 if (( LEAK_DELTA > 0 )); then
   DEGRADATION="leak-suspected"
 elif [[ "$RSS_OBTAINED" == "true" ]]; then
-  DEGRADATION="$(destructive_classify 0 0 0 "$RSS_DELTA" 5 \
+  DEGRADATION="$(destructive_classify "$CRASH_COUNT" "$OOM_COUNT" "$HANG_COUNT" "$RSS_DELTA" 5 \
       "$RSS_BEFORE" "$DESTR_PROBE_ALIVE")"
 else
   # RSS unobtained — skip leak-suspected pathway so a missing measurement
   # is not silently rewritten as "stable".
-  DEGRADATION="$(destructive_classify 0 0 0 0 5 0 "$DESTR_PROBE_ALIVE")"
+  DEGRADATION="$(destructive_classify "$CRASH_COUNT" "$OOM_COUNT" "$HANG_COUNT" 0 5 0 "$DESTR_PROBE_ALIVE")"
 fi
 
 RESULT_FILE="$OUTPUT_DIR/result.json"
@@ -220,7 +276,7 @@ jq -n \
     reproducibility_status: "complete",
     run_config: { duration_seconds: $duration },
     metrics: { total_requests: $iterations, total_errors: 0 }
-  }' > "$RESULT_FILE"
+  }' | destructive_emit_json "$RESULT_FILE"
 
 # leak delta and NHC delta are emitted with jq's null-safety
 jq -n \
@@ -240,6 +296,15 @@ jq -n \
   --arg degradation "$DEGRADATION" \
   --arg jfr_path "${JFR_OUT:-}" \
   --arg radamsa_seed "$RADAMSA_SEED" \
+  --argjson warmup_seconds "$WARMUP_SECONDS" \
+  --argjson crash "$CRASH_COUNT" \
+  --argjson oom "$OOM_COUNT" \
+  --argjson hang "$HANG_COUNT" \
+  --argjson incomplete_wait "$INCOMPLETE_WAIT_COUNT" \
+  --arg notes "$ARENA_NOTES" \
+  --arg series_samples "$RSS_SERIES_SAMPLES" \
+  --arg series_early "$RSS_SERIES_EARLY_SLOPE" \
+  --arg series_late "$RSS_SERIES_LATE_SLOPE" \
   '{
     schema_version: "1",
     run_id: $run_id,
@@ -250,9 +315,10 @@ jq -n \
     comparison_axis: "standalone",
     findings: {
       iterations_total: $iterations,
-      crash_count: 0,
-      oom_count: 0,
-      hang_count: 0,
+      crash_count: $crash,
+      oom_count: $oom,
+      hang_count: $hang,
+      incomplete_wait_count: $incomplete_wait,
       unique_crash_signatures: 0,
       mean_time_to_crash_us: null,
       leak_count_delta: $leak_delta
@@ -279,16 +345,23 @@ jq -n \
         end
       ),
       native_heap_committed_bytes_delta: ($nhc_delta | tonumber? // null),
-      jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end)
+      jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end),
+      baseline_warmup_seconds: $warmup_seconds,
+      rss_series_samples: ($series_samples | tonumber? // null),
+      rss_series_early_slope_bytes_per_s: ($series_early | tonumber? // null),
+      rss_series_late_slope_bytes_per_s:  ($series_late  | tonumber? // null)
     },
     degradation_class: $degradation,
+    notes: $notes,
     tolerance: {
       rss_growth_pct_max: 5,
       native_heap_committed_growth_pct_max: 10
     },
     seeds: { radamsa_seed: $radamsa_seed },
     publication_mode: "internal-only"
-  }' > "$FINDINGS_FILE"
+  }' | destructive_emit_json "$FINDINGS_FILE"
+
+destructive_validate_findings "$FINDINGS_FILE"
 
 echo ""
 echo "=== Summary ==="

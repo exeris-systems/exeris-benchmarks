@@ -37,15 +37,54 @@ SEED_REQUEST = (
 
 
 def is_complete_request(payload: bytes) -> bool:
-    """Does this mutant terminate an HTTP/1 request?
+    """Is the target OBLIGED to answer this mutant?
 
-    Header-block termination is the test, because the seed carries no body.
-    A mutant that grew a Content-Length larger than its body counts as
-    complete here and would be classified `hang` on a timeout rather than
-    `incomplete-wait`. That is the conservative direction: it can produce a
-    candidate signal to investigate, never suppress one.
+    Header-block termination alone is not the test, even though the seed
+    carries no body. radamsa readily grows a `Content-Length:` or a
+    `Transfer-Encoding: chunked` out of the header bytes, and a request
+    announcing a body it never sends leaves the target correctly waiting for
+    the rest -- `incomplete-wait`. Counting it as complete makes the timeout a
+    `hang`, and destructive-radamsa-h1 declares max_hang_count: 0, so a
+    correctly-behaved server would fail the run.
+
+    The H2 driver had the same defect in frame-shaped clothing (a lone
+    well-formed SETTINGS frame is perfectly aligned and obliges the server to
+    say nothing) and it fired there, once in 400 validation iterations. These
+    two drivers already drifted apart once by fixing the same idea twice, so
+    the predicate is corrected on both sides even though it has not yet
+    produced a wrong H1 result.
+
+    Still deliberately conservative where the input is ambiguous: a mutant
+    with a malformed or contradictory framing header counts as complete,
+    because a target is obliged to answer such a request with 400 rather than
+    wait on it, and a target that instead goes quiet is a finding.
     """
-    return b"\r\n\r\n" in payload
+    idx = payload.find(b"\r\n\r\n")
+    if idx < 0:
+        return False
+    head, body = payload[:idx], payload[idx + 4:]
+
+    lengths, chunked, malformed = [], False, False
+    for line in head.split(b"\r\n")[1:]:
+        name, _, value = line.partition(b":")
+        key = name.strip().lower()
+        if key == b"content-length":
+            try:
+                lengths.append(int(value.strip()))
+            except ValueError:
+                malformed = True
+        elif key == b"transfer-encoding":
+            if b"chunked" in value.strip().lower():
+                chunked = True
+
+    if malformed or len(set(lengths)) > 1 or (chunked and lengths):
+        # Framing the target must reject, not wait on. RFC 9112 s6.1/s6.3.
+        return True
+    if chunked:
+        return body.endswith(b"0\r\n\r\n")
+    if lengths:
+        return len(body) >= lengths[0]
+    return True
 
 
 def main() -> int:

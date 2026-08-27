@@ -52,6 +52,12 @@ SOCKET_TIMEOUT=2.0
 # 500 rps the spawn path alone would need 1.55 CPU-seconds per wall second. Part of the
 # reproducibility key: (seed, chunk size, index) determines the bytes.
 MUTANT_CHUNK_SIZE=2048
+# Warm-up before the RSS baseline. Until 2026-08-26 this sampled a target that had never served a
+# request, so first-load JIT, metaspace fill and heap commit were charged to the attack. Measured
+# on the first slowloris run: RSS +34.9 % against a 5 % tolerance, classifying `leak-suspected`,
+# while the JFR's post-GC heap summary put LIVE HEAP at 9.5 MB. 0 restores the old behaviour.
+WARMUP_SECONDS=30
+WARMUP_RPS=50
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -68,6 +74,8 @@ while [[ $# -gt 0 ]]; do
     --workers)       WORKERS="$2";       shift 2 ;;
     --socket-timeout) SOCKET_TIMEOUT="$2"; shift 2 ;;
     --mutant-chunk-size) MUTANT_CHUNK_SIZE="$2"; shift 2 ;;
+    --warmup-seconds)  WARMUP_SECONDS="$2";  shift 2 ;;
+    --warmup-rps)      WARMUP_RPS="$2";      shift 2 ;;
     --duration)      DURATION="$2";      shift 2 ;;
     --cooldown)      COOLDOWN="$2";      shift 2 ;;
     --health-path)   HEALTH_PATH="$2";   shift 2 ;;
@@ -119,14 +127,37 @@ if [[ -z "$OUTPUT_DIR" ]]; then
 fi
 mkdir -p "$OUTPUT_DIR"
 
+PORT="$(bench_extract_port_from_url "$BASE_URL")"
 if [[ -z "$TARGET_PID" ]]; then
-  PORT="$(bench_extract_port_from_url "$BASE_URL")"
   TARGET_PID="$(bench_detect_pid_for_port "$PORT" 2>/dev/null || true)"
+fi
+# A supplied pid is verified against the listener, never taken on trust --
+# see destructive_resolve_target_pid for what sampling a wrapper produced.
+if [[ -n "$TARGET_PID" ]]; then
+  TARGET_PID="$(destructive_resolve_target_pid "$TARGET_PID" "$PORT")" || exit 1
 fi
 
 # destructive_capture_rss emits "unobtained unobtained" when no PID is known;
 # downstream JSON emission turns that into null so a no-signal run is not
 # misread as a stable-with-zero-RSS run.
+if [[ "$WARMUP_SECONDS" -gt 0 ]]; then
+  echo "=== Warm-up: ${WARMUP_SECONDS}s of clean ${HEALTH_PATH} at ~${WARMUP_RPS} rps ==="
+  WARMUP_REQUESTS="$(destructive_warmup "$BASE_URL" "$HEALTH_PATH" "$WARMUP_SECONDS" "$WARMUP_RPS")"
+  echo "  ${WARMUP_REQUESTS} warm-up requests; the baseline below is taken on a warm JVM"
+else
+  WARMUP_REQUESTS=0
+  echo "=== Warm-up DISABLED: the baseline is cold and first-load growth will be charged to the attack ==="
+fi
+
+# GC is forced before BOTH samples, so the delta compares two post-collection
+# states -- i.e. memory the target RETAINED, which is what a leak scenario is
+# asking about. Until 2026-08-27 only the final sample was preceded by a forced
+# GC, making the comparison a collected heap against an uncollected one. That is
+# biased toward understating growth, and on destructive-radamsa-h2 it produced a
+# delta of -588 517 376 bytes: the baseline held a full post-warm-up heap and the
+# final sample did not. Artifacts written before this change are not comparable
+# with ones written after it.
+destructive_force_gc "${TARGET_PID:-0}" || true
 read -r RSS_BEFORE VSZ_BEFORE < <(destructive_capture_rss "${TARGET_PID:-0}")
 
 JFR_OUT=""
@@ -164,7 +195,18 @@ read -r RSS_AFTER VSZ_AFTER < <(destructive_capture_rss "${TARGET_PID:-0}")
 [[ -n "$JFR_OUT" ]] && destructive_stop_jfr "$TARGET_PID" destructive-radamsa || true
 
 echo "=== Liveness probe: GET ${BASE_URL%/}${HEALTH_PATH} ==="
-destructive_liveness_probe "$BASE_URL" "$HEALTH_PATH" 200 1000 || true
+# The probe must speak the protocol under attack. Probing h2c over HTTP/1.1 would have let a
+# broken frame parser pass as "target survived".
+# --protocol h2 over an http:// base URL is prior-knowledge H2 CLEARTEXT, i.e.
+# h2c -- which is what scenarios/destructive-radamsa-h2 declares its probe to
+# be. Recording it as bare "h2" in the artifact while the scenario says "h2c"
+# is exactly the drift the axis labels exist to prevent, and h2 vs h2-over-TLS
+# is a real difference elsewhere in this repo.
+PROBE_PROTOCOL="$PROTOCOL"
+if [[ "$PROTOCOL" == "h2" && "$BASE_URL" == http://* ]]; then
+  PROBE_PROTOCOL="h2c"
+fi
+destructive_liveness_probe "$BASE_URL" "$HEALTH_PATH" 200 1000 "$PROBE_PROTOCOL" || true
 echo "  status=$DESTR_PROBE_STATUS duration_ms=$DESTR_PROBE_DURATION_MS alive=$DESTR_PROBE_ALIVE"
 
 # The attacker writes its summary as JSON on stdout. If it died -- a rejected radamsa seed,
@@ -198,6 +240,7 @@ RESPONSE_COUNT=$(jq -r '.response_count // 0' "$ATTACKER_OUT")
 # request. hang_count now counts only timeouts on COMPLETE requests, where the target owed an
 # answer. `incomplete-wait` is disclosed, not hidden -- it is an attack-shape fact worth reading.
 INCOMPLETE_WAIT_COUNT=$(jq -r '.incomplete_wait_count // 0' "$ATTACKER_OUT")
+OUTCOME_DETAILS=$(jq -c '.outcome_details // {}' "$ATTACKER_OUT")
 # Achieved rate, worker count and pacing pressure: the campaign's declared rps is a REQUEST, and a
 # run that could not reach it must say so rather than let the scenario's profile stand in for what
 # happened. Concurrency is part of the stimulus, so it travels with the result.
@@ -207,7 +250,16 @@ BACKLOG_SKIPS=$(jq -r '.backlog_skips // 0' "$ATTACKER_OUT")
 GENERATOR_FAILURES=$(jq -r '.generator_failures // 0' "$ATTACKER_OUT")
 MUTANT_STREAM=$(jq -r '.mutant_stream // "unknown"' "$ATTACKER_OUT")
 CAMPAIGN_NOTES="expected outcomes (not findings): ${REJECTED_COUNT} connection-close rejections, ${RESPONSE_COUNT} well-formed responses, ${INCOMPLETE_WAIT_COUNT} incomplete-wait timeouts (mutant never terminated its request; the target was correctly waiting, the attacker gave up at the socket deadline -- whether the target EVER times out an incomplete request is destructive-slowloris-h1's question, not this one). crash_count counts CONNECT failures only (listener gone); a close after connect is the server correctly refusing malformed input. hang_count counts timeouts on COMPLETE requests only. rate: ${ACHIEVED_RPS}/${RPS} rps achieved with ${WORKERS_USED} workers, ${BACKLOG_SKIPS} pacing skips, ${GENERATOR_FAILURES} generator failures. mutant_stream=${MUTANT_STREAM} (streams are not byte-comparable across ids)."
-
+# response_count means different things on the two protocols, and on H2 it
+# very nearly means nothing. RFC 9113 s3.4 makes the server's SETTINGS frame
+# the mandatory first thing it sends after the preface, so an H2C connection
+# always yields bytes back. The classifier therefore reads past the frames a
+# server sends unprompted and decides on the first one that actually answers
+# the mutant; outcome_details carries the GOAWAY/RST_STREAM error code, which
+# is what says whether the framing layer or HPACK did the rejecting.
+if [[ "$PROTOCOL" != "h1" ]]; then
+  CAMPAIGN_NOTES="${CAMPAIGN_NOTES} H2 CAVEAT: response_count here counts only frames sent in answer to the mutant -- the target's mandatory post-preface SETTINGS is skipped. The first h2 campaign (20260826-192933) used the H1 classifier, which stopped at the first bytes received and so scored 60000/60000 as responses; measured, an intact preface followed by pure garbage, by one zero byte, and by nothing at all all returned the identical 9-byte empty SETTINGS frame. That run's response_count is not comparable with this one's."
+fi
 if [[ "$RSS_BEFORE" == "unobtained" || "$RSS_AFTER" == "unobtained" ]]; then
   RSS_OBTAINED=false
   RSS_DELTA="unobtained"
@@ -271,7 +323,7 @@ jq -n \
       total_requests: $iterations,
       total_errors: $errors
     }
-  }' > "$RESULT_FILE"
+  }' | destructive_emit_json "$RESULT_FILE"
 
 jq -n \
   --arg run_id "$RUN_ID" \
@@ -294,6 +346,9 @@ jq -n \
   --arg jfr_path "${JFR_OUT:-}" \
   --arg radamsa_seed "$RADAMSA_SEED" \
   --argjson incomplete_wait "$INCOMPLETE_WAIT_COUNT" \
+  --argjson outcome_details "$OUTCOME_DETAILS" \
+  --argjson warmup_seconds "$WARMUP_SECONDS" \
+  --arg probe_protocol "${DESTR_PROBE_PROTOCOL:-h1}" \
   '{
     schema_version: "1",
     run_id: $run_id,
@@ -308,6 +363,7 @@ jq -n \
       oom_count: 0,
       hang_count: $hang,
       incomplete_wait_count: $incomplete_wait,
+      outcome_details: $outcome_details,
       unique_crash_signatures: 0,
       mean_time_to_crash_us: null,
       leak_count_delta: 0
@@ -315,6 +371,7 @@ jq -n \
     liveness_probe: {
       method: "GET",
       path: "/health",
+      protocol: $probe_protocol,
       status_code: ($probe_status | tonumber? // 0),
       duration_ms: $probe_duration_ms,
       expected_status: 200,
@@ -334,7 +391,8 @@ jq -n \
         end
       ),
       native_heap_committed_bytes_delta: null,
-      jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end)
+      jfr_recording_path: (if $jfr_path == "" then null else $jfr_path end),
+      baseline_warmup_seconds: $warmup_seconds
     },
     degradation_class: $degradation,
     notes: $notes,
@@ -344,7 +402,9 @@ jq -n \
     },
     seeds: { radamsa_seed: $radamsa_seed },
     publication_mode: "internal-only"
-  }' > "$FINDINGS_FILE"
+  }' | destructive_emit_json "$FINDINGS_FILE"
+
+destructive_validate_findings "$FINDINGS_FILE"
 
 echo ""
 echo "=== Summary ==="

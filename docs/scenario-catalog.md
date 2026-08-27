@@ -182,7 +182,62 @@ Concurrency is part of the stimulus, not a harness detail, so `concurrent_connec
 
 `hang_count` counts read timeouts only where the payload **completed a request** and the target therefore owed an answer. A timeout on a truncated mutant is `incomplete_wait_count`: the target is correctly waiting for the rest and the attacker gave up at its socket deadline. This is the timeout-side twin of the `rejected`-vs-`crash` correction — measured on the first campaign, 14.6 % of iterations timed out while ~10 % of that seed's mutants carry no terminated request, and the target answered `/health` in 8 ms throughout. `incomplete_wait_count` does **not** establish that a target is healthy: whether it ever times out an incomplete request is `destructive-slowloris-h1`'s question.
 
+### RSS is a weak leak signal, and a cold baseline makes it weaker
+
+Both `destructive-*` runners and `arena-lifecycle-leak` sampled `rss_bytes_before` on a target that had **never served a request**, so first-load JIT, metaspace fill and heap commit were charged to the attack. The first slowloris run recorded **+34.9 % RSS against a 5 % tolerance** and classified `leak-suspected` — while the same run's JFR put **live heap after the forced GC at 9.5 MB**. Whatever those bytes were, retained Java objects was not it.
+
+The runners now drive a warm-up (`--warmup-seconds`, default 30) before the baseline and record `baseline_warmup_seconds` in `resource_delta`. **Two runs with different values there are not comparable on `rss_bytes_delta`.**
+
+`arena-lifecycle-leak` states its FAIL condition as *"RSS delta correlates with attack duration"*, but the runner recorded two points, from which no correlation can be computed — a leak and a plateau fit a before/after pair equally well, and they are precisely the two hypotheses the scenario exists to separate. The runner now samples RSS across the window (`rss-series.txt`) and reports `rss_series_early_slope_bytes_per_s` / `rss_series_late_slope_bytes_per_s`: **a leak holds the late slope near the early one; first-load growth collapses it toward zero.**
+
+Neither replaces NMT. Without `-XX:NativeMemoryTracking`, `native_heap_committed_bytes_delta` is null and the non-heap remainder is unattributed — quote it as a remainder, never decompose it by subtraction.
+
+### `arena-lifecycle-leak` was blind to crashes until 2026-08-26
+
+Its findings hardcoded `crash_count: 0`, `oom_count: 0`, `hang_count: 0` and called `destructive_classify` with three literal zeros, reading only `iterations_total` from the attacker. A run whose listener died in the first second would still have been classified on memory growth alone. On the first real run the attacker reported 46 112 complete-request timeouts that the artifact recorded as `hang_count: 0`. The counters are now read from the attacker summary and reach both the classifier and the artifact.
+
 Mutant streams carry a `mutant_stream` id. Batched generation produces different bytes from the pre-2026-08-26 per-iteration seeding for the same seed, so `per-iteration-v1` and `batched-v2` runs are **not byte-comparable**.
+
+### The H2 outcome taxonomy was an H1 taxonomy until 2026-08-26
+
+`destructive-radamsa-h2` ran for the first time on 2026-08-26 and returned a perfect-looking `response_count: 60000` out of 60 000 iterations, with zero rejections. That was not robustness; it was a degenerate measurement, and the 100 % rate is the tell.
+
+Two H1 assumptions had been carried into an H2 driver:
+
+1. **"The first bytes back mean the target answered."** True on HTTP/1.x, where a server sends nothing until it has something to say. False on HTTP/2: RFC 9113 §3.4 makes the server's SETTINGS frame the mandatory first thing it sends after the connection preface, and this driver sends the preface intact by design. Measured against kernel 0.11.0, an intact preface followed by pure garbage, followed by a single zero byte, and followed by nothing at all each returned the identical 9-byte empty SETTINGS frame. The campaign counted the target's own handshake 60 000 times.
+2. **"Ending on a frame boundary means a response is owed."** The H1 analogue — a terminating CRLFCRLF — really does complete a request. A lone well-formed SETTINGS frame is equally well aligned on H2 and obliges the server to say nothing, so such a mutant timed out at the attacker's socket deadline and scored `hang` against a scenario declaring `max_hang_count: 0`. A correctly idle server would have failed the run. It fired once in a 400-iteration validation campaign.
+
+The classifier now reads past the frames a server sends unprompted (SETTINGS, WINDOW_UPDATE) and decides on the first frame that actually answers the mutant; the completeness predicate additionally requires a client-initiated stream to have been opened to END_HEADERS and half-closed by END_STREAM. On the same 400-iteration validation the counters separated into 177 rejected / 126 responses / 97 incomplete-wait, with every other counter unchanged.
+
+The payoff is `findings.outcome_details`, which histograms the target's GOAWAY and RST_STREAM error codes. On an all-zero crash/hang campaign that histogram is the only positive evidence produced: it names the layer that rejected each mutant — `FRAME_SIZE_ERROR` and `PROTOCOL_ERROR` come from the framing layer, `COMPRESSION_ERROR` from HPACK. `response_count` is **not comparable** between the 20260826-192933 run and later ones.
+
+**Generalization worth keeping:** both defects had the same shape — a concept that is sound on one protocol silently reinterpreted on another, producing a *clean* result rather than an error. The H1 driver's own `rejected` and `incomplete-wait` corrections (#29) were the same shape. A destructive scenario reporting an unblemished score is a reason to check the classifier, not to publish.
+
+### `destructive-slowloris-h1` reported the target's defence as a failure
+
+The runner mapped the attacker's `connections_dropped` onto `hang_count`, and passed the same value to `destructive_classify` as its hang argument. Those are opposite meanings. Evicting a half-open connection is precisely the **defence** against slowloris; a target that did it would have been recorded as having hung that many times and pushed toward a degraded classification for behaving correctly. The first run scored `connections_dropped: 0`, so the inversion produced `hang_count: 0` and never showed itself.
+
+The scenario now reports `connections_opened` and `connections_dropped` as their own fields, and `hang_count` is 0 — this driver has no per-request deadline of its own, so it has nothing to report as a hang. What the scenario gates on is liveness and the RSS delta.
+
+The measurement itself matters beyond this scenario: `connections_dropped: 0` over a 120 s window means the target never evicted a half-open connection, which is what licenses the `incomplete-wait` outcome in the radamsa drivers. A target with no half-open eviction inside 120 s cannot have been the source of a 2 s attacker-side timeout. That value had been read into a shell variable and discarded, so the artifact carried it nowhere and left `notes` null.
+
+### Two RSS samples, one forced GC
+
+Until 2026-08-27 all three destructive runners forced a GC before the **final** RSS sample and not before the baseline. The reported `rss_bytes_delta` was therefore a collected heap measured against an uncollected one — biased toward understating growth, and capable of any sign at all. On `destructive-radamsa-h2` it read **−588 517 376 bytes**: the baseline held a full post-warm-up heap, the final sample had just been collected.
+
+Both samples are now preceded by a forced GC, so the delta compares two post-collection states — memory the target *retained*, which is the question a leak scenario is asking. Artifacts written before the change are not comparable with ones written after it.
+
+Note this compounds with the warm-up fix rather than replacing it: warm-up moves the baseline past first-load cost, GC symmetry makes the two endpoints the same kind of measurement. Both are needed, and `baseline_warmup_seconds` in the artifact identifies which generation a run belongs to.
+
+### A pid taken on trust can make a run incapable of failing
+
+`--target-pid` was accepted without checking it against the target. On 2026-08-27 the `destructive-radamsa-h2` campaign was pointed at a pidfile holding the `bash -c "… java …"` wrapper rather than the JVM it spawned. The artifact recorded `rss_bytes_before == rss_bytes_after == 2 170 880` — 2.07 MB, a shell — and classified the run `stable` on a delta of exactly zero. Every `resource_delta` field, and the `degradation_class` resting on them, described a process that allocates nothing.
+
+`destructive_resolve_target_pid` now checks the supplied pid against the process holding the listening socket, walks the process tree to correct a wrapper to its server child (a legitimate launch shape) with a loud warning, and refuses a pid unrelated to the port. Verdicts that can only pass are worse than no verdict.
+
+### A failing emitter left an artifact that looked like a result
+
+The first H2 campaign fired all 60 000 mutants and then died on two undeclared `jq` variables. Because the runners used `jq ... > "$FINDINGS_FILE"`, the shell truncated the target *before* `jq` ran, so the run left a 0-byte `destructive-findings.json` and the attack data survived only in the raw attacker stdout. All runner JSON now goes through `destructive_emit_json`, which stages to a temp file, rejects empty or non-object output, and only then moves it into place.
 
 Cross-stack destructive comparisons require explicit timeout / connection-limit / radamsa-seed normalization — see methodology doc.
 

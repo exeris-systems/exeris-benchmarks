@@ -280,7 +280,13 @@ destructive_classify() {
     echo "timeout-flood"; return 0
   fi
   if (( hang > 0 )); then
-    echo "graceful-shed"; return 0
+    # NOT graceful-shed. Shedding is a target deliberately rejecting or closing
+    # under pressure -- a healthy response. A hang is its opposite: the target
+    # owed an answer and produced none. Classifying hangs as graceful-shed
+    # labelled 8 364 unanswered complete requests on destructive-radamsa-h1 as
+    # healthy behaviour, and hid four minimal malformed-request-line shapes that
+    # park an Exeris H1 connection with no response, no close and no timeout.
+    echo "unanswered"; return 0
   fi
   if (( rss_before > 0 )); then
     local growth_pct=$((rss_delta * 100 / rss_before))

@@ -198,6 +198,33 @@ Its findings hardcoded `crash_count: 0`, `oom_count: 0`, `hang_count: 0` and cal
 
 Mutant streams carry a `mutant_stream` id. Batched generation produces different bytes from the pre-2026-08-26 per-iteration seeding for the same seed, so `per-iteration-v1` and `batched-v2` runs are **not byte-comparable**.
 
+### Finding: four malformed request lines park an Exeris H1 connection indefinitely
+
+The first full-rate `destructive-radamsa-h1` campaign against kernel 0.11.0 (`5e29ae675020`, arm C, pure/community) reported **8 364 hangs in 59 486 iterations (14.1 %)** — mutants the target was obliged to answer and did not, inside a 2 s socket deadline. Four checks turned that from a number into a characterization.
+
+1. **Not saturation.** The hang fraction is flat across a 10× concurrency range and *falls* slightly as load rises: 16.6 % at 50 rps / 32 workers, 12.1 % at 150/64, 11.5 % at 500/256. Queuing would move it the other way.
+2. **Not the attacker's deadline.** Eight mutants that hang at 2 s were re-fired and held for 45 s. All eight were **still silent — no response and no close**.
+3. **Not body framing.** All 2 000 owed mutants sampled were `no-body-framing`: plain CRLFCRLF-terminated requests with no `Content-Length` and no `Transfer-Encoding`. The predicate's conflicting/malformed-`Content-Length` branches never fired.
+4. **Reducible to minimal cases.** Four handcrafted single-line requests reproduce it without radamsa. Each is held open with no response and no close; a fifth malformed shape shows the parser *does* have a rejection path.
+
+| Request | Result |
+|---|---|
+| `GET /plaintext HTTP/1.1` + `Host` | 200 in 1 ms |
+| `\r\n` before the request line | **held open, silent** |
+| `BADMETHOD /plaintext HTTP/1.1` | **held open, silent** |
+| `GET /plaintext` (no HTTP version) | **held open, silent** |
+| bare-LF line endings | **held open, silent** |
+| space inside a header name | closed cleanly, 0 ms |
+| `HTTP/9.9` and `HTTP/11845539971726784.2` | **200 OK** — version not validated |
+
+RFC 9112 §2.2 says a server should ignore at least one empty line before the request-line; RFC 9110 §9.1 makes an unrecognized method a 501. Whether the parser *ought* to answer each of these is arguable case by case. The consequence is not: **100 such connections opened against the target were still established after 20 s idle, and were released only when the attacker closed them.** The target stayed responsive throughout — `/health` answered 200 in well under a millisecond — so this is unbounded connection retention, not a crash.
+
+It composes with `destructive-slowloris-h1`'s `connections_dropped: 0`: the target evicted no half-open connection in a 120 s window either. A request that parks a connection, on a server that never reclaims one, costs a connection slot permanently.
+
+**Scope of the claim.** One kernel version, one arm, loopback, `claim_scope: exploratory`. It is a reproducible property of that build, not a measured availability impact — no attempt was made to find the connection ceiling or to drive the target to refuse service.
+
+This is also why the classifier no longer calls hangs `graceful-shed`. That label reads as a target deliberately and correctly shedding load, and it was applied to all 8 364 of these.
+
 ### The H2 outcome taxonomy was an H1 taxonomy until 2026-08-26
 
 `destructive-radamsa-h2` ran for the first time on 2026-08-26 and returned a perfect-looking `response_count: 60000` out of 60 000 iterations, with zero rejections. That was not robustness; it was a degenerate measurement, and the 100 % rate is the tell.

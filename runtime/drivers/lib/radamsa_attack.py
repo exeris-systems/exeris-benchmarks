@@ -203,9 +203,16 @@ class MutantPool:
                     raise subprocess.CalledProcessError(
                         proc.returncode, self._binary)
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-                # A generator failure is an ATTACKER-side fault. It is counted
-                # and surfaced, never folded into a target-side counter --
-                # the previous drivers charged it to hang_count.
+                if self._stop.is_set():
+                    # close() kills the in-flight child on purpose. Counting
+                    # that as a generator failure reports a normal shutdown as
+                    # an attacker-side fault -- the first campaign after the
+                    # reaping fix logged exactly one such phantom
+                    # ("chunk 31 died with SIGKILL") at the end of its window.
+                    return []
+                # A genuine generator failure is an ATTACKER-side fault. It is
+                # counted and surfaced, never folded into a target-side counter
+                # -- the previous drivers charged it to hang_count.
                 with self._failures_lock:
                     self._failures += 1
                 print(f"WARN: radamsa chunk {index} failed: {exc}", file=sys.stderr)

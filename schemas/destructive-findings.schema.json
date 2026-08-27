@@ -167,8 +167,8 @@
     },
     "degradation_class": {
       "type": "string",
-      "enum": ["graceful-shed", "timeout-flood", "crash", "oom", "leak-suspected", "stable"],
-      "description": "Observed failure/degradation classification. 'stable' = target absorbed attack and liveness probe passed within tolerance."
+      "enum": ["graceful-shed", "unanswered", "timeout-flood", "crash", "oom", "leak-suspected", "stable"],
+      "description": "Observed failure/degradation classification. 'stable' = target absorbed attack and liveness probe passed within tolerance. 'unanswered' = the target owed a response to at least one request it was obliged to answer and produced none inside the socket deadline; findings.hang_count carries how many. Until 2026-08-27 hangs were classified 'graceful-shed', which reads as the target deliberately and correctly shedding load -- the opposite of what a hang is. That labelled 8 364 unanswered complete requests, and the four minimal request-line shapes behind them, as healthy behaviour. 'graceful-shed' now means only what its name says: the target stayed alive and rejected or closed rather than leaving requests outstanding."
     },
     "tool_versions": {
       "type": "object",

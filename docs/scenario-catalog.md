@@ -221,6 +221,8 @@ RFC 9112 §2.2 says a server should ignore at least one empty line before the re
 
 It composes with `destructive-slowloris-h1`'s `connections_dropped: 0`: the target evicted no half-open connection in a 120 s window either. A request that parks a connection, on a server that never reclaims one, costs a connection slot permanently.
 
+**It is the HTTP/1 request-line path, not malformed input in general.** Given the same seed, the same rate and the same mutation engine, `destructive-radamsa-h2` leaves **0** of 60 000 requests unanswered where H1 leaves 8 366 of 59 501. The H2 framing layer answers a mutant it cannot accept — 25 791 `GOAWAY:PROTOCOL_ERROR` and 4 139 `RST_STREAM:REFUSED_STREAM` — rather than parking the connection. Both arms are the same kernel build and the same process family; only the protocol path differs.
+
 **Scope of the claim.** One kernel version, one arm, loopback, `claim_scope: exploratory`. It is a reproducible property of that build, not a measured availability impact — no attempt was made to find the connection ceiling or to drive the target to refuse service.
 
 This is also why the classifier no longer calls hangs `graceful-shed`. That label reads as a target deliberately and correctly shedding load, and it was applied to all 8 364 of these.

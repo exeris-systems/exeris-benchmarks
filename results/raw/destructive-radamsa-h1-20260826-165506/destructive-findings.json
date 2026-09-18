@@ -1,0 +1,47 @@
+{
+  "schema_version": "1",
+  "run_id": "destructive-radamsa-h1-20260826-165506-1db77923ceff",
+  "scenario": "destructive-radamsa-h1",
+  "campaign_kind": "radamsa",
+  "duration_seconds": 120,
+  "claim_scope": "exploratory",
+  "comparison_axis": "standalone",
+  "findings": {
+    "iterations_total": 410,
+    "crash_count": 0,
+    "oom_count": 0,
+    "hang_count": 60,
+    "unique_crash_signatures": 0,
+    "mean_time_to_crash_us": null,
+    "leak_count_delta": 0
+  },
+  "liveness_probe": {
+    "method": "GET",
+    "path": "/health",
+    "status_code": 200,
+    "duration_ms": 8,
+    "expected_status": 200,
+    "expected_max_response_ms": 1000,
+    "asserted_alive": true
+  },
+  "resource_delta": {
+    "rss_bytes_before": 219377664,
+    "rss_bytes_after": 195026944,
+    "rss_bytes_delta": -24350720,
+    "vsz_bytes_before": 22794645504,
+    "vsz_bytes_after": 22862807040,
+    "vsz_bytes_delta": 68161536,
+    "native_heap_committed_bytes_delta": null,
+    "jfr_recording_path": "/home/bench/exeris-benchmarks/results/raw/destructive-radamsa-h1-20260826-165506/destructive-radamsa.jfr"
+  },
+  "degradation_class": "graceful-shed",
+  "notes": "expected outcomes (not findings): 85 connection-close rejections, 265 well-formed responses. crash_count counts CONNECT failures only (listener gone); a close after connect is the server correctly refusing malformed input.",
+  "tolerance": {
+    "rss_growth_pct_max": 5,
+    "max_unexpected_crashes": 0
+  },
+  "seeds": {
+    "radamsa_seed": "424242"
+  },
+  "publication_mode": "internal-only"
+}

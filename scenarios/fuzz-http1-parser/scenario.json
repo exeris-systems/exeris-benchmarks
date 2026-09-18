@@ -3,7 +3,7 @@
   "version": "1",
   "benchmark_family": "micro",
   "target_classification": "micro-parser-robustness",
-  "description": "Jazzer-driven byte[] fuzz against eu.exeris.kernel.core.http.http1.Http1RequestParser (parseRequestLine + parseHeaders). Each fuzz iteration wraps the mutated byte[] in a confined Arena MemorySegment and invokes the parser. Whitelisted throwables (Http1ParseException, IndexOutOfBoundsException, IllegalArgumentException, BufferUnderflowException) are recorded but do NOT count as findings. Any other Throwable (NPE, AssertionError, OOM, StackOverflow, VirtualMachineError) is a finding.",
+  "description": "Jazzer-driven byte[] fuzz against eu.exeris.kernel.core.http.http1.Http1RequestParser.parseRequestLine. This scenario drives Http1RequestParserFuzzTest and the REQUEST LINE only; it previously claimed 'parseRequestLine + parseHeaders' while no scenario drove the header parser at all, so the 119.9 M inputs of the 2026-08-26 campaign never reached parseHeaders. Header-block coverage is scenario fuzz-http1-headers. Each fuzz iteration wraps the mutated byte[] in a confined Arena MemorySegment and invokes the parser. Whitelisted throwables (Http1ParseException, IndexOutOfBoundsException, IllegalArgumentException, BufferUnderflowException) are recorded but do NOT count as findings. Any other Throwable (NPE, AssertionError, OOM, StackOverflow, VirtualMachineError) is a finding.",
   "mode": "fuzz-campaign",
   "tier": "community",
   "driver": ["jazzer"],
@@ -15,7 +15,7 @@
     "default_duration_seconds": 60,
     "seed_corpus_dir": "src/test/resources/eu/exeris/benchmarks/micro/fuzz/Http1RequestParserFuzzTest",
     "expected_throwables": [
-      "eu.exeris.kernel.core.http.http1.Http1ParseException",
+      "eu.exeris.kernel.core.http.http1.Http1RequestParser$Http1ParseException",
       "java.lang.IndexOutOfBoundsException",
       "java.lang.IllegalArgumentException",
       "java.nio.BufferUnderflowException"

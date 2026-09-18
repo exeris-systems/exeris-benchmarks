@@ -1,0 +1,15 @@
+{
+  "leg": "D-double-prime->F",
+  "contract": "light",
+  "arms": {
+    "exeris-k0110-j28p": {
+      "jdk_feature": 28
+    },
+    "exeris-k0111pv-j28p": {
+      "jdk_feature": 28
+    }
+  },
+  "harness_path_jdk": "26.0.1",
+  "harness_jdk_field_is_authoritative": false,
+  "warning": "run_config.metadata.jdk_version and run_config.*_versions.jdk_version in comparative-result.json record `java` on the harness PATH (26.0.1), which is NOT the JDK that launched either arm and is never authoritative on this axis. Read the per-arm jdk_feature here instead. BENCHMARK_PINNED_JDK_VERSION cannot express the truth: gate G7 checks it against the PATH java, so setting it to an arm's real JDK fails the run as PIN_MISMATCH rather than correcting the metadata."
+}

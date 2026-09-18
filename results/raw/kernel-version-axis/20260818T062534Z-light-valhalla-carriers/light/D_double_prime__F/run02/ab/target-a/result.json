@@ -1,0 +1,201 @@
+{
+  "schema_version": "1",
+  "run_id": "entity-read-by-id-20260818-114945-000000",
+  "timestamp": "2026-08-18T12:09:49Z",
+  "scenario": "entity-read-by-id",
+  "tool": "wrk",
+  "env_ref": "/home/bench/exeris-benchmarks/runtime/drivers/env/exeris-k0110-j28p.env",
+  "transport_mode": "loopback-h1",
+  "target": {
+    "tier": "community",
+    "repo": "exeris-k0110-j28p",
+    "protocol": "h1",
+    "mode": "pure",
+    "commit_sha": "be2330ffa80abd27c6da34df31bc6c19146aa6de",
+    "build_provenance": {
+      "artifact_path": "/home/bench/exeris-benchmarks/targets/_staging/exeris-community-app-k0.11.0-r28p.jar",
+      "artifact_sha256": "8afce53a48c1de89ba488dece8dddbf69a0601ad07a4e8582937d858b94102f3"
+    }
+  },
+  "run_config": {
+    "duration_seconds": 900,
+    "warmup_seconds": 300,
+    "threads": 4,
+    "connections": 128,
+    "contract_id": "fixed_contract_cross_runtime_h1_single_read_v1",
+    "protocol_mode": "h1",
+    "transport_mode": "loopback-h1",
+    "track_id": "track-light-D_double_prime__F-ab-02",
+    "pair_id": "entity-read-by-id-fixed_contract_cross_runtime_h1_single_read_v1-exeris-k0110-j28p__exeris-k0111pv-j28p",
+    "pair_order": "ab",
+    "ab_ba_orders_completed": [
+      "ab",
+      "ba"
+    ],
+    "pair_completion_evidence": {
+      "invocation_order": "ab",
+      "target_slot": "target-a",
+      "completion_marker_utc": "2026-08-18T12:09:49Z",
+      "completed_orders": [
+        "ab",
+        "ba"
+      ]
+    },
+    "jvm_class": "jvm",
+    "mode": "pure",
+    "driver": {
+      "mode": "closed",
+      "offered_rps": 0,
+      "rate_attainment_pct": 0,
+      "note": "closed = wrk at saturation: throughput and resource metrics valid, percentiles are queue-depth/throughput. open = wrk2 at a fixed arrival rate: percentiles are service time."
+    },
+    "payload_size_bytes": 1024,
+    "drift_snapshot": {
+      "required_metadata_present": true,
+      "max_latency_drift_pct": 0,
+      "observed_latency_drift_pct": 0,
+      "max_throughput_drift_pct": 0,
+      "observed_throughput_drift_pct": 0
+    },
+    "metadata": {
+      "jdk_vendor": "Eclipse Adoptium",
+      "jdk_version": "26.0.1",
+      "benchmark_tool_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+      "jvm_flags": [
+        "--enable-preview"
+      ],
+      "hardware_profile": "perf-box-amd64",
+      "backend_network_mode": "bridge",
+      "db_cpuset": "4-7,12-15",
+      "db_cpuset_source": "docker-hostconfig",
+      "scenario_id": "entity-read-by-id",
+      "target_classification": "runtime-comparative"
+    },
+    "pinned_versions": {
+      "jdk_version": "26.0.1",
+      "benchmark_tool_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+      "target_commit_sha": "be2330ffa80abd27c6da34df31bc6c19146aa6de"
+    },
+    "actual_versions": {
+      "jdk_version": "26.0.1",
+      "benchmark_tool_version": "wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer",
+      "target_commit_sha": "be2330ffa80abd27c6da34df31bc6c19146aa6de"
+    },
+    "target_contract": {
+      "target_id": "exeris-k0110-j28p",
+      "tier": "community",
+      "protocol_mode": "h1",
+      "launcher_mode": "external",
+      "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/exeris-k0110-j28p.env",
+      "profile_id": "exeris-k0110-j28p",
+      "compose_file": "",
+      "jar_path": "/home/bench/exeris-benchmarks/targets/_staging/exeris-community-app-k0.11.0-r28p.jar",
+      "health_url": "http://localhost:9026/health"
+    },
+    "resource_metrics": {
+      "sample_count": 870,
+      "cpu_time_seconds": 3582.86,
+      "cpu_util_percent_of_one_core": 398.10,
+      "avg_cores_used": 3.9810,
+      "host_logical_cpus": 16,
+      "cpu_util_percent_of_host_total": 24.88,
+      "vmrss_kb_min": 364672,
+      "vmrss_kb_max": 386084,
+      "vmrss_kb_avg": 382787,
+      "vmsize_kb_min": 4492232,
+      "vmsize_kb_max": 4492232,
+      "vmsize_kb_avg": 4492232,
+      "vmhwm_kb_max": 386084,
+      "threads_min": 39,
+      "threads_max": 41,
+      "threads_avg": 39.07,
+      "smaps_rss_kb_min": 367764,
+      "smaps_rss_kb_max": 386084,
+      "smaps_rss_kb_avg": 382791,
+      "cgroup_memory_current_kb_min": 5020508,
+      "cgroup_memory_current_kb_max": 5085240,
+      "cgroup_memory_current_kb_avg": 5063007,
+      "rss_kb_min": 367764,
+      "rss_kb_max": 386084,
+      "rss_kb_avg": 382791,
+      "jvm_memory_breakdown": {
+        "jcmd_available": true,
+        "jcmd_heap_info_succeeded": true,
+        "heap_metrics_present": false,
+        "breakdown_valid": false,
+        "breakdown_note": "GC.heap_info succeeded but heap metrics were unavailable; offheap estimate not possible.",
+        "heap_used_kb": 0,
+        "heap_committed_kb": 0,
+        "heap_max_kb": 0,
+        "native_total_committed_kb": 0,
+        "native_total_reserved_kb": 0,
+        "native_java_heap_committed_kb": 0,
+        "offheap_kb_estimate": 0,
+        "heap_plus_offheap_kb_estimate": 0,
+        "offheap_estimate_source": "unavailable_heap_unknown",
+        "nmt_enabled": false
+      }
+    },
+    "jfr_capture": {
+      "pid": "2472144",
+      "jcmd_available": true,
+      "check_ok": true,
+      "recording_detected": true,
+      "dump_attempted": true,
+      "dump_success": true,
+      "stop_attempted": true,
+      "stop_success": true,
+      "stop_recording_name": "exeris_k0110_j28p_20260818_114945",
+      "jfr_file": "results/raw/kernel-version-axis/20260818T062534Z-light-valhalla-carriers/light/D_double_prime__F/run02/ab/target-a/target-exeris-k0110-j28p-20260818-114945.jfr",
+      "note": ""
+    },
+    "runtime_log": {
+      "launcher_mode": "external",
+      "env_file": "/home/bench/exeris-benchmarks/runtime/drivers/env/exeris-k0110-j28p.env",
+      "log_path": "/tmp/exeris-exeris-k0110-j28p-9026.log",
+      "external_jar_path": "targets/_staging/exeris-community-app-k0.11.0-r28p.jar",
+      "resolved_jar_path": "/home/bench/exeris-benchmarks/targets/_staging/exeris-community-app-k0.11.0-r28p.jar",
+      "jar_exists": true,
+      "jar_sha256": "8afce53a48c1de89ba488dece8dddbf69a0601ad07a4e8582937d858b94102f3",
+      "jar_size_bytes": 20724977,
+      "jar_mtime_utc": "2026-08-12T14:03:47Z",
+      "copied": true,
+      "output_file": "results/raw/kernel-version-axis/20260818T062534Z-light-valhalla-carriers/light/D_double_prime__F/run02/ab/target-a/target-runtime.log",
+      "note": "runtime log copied"
+    },
+    "jfr_start": {
+      "pid": "2472144",
+      "jcmd_available": true,
+      "start_attempted": true,
+      "start_success": true,
+      "recording_already_present": false,
+      "recording_name": "exeris_k0110_j28p_20260818_114945",
+      "note": "recording started"
+    }
+  },
+  "metrics": {
+    "throughput_rps": 78924.60,
+    "latency_p50_us": 1280.000000,
+    "latency_p75_us": 2800.000000,
+    "latency_p90_us": 5560.000000,
+    "latency_p95_us": 7380.000000,
+    "latency_p99_us": 11130.000000,
+    "error_rate_pct": 0.0000,
+    "total_requests": 71040043,
+    "total_errors": 0,
+    "socket_errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "timeout": 0,
+      "total": 0
+    },
+    "failed_requests_total": 0,
+    "failed_request_rate_pct": 0.0000,
+    "latency_p999_us": 0
+  },
+  "claim_scope": "comparison_eligible",
+  "runner_status": "success",
+  "final_reason": "ok",
+  "reproducibility_status": "complete"
+}

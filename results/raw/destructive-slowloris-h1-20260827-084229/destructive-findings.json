@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "run_id": "destructive-slowloris-h1-20260827-084229-40e96a24fe78",
+  "scenario": "destructive-slowloris-h1",
+  "campaign_kind": "slowloris",
+  "duration_seconds": 120,
+  "claim_scope": "exploratory",
+  "comparison_axis": "standalone",
+  "findings": {
+    "iterations_total": 12000,
+    "crash_count": 0,
+    "oom_count": 0,
+    "hang_count": 0,
+    "connections_opened": 1000,
+    "connections_dropped": 0,
+    "unique_crash_signatures": 0,
+    "mean_time_to_crash_us": null,
+    "leak_count_delta": 0
+  },
+  "liveness_probe": {
+    "method": "GET",
+    "path": "/health",
+    "status_code": 200,
+    "duration_ms": 7,
+    "expected_status": 200,
+    "expected_max_response_ms": 1000,
+    "asserted_alive": true
+  },
+  "resource_delta": {
+    "rss_bytes_before": 345952256,
+    "rss_bytes_after": 346480640,
+    "rss_bytes_delta": 528384,
+    "vsz_bytes_before": 23885168640,
+    "vsz_bytes_after": 23885168640,
+    "vsz_bytes_delta": 0,
+    "native_heap_committed_bytes_delta": null,
+    "jfr_recording_path": "/home/bench/exeris-benchmarks/results/raw/destructive-slowloris-h1-20260827-084229/destructive-slowloris.jfr",
+    "baseline_warmup_seconds": 30
+  },
+  "degradation_class": "stable",
+  "tolerance": {
+    "rss_growth_pct_max": 5,
+    "max_hang_count": 0
+  },
+  "publication_mode": "internal-only"
+}

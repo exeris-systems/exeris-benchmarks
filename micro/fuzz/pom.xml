@@ -53,6 +53,31 @@
     </repository>
   </repositories>
 
+  <!--
+    The JUnit BOM is load-bearing, not hygiene. jazzer-junit 0.22.1 drags in
+    junit-platform-commons and junit-platform-launcher 1.9.0, while junit-jupiter-engine 5.10.2
+    needs platform 1.10.2. Maven's nearest-wins picks Jazzer's 1.9.0 because jazzer-junit is
+    declared first at the same depth, and the engine then calls a method that does not exist in
+    the older commons:
+
+      NoSuchMethodError: ReflectionSupport.streamNestedClasses(Class, Predicate)
+
+    which surfaces as "TestEngine with ID 'junit-jupiter' failed to discover tests" — zero tests
+    run, and before the runner was hardened on 2026-08-26 that was reported as "stable".
+    Importing the BOM pins every junit-platform artifact to the line that matches the engine.
+  -->
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>${junit.jupiter.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
   <dependencies>
     <dependency>
       <groupId>com.code-intelligence</groupId>
@@ -133,6 +158,21 @@ A floating -SNAPSHOT is non-reproducible; a stale literal silently invalidates f
         <configuration>
           <argLine>--enable-preview --enable-native-access=ALL-UNNAMED</argLine>
           <systemPropertyVariables>
+            <!--
+              jazzer.duration is NOT a property Jazzer reads. It is kept only so the value is
+              visible in the forked JVM's properties for debugging; nothing consumes it.
+              Campaign length is controlled solely by @FuzzTest(maxDuration = "...") on each test.
+
+              Two things were tried on 2026-08-26 and both failed, so do not repeat them:
+                - -Djazzer.* on the mvn command line never reaches the FORKED test JVM (only
+                  systemPropertyVariables do), so it cannot work from outside at all;
+                - routing -max_total_time through jazzer.internal.arg.0 from here DOES reach the
+                  fork, but Jazzer appends the annotation's own -max_total_time afterwards and
+                  libFuzzer takes the last occurrence. Measured: a 20s request still ran 66s.
+
+              To change campaign length, edit the annotation. scripts/run-fuzz-campaign.sh reads
+              it back so the artifact records the duration that actually applied.
+            -->
             <jazzer.duration>${jazzer.duration}</jazzer.duration>
           </systemPropertyVariables>
         </configuration>

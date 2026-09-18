@@ -6,52 +6,12 @@ categories:
   - benchmarking
   - jvm
 summary: "One Spring application served five ways on dedicated bare metal, under two fixed contracts and two instruments. The repository layer costs headroom, not per-request latency: at 600 rps the heavy median gap is x1.43 and on the single-row contract the arms are indistinguishable up to 20 000 rps, but the Hibernate arm reaches 94 % of its capacity while the JDBC one stays flat. The largest identified contributor is Spring Data's projection proxies rather than Hibernate's own row mapping — the pair moves both and the split is unmeasured. The hosting swap is smaller than either, and 23 % of it turned out to be Spring Security."
-# Written from 7.1 (service time), deliberately NOT from 4 (cost). x3.95 is the most quotable
-# number in this report and the body says it holds on neither contract, so it must not appear
-# here: this is the only surface that travels to aggregators, RSS and search without its fences.
-#
-# Second trap, caught 2026-08-11: this line must not resolve L10. Section 5 says the attribution
-# to Hibernate specifically "is not established by these arms" and section 8 carries the split as
-# an open item. "Largest identified contributor ... split is unmeasured" is the strongest form the
-# data supports; "it is X rather than Y" is not, however quotable it reads.
 authors:
   - Arkadiusz Przychocki
 track: Community
 benchmark_family: Runtime
 scenario: entity-read-by-id
 reproducibility_status: complete
-# NO claim_scope FIELD, DELIBERATELY — removed 2026-08-11.
-#
-# A whole-file claim scope is the wrong shape for a report, and for this one it would be false
-# in every available value. The file mixes: 108 gated units that are comparison_eligible, two
-# pairs that are non_eligible BY DESIGN because they cross the Pure-vs-Compat axis, an
-# exploratory-class Amdahl derivation (L3), and descriptive footprint data. "comparison_eligible"
-# would over-claim the compat pairs; "exploratory" would under-claim 108 gated units; any single
-# value erases the axis separation the report exists to maintain.
-#
-# Eligibility in this repo is a per-campaign, per-pair property, and it is now stated at EVERY
-# data table with its campaign id and unit count. That is where a reader should look, and a
-# frontmatter field that contradicts or flattens those statements is worse than no field.
-#
-# Nothing consumes it either: publish-report.sh reads claim_scope from the RESULT JSON, not from
-# report frontmatter, and 2026-06-20-entity-read-by-id-artifacts.md already carries none.
-#
-# reproducibility_status: complete — flipped 2026-08-12. READ THE DEFINITION BEFORE RELYING ON IT.
-#
-# What was actually done: every headline figure was re-derived a second time directly from
-# results/raw/entity-read-by-id/, WITHOUT reading this report's text, using independent queries
-# over the artefacts. It found one derivation error (§6 presented a telescoping identity as a
-# closure check), one mislabelled column (§7.1) and a set of scope/unit slips -- all fixed and
-# recorded in CLAIMS.md's retraction register (#18-#21) and the editorial list below.
-#
-# What that is NOT: third-party review. The re-derivation was performed on the author's side,
-# independently of the pass that wrote the prose but not by an unaffiliated reviewer. An earlier
-# version of this comment set the bar as "someone ELSE re-derives" and then claimed the flip met
-# "exactly the condition this comment used to set" -- an assertion of equivalence between "a
-# second pass" and "a second person" that the facts did not support. The bar is restated here as
-# what was done, not as what it sounded like.
-#
-# Flip it back if the report gains a section that pass did not cover.
 comparison_axis: within-tier
 hardware_profile: perf-box-amd64
 ---
@@ -1264,6 +1224,11 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
      claim were sitting among five notes about paragraph order and TL;DR length, which is the
      opposite of what this section is for. -->
 
+Editor-facing notes for this report — what the `summary` is written from, why there is no
+`claim_scope` field, and what `reproducibility_status: complete` does and does not mean here —
+live in [`docs/REPORT-EDITORIAL-NOTES.md`](../../docs/REPORT-EDITORIAL-NOTES.md). Read them before
+touching the summary, and correct them in the same pass that corrects the body.
+
 ### Findings and retractions — each changed a number or a claim
 
 - **2026-08-11 — draft opened.** Skeleton with §2–§6 data from committed campaigns; §7 pending.
@@ -1341,9 +1306,23 @@ with the fence rather than hold the report, and it lives in fairness posture 5.)
 
 ### Editorial corrections — found in review, changed nothing in the data
 
-*All four were defects living **only** on a summarizing surface or in the ordering of evidence, in
-a report that carries a footer note warning about exactly that. Recorded together because the
-pattern is the point: the footer rule is not folklore, it is this list.*
+*The four 2026-08-11 entries were defects living **only** on a summarizing surface or in the
+ordering of evidence, in a report that carries a footer note warning about exactly that. Recorded
+together because the pattern is the point: the footer rule is not folklore, it is this list.*
+
+- **2026-08-27 — the editor notes leave the frontmatter.** Forty commented lines sat inside the
+  YAML block, and a report's raw view is one click from any link to it, so they were published
+  whether or not they rendered. One was quotable straight against the work: of ×3.95, *"the most
+  quotable number in this report … it must not appear here: this is the only surface that travels
+  to aggregators, RSS and search without its fences."* The reason is sound — the body establishes
+  the figure holds on neither contract, so the one unfenced surface must not carry it — but the
+  phrasing leads with the distribution channel, and lifted alone it reads as suppressing a number
+  because of where it would travel. It now says what it always meant: the summary states what
+  survives being read detached from its fences, and §4 and §5 carry ×3.95 in full with its
+  conditions. Moved to [`docs/REPORT-EDITORIAL-NOTES.md`](../../docs/REPORT-EDITORIAL-NOTES.md)
+  with the `claim_scope` and `reproducibility_status` notes, and linked from this section. No
+  figure, no body text, and no frontmatter *field* changes.
+
 
 - **2026-08-11 — §7's own uncertainty measure was the one §2.4 disqualifies, and the fence for it
   was already in the document.** §7's 36 leaves are 6 rungs × two *directions* × three ladders:

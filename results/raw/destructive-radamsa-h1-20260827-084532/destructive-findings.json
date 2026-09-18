@@ -1,0 +1,51 @@
+{
+  "schema_version": "1",
+  "run_id": "destructive-radamsa-h1-20260827-084532-40e96a24fe78",
+  "scenario": "destructive-radamsa-h1",
+  "campaign_kind": "radamsa",
+  "duration_seconds": 120,
+  "claim_scope": "exploratory",
+  "comparison_axis": "standalone",
+  "findings": {
+    "iterations_total": 59501,
+    "crash_count": 0,
+    "oom_count": 0,
+    "hang_count": 8366,
+    "incomplete_wait_count": 3225,
+    "outcome_details": {},
+    "unique_crash_signatures": 0,
+    "mean_time_to_crash_us": null,
+    "leak_count_delta": 0
+  },
+  "liveness_probe": {
+    "method": "GET",
+    "path": "/health",
+    "protocol": "h1",
+    "status_code": 200,
+    "duration_ms": 7,
+    "expected_status": 200,
+    "expected_max_response_ms": 1000,
+    "asserted_alive": true
+  },
+  "resource_delta": {
+    "rss_bytes_before": 346505216,
+    "rss_bytes_after": 347389952,
+    "rss_bytes_delta": 884736,
+    "vsz_bytes_before": 23885168640,
+    "vsz_bytes_after": 23885168640,
+    "vsz_bytes_delta": 0,
+    "native_heap_committed_bytes_delta": null,
+    "jfr_recording_path": "/home/bench/exeris-benchmarks/results/raw/destructive-radamsa-h1-20260827-084532/destructive-radamsa.jfr",
+    "baseline_warmup_seconds": 30
+  },
+  "degradation_class": "unanswered",
+  "notes": "expected outcomes (not findings): 9051 connection-close rejections, 38859 well-formed responses, 3225 incomplete-wait timeouts (mutant never terminated its request; the target was correctly waiting, the attacker gave up at the socket deadline -- whether the target EVER times out an incomplete request is destructive-slowloris-h1's question, not this one). crash_count counts CONNECT failures only (listener gone); a close after connect is the server correctly refusing malformed input. hang_count counts timeouts on COMPLETE requests only. rate: 495.8/500 rps achieved with 256 workers, 499 pacing skips, 0 generator failures. mutant_stream=batched-v2 (streams are not byte-comparable across ids).",
+  "tolerance": {
+    "rss_growth_pct_max": 5,
+    "max_unexpected_crashes": 0
+  },
+  "seeds": {
+    "radamsa_seed": "424242"
+  },
+  "publication_mode": "internal-only"
+}

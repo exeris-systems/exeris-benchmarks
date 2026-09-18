@@ -1,0 +1,39 @@
+{
+  "scenario_id": "fuzz-http1-headers",
+  "version": "1",
+  "benchmark_family": "micro",
+  "target_classification": "micro-parser-robustness",
+  "description": "Jazzer-driven byte[] fuzz against eu.exeris.kernel.core.http.http1.Http1RequestParser.parseHeaders — the HEADER BLOCK, distinct from fuzz-http1-parser's request line. Each iteration wraps the mutated byte[] in a confined Arena MemorySegment and parses it with a MAX_HEADERS=64 / MAX_HEADER_SIZE=4096 bound and a no-op HeaderVisitor. The visitor is a no-op but the path is not free of allocation: parseHeaders materialises name and value as Strings BEFORE calling the visitor, so this scenario covers the header allocation path as well as the parse path. Whitelisted throwables (Http1ParseException, IndexOutOfBoundsException, IllegalArgumentException, BufferUnderflowException) are recorded but do NOT count as findings. Any other Throwable (NPE, AssertionError, OOM, StackOverflow, VirtualMachineError) is a finding.",
+  "mode": "fuzz-campaign",
+  "tier": "community",
+  "driver": ["jazzer"],
+  "transport": ["none"],
+  "loopback": false,
+  "fuzz": {
+    "tool": "jazzer",
+    "test_class": "eu.exeris.benchmarks.micro.fuzz.Http1HeaderParserFuzzTest",
+    "default_duration_seconds": 60,
+    "seed_corpus_dir": "src/test/resources/eu/exeris/benchmarks/micro/fuzz/Http1HeaderParserFuzzTest",
+    "expected_throwables": [
+      "eu.exeris.kernel.core.http.http1.Http1RequestParser$Http1ParseException",
+      "java.lang.IndexOutOfBoundsException",
+      "java.lang.IllegalArgumentException",
+      "java.nio.BufferUnderflowException"
+    ],
+    "finding_throwables": [
+      "java.lang.NullPointerException",
+      "java.lang.AssertionError",
+      "java.lang.OutOfMemoryError",
+      "java.lang.StackOverflowError",
+      "java.lang.VirtualMachineError"
+    ]
+  },
+  "tolerance": {
+    "max_unexpected_crashes": 0,
+    "max_hang_count": 0
+  },
+  "claim_scope": "exploratory",
+  "comparison_axis_note": "Fuzz findings are exploratory by construction. Do NOT report iterations/sec as a perf claim — Jazzer's internal coverage feedback makes throughput non-stationary. The relevant axes are robustness (zero unexpected crashes) and Arena leak count delta.",
+  "publication_mode_required": "internal-only",
+  "publication_mode_reason": "Crash inputs produced by Jazzer (crash-<sha1>) contain attacker-supplied bytes; basename blocklist in publish-report.sh blocks them outside internal-only mode."
+}

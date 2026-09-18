@@ -106,3 +106,11 @@ scripts/tmp-*.sh
 # Git-Bash / Cygwin crash artifacts
 *.stackdump
 tools/bench/lib/__pycache__/
+
+# Kernel-version-axis staged jars: build outputs, ~20 MB each, rebuilt by
+# scripts/build-kernel-version-axis-jars.sh from the arms manifest. The jar
+# identity that matters is asserted at run time by
+# tools/verify-kernel-version-axis-identity.sh against the live process, and
+# recorded per leaf, so the binaries themselves need not be in git.
+targets/_staging/
+__pycache__/

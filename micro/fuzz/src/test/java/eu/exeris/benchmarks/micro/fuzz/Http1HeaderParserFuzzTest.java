@@ -31,17 +31,23 @@ class Http1HeaderParserFuzzTest {
     }
   }
 
-  // The kernel's HeaderVisitor SAM lives in eu.exeris.kernel.core.http.http1.
-  // We use a no-op so fuzzing exercises the parser path, not visitor logic.
-  // If the SAM signature changes, the compile error here is intentional:
-  // pin the kernel snapshot in pom.xml and update this shim.
-  private enum NoOpHeaderVisitor
-      implements eu.exeris.kernel.core.http.http1.HeaderVisitor {
+  // HeaderVisitor is NESTED in Http1RequestParser and takes materialised Strings. This shim
+  // originally declared a top-level eu.exeris.kernel.core.http.http1.HeaderVisitor with an
+  // offset-based onHeader(MemorySegment, long, long, long, long) — a type that has never
+  // existed in any released kernel (checked v0.5.0 through v0.11.0), so this test could not
+  // compile against anything and the whole fuzz family had never run.
+  //
+  // Note for anyone reading this while changing the parser: the String materialisation happens
+  // INSIDE parseHeaders, before the visitor is called, so a no-op visitor does not avoid it.
+  // Fuzzing here therefore covers the allocation path as well as the parse path.
+  //
+  // If the SAM signature changes again, the compile error here is intentional: re-pin the
+  // kernel version and update this shim rather than loosening the type.
+  private enum NoOpHeaderVisitor implements Http1RequestParser.HeaderVisitor {
     INSTANCE;
 
     @Override
-    public void onHeader(MemorySegment seg, long nameOffset, long nameLength,
-                         long valueOffset, long valueLength) {
+    public void onHeader(String name, String value) {
       // intentionally empty — fuzz target only cares whether the parser itself
       // crashes; visitor side effects are out of scope here.
     }

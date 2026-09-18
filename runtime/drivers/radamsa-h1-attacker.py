@@ -2,70 +2,31 @@
 """
 radamsa-h1-attacker.py — fire radamsa-mutated HTTP/1.1 requests at a target.
 
-REQUIRES: `radamsa` in PATH. Install: https://gitlab.com/akihe/radamsa
+REQUIRES: `radamsa` on PATH, or RADAMSA_BIN pointing at it.
+Install: https://gitlab.com/akihe/radamsa
 
-Each iteration:
-  1. Pipe the seed request through `radamsa --seed <fixed>` to get a mutant.
-  2. Open a fresh TCP connection.
-  3. Send the mutant.
-  4. Read response (best-effort) up to --socket-timeout-seconds.
-  5. Close.
+The attack engine, the outcome taxonomy, the mutant pool and the concurrency
+model all live in lib/radamsa_attack.py, shared with the H2 driver. This file
+supplies only what is HTTP/1-specific: the seed request and the predicate for
+"does this mutant complete a request".
 
-Output: one JSON line on stdout when the attack window closes:
-    {
-      "iterations_total": int,
-      "crash_count": int,
-      "hang_count": int,
-      "five_xx_count": int,
-      "duration_seconds": float,
-      "radamsa_seed": str
-    }
+Output: one JSON object on stdout when the attack window closes. See
+lib/radamsa_attack.run_campaign for the field list.
 
 Exit code: 0 on clean attack-window close. Non-zero on configuration errors
 (radamsa missing, target URL unparseable). NOT on target-side errors.
 """
 
 import argparse
-import ipaddress
 import json
-import shutil
-import socket
-import subprocess
 import sys
-import time
+from pathlib import Path
 from urllib.parse import urlparse
 
-
-def assert_loopback_or_die(host: str, allow_non_loopback: bool) -> None:
-    """Refuse to attack anything that resolves to a non-loopback address.
-
-    These scripts are committed attack tooling. Accepting arbitrary URLs would
-    make them trivially weaponizable against unrelated hosts; require an
-    explicit opt-in for non-loopback targets so the default cannot be misused.
-    """
-    if allow_non_loopback:
-        return
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror as e:
-        print(f"ERROR: cannot resolve host '{host}': {e}", file=sys.stderr)
-        sys.exit(2)
-    for info in infos:
-        addr = info[4][0]
-        try:
-            if not ipaddress.ip_address(addr).is_loopback:
-                print(
-                    f"ERROR: refusing to attack non-loopback host '{host}' "
-                    f"(resolved to {addr}). Pass --allow-non-loopback to "
-                    f"override (e.g. authorized lab targets).",
-                    file=sys.stderr,
-                )
-                sys.exit(2)
-        except ValueError:
-            print(f"ERROR: cannot parse resolved address '{addr}'",
-                  file=sys.stderr)
-            sys.exit(2)
-
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from radamsa_attack import (  # noqa: E402
+    MutantPool, assert_loopback_or_die, radamsa_binary, run_campaign,
+)
 
 SEED_REQUEST = (
     b"GET /plaintext HTTP/1.1\r\n"
@@ -75,36 +36,55 @@ SEED_REQUEST = (
 )
 
 
-def mutate(seed_bytes: bytes, seed_value: str) -> bytes:
-    proc = subprocess.run(
-        ["radamsa", "--seed", seed_value],
-        input=seed_bytes, capture_output=True, check=True, timeout=5.0,
-    )
-    return proc.stdout
+def is_complete_request(payload: bytes) -> bool:
+    """Is the target OBLIGED to answer this mutant?
 
+    Header-block termination alone is not the test, even though the seed
+    carries no body. radamsa readily grows a `Content-Length:` or a
+    `Transfer-Encoding: chunked` out of the header bytes, and a request
+    announcing a body it never sends leaves the target correctly waiting for
+    the rest -- `incomplete-wait`. Counting it as complete makes the timeout a
+    `hang`, and destructive-radamsa-h1 declares max_hang_count: 0, so a
+    correctly-behaved server would fail the run.
 
-def fire_one(host: str, port: int, payload: bytes, timeout: float) -> str:
-    """Returns one of: 'response', 'hang', 'crash'."""
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        sock.connect((host, port))
-        sock.sendall(payload)
-        try:
-            data = sock.recv(4096)
-            sock.close()
-            if not data:
-                return "crash"
-            if data.startswith(b"HTTP/1.") and b" 5" in data[:32]:
-                return "5xx"
-            return "response"
-        except socket.timeout:
-            sock.close()
-            return "hang"
-    except (ConnectionResetError, BrokenPipeError):
-        return "crash"
-    except OSError:
-        return "crash"
+    The H2 driver had the same defect in frame-shaped clothing (a lone
+    well-formed SETTINGS frame is perfectly aligned and obliges the server to
+    say nothing) and it fired there, once in 400 validation iterations. These
+    two drivers already drifted apart once by fixing the same idea twice, so
+    the predicate is corrected on both sides even though it has not yet
+    produced a wrong H1 result.
+
+    Still deliberately conservative where the input is ambiguous: a mutant
+    with a malformed or contradictory framing header counts as complete,
+    because a target is obliged to answer such a request with 400 rather than
+    wait on it, and a target that instead goes quiet is a finding.
+    """
+    idx = payload.find(b"\r\n\r\n")
+    if idx < 0:
+        return False
+    head, body = payload[:idx], payload[idx + 4:]
+
+    lengths, chunked, malformed = [], False, False
+    for line in head.split(b"\r\n")[1:]:
+        name, _, value = line.partition(b":")
+        key = name.strip().lower()
+        if key == b"content-length":
+            try:
+                lengths.append(int(value.strip()))
+            except ValueError:
+                malformed = True
+        elif key == b"transfer-encoding":
+            if b"chunked" in value.strip().lower():
+                chunked = True
+
+    if malformed or len(set(lengths)) > 1 or (chunked and lengths):
+        # Framing the target must reject, not wait on. RFC 9112 s6.1/s6.3.
+        return True
+    if chunked:
+        return body.endswith(b"0\r\n\r\n")
+    if lengths:
+        return len(body) >= lengths[0]
+    return True
 
 
 def main() -> int:
@@ -115,15 +95,24 @@ def main() -> int:
     p.add_argument("--socket-timeout-seconds", type=float, default=2.0)
     p.add_argument("--radamsa-seed", required=True,
                    help="Fixed seed for radamsa reproducibility")
+    p.add_argument("--workers", type=int, default=64,
+                   help="Concurrent connections. A timeout costs one worker "
+                        "rather than the campaign. Part of the campaign's "
+                        "identity — reported in the summary.")
+    p.add_argument("--mutant-chunk-size", type=int, default=2048,
+                   help="Mutants per radamsa invocation. With the seed, this "
+                        "determines the byte stream, so changing it changes "
+                        "the campaign.")
     p.add_argument("--allow-non-loopback", action="store_true",
                    help="Opt-in: permit a non-loopback target. Default is "
                         "refuse — these scripts are not general-purpose "
                         "attack tools.")
     args = p.parse_args()
 
-    if shutil.which("radamsa") is None:
-        print("ERROR: radamsa not in PATH. Install: "
-              "https://gitlab.com/akihe/radamsa", file=sys.stderr)
+    binary = radamsa_binary()
+    if binary is None:
+        print("ERROR: radamsa not found. Set RADAMSA_BIN or add it to PATH. "
+              "Install: https://gitlab.com/akihe/radamsa", file=sys.stderr)
         return 2
 
     parsed = urlparse(args.base_url)
@@ -138,51 +127,27 @@ def main() -> int:
         return 2
     assert_loopback_or_die(host, args.allow_non_loopback)
 
-    start = time.monotonic()
-    deadline = start + args.attack_duration_seconds
-    iteration_period = 1.0 / args.rps if args.rps > 0 else 0.0
+    try:
+        base_seed = int(args.radamsa_seed)
+    except ValueError:
+        # radamsa's --seed accepts integers only, and rejects anything else
+        # with exit 127 -- its own usage-error code, which reads like
+        # "command not found" and is not. Fail here with a clear message
+        # instead of at the first generation.
+        print(f"ERROR: --radamsa-seed must be an integer "
+              f"(got: '{args.radamsa_seed}')", file=sys.stderr)
+        return 2
 
-    iterations = 0
-    crashes = 0
-    hangs = 0
-    five_xx = 0
-
-    while time.monotonic() < deadline:
-        loop_start = time.monotonic()
-        # Each iteration mutates with a slightly different seed derived from
-        # the base seed + iteration number — this keeps the campaign
-        # reproducible while still exploring the mutator space.
-        mutant_seed = f"{args.radamsa_seed}.{iterations}"
-        try:
-            payload = mutate(SEED_REQUEST, mutant_seed)
-        except subprocess.TimeoutExpired:
-            hangs += 1
-            iterations += 1
-            continue
-
-        outcome = fire_one(host, port, payload,
-                           args.socket_timeout_seconds)
-        if outcome == "hang":
-            hangs += 1
-        elif outcome == "crash":
-            crashes += 1
-        elif outcome == "5xx":
-            five_xx += 1
-
-        iterations += 1
-        elapsed = time.monotonic() - loop_start
-        if iteration_period > elapsed:
-            time.sleep(iteration_period - elapsed)
-
-    duration = time.monotonic() - start
-    json.dump({
-        "iterations_total": iterations,
-        "crash_count": crashes,
-        "hang_count": hangs,
-        "five_xx_count": five_xx,
-        "duration_seconds": duration,
-        "radamsa_seed": args.radamsa_seed,
-    }, sys.stdout)
+    pool = MutantPool(SEED_REQUEST, base_seed, args.mutant_chunk_size, binary)
+    summary = run_campaign(
+        host=host, port=port, pool=pool, rps=args.rps,
+        duration=args.attack_duration_seconds,
+        socket_timeout=args.socket_timeout_seconds,
+        workers=args.workers, is_complete=is_complete_request,
+    )
+    summary["radamsa_seed"] = args.radamsa_seed
+    summary["mutant_chunk_size"] = args.mutant_chunk_size
+    json.dump(summary, sys.stdout)
     sys.stdout.write("\n")
     return 0
 

@@ -5,7 +5,7 @@ categories:
   - benchmarking
   - jvm
   - saga
-summary: "Every load-bearing figure in the tJUG talk, keyed to the run-sheet segment that uses it, with its artifact path and the validity fence it sits after. Nothing here is a new measurement: the bundle exists so that a figure on a slide can be traced to a file in one step, and so that figures which are NOT citable are named rather than discovered. Four states are separated deliberately — citable (an artifact exists in this repo), observed-but-unartifacted (measured, reproducible, and unusable under this repo's own traceability rule), retracted (an earlier reading a later artifacted measurement does not reproduce, kept visible so it cannot re-enter from an old note), and forbidden (the retired straight-through report, whose retirement note bars forward quotation of every number in it, including its own corrections). The coordinator's resting footprint moved from unartifacted to retracted on the day this bundle was written: re-measured with an artifact it is 319-381 MB, not the 1 055 MB an ad-hoc terminal reading had produced, though the forced-GC result reproduces exactly. The talk's four abstract promises map to six of eight segments; the crash-resilience promise is paid as a named fidelity, not as a counted result, because its current uniform verdict across five unrelated architectures is a property of the harness gateway stub rather than of any engine."
+summary: "Every load-bearing figure in the tJUG talk, keyed to the run-sheet segment that uses it, with its artifact path and the validity fence it sits after. Nothing here is a new measurement: the bundle exists so that a figure on a slide can be traced to a file in one step, and so that figures which are NOT citable are named rather than discovered. Four states are separated deliberately — citable (an artifact exists in this repo), observed-but-unartifacted (measured, reproducible, and unusable under this repo's own traceability rule), retracted (an earlier reading a later artifacted measurement does not reproduce, kept visible so it cannot re-enter from an old note), and forbidden (the retired straight-through report, whose retirement note bars forward quotation of every number in it, including its own corrections). The coordinator's resting footprint moved from unartifacted to retracted on the day this bundle was written: re-measured with an artifact it is 319-381 MB, not the 1 055 MB an ad-hoc terminal reading had produced, though the forced-GC result reproduces exactly. The talk's four abstract promises map to six of eight segments; the crash-resilience promise is paid as a named fidelity, not as a counted result — the 2026-08-25 correction in Segment 3 decomposes the uniform verdict by pre-crash state: parked-on-a-lost-wake stranded on every arm, pre-dispatch work resolved wherever it existed."
 authors:
   - Arkadiusz Przychocki
 track: Community
@@ -22,7 +22,7 @@ hardware_profile: perf-box-amd64
 Run sheet: eight segments, 30:00. This bundle answers one question per figure: **where
 does it come from, and is it allowed on a slide.**
 
-Three states, used consistently below:
+Four states, used consistently below:
 
 - **CITABLE** — an artifact exists in this repository, at the path given.
 - **UNARTIFACTED** — measured and reproducible, but the reading exists only as terminal
@@ -77,10 +77,30 @@ counted result.
 the same word. Both Axon arms resumed the majority of their in-flight sagas after the JVM
 was killed. The in-process arm resumed none of five.
 
-**What the gateway stub does and does not explain.** It never retries a failed callback, so
-a saga parked on a wake lost during the outage cannot resume on any arm — that accounts for
-the residual. It does not account for the difference between 10/14 and 0/5. Something
-resumed on the Axon arms.
+**What the gateway stub does and does not explain — corrected 2026-08-25.** This note
+previously ended: "It does not account for the difference between 10/14 and 0/5. Something
+resumed on the Axon arms." That reading is withdrawn: the `order_status_pre_crash` /
+`order_status_post_drain` fields in the same artifacts decompose the difference. Everything
+parked at `PAYMENT_PROCESSING` before the kill stayed stranded, on every arm — with a
+~100 ms park (shape B), every pre-kill wake fired into the outage, and the stub never
+redelivers, so those sagas are unrecoverable on any engine by harness construction. What
+resolved — on the arms where anything did — was pre-dispatch, mid-pipeline work
+(`CONFIRMED`, `INVENTORY_RESERVED`, `SAGA_INITIATED`) that the store-backed engines
+re-drove after restart, dispatching payment late enough for the callback to land on a live
+app; the dedicated-server arm resolved one saga and additionally left pre-dispatch work
+unresolved (post-drain census: `INVENTORY_RESERVED=1`, `SAGA_INITIATED=1`), so
+"resolved = pre-dispatch" is a property of the store-backed arms, not of all four. The in-process arm's census never catches a saga between
+start and park — its cohort was lost wakes and nothing else — so 0/5 exercises the
+harness's wake-at-most-once policy, not restore-after-crash; the engine's wake-driven
+restore path (checkpoint → rebuild → wake → resume; `AbstractSagaRecoveryTck` at
+kernel@424ddea — every resume test delivers a wake explicitly) had zero opportunities in
+this run. What survives against the in-process engine is narrower and real: no lost-wake
+reconciliation exists — recovery is wake-driven and timeout is evaluated on the next step
+run (`docs/subsystems/flow.md`) — and the store-backed arms did not solve it either; their
+parked sagas stayed equally stranded (server-backed: 4 parked pre-kill, the same 4
+non-terminal post-drain). Cohort-capture note: the cohort id list and the census breakdown
+are captured moments apart at 38/s, which is why cohort size (5) can exceed the census
+non-terminal count (2); both precede the kill.
 
 **So: injected, fails closed, and carrying a signal that runs against my own engine on a
 sample of five to fourteen.** That is what gets said at minute eight, and nothing is claimed
@@ -109,6 +129,29 @@ exactly.
 | both arms gained contract vocabulary | one commit, two routes | `cf7f4df9`, 2026-07-28 | CITABLE |
 | published compensation column | 3.32 % · 0 % · 0 % | the May article | CITABLE, with the correction block attached |
 
+**Added 2026-08-25 — verbatim rows for quotes spoken on stage**, each re-read from source
+this day, because a quotation outside this bundle is a number nobody has checked:
+
+- the line-37 comment in `k6.js @ 45a9239d` reads, in full: `// COMPENSATING is
+  non-terminal: saga rollback still in progress` — CITABLE;
+- the projection SQL at `AxonOrderSagaProjection @ 34f898b9` (constant at lines 17–18)
+  reads: `SELECT status, saga_id FROM orders WHERE saga_id = ? AND user_id = ?` — CITABLE;
+- the full `verdict_guards` text in every `crash-recovery.json` begins: "An empty orders
+  table is NOT a pass: the 2026-08-21 run reported all_sagas_reached_terminal_state for an
+  arm whose 3.1 preflight had aborted before a single order was issued." — CITABLE;
+- the roster correction in `CONTRACT-v2 §1` reads: "'Quarkus + Axon' was wrong in v2.0:
+  the Quarkus arm has never run an Axon saga — Axon was present only as a command bus,
+  with the saga hand-rolled." — CITABLE;
+- the Axon Server container's presence beside the May Quarkus arm is itself artifacted:
+  `20260505T115008Z-baseline/logs/axonserver-docker-stats.csv` — CITABLE;
+- the gateway-stub comment at `targets/payment-gateway-stub/payment_stub.py:112–116`
+  reads, in full: "A failed callback strands a parked saga. Counted, never retried:
+  retrying here would silently mask a target that cannot accept the callback, and the
+  stub must not be the thing that hides that." — CITABLE;
+- roster fact for the backup deck: `spring-on-exeris` is **listed and pending** — contract
+  id `spring_on_exeris_h1_park100_v3` against `exeris-spring-runtime` 0.7.0, no run under
+  that id yet (`CONTRACT-v2 §1`) — CITABLE.
+
 **Slide risk.** The metrics table is safe: its columns are labelled by host runtime. The
 stack table above it is not — it attributes an event-sourced saga to the arm the roster
 correction says never ran one. This is the slide that gets photographed.
@@ -135,9 +178,20 @@ v2 onward. The reconciliation is not owed — it is undefined for that epoch.
 | figure | value | artifact | state |
 |---|---|---|---|
 | the declined subset is an exact integer | FNV-1a, per-`orderId`, `mod 1000 < 30` | `CONTRACT-v2 §4.1` | CITABLE, normative |
-| O0 refusing to report | 768 of 6644 (11.55 %) above the 2 % bound; "an instrument failure, not a measurement" | `…/ladderC-…/exeris-community-r200-p256/correctness-gate.json` and the run log | CITABLE |
+| O0 refusing to report | 768 of 6698 (11.46 %) above the 2 % bound; "an unresolved saga is an observation failure, not an outcome" | `…/ladderG-…/exeris-community-r200-p256/correctness-gate.json` → `reason`, `status: detector_fault` | CITABLE |
 | the empty-table guard | "An empty orders table is NOT a pass" | any `crash-recovery.json`, `verdict_guards` | CITABLE |
 | the false-pass case (Q&A only) | domain-corroborated compensations 0 → 190 | commit `b0779716` and the gate before/after | CITABLE |
+
+**Corrected 2026-08-25.** An earlier revision of the O0 row read "768 of 6644 (11.55 %)",
+quoted a phrase — "an instrument failure, not a measurement" — that appears in no artifact,
+and pointed at ladderC, which holds no `exeris-community-r200-p256` rung. The artifacted
+gate lives in ladderG and its `reason` reads, in full: "O0: 768 of 6698 issued sagas
+(11.46%) reached no terminal outcome the detector recognises, above the 2% bound. An
+unresolved saga is an observation failure, not an outcome, so the compensation count cannot
+be trusted in either direction. First thing to check: this stack's declared terminal_tokens
+(CONTRACT-v2 §3.1) against what it actually emits." The correction is kept visible rather
+than silently applied, for the same reason the RETRACTED state exists: a quotation nobody
+re-checked is a number nobody has checked.
 
 ---
 
@@ -181,10 +235,57 @@ not reclaim — a component the in-process arm does not have at all. The in-proc
 resting cost is measured on the same day at the same rate, and it is smaller: 322 MB against
 446 plus a coordinator.
 
-**Disclose without being asked.** That coordinator runs `-Xmx1536m` where every target JVM
-in the campaign runs `-Xmx192m`. Which way it cuts depends on the metric.
+**Disclose without being asked — corrected 2026-08-25.** This note previously read: "That
+coordinator runs `-Xmx1536m` where every target JVM in the campaign runs `-Xmx192m`."
+Neither value survives its own citation: no `Xmx` string exists anywhere in this repository
+or in any artifact of these runs. What the artifacts do support: the targets run with **no
+heap flags at all**, by documented design — the launcher's own comment block ("Intentionally
+no -XX:MaxRAM / -XX:MaxRAMPercentage flags here"; the constraint model is a cgroup applied
+after startup), and every rung's `env.json` records `jvm_flags: []` — while the shape-A
+rungs additionally record cgroup `memory_limit: "unknown"`. The coordinator is an
+off-the-shelf container the harness samples (`docker inspect` for identity, docker-stats
+for cost) and never introspects, so its JVM configuration sits in no artifact. Both halves
+of the old sentence are therefore **UNARTIFACTED** and withdrawn from citable material. The
+disclosable asymmetry is one of *observability*: the targets' configuration is provable
+from artifacts, the coordinator's is not — read the footprint comparison with that caveat.
 
 ---
+
+## The fence re-run — measured, and not in this repository
+
+`saga-campaign-fence-rerun-20260822T092623Z` on the perf box: `quarkus-lra-jdbc` ×3 with the
+415 fix, and `exeris-community` ×3 beside it as a control, at the normative rate, shape B,
+pool 32, heap 256m — the reference campaign's own configuration, read from its manifest.
+
+**Its citable subset was never imported. The box went offline first.** The artifacts are
+presumably intact on it; that cannot be confirmed until it returns, so this is pending
+import rather than lost. Every figure below is therefore **UNARTIFACTED** — read from a
+terminal and not checkable by anyone, including me.
+
+| reading | value | state |
+|---|---|---|
+| all six reps | `runner=clean`, `gate=pass` | UNARTIFACTED |
+| quarkus domain corroboration | **1399 compensated rows on each of three reps** (0 before the fix) | UNARTIFACTED |
+| control, exeris | reps 2 and 3 reproduce 08-20 to the millisecond (124/128 ms); **rep 1 runs 13 % high** (140/146) and is unexplained | UNARTIFACTED |
+| quarkus completed-path p50 | **376 → 232 ms** across the fence | UNARTIFACTED |
+
+**Two consequences, and neither is comfortable.**
+
+The fence is wider than the compensation column. The completed path does not compensate, and
+it got 38 % faster when the compensation callback stopped returning 415. The leading
+candidate is coordinator retry traffic from the failing callback taxing the whole arm — a
+hypothesis, checkable in the coordinator logs, and not checked. Until it is, **no latency
+figure for that arm from before the fence is usable either**, not just its compensation
+count. Quoting 376 ms as the cost of the LRA architecture would be quoting the cost of our
+own defect in someone else's arm.
+
+And the control validation is itself unartifacted, so the conclusion it was run to support —
+that the three untouched arms of the 08-20 campaign stand — is **provisional**. It is the
+reading I would most like to rely on and the one I am least entitled to.
+
+**What closes it:** import the citable subset when the box returns. If the run directory did
+not survive, re-run it — the configuration is recorded in this bundle and in the reference
+campaign's manifest.
 
 ## The gap at the normative rate
 

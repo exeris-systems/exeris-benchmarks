@@ -1,0 +1,14 @@
+{
+  "captured_at_utc": "2026-07-30T16:13:19Z",
+  "note": "Sampled after backend readiness and before load. Postgres RSS is mostly fixed shared_buffers and identical across stacks; subtract this to get the attributable part.",
+  "backends": {
+    "exeris-e2e-saga-postgres": {
+      "cpu_pct_idle": 0.00,
+      "mem_usage_idle_raw": "100.4MiB"
+    },
+    "exeris-e2e-saga-neo4j": {
+      "cpu_pct_idle": 0.13,
+      "mem_usage_idle_raw": "2.087GiB"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": "1",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "quarkus_lra_jdbc_h1_park100_v3",
+  "target_app": "quarkus-lra-jdbc",
+  "graph_track": "none",
+  "fault_mode": "terminal",
+  "hardware_profile": "perf-box-amd64",
+  "claim_scope": "exploratory",
+  "correctness_gate_status": "pass",
+  "rejection_codes": [
+    "threshold_failure"
+  ],
+  "reason": "k6 exited with code 99 (threshold_failure)"
+}

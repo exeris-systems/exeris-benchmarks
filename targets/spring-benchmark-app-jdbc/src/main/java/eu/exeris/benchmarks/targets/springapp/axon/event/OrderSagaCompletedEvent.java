@@ -5,5 +5,5 @@ public record OrderSagaCompletedEvent(
         String userId,
         String cartId,
         String sagaId
-) {
+) implements SagaScopedEvent {
 }

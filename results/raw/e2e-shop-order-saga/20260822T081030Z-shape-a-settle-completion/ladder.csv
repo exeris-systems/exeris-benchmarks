@@ -1,0 +1,5 @@
+arm,pool,rate,configured_rate,achieved_rate,exit,orders,error_rate,dropped,iter_p95_ms,vus_peak,pg_backends_max,conn_x,gate,domain,lg_cpu4,lg_cpu12,tgt_cpu,pg_cpu,coord_cpu,gw_cpu,settle_s,settled,engine_rss_after_mb,verdict
+exeris-community,256,50,50.00,50.0,0,6004,0.00%,0,8277,346,30,0,pass,182,1.4,1.3,1.6,2.3,0.5,1.7,609,false,-,CLEAN
+quarkus-lra-jdbc,256,50,50.00,50.0,0,6003,0.03%,0,8425,354,24,0,pass,182,3.9,3.9,6.7,4.8,14.3,2.5,98,true,391.00,CLEAN
+exeris-community,256,150,150.00,150.0,0,18004,0.00%,0,8281,1020,46,0,pass,536,3.1,3.0,3.5,3.9,0.6,2.1,610,false,-,CLEAN
+quarkus-lra-jdbc,256,70,70.00,69.5,3,8341,0.74%,0,8510,505,29,0,fail,256,5.0,4.8,8.1,4.9,8.7,2.7,98,true,340.10,FAILED

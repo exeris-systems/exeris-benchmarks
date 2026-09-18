@@ -1,6 +1,7 @@
 package eu.exeris.benchmarks.targets.restateapp.saga;
 
 import dev.restate.common.function.ThrowingRunnable;
+import dev.restate.sdk.Awakeable;
 import dev.restate.sdk.Restate;
 import dev.restate.sdk.annotation.Handler;
 import dev.restate.sdk.annotation.Name;
@@ -51,6 +52,7 @@ public class OrderSagaWorkflow {
     private final OrderStatusProjection projection;
     private final SagaFaultMode faultMode;
     private final SagaRetryPolicyConfig retryConfig;
+    private final PaymentGatewayClient paymentGateway = new PaymentGatewayClient();
 
     public OrderSagaWorkflow(
             OrderSagaSqlSteps steps,
@@ -62,6 +64,14 @@ public class OrderSagaWorkflow {
         this.projection = projection;
         this.faultMode = faultMode;
         this.retryConfig = retryConfig;
+        if (faultMode == SagaFaultMode.OFF) {
+            // Parsed only so a stale setting is not read as authoritative: under the §4
+            // parking workload the effective switch is the gateway's
+            // PAYMENT_STUB_FAULT_MODE. A knob that silently no-ops is worse than none.
+            log.warn("EXERIS_SAGA_FAULT_MODE=off has no effect in the parking workload: the "
+                    + "CONTRACT-v2 §4.1 decline is decided by the external gateway. "
+                    + "Set PAYMENT_STUB_FAULT_MODE=off instead.");
+        }
     }
 
     @Handler
@@ -83,21 +93,38 @@ public class OrderSagaWorkflow {
             projection.put(orderId, userId, "INVENTORY_RESERVED", sagaId);
 
             // Pivot step. Compensation is registered BEFORE the charge because the
-            // §4.1 decline fires after the step's forward writes are committed —
+            // §4.1 decline arrives after the step's forward writes are committed —
             // exactly like the reference stacks, a declined payment still refunds.
             compensations.push(new NamedCompensation("refund-payment",
                     () -> steps.refundPayment(dbOrderId, sagaId)));
+
+            // CONTRACT-v2 §4 (parking workload): charge-payment does not answer inline.
+            //
+            // The awakeable is created OUTSIDE the run block on purpose: creating it is
+            // itself a journaled action, so on replay it yields the same id, whereas an
+            // id minted inside a run block would be captured in that block's result and
+            // the surrounding code could not see it. The dispatch goes INSIDE a run
+            // block so it happens exactly once across replays — a second dispatch would
+            // produce a second callback for an already-resolved awakeable.
+            Awakeable<PaymentGatewayOutcome> payment = Restate.awakeable(PaymentGatewayOutcome.class);
             Restate.run("charge-payment", retry, () -> {
                 steps.requestPayment(dbOrderId, sagaId);
-                // CONTRACT-v2 §4.1: deterministic per-orderId business decline —
-                // BUSINESS-TERMINAL. TerminalException is never retried by Restate
-                // (zero retries on decline), routed straight to compensation.
-                if (faultMode == SagaFaultMode.TERMINAL && PaymentDeclineRule.isDeclined(orderId)) {
-                    throw new TerminalException(TerminalException.INTERNAL_SERVER_ERROR_CODE,
-                            "payment_declined:" + orderId);
-                }
+                paymentGateway.dispatch(orderId, sagaId, payment.id());
             });
             projection.put(orderId, userId, "PAYMENT_PROCESSING", sagaId);
+
+            // PARK. Restate suspends the invocation here — no thread, no connection and
+            // no request is held while the gateway takes its time; the journal is the
+            // only thing that persists. This is the shape the whole workload exists to
+            // compare, and it is the one Restate is built around.
+            PaymentGatewayOutcome outcome = payment.await();
+            if (!outcome.authorized()) {
+                // CONTRACT-v2 §4.1: business-terminal decline, decided by the gateway.
+                // TerminalException is never retried by Restate (zero retries on
+                // decline), routed straight to compensation.
+                throw new TerminalException(TerminalException.INTERNAL_SERVER_ERROR_CODE,
+                        "payment_declined:" + orderId);
+            }
 
             Restate.run("confirm-order", retry, () -> steps.confirmOrder(dbOrderId, sagaId));
             projection.put(orderId, userId, "CONFIRMED", sagaId);

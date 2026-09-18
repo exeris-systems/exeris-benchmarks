@@ -1,0 +1,64 @@
+{
+  "schema_version": "1",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#8",
+  "contract_id": "exeris_community_h1_park1_v3",
+  "target_app": "exeris-community",
+  "axis": "post_load_settle",
+  "settle_seconds": 609,
+  "settled": false,
+  "idle_definition": {
+    "cpu_pct_below": 3.0,
+    "consecutive_samples": 5,
+    "cap_seconds": 600
+  },
+  "watched_nothing": false,
+  "retention": [
+    {
+      "component": "target-jvm",
+      "phase": "before",
+      "anon_bytes": 0,
+      "file_bytes": 0,
+      "rss_kb": 355780,
+      "gc_invoked": "n/a"
+    },
+    {
+      "component": "target-jvm",
+      "phase": "after",
+      "anon_bytes": 0,
+      "file_bytes": 0,
+      "rss_kb": 330632,
+      "gc_invoked": "yes"
+    }
+  ],
+  "retention_note": "anon vs file separates live state from reclaimable page cache; gc_invoked records whether a full collection was actually requested. A resting footprint that survives a forced GC is retained state, not uncollected garbage. rss_kb is populated for the target JVM only, anon/file for containers only - the two are read from different interfaces and must not be compared as if they were one number.",
+  "deployment_unit_engines": [],
+  "gated_on": [
+    "target-jvm"
+  ],
+  "target_cpu_core_seconds_after_load": 12.630,
+  "components": [
+    {
+      "component": "exeris-e2e-saga-postgres",
+      "samples": 120,
+      "cpu_pct_max": 13.06,
+      "cpu_pct_avg": 3.03,
+      "rss_mb_max": 141.90
+    },
+    {
+      "component": "target-jvm",
+      "samples": 120,
+      "cpu_pct_max": 8.00,
+      "cpu_pct_avg": 3.46,
+      "rss_mb_max": 0.00
+    },
+    {
+      "component": "exeris-e2e-saga-payment-gateway",
+      "samples": 120,
+      "cpu_pct_max": 8.02,
+      "cpu_pct_avg": 1.83,
+      "rss_mb_max": 21.65
+    }
+  ],
+  "unit_note": "components[] also carries containers sampled for context: Postgres, the gateway, and any engine owned by ANOTHER arm sharing this compose stack. Per CONTRACT-v2 section 1, only deployment_unit_engines plus target-jvm belong to THIS arm. Taking a max across components[] without that filter reports a foreign idle container as a cost of this arm. NOTE: no apostrophes in this string - the jq program is bash single-quoted, and one apostrophe here silently broke this rollup once already, in the same file that already carries this warning on the footprint rollup.",
+  "note": "SEPARATE AXIS from deployment-footprint.json, which covers the measurement window only. Never sum the two: this window has no load and no iteration denominator, so a per-saga figure derived from it is meaningless. settled=false means the cap was hit and the numbers are a lower bound, not a resting state. Postgres and the payment gateway are sampled here but not gated on - autovacuum would hold the gate open indefinitely and neither defers saga work."
+}

@@ -24,6 +24,27 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkUseCaseService {
 
+    /**
+     * CONTRACT-v2 section 3 request-response budget. Sized to the client's own resolution
+     * budget (k6 polls 25 times with a 1 s sleep) so this stack never gives up before the
+     * client would have; overridable for constrained runs.
+     */
+    private static final long SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS =
+        Long.getLong("exeris.benchmark.saga.terminalAwaitTimeoutMillis",
+            parseEnvLong("EXERIS_SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS", 25_000L));
+
+    private static long parseEnvLong(String name, long fallback) {
+        String raw = System.getenv(name);
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException invalid) {
+            return fallback;
+        }
+    }
+
     private final UserRepository userRepository;
     private final GraphFriendsOfFriendsAdapter graphFriendsOfFriendsAdapter;
     private final GraphShopAdapter graphShopAdapter;
@@ -105,15 +126,14 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
 
     @Override
     public List<ProductView> getRecommendedProducts(long userId, int limit) {
+        // CONTRACT-v2 §2 (2026-07-31): graph removed from the saga scenario. On THIS
+        // stack the traversal matched nothing for an entire campaign — wrong edge type,
+        // wrong direction, wrong key type — and the empty result was absorbed by the
+        // catch below and served from Postgres anyway. It accounted for 42% of this
+        // stack's whole-deployment CPU per saga, scanning for rows that could not match.
+        // The adapter is kept for the separate graph benchmark (blocked on the kernel
+        // 0.12 dialect fixes); it is simply not on the saga path.
         int boundedLimit = Math.max(1, limit);
-        try {
-            List<UUID> graphNodeIds = graphShopAdapter.recommendProductNodeIdsFromGraph(userId, boundedLimit);
-            List<Long> ids = productRepository.resolveProductIdsFromGraphNodeIds(graphNodeIds, boundedLimit);
-            if (!ids.isEmpty()) {
-                return productRepository.findByIdsPreserveOrder(ids, boundedLimit);
-            }
-        } catch (RuntimeException ignored) {
-        }
         return productRepository.findRecommendedForUser(userId, boundedLimit);
     }
 
@@ -128,19 +148,15 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
         }
         long cartId = cartRepository.getOrCreateCart(userId);
         cartRepository.addOrUpdateItem(cartId, productId, quantity, price);
-        try {
-            graphShopAdapter.upsertCartEdge(userId, productId, quantity);
-        } catch (RuntimeException ignored) {
-        }
+        // Graph edge write removed with the rest of the graph path: written, never read
+        // back into any response, on any stack.
         return cartRepository.getCart(userId);
     }
 
     @Override
     public CartView getCart(long userId) {
-        try {
-            graphShopAdapter.readCartProductNodeIds(userId);
-        } catch (RuntimeException ignored) {
-        }
+        // Graph read removed: the result was DISCARDED here and on every other stack,
+        // so it was synthetic load rather than a modelled use case.
         return cartRepository.getCart(userId);
     }
 
@@ -166,7 +182,20 @@ public final class RepositoryBackedBenchmarkUseCaseService implements BenchmarkU
             : clientOrderId.trim();
         dbOrderIdByApiOrderId.putIfAbsent(orderId, dbOrderId);
         String sagaId = orderSagaOrchestrator.scheduleSaga(dbOrderId, orderId, userId, paymentMethod);
-        return new OrderResponse(orderId, sagaId, "SAGA_INITIATED");
+        // CONTRACT-v2 section 3: "The saga executes request-response: the HTTP response
+        // returns the final saga outcome." Await the terminal outcome instead of returning
+        // SAGA_INITIATED and leaving the client to poll. Polling was not merely slower — it
+        // injected up-to-one-second quantization into this stack's measured saga duration
+        // while the inline stacks paid none, which is a measurement-model asymmetry that
+        // forbids cross-stack latency comparison (see the section 3 caveat).
+        //
+        // On timeout we fall back to the pre-v2 async response so a slow saga degrades to
+        // polling rather than failing the request; the harness flags such runs because the
+        // response then carries a non-terminal status.
+        String status = orderSagaOrchestrator
+            .awaitTerminalOutcome(sagaId, SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS)
+            .orElse("SAGA_INITIATED");
+        return new OrderResponse(orderId, sagaId, status);
     }
 
     @Override

@@ -74,6 +74,15 @@ public class SecurityConfig {
                         // this line the light contract would measure a 401 from the auth filter instead
                         // of the read path.
                         .requestMatchers(HttpMethod.GET, "/api/v1/user").permitAll()
+                        // CONTRACT-v2 §4 parking: the payment gateway stub is an EXTERNAL process
+                        // that calls back to settle a parked saga, and it holds no JWT. Without this
+                        // the callback is rejected by the auth filter, the saga is never woken, and
+                        // every session strands at INVENTORY_RESERVED - which reads as a slow or
+                        // broken stack rather than as an auth rule. The JPA sibling target permits
+                        // the same path in SecurityFilterChainConfig; this target keeps its permit
+                        // list here instead, which is why porting the callback controller alone was
+                        // not enough. Scoped to POST on the exact path.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/callback").permitAll()
                         .anyRequest().authenticated())
                 // NOTE (smoke-verified 2026-08-01): "/error" is not permitted here, so any request
                 // that raises an exception is forwarded to /error and re-authorized, surfacing as

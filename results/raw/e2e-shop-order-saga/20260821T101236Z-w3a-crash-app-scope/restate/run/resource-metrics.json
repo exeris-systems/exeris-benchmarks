@@ -1,0 +1,26 @@
+{
+  "sample_count": 117,
+  "cpu_time_seconds": 37.960000,
+  "host_logical_cpus": 16,
+  "cpu_util_percent_of_one_core": 32.1521,
+  "avg_cores_used": 0.3215,
+  "cpu_util_percent_of_host_total": 2.0094,
+  "rss_kb_min": 255152,
+  "rss_kb_avg": 346625,
+  "peak_rss_kb": 364992,
+  "vmsize_kb_min": 5533876,
+  "vmsize_kb_avg": 6564137,
+  "peak_vmsize_kb": 6665400,
+  "threads_min": 57,
+  "threads_avg": 72,
+  "peak_threads": 74,
+  "vmhwm_kb_max": 365656,
+  "smaps_rss_kb_avg": 347322,
+  "smaps_rss_kb_max": 365656,
+  "cgroup_memory_current_kb_avg": 1522621,
+  "cgroup_memory_current_kb_max": 1684440,
+  "jvm": {
+    "pid": 3338212,
+    "nmt_enabled": false
+  }
+}

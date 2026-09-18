@@ -30,7 +30,7 @@
         unzip -l <jar> | grep exeris-kernel      (Spring arms, fat jars)
         mvn -q dependency:list | grep exeris-kernel   (this arm, shaded)
     -->
-    <exeris.kernel.version>0.10.2</exeris.kernel.version>
+    <exeris.kernel.version>0.11.0</exeris.kernel.version>
   </properties>
 
   <!--

@@ -1,0 +1,66 @@
+{
+  "schema_version": "1",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#8",
+  "contract_id": "spring_axon_jdbc_h1_park1_v3",
+  "target_app": "spring-axon-jdbc",
+  "axis": "post_load_settle",
+  "settle_seconds": 20,
+  "settled": true,
+  "idle_definition": {
+    "cpu_pct_below": 3.0,
+    "consecutive_samples": 4,
+    "cap_seconds": 150
+  },
+  "gated_on": [
+    "exeris-e2e-saga-axonserver",
+    "exeris-e2e-saga-restate-server",
+    "exeris-e2e-saga-lra-coordinator",
+    "target-jvm"
+  ],
+  "target_cpu_core_seconds_after_load": 0.050,
+  "components": [
+    {
+      "component": "exeris-e2e-saga-postgres",
+      "samples": 4,
+      "cpu_pct_max": 8.55,
+      "cpu_pct_avg": 7.28,
+      "rss_mb_max": 185.00
+    },
+    {
+      "component": "target-jvm",
+      "samples": 4,
+      "cpu_pct_max": 0.67,
+      "cpu_pct_avg": 0.42,
+      "rss_mb_max": 0.00
+    },
+    {
+      "component": "exeris-e2e-saga-payment-gateway",
+      "samples": 4,
+      "cpu_pct_max": 7.84,
+      "cpu_pct_avg": 3.92,
+      "rss_mb_max": 14.83
+    },
+    {
+      "component": "exeris-e2e-saga-restate-server",
+      "samples": 4,
+      "cpu_pct_max": 0.59,
+      "cpu_pct_avg": 0.53,
+      "rss_mb_max": 173.10
+    },
+    {
+      "component": "exeris-e2e-saga-axonserver",
+      "samples": 4,
+      "cpu_pct_max": 0.54,
+      "cpu_pct_avg": 0.52,
+      "rss_mb_max": 902.30
+    },
+    {
+      "component": "exeris-e2e-saga-lra-coordinator",
+      "samples": 4,
+      "cpu_pct_max": 1.78,
+      "cpu_pct_avg": 0.51,
+      "rss_mb_max": 134.10
+    }
+  ],
+  "note": "SEPARATE AXIS from deployment-footprint.json, which covers the measurement window only. Never sum the two: this window has no load and no iteration denominator, so a per-saga figure derived from it is meaningless. settled=false means the cap was hit and the numbers are a lower bound, not a resting state. Postgres and the payment gateway are sampled here but not gated on - autovacuum would hold the gate open indefinitely and neither defers saga work."
+}

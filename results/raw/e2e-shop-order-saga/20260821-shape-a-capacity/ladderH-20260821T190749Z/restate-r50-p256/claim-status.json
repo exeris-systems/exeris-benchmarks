@@ -1,0 +1,15 @@
+{
+  "schema_version": "1",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "restate_saga_h1_park1_v3",
+  "target_app": "restate",
+  "graph_track": "none",
+  "fault_mode": "terminal",
+  "hardware_profile": "dev-laptop",
+  "claim_scope": "exploratory",
+  "correctness_gate_status": "pass",
+  "rejection_codes": [
+    "non_canonical_hardware_profile"
+  ],
+  "reason": "not perf-box-amd64 hardware profile"
+}

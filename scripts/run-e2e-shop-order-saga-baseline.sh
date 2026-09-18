@@ -18,13 +18,54 @@ source "$LIB/run-summary.sh"
 # Saga-order runs opt into Axon explicitly; generic runtime startup stays default-off.
 export EXERIS_AXON_ENABLED="${EXERIS_AXON_ENABLED:-true}"
 
+# ADR-035 admission equalization, carried over from the entity-read campaigns
+# (results/reports/2026-07-22-entity-read-by-id-memory-cpu-sweep.md, build fence 1bf4767).
+#
+# The default queueDepthAllowanceRatio is 8, and under connection pressure Exeris SHEDS
+# while HikariCP and Tomcat BLOCK. That is a policy difference, not a runtime property, and
+# comparing a shedding stack against blocking ones measures the policy: it is what produced
+# an 84 % error rate on the exeris arm in that report'"'"'s pool pre-runs, and raising the ratio
+# to 32 took all 24 runs to zero errors. This scenario never applied the equalization, and
+# its own rate-100 finding has been chasing an unexplained exeris-only connection drop ever
+# since.
+#
+# The property string is the one those campaigns actually ran with (1bf4767, which measured
+# 84% HTTP errors going to 0% at pool=4 through this exact spelling).
+#
+# The "class constant carries a LEADING DOT" warning that used to sit here was WRONG, and
+# believing it cost a day on 2026-08-20: it made a dead-knob explanation plausible enough that
+# I rewrote the spelling across five scripts before reverting. It came from reading a
+# strings(1) dump of the constant pool, where every UTF8 entry is preceded by a two-byte
+# length that strings renders as a character. `persistence.admission.queueDepthAllowanceRatio`
+# is 46 characters and 46 is 0x2E, '.'. The same dump shows
+# `(persistence.admission.guardBandThreshold` (40 = '(') and
+# `1persistence.admission.fairnessQueueDepthThreshold` (49 = '1'); nobody reads those as a
+# leading paren or a leading digit.
+#
+# All seven admission keys are plain `persistence.admission.*` read through ConfigProvider,
+# and the Community provider maps a ConfigProvider key to a system property by prepending
+# `exeris.` -- so -Dexeris.persistence.admission.<key> is correct, and always was.
+#
+# Verified by behaviour, which is the only thing that settles it: at ratio=0 ("strict
+# pre-035") this spelling immediately produces REJECT_NO_CAPACITY / REJECT_HARD_SATURATION /
+# REJECT_GUARD_BAND_FAIRNESS in the JFR, against 277 104 consecutive ACCEPTs when permissive.
+#
+# Trap for anyone probing this knob: the runner injects the -D itself from
+# EXERIS_ADMISSION_QUEUE_RATIO below. A probe that sets that variable while passing a
+# different spelling on the command line is not testing the spelling at all. Both of mine did.
+# MOVED: this used to sit here, ~800 lines above the line that first assigns TARGET_APP.
+# `"${TARGET_APP:-}"` was therefore always empty, the pattern never matched, and the export
+# never ran -- so the equalization this comment describes has never once been applied. It is
+# now performed in configure_target_runtime_overrides, which runs after argument parsing, and
+# is verified against the started process rather than trusted.
+
 usage() {
   cat <<'EOF'
 Usage: run-e2e-shop-order-saga-baseline.sh [options]
 
 Options:
   --base-url <url>         Base URL for target app (default: https://localhost:8080)
-  --contract-id <id>       Contract id (default: exeris_community_h2c_v1).
+  --contract-id <id>       Contract id (default: exeris_community_h1_v2).
                            Restate runs MUST pass this explicitly with a
                            restate-appropriate id: the h2c default is never
                            stamped onto a restate (h1 facade) run — the runner
@@ -160,8 +201,88 @@ _ensure_bench_tls_cert() {
   echo "TLS cert exported: EXERIS_TRANSPORT_CERT_PATH=${cert_path}"
 }
 
+# Does this run's §1 deployment unit include an EXTERNAL Axon Server?
+#
+# This predicate existed in three separate copies, each spelled
+#   *axon* || *spring* || *quarkus*
+# and each doing something different with the answer: starting the Axon Server container,
+# sampling it into the footprint rollup, and widening k6's saga poll budget. The
+# `*spring*`/`*quarkus*` arms date from when BOTH framework arms ran the saga through Axon
+# as a command bus. They kept matching after quarkus was rebuilt on MicroProfile LRA, so
+# every quarkus-lra-jdbc run STARTED a ~1 GB Axon Server beside an arm that never talks to
+# it, BILLED it 960 MB of RSS and 48 core-seconds, and ran k6 with a different poll budget
+# than the other arms. The campaign of 2026-08-19 reported that arm's deployment RSS as
+# ~2 240 MB instead of ~1 258 MB.
+#
+# A target-name substring is not a deployment unit. Only the contract is.
+_deployment_uses_axon_server() {
+  # The embedded arm keeps its events in Postgres — same jar, no Axon Server.
+  if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
+    return 1
+  fi
+  # quarkus-lra-jdbc is NOT on this list any more, and the history is worth keeping because I
+  # got it wrong in both directions in one day.
+  #
+  # AxonBusConfig.commandBus() opens with `if (!axonEnabled) return SimpleCommandBus…` under a
+  # comment stating no gRPC channel is created. I read that, concluded the *quarkus* arm of the
+  # old predicate was stale, and removed it — which broke the arm outright, because the `else`
+  # directly below builds an AxonServerCommandBus and this runner exports
+  # EXERIS_AXON_ENABLED=true for every saga run. So I put it back.
+  #
+  # The right fix was neither: the arm should not have been on Axon Server at all. Nothing in
+  # MicroProfile LRA needs it — the saga is @LRA(REQUIRES_NEW, end=false) with LRA participants
+  # compensating — and the command handler lives in the SAME JVM as its localSegment, so the
+  # bus was routing a local dispatch out over gRPC and back. quarkus-lra-jdbc.env now forces
+  # EXERIS_AXON_ENABLED=false, which selects the in-process SimpleCommandBus, and the arm's §1
+  # unit becomes the three processes the pair manifest has always declared.
+  #
+  # The lesson is about the predicate itself: a target-name substring cannot express "does this
+  # deployment include an external Axon Server", because the answer depends on a runtime flag.
+  # This now keys on the contract, and the env file that sets the flag carries the reason.
+  [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]
+}
+
+# Does it include an external MicroProfile-LRA coordinator?
+_deployment_uses_lra_coordinator() {
+  [[ "$CONTRACT_ID" == *lra* || "$TARGET_APP" == *lra* ]]
+}
+
+# Stop every container/backend sampler subshell started by this run.
+#
+# Split out of the end-of-run path on 2026-08-19 because that path is NOT the only
+# way this script exits, and the samplers are `while true` loops: anything that
+# skipped it leaked a per-second loop that outlives the run. Four of them were
+# found alive four hours after their campaign died -- two `docker stats`, one
+# `docker exec psql` against the shared Postgres once a second, all still
+# appending to a run directory nothing would ever read again.
+#
+# Idempotent by blanking each pid as it is reaped, so the normal path and the
+# EXIT trap can both call it. Every read is ${x:-} because the trap can fire
+# before these are assigned and `set -u` is in effect.
+_stop_container_samplers() {
+  local _p _pid
+  for _p in AXON RESTATE LRA_COORD PAYMENT_GATEWAY POSTGRES NEO4J; do
+    eval "_pid=\${${_p}_STATS_PID:-}"
+    if [[ -n "$_pid" ]]; then
+      kill "$_pid" >/dev/null 2>&1 || true
+      wait "$_pid" 2>/dev/null || true
+      eval "${_p}_STATS_PID=''"
+    fi
+  done
+  if [[ -n "${PG_CONNECTIONS_PID:-}" ]]; then
+    kill "$PG_CONNECTIONS_PID" >/dev/null 2>&1 || true
+    wait "$PG_CONNECTIONS_PID" 2>/dev/null || true
+    PG_CONNECTIONS_PID=""
+  fi
+}
+
 cleanup_baseline() {
-  [[ -n "$PRE_TMP" ]] && rm -f "$PRE_TMP"
+  # Guard: this runs from EXIT and from the INT/TERM/HUP handlers below, and a
+  # signal arriving during cleanup would otherwise re-enter it.
+  [[ -n "${_CLEANUP_BASELINE_DONE:-}" ]] && return 0
+  _CLEANUP_BASELINE_DONE=1
+  [[ -n "${PRE_TMP:-}" ]] && rm -f "$PRE_TMP"
+  _stop_container_samplers
   bench_stop_resource_sampler
   bench_stop_perf_stat
   # Best-effort stop of OS sidecars on any exit path (guarded: trap may fire
@@ -320,11 +441,14 @@ _apply_process_cgroup_limits() {
 configure_target_runtime_overrides() {
   local declared_protocol_mode
 
-  # shop-order-saga is the only scenario that needs Flow (saga orchestration),
-  # Graph (product recommendations) and Events. The Exeris community target boots a lean
+  # shop-order-saga needs Flow (saga orchestration) and Events. Graph was removed
+  # from this scenario on 2026-07-31 (CONTRACT-v2 §2): it confounded the only
+  # comparison the scenario exists to make, and on the Exeris arm the traversal
+  # matched nothing for an entire campaign. Booting the subsystem anyway would make
+  # this stack pay RSS for a capability the workload no longer uses. The Exeris community target boots a lean
   # http,persistence,crypto set by default; opt the full set in here. (Ignored by the
   # Spring/Quarkus targets, which read this env var not at all.)
-  export EXERIS_SUBSYSTEMS="http,persistence,graph,flow,events,crypto"
+  export EXERIS_SUBSYSTEMS="http,persistence,flow,events,crypto"
 
   # CONTRACT-v2 fault-injection knobs, exported BEFORE target start so every stack
   # sees the same declared configuration (s4 fault-class label + s5 pinned retry
@@ -359,13 +483,13 @@ configure_target_runtime_overrides() {
   # restate-server). Exported BEFORE target start so the app's startup
   # self-registration and the baseline's post-readiness force-registration
   # agree on the same endpoints. restate-server runs in Docker
-  # (benchmark-restate-server), so it calls back into the host-side SDK
-  # endpoint via host.docker.internal.
+  # (benchmark-restate-server) with host networking, so the host-side SDK
+  # endpoint is 127.0.0.1:<port> from inside the container too.
   if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
     export RESTATE_SDK_PORT="${RESTATE_SDK_PORT:-9084}"
     export RESTATE_INGRESS_URL="${RESTATE_INGRESS_URL:-http://localhost:8080}"
     export RESTATE_ADMIN_URL="${RESTATE_ADMIN_URL:-http://localhost:9070}"
-    export RESTATE_SDK_ADVERTISED_URL="${RESTATE_SDK_ADVERTISED_URL:-http://host.docker.internal:${RESTATE_SDK_PORT}}"
+    export RESTATE_SDK_ADVERTISED_URL="${RESTATE_SDK_ADVERTISED_URL:-http://${BENCH_CONTAINER_HOST_ADDR}:${RESTATE_SDK_PORT}}"
     export RESTATE_AUTO_REGISTER="${RESTATE_AUTO_REGISTER:-true}"
   fi
 
@@ -403,6 +527,35 @@ configure_target_runtime_overrides() {
       ;;
   esac
 
+  # pgjdbc fairness parameters, identical on every arm.
+  #
+  # The four env files already carry the SAME url string, and that is not the same thing as
+  # the same configuration: pgjdbc parameters left out of the url fall back to per-driver and
+  # per-pool defaults, so Agroal, HikariCP and the exeris engine can each end up on a different
+  # query protocol while the url text matches. That is the exact non-equalization that produced
+  # the entity-read sweep-vs-triad gap (9f2b182), and the set below is the one those campaigns
+  # settled on: prepared statements on, fetch-all rather than a cursor, adaptive fetch off,
+  # extended protocol pinned.
+  #
+  # adaptiveFetch=false matters even though defaultRowFetchSize=0 would seem to make it moot:
+  # adaptiveFetch=true WITH rowFetchSize=0 is a no-op that reads as a passing equalization while
+  # changing nothing -- a fake-pass this repo has already been caught by once.
+  #
+  # Exported here rather than edited into four env files so the arms cannot drift apart, and
+  # applied by REPLACING any query string the env file carries, not by appending to it.
+  _pgjdbc_fair="${BENCH_PGJDBC_FAIR_PARAMS:-preferQueryMode=extended&prepareThreshold=1&defaultRowFetchSize=0&adaptiveFetch=false}"
+  _pgjdbc_base="${EXERIS_DB_JDBC_URL:-jdbc:postgresql://localhost:5432/postgres}"
+  _pgjdbc_base="${_pgjdbc_base%%\?*}"
+  export EXERIS_DB_JDBC_URL="${_pgjdbc_base}?${_pgjdbc_fair}"
+  echo "pgjdbc fairness params applied to every arm: ${_pgjdbc_fair}"
+
+  # ADR-035 admission equalization (see the note at the top of this file). Exeris SHEDS
+  # under connection pressure where HikariCP and Tomcat BLOCK; comparing a shedding stack
+  # against blocking ones measures the policy, not the runtime.
+  if [[ "$TARGET_APP" == exeris-* || "$TARGET_APP" == *on-exeris* ]]; then
+    export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} -Dexeris.persistence.admission.queueDepthAllowanceRatio=${EXERIS_ADMISSION_QUEUE_RATIO:-32}"
+  fi
+
   # Enable NMT for off-heap capture (matching full-triad behavior).
   export SPRING_JAVA_OPTS="${SPRING_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
   export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} -XX:NativeMemoryTracking=summary"
@@ -435,6 +588,52 @@ configure_target_runtime_overrides() {
     else
       export EXERIS_HTTP_PORT="$_base_port"
     fi
+  fi
+
+  # CONTRACT-v2 §4 (parking workload): where the target dispatches a payment, and
+  # where the gateway calls back to settle it.
+  #
+  # Exported explicitly rather than left to each target's compiled-in default. The
+  # defaults necessarily differ per stack (different ports, and restate's callback
+  # goes to the Restate ingress rather than to the target at all), and a wrong
+  # default fails INVISIBLY: the saga dispatches, parks, and simply never settles.
+  # That reads as "slow stack", not as "misconfigured callback".
+  if [[ "$BENCH_PAYMENT_PARKING" == "1" ]]; then
+    export EXERIS_PAYMENT_GATEWAY_URL="${EXERIS_PAYMENT_GATEWAY_URL:-http://localhost:9300/payments}"
+    local _callback_port="${EXERIS_HTTP_PORT:-${_base_port:-}}"
+    if [[ -z "${EXERIS_PAYMENT_CALLBACK_URL:-}" && ! "$_callback_port" =~ ^[0-9]+$ ]]; then
+      # Without a port the URL would be built as ".../127.0.0.1:/api/..." —
+      # syntactically plausible, uniformly unreachable, and the only symptom would be
+      # every saga stranding. Refuse instead.
+      echo "ERROR: BENCH_PAYMENT_PARKING=1 but no target port could be derived from BASE_URL='${BASE_URL}'." >&2
+      echo "ERROR: the gateway callback URL cannot be built; every saga would park forever." >&2
+      echo "ERROR: Set EXERIS_PAYMENT_CALLBACK_URL explicitly to override." >&2
+      exit 75
+    fi
+    # BENCH_CONTAINER_HOST_ADDR is how a container addresses the host, and it is one
+    # knob rather than four literals because it changed once already: it was
+    # host.docker.internal while the stack ran on the docker bridge, and is 127.0.0.1
+    # now that every service is host-networked. A wrong value fails invisibly — the saga
+    # dispatches, parks, and never settles, which reads as a slow stack.
+    export EXERIS_PAYMENT_CALLBACK_URL="${EXERIS_PAYMENT_CALLBACK_URL:-http://${BENCH_CONTAINER_HOST_ADDR}:${_callback_port}/api/v1/payments/callback}"
+    # Same address for the restate arm: under host networking the ingress binds the
+    # host's loopback, so the gateway reaches it at 127.0.0.1:8080 (on the bridge this
+    # had to be the compose service name instead).
+    export EXERIS_RESTATE_INGRESS_CALLBACK_URL="${EXERIS_RESTATE_INGRESS_CALLBACK_URL:-http://${BENCH_CONTAINER_HOST_ADDR}:8080}"
+    # The stub speaks plaintext HTTP/1.1 only. Under a TLS protocol mode the callback
+    # would be dispatched to a port that answers TLS, every settle would fail, and
+    # every saga would strand — so refuse the run instead of producing a directory
+    # full of unresolved sagas that looks like a target problem.
+    case "${declared_protocol_mode:-h1}" in
+      h1|h2c) ;;
+      *)
+        echo "ERROR: BENCH_PAYMENT_PARKING=1 with protocol mode '${declared_protocol_mode}'." >&2
+        echo "ERROR: the payment gateway stub speaks plaintext HTTP/1.1 only; every callback" >&2
+        echo "ERROR: would fail against a TLS port and every saga would park forever." >&2
+        echo "ERROR: Set EXERIS_PAYMENT_CALLBACK_URL to a reachable plaintext endpoint to override." >&2
+        exit 75
+        ;;
+    esac
   fi
   echo "Runtime overrides: graph_backend=${EXERIS_GRAPH_BACKEND_TYPE} protocol=${declared_protocol_mode} http_max=${EXERIS_HTTP_MAX_VERSION} h2c_upgrade=${EXERIS_HTTP_H2C_UPGRADE_ENABLED} http2=${EXERIS_HTTP2_ENABLED} ssl=${EXERIS_SSL_ENABLED} fault_mode=${FAULT_MODE}"
 }
@@ -518,22 +717,139 @@ ensure_benchmark_infra() {
     wait_for_compose_service_health "$BENCHMARK_COMPOSE_FILE" "benchmark-postgres" "true"
   fi
 
+  # Postgres TCP-auth preflight. Observed twice on 2026-07-30: TCP auth for the
+  # `postgres` role started failing mid-campaign with "password authentication
+  # failed" while local-socket auth (trust, per pg_hba) kept working, so the
+  # container looked healthy. No seed SQL touches roles and the cause is
+  # unexplained; `ALTER USER postgres WITH PASSWORD` restores it immediately.
+  # Repair, re-verify, and abort if it still fails — losing a rep to this is
+  # avoidable, and silently seeding half a database is not acceptable.
+  # The probe MUST take a password-authenticated path. An earlier version used
+  # `psql -h 127.0.0.1` from inside the container, which pg_hba maps to
+  # `host all all 127.0.0.1/32 trust` — no password is ever checked, so the
+  # probe passed while the seed (a separate container reaching Postgres over the
+  # docker network, matching `host all all all scram-sha-256`) still failed.
+  # Mirror the seed's path exactly: another container, over the compose network.
+  _pg_net="$(docker inspect exeris-e2e-saga-postgres \
+    --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{break}}{{end}}' 2>/dev/null || true)"
+  # NOTE (2026-08-19): the seed's path changed with the network mode. Under host
+  # networking there is no compose DNS, so the seed container reaches Postgres at
+  # 127.0.0.1 - which pg_hba maps to `trust`. This probe therefore verifies REACHABILITY
+  # there, not the password; the scram path that broke on 2026-07-30 is no longer used
+  # by anything in the deployment. Probing the old service-name address instead failed
+  # for every run, which is how this was caught.
+  _pg_auth_probe() {
+    [[ -z "$_pg_net" ]] && return 0   # cannot probe; leave it to the seed's own fail-closed
+    if [[ "$_pg_net" == "host" ]]; then
+      docker run --rm --network host -e PGPASSWORD=postgres postgres:16.2 \
+        psql -h 127.0.0.1 -U postgres -tAc 'select 1' >/dev/null 2>&1
+    else
+      docker run --rm --network "$_pg_net" -e PGPASSWORD=postgres postgres:16.2 \
+        psql -h exeris-e2e-saga-postgres -U postgres -tAc 'select 1' >/dev/null 2>&1
+    fi
+  }
+  if ! _pg_auth_probe; then
+    echo "WARN: Postgres password auth (docker-network path, as the seed uses) is failing; resetting the role password." >&2
+    docker exec exeris-e2e-saga-postgres \
+      psql -U postgres -tAc "alter user postgres with password 'postgres'" >/dev/null 2>&1 || true
+    if ! _pg_auth_probe; then
+      echo "ERROR: Postgres password auth still failing after reset; the seed would fail and the run would be measured against an incomplete database." >&2
+      exit 72
+    fi
+    echo "Postgres password auth repaired (role password reset to the compose-declared value)."
+  fi
+
   echo "Running DB seed migrations (benchmark-db-seed)..."
-  docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up --force-recreate --no-deps benchmark-db-seed
-  echo "DB seed migrations complete."
+  # `docker compose up` returns 0 even when the one-shot service container exits
+  # non-zero, so the seed's own exit code has to be read back explicitly.
+  # Observed 2026-07-30: psql failed with "password authentication failed", the
+  # container exited 2, and the harness printed "DB seed migrations complete."
+  # and carried on toward measuring against an EMPTY database.
+  docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up --force-recreate --no-deps benchmark-db-seed || true
+  _seed_rc="$(docker inspect exeris-e2e-saga-db-seed --format '{{.State.ExitCode}}' 2>/dev/null || echo "unknown")"
+  if [[ "$_seed_rc" != "0" ]]; then
+    echo "ERROR: DB seed container exited ${_seed_rc}; the database is not in a known state." >&2
+    echo "ERROR: refusing to continue — a run against a partially seeded or empty database produces" >&2
+    echo "ERROR: results that look valid and are not. See logs above for the psql error." >&2
+    exit 70
+  fi
+  echo "DB seed migrations complete (exit 0)."
 
   if [[ "$GRAPH_TRACK" == "neo4j" ]]; then
     echo "[seed] Seeding Neo4j from PostgreSQL..."
+    # pipefail makes the script's status survive the tee, but the seed script is
+    # itself fail-open (it printed "completed successfully" after loading 0
+    # nodes from 4 failed psql calls), so the row counts are checked below too.
     "$SEED_NEO4J_SCRIPT" 2>&1 | tee "$NEO4J_SEED_LOG"
+    _neo4j_products="$(grep -oE '^[[:space:]]*Product nodes:[[:space:]]*[0-9]+' "$NEO4J_SEED_LOG" 2>/dev/null | tail -1 | grep -oE '[0-9]+$' || echo 0)"
+    if [[ "${_neo4j_products:-0}" -lt 1 ]]; then
+      echo "ERROR: Neo4j seed loaded ${_neo4j_products:-0} Product nodes — the recommendation graph is empty." >&2
+      echo "ERROR: the seed script reports success regardless of psql failures, so this is checked here." >&2
+      echo "ERROR: refusing to continue; every recommendation request would hit an empty graph." >&2
+      exit 71
+    fi
+    echo "[seed] Neo4j seed verified: ${_neo4j_products} Product nodes."
   fi
 
-  if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
+  # Name of the anonymous volume currently backing the Axon Server event store,
+  # or empty when the container does not exist. Always succeeds (callers run
+  # under `set -e`).
+  _axon_events_volume_name() {
+    docker inspect exeris-e2e-saga-axonserver \
+      --format '{{range .Mounts}}{{if eq .Destination "/axonserver/events"}}{{.Name}}{{end}}{{end}}' \
+      2>/dev/null || true
+  }
+
+  # Every arm whose CONTRACT-v2 s1 unit does not name an Axon Server must neither start one
+  # nor inherit one. This guard was written for spring-axon-embedded alone, because that was
+  # believed to be the only arm matching the old *axon*/*spring*/*quarkus* pattern wrongly.
+  # It was not: quarkus-lra-jdbc matched too, so it STARTED a ~1 GB Axon Server beside itself
+  # on the backend cores it is pinned against, then billed it into its own s8 footprint. The
+  # reasoning below always applied to any non-Axon arm; only its condition was too narrow.
+  if ! _deployment_uses_axon_server; then
+    if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
+      echo "Axon EMBEDDED arm (contract=${CONTRACT_ID}): Axon Server is deliberately NOT started;"
+      echo "  the event, token and saga stores live in Postgres (s1 unit = target JVM + Postgres)."
+    else
+      echo "Contract ${CONTRACT_ID} names no Axon Server in its s1 deployment unit; not starting one."
+    fi
+    # Not started is not the same as not running: the stack is shared, and an Axon Server
+    # left up by the previous arm idles a ~2 GB JVM on the backend cores this run is pinned
+    # against. Stop it, so the deployment on the box matches the deployment in the metadata.
+    if [[ -n "$(docker ps -q -f name=exeris-e2e-saga-axonserver)" ]]; then
+      echo "  stopping a leftover exeris-e2e-saga-axonserver so it does not run beside this arm."
+      docker stop exeris-e2e-saga-axonserver >/dev/null 2>&1 || true
+    fi
+  else
     echo "Axon target detected (contract=${CONTRACT_ID}); starting benchmark-axonserver."
-    docker compose -f "$BENCHMARK_COMPOSE_FILE" rm -f --volumes benchmark-axonserver 2>/dev/null || true
+    # Fresh event store per rep. `rm -f` WITHOUT `-s` silently skips a RUNNING
+    # container ("No stopped containers") — the anonymous volumes the image
+    # declares (/axonserver/data, /axonserver/events, ...) then survive and
+    # `up --force-recreate` re-attaches them, so the event store carries over
+    # between reps. Because CONTRACT-v2 s3 issues the SAME deterministic
+    # orderId set every run and spring-hibernate uses that orderId as its
+    # aggregate identifier, the carried-over store rejects every re-created
+    # aggregate with AXONIQ-2000 "Invalid sequence number 0" and the rep is
+    # worthless. `-s` (stop first) is what the restate block below already
+    # does; the two must not diverge.
+    _axon_events_vol_before="$(_axon_events_volume_name)"
+    docker compose -f "$BENCHMARK_COMPOSE_FILE" rm -sf --volumes benchmark-axonserver 2>/dev/null || true
     if ! docker compose "${BENCHMARK_COMPOSE_UP_ARGS[@]}" up -d --force-recreate benchmark-axonserver; then
       echo "Warning: docker compose failed to start benchmark-axonserver; checking health anyway." >&2
     fi
     wait_for_compose_service_health "$BENCHMARK_COMPOSE_FILE" "benchmark-axonserver" "false"
+
+    # Assert the wipe actually happened. Checking the volume identity is
+    # mechanism-independent: if /axonserver/events is the same volume as before,
+    # prior events are still there no matter why. Fail closed — a silently
+    # carried-over event store does not crash the run, it produces a run whose
+    # saga outcomes are an artifact of the previous rep.
+    _axon_events_vol_after="$(_axon_events_volume_name)"
+    if [[ -n "$_axon_events_vol_before" && "$_axon_events_vol_before" == "$_axon_events_vol_after" ]]; then
+      echo "ERROR: Axon Server event store was NOT reset — /axonserver/events is still volume ${_axon_events_vol_after} after rm --volumes + --force-recreate." >&2
+      echo "ERROR: CONTRACT-v2 s3 reissues the same deterministic orderId set every run, so a carried-over event store makes every aggregate a duplicate (AXONIQ-2000) and the rep's saga outcomes meaningless." >&2
+      exit 66
+    fi
     echo "Initializing Axon Server cluster and default context..."
     for _axon_init_attempt in $(seq 1 15); do
       _axon_init_http="$(curl -s -o /dev/null -w "%{http_code}" \
@@ -587,7 +903,7 @@ _BASE_URL_EXPLICIT="false"
 _CONTRACT_ID_EXPLICIT="false"
 BASE_URL="http://localhost:9000"
 CURL_INSECURE_OPT=""
-CONTRACT_ID="exeris_community_h2c_v1"
+CONTRACT_ID="exeris_community_h1_v2"
 TARGET_APP="exeris-community"
 TARGET_APP_LOG_FILE=""
 AUTO_START_INFRA="true"
@@ -598,7 +914,10 @@ START_TARGET_SCRIPT="$REPO_ROOT/runtime/drivers/start-target.sh"
 STOP_TARGET_SCRIPT="$REPO_ROOT/runtime/drivers/stop-target.sh"
 BENCHMARK_COMPOSE_REF="runtime/compose/e2e-shop-order-saga.yml"
 BENCHMARK_COMPOSE_FILE="$REPO_ROOT/$BENCHMARK_COMPOSE_REF"
-GRAPH_TRACK="postgres"
+# Graph removed from this scenario 2026-07-31 (CONTRACT-v2 §2). "none" keeps Neo4j
+# out of the §1 deployment unit entirely — not started, not seeded, not sampled.
+# --graph-track is still accepted so the separate graph benchmark can drive it.
+GRAPH_TRACK="none"
 # CONTRACT-v2 s4 fault-class label: 'terminal' (deterministic per-orderId business
 # decline, s4.1) or 'transient' (retryable infra fault, s4.2). MUST NOT be mixed
 # within a run; headline latency/throughput claims come from terminal runs only.
@@ -616,6 +935,9 @@ BENCH_CGROUP_MEMORY_LIMIT_MB="${BENCH_CGROUP_MEMORY_LIMIT_MB:-}"
 BENCH_CGROUP_CPU_QUOTA_PCT="${BENCH_CGROUP_CPU_QUOTA_PCT:-}"
 _BENCH_CGROUP_SCOPE_UNIT=""
 K6_EXIT_CODE=0
+# Defaulted next to the code it describes so `set -u` cannot trip on an exit path
+# that never reaches the classifier (k6 not run at all, an early abort).
+K6_EXIT_CLASS="clean"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -735,7 +1057,7 @@ esac
 
 # Restate contract-id fail-closed check: restate is not a scenario.json fixed
 # contract, so the runner cannot derive a restate contract id — and the default
-# (exeris_community_h2c_v1) is an h2c contract while the restate facade is
+# (exeris_community_h1_v2) is an exeris contract while the restate facade is a
 # HTTP/1.1. Stamping the h2c default onto a restate run would mislabel every
 # artifact (protocol axis + contract id), so abort instead of defaulting.
 if [[ "$TARGET_APP" == *restate* || "$CONTRACT_ID" == *restate* ]]; then
@@ -782,6 +1104,7 @@ echo "Durability tier label: ${DURABILITY_TIER} (source: ${DURABILITY_TIER_SOURC
 case "${TARGET_APP:-}" in
   exeris-community|exeris-community-app|exeris-e2e-community-h2*)  TARGET_APP_LOG_FILE="/tmp/exeris-community.log"  ;;
   exeris-community-app-locality)                  TARGET_APP_LOG_FILE="/tmp/exeris-locality-8080.log"  ;;
+  spring-axon-embedded|spring-axon-jpa)            TARGET_APP_LOG_FILE="/tmp/exeris-spring-axon-embedded-9014.log" ;;
   spring-on-exeris|spring-hibernate|spring-app-axon|spring-*)      TARGET_APP_LOG_FILE="/tmp/exeris-spring-9001.log"    ;;
   quarkus-hibernate|quarkus-app-axon|quarkus-*)   TARGET_APP_LOG_FILE="/tmp/exeris-quarkus-9002.log"   ;;
   restate|restate-benchmark-app|restate-*)        TARGET_APP_LOG_FILE="/tmp/exeris-restate-9004.log"   ;;
@@ -796,10 +1119,82 @@ if [[ "$_BASE_URL_EXPLICIT" == "false" ]]; then
       '.targets[] | select(.target_id == $id) | .health_url' \
       "$_asset_matrix" 2>/dev/null || true)"
     if [[ -n "$_derived_health_url" && "$_derived_health_url" != "null" ]]; then
+      # Fail closed when the asset matrix and the target's own env file disagree
+      # about where the target listens. The matrix drives BASE_URL and the
+      # readiness poll; the env file drives the actual bind port. A stale matrix
+      # entry does not merely time out — if another target of the same family is
+      # up on the matrix port (spring-hibernate 9001 vs spring-on-exeris 9004,
+      # which share a port range by design), readiness passes against the WRONG
+      # APPLICATION and k6 silently benchmarks it under this target's label.
+      # That is a mislabeled result, which is worse than a failed run.
+      _env_file_ref="$(jq -r --arg id "$TARGET_APP" \
+        '.targets[] | select(.target_id == $id) | .env_file // empty' \
+        "$_asset_matrix" 2>/dev/null || true)"
+      if [[ -n "$_env_file_ref" && -f "$REPO_ROOT/$_env_file_ref" ]]; then
+        _env_health_url="$(sed -n 's/^[[:space:]]*HEALTH_URL=//p' "$REPO_ROOT/$_env_file_ref" | tail -1 | tr -d '"'"'"'' | tr -d '\r')"
+        # Only compare literals — an env value carrying a shell expansion is
+        # resolved at launch time and cannot be checked here.
+        if [[ -n "$_env_health_url" && "$_env_health_url" != *'$'* \
+              && "$_env_health_url" != "$_derived_health_url" ]]; then
+          echo "ERROR: health-endpoint disagreement for target '${TARGET_APP}'." >&2
+          echo "ERROR:   runtime/drivers/target-asset-matrix.json : ${_derived_health_url}" >&2
+          echo "ERROR:   ${_env_file_ref} : ${_env_health_url}" >&2
+          echo "ERROR: the matrix drives BASE_URL and the readiness poll while the env file drives the actual bind port." >&2
+          echo "ERROR: proceeding risks benchmarking a DIFFERENT target that happens to hold the matrix port, and labelling the result '${TARGET_APP}'. Reconcile the two before running." >&2
+          exit 78
+        fi
+      fi
       BASE_URL="${_derived_health_url%/health}"
       echo "BASE_URL derived from asset matrix for target '${TARGET_APP}': ${BASE_URL}"
     fi
   fi
+fi
+
+# CONTRACT-v2 §4 parking-workload knobs. Defaulted HERE, before
+# configure_target_runtime_overrides, because that function exports the targets'
+# payment gateway and callback URLs and needs both. (The gateway's docker-stats
+# sampler further down consumes them too.)
+BENCH_PAYMENT_PARKING="${BENCH_PAYMENT_PARKING:-0}"
+# How a container addresses the host. 127.0.0.1 since the stack went host-networked
+# (2026-08-19); host.docker.internal is the value to set if it is ever moved back onto
+# the docker bridge. Used for the gateway callback, the restate ingress callback and the
+# restate SDK advertised URL - the three addresses whose failure mode is a saga that
+# parks and never settles.
+export BENCH_CONTAINER_HOST_ADDR="${BENCH_CONTAINER_HOST_ADDR:-127.0.0.1}"
+# Sets parked concurrency (parked ≈ arrival rate × delay). CONTRACT-v2 §2.1 pins
+# it per workload shape — ~1 ms for shape A, 100 ms for shape B, harness-controlled
+# for shape C — and it MUST be identical across stacks within a run, so it is both
+# stamped into run metadata and verified against the running gateway before load.
+PAYMENT_STUB_DELAY_MS="${PAYMENT_STUB_DELAY_MS:-100}"
+
+# ...and the contract id has to AGREE with it. The comment above already stated the
+# §2.1 mapping; nothing enforced it, and the whole roster ran a 100 ms gateway under
+# `park1` ids -- shape B's workload wearing shape A's name -- from the introduction of
+# parking until 2026-08-19. It survived because the two facts lived in different files:
+# the delay defaults here, the shape lives in the contract id, and the existing check
+# below only compares the declared delay against the RUNNING GATEWAY. A stack can be
+# perfectly self-consistent and still be measuring a different workload than it claims.
+#
+# This is not a cosmetic mismatch. §2.1 gives shape A "the only shape in which saga
+# latency is a legitimate headline" and shape B "latency is dominated by the gateway
+# delay... report it only alongside the delay" -- so the wrong label grants permission
+# to headline a number that is mostly a constant.
+# Parse the park depth out of the id rather than enumerating it. The enumerated form had
+# the defect it was written to prevent: a new `_park250_v3` id fell through to the wildcard
+# and ran UNCHECKED, so the very next shape added would silently reintroduce the drift.
+_expected_delay_ms=""
+if [[ "$CONTRACT_ID" =~ _park([0-9]+)_v3$ ]]; then
+  _expected_delay_ms="${BASH_REMATCH[1]}"
+fi
+if [[ -n "$_expected_delay_ms" && "$PAYMENT_STUB_DELAY_MS" != "$_expected_delay_ms" ]]; then
+  echo "ERROR: workload-shape mismatch (CONTRACT-v2 §2.1)." >&2
+  echo "ERROR:   contract id '${CONTRACT_ID}' declares a ${_expected_delay_ms} ms payment-gateway park," >&2
+  echo "ERROR:   but this run is configured for ${PAYMENT_STUB_DELAY_MS} ms." >&2
+  echo "ERROR: §2.1 shapes carry their own contract ids and workload_profile_key and MUST NEVER" >&2
+  echo "ERROR: be aggregated, so a run may not be recorded under a shape it did not execute." >&2
+  echo "ERROR: Either set PAYMENT_STUB_DELAY_MS=${_expected_delay_ms}, or pass the contract id for" >&2
+  echo "ERROR: the shape you actually intend to run." >&2
+  exit 64
 fi
 
 configure_target_runtime_overrides
@@ -885,6 +1280,85 @@ BENCHMARK_COMPOSE_FILE="$REPO_ROOT/$BENCHMARK_COMPOSE_REF"
 SEED_MANIFEST_PATH="$REPO_ROOT/$SEED_MANIFEST_REF"
 SEED_VERIFY_SCRIPT="$REPO_ROOT/$SEED_VERIFY_SCRIPT_REF"
 
+# ---------------------------------------------------------------------------------------
+# CONTRACT-ID <-> SCENARIO.JSON <-> RUNTIME three-way invariant (added 2026-08-20).
+#
+# WHY THIS EXISTS, and why it is not the same as the PAYMENT_STUB_DELAY_MS check above.
+# That check closes ONE leg: contract id vs the delay this run is configured for. It does
+# not look at scenario.json at all. So when the roster was relabelled park1 -> park100 on
+# 2026-08-19, the ids moved, the prose moved, the runtime moved -- and every fixed_contracts
+# entry kept workload_shape="A-minimal-park" and payment_callback_delay_ms=1. For a day the
+# id said B, the gateway ran B, and the machine-readable declaration said A. Nothing failed,
+# because nothing compared those two.
+#
+# That was the FIFTH occurrence of one class in this scenario: a human-readable name and a
+# machine-readable field drifting apart with no invariant tying them. Counting the previous
+# four -- Neo4j listed on one deployment-unit row only, "Quarkus + Axon" naming an Axon saga
+# that never existed, spring-axon-embedded measured while s1 declared it unmeasured,
+# spring-on-exeris listed in s1 with no contract id to run it -- the pattern is the point.
+# Fixing the fifth instance one more time changes nothing about the sixth.
+#
+# So: the contract id is the single source of truth, and every token in it is asserted
+# against both the declaration and the runtime, at startup, BEFORE any measurement. A
+# mismatch is a start failure (exit 64), never a result -- same posture as the s3.1
+# terminal-vocabulary preflight.
+_wpk="$(jq -r --arg cid "$CONTRACT_ID" '.fixed_contracts[$cid].workload_profile_key // ""' "$SCENARIO_JSON" 2>/dev/null || true)"
+_decl_shape="$(jq -r --arg cid "$CONTRACT_ID" '.fixed_contracts[$cid].workload_shape // ""' "$SCENARIO_JSON" 2>/dev/null || true)"
+_decl_delay="$(jq -r --arg cid "$CONTRACT_ID" '.fixed_contracts[$cid].payment_callback_delay_ms // ""' "$SCENARIO_JSON" 2>/dev/null || true)"
+_inv_fail=0
+_inv_say() { echo "ERROR: [contract-invariant] $*" >&2; _inv_fail=1; }
+
+# --- leg 1: the park<N> token in the contract id fixes the declared delay AND the shape ---
+case "$CONTRACT_ID" in
+  *_park1_v3)   _tok_delay=1;   _tok_shape_prefix="A-" ;;
+  *_park100_v3) _tok_delay=100; _tok_shape_prefix="B-" ;;
+  *)            _tok_delay="";  _tok_shape_prefix=""   ;;   # shape C / non-parking: unasserted
+esac
+if [[ -n "$_tok_delay" ]]; then
+  if [[ -n "$_decl_delay" && "$_decl_delay" != "null" && "$_decl_delay" != "$_tok_delay" ]]; then
+    _inv_say "contract id '${CONTRACT_ID}' implies a ${_tok_delay} ms park, but scenario.json declares payment_callback_delay_ms=${_decl_delay}."
+  fi
+  if [[ -n "$_decl_shape" && "$_decl_shape" != "null" && "$_decl_shape" != ${_tok_shape_prefix}* ]]; then
+    _inv_say "contract id '${CONTRACT_ID}' implies CONTRACT-v2 s2.1 shape ${_tok_shape_prefix%-}, but scenario.json declares workload_shape='${_decl_shape}'."
+  fi
+  # leg 1c: and the runtime must agree with the declaration, not only with the id.
+  if [[ -n "$_decl_delay" && "$_decl_delay" != "null" && "$_decl_delay" != "$PAYMENT_STUB_DELAY_MS" ]]; then
+    _inv_say "scenario.json declares payment_callback_delay_ms=${_decl_delay} but this run is configured for PAYMENT_STUB_DELAY_MS=${PAYMENT_STUB_DELAY_MS}."
+  fi
+fi
+
+# --- leg 2: the r<N> token in workload_profile_key fixes the measurement arrival rate ---
+# workload_profile_key looks like ...-runtime-k6-r38-park100-v3; r38 means 38 sessions/s,
+# which is the s2 normative rate the whole roster is re-rated to. A key that says r38 while
+# k6 runs a different rate records the run under a profile it did not execute, and s2.1
+# forbids aggregating across profiles -- so this is an aggregation hazard, not a typo.
+if [[ "$_wpk" =~ -r([0-9]+)- ]]; then
+  _tok_rate="${BASH_REMATCH[1]}"
+  _run_rate="${K6_MEASURE_RATE:-}"
+  if [[ -z "$_run_rate" && -f "$SCENARIO_DIR/k6.env" ]]; then
+    _run_rate="$(sed -n 's/^[[:space:]]*K6_MEASURE_RATE=\([0-9]\{1,\}\).*/\1/p' "$SCENARIO_DIR/k6.env" | tail -1)"
+  fi
+  if [[ -n "$_run_rate" && "$_run_rate" != "$_tok_rate" ]]; then
+    _inv_say "workload_profile_key '${_wpk}' declares r${_tok_rate} (${_tok_rate} sessions/s) but this run drives K6_MEASURE_RATE=${_run_rate}."
+  fi
+fi
+
+# --- leg 3: the park<N> token must also appear in workload_profile_key ---
+case "$CONTRACT_ID" in
+  *_park1_v3)   [[ -n "$_wpk" && "$_wpk" != *"-park1-"*   ]] && _inv_say "contract id '${CONTRACT_ID}' is park1 but workload_profile_key is '${_wpk}'." ;;
+  *_park100_v3) [[ -n "$_wpk" && "$_wpk" != *"-park100-"* ]] && _inv_say "contract id '${CONTRACT_ID}' is park100 but workload_profile_key is '${_wpk}'." ;;
+esac
+
+if [[ "$_inv_fail" != "0" ]]; then
+  echo "ERROR: [contract-invariant] the contract id, scenario.json and the runtime configuration disagree." >&2
+  echo "ERROR: [contract-invariant] CONTRACT-v2 s2.1 gives each shape its own ids and its own" >&2
+  echo "ERROR: [contract-invariant] workload_profile_key and forbids aggregating across them, and s8 requires" >&2
+  echo "ERROR: [contract-invariant] every reported figure to name its shape. A run recorded under a shape it did" >&2
+  echo "ERROR: [contract-invariant] not execute defeats both. Fix the declaration or pass the id you mean to run." >&2
+  exit 64
+fi
+unset _inv_fail _tok_delay _tok_shape_prefix _tok_rate _run_rate
+
 # Backend container network mode (fairness gate). By default the stateful backends
 # run bridged with published ports → every target↔backend packet crosses NAT, an
 # asymmetric tax across stacks of differing DB-chattiness. DB_HOST_NETWORK=1 (or
@@ -965,7 +1439,38 @@ RUNTIME_LOG_METADATA_JSON="$LOGS_DIR/runtime-log-metadata.json"
 AXON_STATS_CSV="$LOGS_DIR/axonserver-docker-stats.csv"
 AXON_STATS_PID=""
 RESTATE_STATS_CSV="$LOGS_DIR/restate-server-docker-stats.csv"
+LRA_COORD_STATS_CSV="$LOGS_DIR/lra-coordinator-docker-stats.csv"
 RESTATE_STATS_PID=""
+# CONTRACT-v2 §1/§8 whole-deployment footprint. The shared backends are part of
+# every stack's deployment unit and were previously unsampled, which measured
+# only where work LIVES, not what it COSTS: exeris-community runs the saga
+# in-process and checkpoints flow state to Postgres (v5 tables), while the Axon
+# stacks push saga progression to a separate Axon Server container. Sampling
+# only the target JVM flatters whichever stack externalises the most work.
+POSTGRES_STATS_CSV="$LOGS_DIR/postgres-docker-stats.csv"
+POSTGRES_STATS_PID=""
+# CONTRACT-v2 §4 parking workload: the external payment gateway is part of the
+# deployment unit, so it is sampled like Axon Server and restate-server. Only
+# started when the workload actually parks (BENCH_PAYMENT_PARKING=1).
+PAYMENT_GATEWAY_STATS_CSV="$LOGS_DIR/payment-gateway-docker-stats.csv"
+PAYMENT_GATEWAY_STATS_PID=""
+# BENCH_PAYMENT_PARKING and PAYMENT_STUB_DELAY_MS are defaulted far earlier, before
+# configure_target_runtime_overrides, because that function needs them to export the
+# targets' gateway/callback URLs. Defaulting them here would have left the function
+# reading an unset variable — and skipping the export silently.
+NEO4J_STATS_CSV="$LOGS_DIR/neo4j-docker-stats.csv"
+NEO4J_STATS_PID=""
+BACKEND_IDLE_BASELINE_JSON="$LOGS_DIR/backend-idle-baseline.json"
+DEPLOYMENT_FOOTPRINT_JSON="$OUTPUT_DIR/deployment-footprint.json"
+# Actual Postgres backend count per run. Every stack is CONFIGURED with the same
+# pool ceiling (EXERIS_DB_POOL_MAX_SIZE, default 256 -> Hikari max / Quarkus jdbc
+# max / kernel pool), but configuration parity is not runtime parity: pools open
+# connections on demand, so a stack may simply never reach the ceiling, and one
+# that plateaus exactly AT it was capped. Without this sample the difference is
+# indistinguishable, and DB config has already been the hidden variable in this
+# repo more than once.
+PG_CONNECTIONS_CSV="$LOGS_DIR/postgres-connections.csv"
+PG_CONNECTIONS_PID=""
 # OS-level sidecars (opt-in via BENCH_OS_SIDECARS=1, default OFF). pidstat gives
 # per-thread %wait (C2 starvation) + context switches; mpstat gives per-CPU
 # %usr/%sys/%soft/%idle (network/softirq burn). See tools/bench/lib/os-sampler.sh.
@@ -974,7 +1479,15 @@ HOST_MPSTAT_CSV="$LOGS_DIR/host-mpstat.csv"
 TARGET_PIDSTAT_PID=""
 HOST_MPSTAT_PID=""
 mkdir -p "$LOGS_DIR"
+# EXIT alone is not enough: bash does not run an EXIT trap when the shell is killed
+# by an UNTRAPPED signal, so Ctrl-C, a `kill` from a campaign wrapper, or a dropped
+# ssh session left the per-second sampler loops running with no parent. Trapping the
+# three signals explicitly, then re-exiting with the conventional 128+signo, keeps the
+# exit status honest for whatever is reading it while still running cleanup.
 trap cleanup_baseline EXIT
+trap 'cleanup_baseline; exit 130' INT
+trap 'cleanup_baseline; exit 143' TERM
+trap 'cleanup_baseline; exit 129' HUP
 
 if [[ "$AUTO_START_INFRA" == "true" ]]; then
   ensure_benchmark_infra
@@ -998,7 +1511,7 @@ bench_ensure_target_ready "$BASE_URL" "$CURL_INSECURE_OPT" "$HEALTH_TIMEOUT_SECO
 # once /health answers: it binds before the facade in the target's main().
 if [[ "$CONTRACT_ID" == *restate* || "$TARGET_APP" == *restate* ]]; then
   _restate_admin_url="${RESTATE_ADMIN_URL:-http://localhost:9070}"
-  _restate_sdk_url="${RESTATE_SDK_ADVERTISED_URL:-http://host.docker.internal:${RESTATE_SDK_PORT:-9084}}"
+  _restate_sdk_url="${RESTATE_SDK_ADVERTISED_URL:-http://${BENCH_CONTAINER_HOST_ADDR:-127.0.0.1}:${RESTATE_SDK_PORT:-9084}}"
   RESTATE_REGISTRATION_TXT="$LOGS_DIR/restate-registration.txt"
   _restate_reg_http="000"
   echo "Registering Restate deployment ${_restate_sdk_url} at ${_restate_admin_url}/deployments..."
@@ -1066,6 +1579,202 @@ if [[ -n "$PRE_TOKEN" ]]; then
   echo "Recommendation preflight OK (status=${RECOMMEND_CODE})."
 fi
 
+
+# --- CONTRACT-v2 §3.1: declared terminal vocabulary + preflight ---------------
+#
+# The harness reads the vocabulary this stack DECLARES and never infers it. A
+# stack whose declaration is absent, incomplete, or contradicted at preflight
+# does not run — that is a launch failure, not a result.
+#
+# This exists because the alternative is what happened: the detector was blind on
+# one arm, reported a clean zero, and nothing in the pipeline could tell that
+# apart from "no compensations occurred".
+TERMINAL_VOCABULARY_JSON="$(python3 - "$CONTRACT_ID" <<'PY'
+import json, sys
+cid = sys.argv[1]
+j = json.load(open("scenarios/e2e-shop-order-saga/scenario.json", encoding="utf-8"))
+for ns in ("fixed_contracts", "baseline_only_contracts"):
+    c = j.get(ns, {}).get(cid)
+    if isinstance(c, dict) and "terminal_vocabulary" in c:
+        print(json.dumps(c["terminal_vocabulary"], separators=(",", ":"))); sys.exit(0)
+sys.exit(3)
+PY
+)" || {
+  echo "ERROR: contract '${CONTRACT_ID}' declares no terminal_vocabulary (CONTRACT-v2 3.1)." >&2
+  echo "ERROR: the harness will not guess the terminal field or its tokens — that is the" >&2
+  echo "ERROR: defect class 3.1 exists to close. Declare it in scenario.json." >&2
+  exit 79
+}
+
+# Negative control (CONTRACT-v2 7). Deliberately falsifies the declaration so the
+# detector cannot see COMPENSATED, and the run MUST end in detector_fault rather
+# than in a compensation figure. A check never observed to fire is not evidence
+# that it would.
+# Two modes, because they exercise DIFFERENT guards and only one of them is the
+# guard the v1 defect got past:
+#
+#   preflight - falsify the declaration everywhere. The 3.1 preflight must reject
+#               it before the window opens. Cheap, and the earliest possible catch.
+#   detector  - falsify ONLY the copy handed to k6, leaving the preflight reading
+#               the true declaration. Preflight then PASSES (the stack really does
+#               emit COMPENSATED) and the detector alone is blind — the v1 shape.
+BENCH_NEGATIVE_CONTROL="${BENCH_NEGATIVE_CONTROL:-0}"
+K6_VOCABULARY_JSON="$TERMINAL_VOCABULARY_JSON"
+case "$BENCH_NEGATIVE_CONTROL" in
+  1|preflight)
+    TERMINAL_VOCABULARY_JSON="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -c '.terminal_tokens.COMPENSATED = "__NEGATIVE_CONTROL_WRONG_TOKEN__"')"
+    K6_VOCABULARY_JSON="$TERMINAL_VOCABULARY_JSON"
+    echo "NEGATIVE CONTROL (preflight): declaration falsified; the 3.1 preflight MUST reject it." >&2
+    ;;
+  detector)
+    K6_VOCABULARY_JSON="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -c '.terminal_tokens.COMPENSATED = "__NEGATIVE_CONTROL_WRONG_TOKEN__"')"
+    echo "NEGATIVE CONTROL (detector): only k6 copy falsified; preflight will PASS." >&2
+    echo "NEGATIVE CONTROL (detector): the run MUST end detector_fault, never a compensation figure." >&2
+    ;;
+esac
+export K6_TERMINAL_VOCABULARY="$K6_VOCABULARY_JSON"
+
+VOCAB_FIELD="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -r '.terminal_field')"
+VOCAB_TOK_COMPLETED="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -r '.terminal_tokens.COMPLETED')"
+VOCAB_TOK_COMPENSATED="$(printf '%s' "$TERMINAL_VOCABULARY_JSON" | jq -r '.terminal_tokens.COMPENSATED')"
+echo "Declared terminal vocabulary: field=${VOCAB_FIELD} completed=${VOCAB_TOK_COMPLETED} compensated=${VOCAB_TOK_COMPENSATED}"
+
+
+# CONTRACT-v2 3.1 preflight (normative): before the measurement window opens, drive
+# one forced-DECLINE and one forced-SUCCESS order and require the DECLARED tokens to
+# appear on the DECLARED field. Failure to observe either is a launch failure.
+#
+# This is the check that would have caught the v1 zero-compensation defect at t=0
+# instead of after a full campaign: a stack that cannot show a COMPENSATED under a
+# guaranteed decline is either not compensating or not observable, and either way
+# its compensation count is worthless.
+#
+# The two orderIds are chosen by IMPORTING tools/bench/lib/fnv1a64.py, never by
+# re-implementing the rule. A fourth copy of a rule that must be identical
+# everywhere is precisely the drift this contract keeps having to correct.
+preflight_terminal_vocabulary() {
+  local base="$1" token="$2"
+  [[ -n "$token" ]] || { echo "vocabulary preflight: no auth token; skipping is NOT allowed" >&2; return 1; }
+
+  local ids decline_id success_id
+  ids="$(python3 - <<'PY'
+import sys
+sys.path.insert(0, "tools/bench/lib")
+from fnv1a64 import decline          # the single normative implementation
+d = s = None
+for i in range(100000):
+    oid = f"preflight-vocab-i{i}"
+    if d is None and decline(oid): d = oid
+    if s is None and not decline(oid): s = oid
+    if d and s: break
+if not (d and s):
+    sys.exit(4)
+print(d); print(s)
+PY
+)" || { echo "vocabulary preflight: could not derive probe orderIds" >&2; return 1; }
+  decline_id="$(printf '%s\n' "$ids" | sed -n 1p)"
+  success_id="$(printf '%s\n' "$ids" | sed -n 2p)"
+
+  local _pid _cart _body _observed _expected _oid _poll_oid _poll_body
+  _pid="$(jq -r '.[0].id // empty' "$RECOMMEND_PREFLIGHT_BODY_JSON" 2>/dev/null || true)"
+  [[ -n "$_pid" ]] || { echo "vocabulary preflight: no product id from the recommendation preflight" >&2; return 1; }
+
+  for _case in "decline:${decline_id}:${VOCAB_TOK_COMPENSATED}" "success:${success_id}:${VOCAB_TOK_COMPLETED}"; do
+    _oid="$(printf '%s' "$_case" | cut -d: -f2)"
+    _expected="$(printf '%s' "$_case" | cut -d: -f3)"
+
+    # snake_case, matching k6.js exactly. The preflight sent camelCase (productId / orderId /
+    # cartId) while the measured workload sends product_id / order_id / cart_id, so it validated
+    # a request shape the campaign never sends. Every arm accepts snake_case by construction —
+    # that is what k6 drives through every campaign — so aligning the preflight to the workload
+    # can only narrow the gap between what is checked and what is run.
+    # A FRESH USER PER CASE. The two cases used to share one identity, and therefore one cart.
+    # k6 registers a new user every iteration, so a cart never carries an order across
+    # submissions in the measured workload — but the preflight submitted both orders from the
+    # same cart, and at least one stack (spring-on-exeris) treats that as the SAME order: the
+    # success case POSTed order_id=preflight-vocab-i0 and got back
+    # {"order_id":"preflight-vocab-i3","status":"COMPENSATED"} — the decline case's order,
+    # replayed. The preflight was measuring its own state leak.
+    #
+    # This was invisible for as long as the poll used the client id: it read order_not_found,
+    # reported the declared field as '<absent>', and looked exactly like a stack that never
+    # reaches COMPLETED. Two defects, one masking the other.
+    local _u _tok_case
+    _u="vocab_${RUN_TIMESTAMP_UTC}_${_case%%:*}_$$"
+    _tok_case="$(curl -sS $CURL_INSECURE_OPT -X POST "$base/api/v1/auth/register" \
+      -H 'content-type: application/json' \
+      --data-binary "$(jq -nc --arg u "$_u" --arg e "${_u}@example.test" --arg p "benchmark-pass-123" '{username:$u,email:$e,password:$p}')" \
+      | jq -r '.token // empty')"
+    [[ -n "$_tok_case" ]] || { echo "vocabulary preflight: could not register a fresh identity for the ${_case%%:*} case" >&2; return 1; }
+    token="$_tok_case"
+
+    curl -sS $CURL_INSECURE_OPT -o /dev/null -X POST "$base/api/v1/cart/add" \
+      -H "Authorization: Bearer $token" -H 'content-type: application/json' \
+      --data-binary "$(jq -nc --arg p "$_pid" '{product_id:$p,quantity:1}')" || return 1
+    _cart="$(curl -sS $CURL_INSECURE_OPT -X GET "$base/api/v1/cart" \
+      -H "Authorization: Bearer $token" | jq -r '.cart_id // .id // empty')"
+    [[ -n "$_cart" ]] || { echo "vocabulary preflight: no cart id" >&2; return 1; }
+
+    _body="$(curl -sS $CURL_INSECURE_OPT -X POST "$base/api/v1/orders" \
+      -H "Idempotency-Key: ${_oid}" \
+      -H "Authorization: Bearer $token" -H 'content-type: application/json' \
+      --data-binary "$(jq -nc --arg o "$_oid" --arg c "$_cart" '{order_id:$o,cart_id:$c,payment_method:"CARD"}')")"
+    _observed="$(printf '%s' "$_body" | jq -r --arg f "$VOCAB_FIELD" '.[$f] // empty')"
+    # Poll the id the SERVER echoed back, falling back to the client id — the same resolution
+    # k6.js uses (extractOrderId(orderRes) || clientOrderId). The preflight polled ONLY the client
+    # id, so against any stack that keys /status on its own identifier it queried an order that
+    # does not exist, read {"error":"order_not_found"}, and reported the declared field as
+    # '<absent>' — indistinguishable from a stack that never reaches the terminal state, which is
+    # the one thing this preflight exists to tell apart.
+    _poll_oid="$(printf '%s' "$_body" | jq -r '.order_id // .id // empty' 2>/dev/null)"
+    [[ -n "$_poll_oid" ]] || _poll_oid="$_oid"
+
+    # Inline is the declared model, but the declaration also permits a polled
+    # fallback, so a non-terminal inline answer is followed up rather than failed.
+    if [[ "$_observed" != "$_expected" ]]; then
+      local _n=0
+      while (( _n < 30 )); do
+        _poll_body="$(curl -sS $CURL_INSECURE_OPT -X GET "$base/api/v1/orders/${_poll_oid}/status" \
+          -H "Authorization: Bearer $token")"
+        _observed="$(printf '%s' "$_poll_body" | jq -r --arg f "$VOCAB_FIELD" '.[$f] // empty')"
+        [[ "$_observed" == "$_expected" ]] && break
+        _n=$((_n+1)); sleep 1
+      done
+    fi
+
+    if [[ "$_observed" != "$_expected" ]]; then
+      echo "ERROR: CONTRACT-v2 3.1 vocabulary preflight FAILED on the ${_case%%:*} case." >&2
+      echo "ERROR:   orderId        ${_oid}" >&2
+      echo "ERROR:   declared field ${VOCAB_FIELD}" >&2
+      echo "ERROR:   expected token ${_expected}" >&2
+      echo "ERROR:   observed       '${_observed:-<absent>}'" >&2
+      # Print what was actually seen. '<absent>' alone cannot distinguish "the stack never
+      # reached the terminal state" from "we asked the wrong question": an error body such as
+      # {"error":"order_not_found"} also carries no such field. Diagnosing that took five probe
+      # rounds once; the raw bodies make it one.
+      echo "ERROR:   polled id      ${_poll_oid:-$_oid}" >&2
+      echo "ERROR:   client id      ${_oid}" >&2
+      echo "ERROR:   order response ${_body:-<empty>}" >&2
+      echo "ERROR:   last poll body ${_poll_body:-<not polled: order response was terminal-shaped>}" >&2
+      echo "ERROR: the declaration in scenario.json does not describe what this stack emits." >&2
+      echo "ERROR: Running anyway would produce a compensation count that cannot be trusted" >&2
+      echo "ERROR: in either direction — the exact failure 3.1 exists to prevent." >&2
+      return 1
+    fi
+    echo "  vocabulary preflight ${_case%%:*}: observed '${_observed}' on '${VOCAB_FIELD}' as declared."
+  done
+  return 0
+}
+
+if ! preflight_terminal_vocabulary "$BASE_URL" "$PRE_TOKEN"; then
+  if [[ "$BENCH_NEGATIVE_CONTROL" == "1" || "$BENCH_NEGATIVE_CONTROL" == "preflight" ]]; then
+    echo "NEGATIVE CONTROL: preflight rejected the falsified declaration, as required." >&2
+    echo "NEGATIVE CONTROL: this is the expected outcome — the detector is demonstrably not blind." >&2
+    exit 80
+  fi
+  exit 79
+fi
+
 bench_read_k6_defaults "$K6_ENV_FILE"
 export BASE_URL
 
@@ -1073,6 +1782,33 @@ export BASE_URL
 
 TARGET_PORT="$(bench_extract_port_from_url "$BASE_URL")"
 TARGET_PID="$(bench_detect_pid_for_port "$TARGET_PORT")"
+
+# Verify the admission equalization reached the PROCESS, not just a shell variable.
+#
+# It did not, for the entire life of this scenario: the export was guarded on TARGET_APP
+# from a line that ran ~800 lines before TARGET_APP was first assigned, so the guard was
+# always false and the flag was never passed. Nothing noticed, because a missing -D is
+# indistinguishable from a present one unless you look at the process -- and the symptom it
+# produced (exeris shedding under a pool the other arms merely queue on) reads as a runtime
+# property rather than as a missing flag. The 2026-08-19 campaign lost all three exeris reps
+# to a s4.1 gate failure caused by exactly this.
+#
+# Checking the shell variable would re-make the original mistake. Read /proc/<pid>/cmdline.
+if [[ "$TARGET_APP" == exeris-* || "$TARGET_APP" == *on-exeris* ]] && [[ -n "$TARGET_PID" ]]; then
+  if [[ -r "/proc/$TARGET_PID/cmdline" ]]; then
+    if tr '\0' ' ' < "/proc/$TARGET_PID/cmdline" | grep -q 'queueDepthAllowanceRatio'; then
+      echo "ADR-035 admission equalization confirmed on pid ${TARGET_PID} (ratio=${EXERIS_ADMISSION_QUEUE_RATIO:-32})."
+    else
+      echo "ERROR: ADR-035 admission equalization is NOT on the target command line (pid ${TARGET_PID})." >&2
+      echo "ERROR: exeris arms shed under connection pressure at the default ratio 8 while the" >&2
+      echo "ERROR: Spring/Quarkus arms block, so this run would compare an admission policy" >&2
+      echo "ERROR: rather than the runtimes. Check that EXERIS_JAVA_OPTS reaches EXTERNAL_START_CMD." >&2
+      exit 64
+    fi
+  else
+    echo "Warning: cannot read /proc/${TARGET_PID}/cmdline; admission equalization unverified." >&2
+  fi
+fi
 printf 'epoch_ms,utime_ticks,stime_ticks,rss_kb,vmsize_kb,threads,vmhwm_kb,smaps_rss_kb,cgroup_mem_kb\n' > "$RESOURCE_SAMPLES_CSV"
 
 # Apply OS-level cgroup limits (memory + CPU) if configured.
@@ -1191,9 +1927,247 @@ _start_container_stats_sampler() {
   _CONTAINER_STATS_SAMPLER_PID="$!"
 }
 
+# --- Shared-backend sampling (CONTRACT-v2 §1 deployment unit) ---------------
+#
+# Postgres and Neo4j serve EVERY stack and are part of every deployment unit, so
+# they are sampled on every run, not conditionally like axonserver/restate.
+#
+# Idle baseline first: Postgres RSS is dominated by fixed shared_buffers and is
+# essentially identical on every stack, so a raw Σ RSS would be swamped by a
+# constant and would COMPRESS the real between-stack differences. Capturing the
+# pre-load value lets the rollup report both raw and delta-over-idle, and makes
+# the attributable part explicit. CPU needs no such correction — a shared
+# backend's CPU under load is caused by the stack's query pattern.
+_capture_backend_idle_baseline() {
+  local _c _cpu _mem _line
+  local _json="{}"
+  local _idle_containers=(exeris-e2e-saga-postgres)
+  [[ "$GRAPH_TRACK" == "neo4j" ]] && _idle_containers+=(exeris-e2e-saga-neo4j)
+  for _c in "${_idle_containers[@]}"; do
+    _line="$(docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}}' "$_c" 2>/dev/null || true)"
+    [[ -z "$_line" ]] && continue
+    _cpu="${_line%%,*}"; _cpu="${_cpu//%/}"
+    _mem="${_line#*,}"; _mem="${_mem%% /*}"
+    _json="$(jq -c --arg c "$_c" --arg cpu "$_cpu" --arg mem "$_mem" \
+      '. + {($c): {cpu_pct_idle: ($cpu|tonumber? // null), mem_usage_idle_raw: $mem}}' <<<"$_json")"
+  done
+  jq -n --argjson b "$_json" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{captured_at_utc: $at, note: "Sampled after backend readiness and before load. Postgres RSS is mostly fixed shared_buffers and identical across stacks; subtract this to get the attributable part.", backends: $b}' \
+    > "$BACKEND_IDLE_BASELINE_JSON"
+}
+_capture_backend_idle_baseline
+
+# Postgres backend-count sampler (answers "did this stack actually get its pool?").
+printf 'epoch_s,total_backends,active,idle,idle_in_txn,max_connections\n' > "$PG_CONNECTIONS_CSV"
+(
+  while true; do
+    _pgrow="$(docker exec exeris-e2e-saga-postgres psql -U postgres -tAF, -c \
+      "select count(*),
+              count(*) filter (where state='active'),
+              count(*) filter (where state='idle'),
+              count(*) filter (where state='idle in transaction'),
+              current_setting('max_connections')
+       from pg_stat_activity
+       where backend_type='client backend' and pid<>pg_backend_pid()" 2>/dev/null || true)"
+    [[ -n "$_pgrow" ]] && printf '%s,%s\n' "$(date +%s)" "$_pgrow" >> "$PG_CONNECTIONS_CSV"
+    sleep 1
+  done
+) &
+PG_CONNECTIONS_PID="$!"
+
+for _shared in "exeris-e2e-saga-postgres:$POSTGRES_STATS_CSV:POSTGRES" \
+               "exeris-e2e-saga-neo4j:$NEO4J_STATS_CSV:NEO4J"; do
+  _sc="${_shared%%:*}"; _rest_s="${_shared#*:}"; _scsv="${_rest_s%%:*}"; _svar="${_rest_s##*:}"
+  if docker inspect --format '{{.Id}}' "$_sc" >/dev/null 2>&1; then
+    _start_container_stats_sampler "$_sc" "$_scsv"
+    printf -v "${_svar}_STATS_PID" '%s' "$_CONTAINER_STATS_SAMPLER_PID"
+    echo "Shared-backend docker stats sampler started (container: ${_sc})."
+  else
+    echo "Warning: ${_sc} not found; its share of the deployment footprint will be missing." >&2
+  fi
+done
+
+# --- Host-networking exposure audit (fail closed) -------------------------------------
+#
+# The stack runs with network_mode: host, so nothing publishes ports on our behalf any
+# more: each service binds whatever address it was told to, and the compose file tells
+# all of them 127.0.0.1. If one of those settings is wrong - or an image changes its
+# default - the service binds 0.0.0.0 on a box with a public IP and no firewall this
+# account can inspect. That has already happened once here (Postgres reachable from the
+# internet, rogue superuser roles, 2026-07-30), and it is invisible from inside a run:
+# the benchmark works perfectly either way.
+#
+# So the bind addresses are checked, not trusted, on every run.
+_saga_stack_ports="5432 9300 8024 8124 8080 9070 9071 8090 5122 7474 7687"
+if command -v ss >/dev/null 2>&1; then
+  _exposed=""
+  while read -r _laddr; do
+    [[ -z "$_laddr" ]] && continue
+    _lport="${_laddr##*:}"
+    _lhost="${_laddr%:*}"
+    case " $_saga_stack_ports " in *" $_lport "*) ;; *) continue ;; esac
+    # Loopback wears four spellings in ss output: 127.0.0.1, [::1], the v4-mapped
+    # [::ffff:127.0.0.1] that every JVM here produces on a dual-stack socket, and
+    # 127.0.0.53%lo for systemd-resolved. Anything else is off-loopback.
+    case "$_lhost" in
+      127.*|"[::1]"|"[::ffff:127."*|localhost) ;;
+      *) _exposed="${_exposed} ${_laddr}" ;;
+    esac
+  done < <(ss -Hltn 2>/dev/null | awk '{print $4}')
+  if [[ -n "$_exposed" ]]; then
+    echo "ERROR: saga stack ports are bound off-loopback:${_exposed}" >&2
+    echo "ERROR: the stack is host-networked, so these are reachable from anywhere this box is." >&2
+    echo "ERROR: fix the service bind address in runtime/compose/e2e-shop-order-saga.yml and" >&2
+    echo "ERROR: recreate the container. Refusing to run." >&2
+    exit 77
+  fi
+  echo "Exposure audit: all saga stack ports bound to loopback."
+else
+  echo "ERROR: ss is unavailable, so the host-networked stack's bind addresses cannot be" >&2
+  echo "ERROR: verified. Refusing to run rather than assume they are loopback." >&2
+  exit 77
+fi
+
+# --- CPU pinning for the backend containers ------------------------------------------
+#
+# Postgres, the payment gateway and whichever saga server this arm needs (Axon Server,
+# LRA coordinator, restate-server) all run in containers and, unpinned, land on the same
+# cores as the target and the load generator. On this box that is 8 physical cores for
+# everything, and the effect is measurable: 50 sessions/s declared, 36.5/s delivered.
+#
+# Applied with `docker update` rather than in the compose file so the split lives with
+# the run that declares it — the compose stack is shared with ad-hoc use, and a cpuset
+# baked in there would silently constrain runs that never asked for one.
+#
+# Fails closed: a partially-pinned deployment is worse than an unpinned one, because the
+# metadata would claim isolation the run did not have.
+# PER-ROLE PINS (added 2026-08-21). One shared backend set was not enough, and the reason is
+# measurable rather than theoretical. Until now postgres, the payment gateway and whichever
+# coordinator an arm needs all shared 6,7,14,15 — four threads, two physical cores with SMT.
+# So a three-process arm crowded its coordinator onto the same two physical cores its own
+# Postgres occupied, and a two-process arm had nothing to crowd. Process count is exactly what
+# CONTRACT-v2 §1 makes the unit of comparison, so the apparatus penalised the architecture under
+# test in the same direction as the claim.
+#
+# The evidence is the payment gateway, which does IDENTICAL work on every arm by construction.
+# Measured over both 2026-08-20 campaigns its CPU per saga spanned 1.165-1.481 ms, a 25-27 %
+# spread against within-arm repeat spreads under 2 %, ordered exactly by backend-set load and
+# fitting gateway_s = 51.80 + 0.01466 x backend_set_s with R^2 = 0.943. Two competing
+# explanations were then eliminated by measurement, not argument:
+#
+#   - different offered load?  No. Gateway requests per saga = 1.0000 on every arm.
+#   - foreign work on the set? No. busy(6,7,14,15) minus the sum of every cgroup confined
+#                                 there leaves -0.5 %, i.e. zero within sampling granularity.
+#
+# What remains is mutual interference between the measured containers themselves, and the fix
+# for that is topological, not statistical: give each measured container its own physical core.
+# No coefficient correction is applied anywhere — the fit was taken on a 52 s container and
+# extrapolating it to a 165-900 s one across a 17x range, on n=5, with SMT as the mechanism,
+# is not warranted.
+#
+# Sibling pairs on this box are (N, N+8), verified from thread_siblings_list, so every set
+# below is whole physical cores and no two measured containers share one.
+#
+# The control that says whether this worked is free and already instrumented: the gateway
+# spread must fall to the within-arm spread, under ~2 %. If it does not, the premise is wrong
+# and requests-per-saga is where to look next.
+#
+# Each role falls back to BENCH_BACKEND_CPUS, so an unchanged caller keeps the old behaviour
+# and old runs stay reproducible.
+_pin_pg="${BENCH_PG_CPUS:-${BENCH_BACKEND_CPUS:-}}"
+_pin_gw="${BENCH_GATEWAY_CPUS:-${BENCH_BACKEND_CPUS:-}}"
+_pin_coord="${BENCH_COORDINATOR_CPUS:-${BENCH_BACKEND_CPUS:-}}"
+if [[ -n "$_pin_pg$_pin_gw$_pin_coord" ]]; then
+  _pin_one() {   # $1 = container, $2 = cpuset, $3 = role label
+    [[ -z "$2" ]] && return 0
+    # Must test the VALUE, not just that inspect succeeded: `docker inspect` on an existing but
+    # stopped container exits 0 and prints "false", and every arm leaves the OTHER arms'
+    # coordinators stopped.
+    local _running
+    _running="$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null || true)"
+    [[ "$_running" == "true" ]] || return 0
+    if ! docker update --cpuset-cpus "$2" "$1" >/dev/null 2>&1; then
+      echo "ERROR: could not pin $1 ($3) to CPUs $2." >&2
+      echo "ERROR: refusing to run a partially-pinned deployment — the metadata would claim" >&2
+      echo "ERROR: an isolation this run does not have." >&2
+      exit 76
+    fi
+    # Verify what the kernel actually applied rather than trusting the request. A cpuset is
+    # intersected with the inherited affinity mask, so a container can end up on fewer cores
+    # than asked for without docker reporting an error.
+    local _eff
+    # `|| true` is load-bearing: this script runs under `set -euo pipefail`, and with pipefail a
+    # failing `docker exec` makes the whole pipeline non-zero, which kills the run. That is exactly
+    # what happened on the first exeris-community run under these pins — that arm does not use
+    # Axon Server, its container was stopped, and verifying the pin took the run down with it. A
+    # verification step must never be able to fail the thing it verifies.
+    _eff="$(docker exec "$1" sh -lc 'cat /sys/fs/cgroup/cpuset.cpus.effective 2>/dev/null' 2>/dev/null | tr -d "\\r\\n" || true)"
+    if [[ -n "$_eff" ]]; then
+      echo "  pinned $3 ($1) -> requested $2, effective ${_eff}"
+    else
+      echo "  pinned $3 ($1) -> requested $2 (effective set unreadable)"
+    fi
+  }
+  echo "Pinning backend containers per role:"
+  _pin_one exeris-e2e-saga-postgres        "$_pin_pg"    postgres
+  _pin_one exeris-e2e-saga-payment-gateway "$_pin_gw"    payment-gateway
+  _pin_one exeris-e2e-saga-axonserver      "$_pin_coord" coordinator
+  _pin_one exeris-e2e-saga-lra-coordinator "$_pin_coord" coordinator
+  _pin_one exeris-e2e-saga-restate-server  "$_pin_coord" coordinator
+fi
+
+# Payment gateway sampler (parking workload only).
+PAYMENT_GATEWAY_STATS_PID=""
+if [[ "$BENCH_PAYMENT_PARKING" == "1" ]]; then
+  if docker inspect --format '{{.Id}}' exeris-e2e-saga-payment-gateway >/dev/null 2>&1; then
+    _start_container_stats_sampler exeris-e2e-saga-payment-gateway "$PAYMENT_GATEWAY_STATS_CSV"
+    PAYMENT_GATEWAY_STATS_PID="$_CONTAINER_STATS_SAMPLER_PID"
+    echo "Payment-gateway docker stats sampler started."
+  else
+    echo "ERROR: BENCH_PAYMENT_PARKING=1 but exeris-e2e-saga-payment-gateway is not running." >&2
+    echo "ERROR: every saga would dispatch to a gateway that cannot answer and park forever." >&2
+    exit 73
+  fi
+
+  # The gateway's delay and fault mode are set when compose brings it up, NOT by this
+  # script — so what the run STAMPS and what the gateway actually INJECTS can disagree
+  # silently, and both are workload parameters. The delay sets parked concurrency; the
+  # fault mode sets the §7 expected compensation count. Read them back from the running
+  # process and fail closed on disagreement rather than publish metadata that describes
+  # a run that did not happen.
+  _gw_health="$(curl -sf --max-time 5 "${PAYMENT_GATEWAY_HEALTH_URL:-http://localhost:9300/health}" || true)"
+  if [[ -z "$_gw_health" ]]; then
+    echo "ERROR: payment gateway is running but /health did not answer." >&2
+    exit 74
+  fi
+  _gw_delay="$(printf '%s' "$_gw_health" | jq -r '.delay_ms // empty')"
+  _gw_fault="$(printf '%s' "$_gw_health" | jq -r '.fault_mode // empty')"
+  if [[ "$_gw_delay" != "$PAYMENT_STUB_DELAY_MS" ]]; then
+    echo "ERROR: gateway callback delay is ${_gw_delay} ms but the run declares ${PAYMENT_STUB_DELAY_MS} ms." >&2
+    echo "ERROR: the delay sets parked concurrency (parked ~= rate x delay) and is stamped into" >&2
+    echo "ERROR: run metadata. Recreate the gateway with PAYMENT_STUB_DELAY_MS=${PAYMENT_STUB_DELAY_MS}." >&2
+    exit 74
+  fi
+  if [[ -z "$_gw_fault" ]]; then
+    echo "ERROR: gateway /health reports no fault_mode — it predates PAYMENT_STUB_FAULT_MODE." >&2
+    echo "ERROR: recreate the gateway container so the injected fault class is verifiable." >&2
+    exit 74
+  fi
+  if [[ "$_gw_fault" != "$FAULT_MODE" ]]; then
+    echo "ERROR: gateway fault mode is '${_gw_fault}' but the run declares '${FAULT_MODE}'." >&2
+    echo "ERROR: the §4.1 decline is decided in the gateway, so its mode — not the targets'" >&2
+    echo "ERROR: EXERIS_SAGA_FAULT_MODE — determines the expected compensation count (§7 O2)." >&2
+    echo "ERROR: Recreate the gateway with PAYMENT_STUB_FAULT_MODE=${FAULT_MODE}." >&2
+    exit 74
+  fi
+  echo "Payment gateway verified: delay=${_gw_delay}ms fault_mode=${_gw_fault}."
+fi
+
 # Start Axon Server docker stats sampler (if axon contract detected)
 AXON_STATS_PID=""
-if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
+if [[ "$TARGET_APP" == *axon-embedded* || "$CONTRACT_ID" == *axon_embedded* ]]; then
+  : # no Axon Server in this arm's deployment unit; nothing to sample (see the start gate above)
+elif _deployment_uses_axon_server; then
   _axon_cid="$(docker inspect --format '{{.Id}}' exeris-e2e-saga-axonserver 2>/dev/null || true)"
   if [[ -n "$_axon_cid" ]]; then
     _start_container_stats_sampler exeris-e2e-saga-axonserver "$AXON_STATS_CSV"
@@ -1201,6 +2175,29 @@ if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *s
     echo "Axon Server docker stats sampler started (container: exeris-e2e-saga-axonserver, pid: ${AXON_STATS_PID})."
   else
     echo "Warning: exeris-e2e-saga-axonserver container not found; Axon Server stats will not be captured." >&2
+  fi
+fi
+
+# Start LRA coordinator docker stats sampler (if an LRA target is detected).
+#
+# The comparative pair manifest has always said this arm's s1 deployment unit is THREE
+# processes -- app JVM + LRA coordinator + Postgres -- and that "the coordinator must be
+# sampled like Axon Server". It never was. The container name was already listed in the
+# idle-baseline loop below, so the runner knew it existed and still left it out of the
+# rollup: the one arm that needs an external coordinator was the one arm not charged for it,
+# while simultaneously being charged for an Axon Server it does not use.
+LRA_COORD_STATS_PID=""
+if _deployment_uses_lra_coordinator; then
+  _lra_cid="$(docker inspect --format '{{.Id}}' exeris-e2e-saga-lra-coordinator 2>/dev/null || true)"
+  if [[ -n "$_lra_cid" ]]; then
+    _start_container_stats_sampler exeris-e2e-saga-lra-coordinator "$LRA_COORD_STATS_CSV"
+    LRA_COORD_STATS_PID="$_CONTAINER_STATS_SAMPLER_PID"
+    echo "LRA coordinator docker stats sampler started (container: exeris-e2e-saga-lra-coordinator, pid: ${LRA_COORD_STATS_PID})."
+  else
+    echo "ERROR: contract '${CONTRACT_ID}' declares an LRA arm but exeris-e2e-saga-lra-coordinator" >&2
+    echo "ERROR: is not running. Its s1 deployment unit is app JVM + LRA coordinator + Postgres;" >&2
+    echo "ERROR: a run that cannot sample the coordinator understates the arm and is not comparable." >&2
+    exit 64
   fi
 fi
 
@@ -1225,7 +2222,7 @@ if [[ "$ENABLE_PERF_STAT" == "true" && -n "$TARGET_PID" ]]; then
 fi
 
 # Extend poll budget for Axon targets: SimpleEventBus async projection may lag under high concurrency.
-if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* || "$TARGET_APP" == *spring* || "$TARGET_APP" == *quarkus* ]]; then
+if _deployment_uses_axon_server; then
   export K6_MAX_POLL_ATTEMPTS="${K6_MAX_POLL_ATTEMPTS:-40}"
 fi
 # CONTRACT-v2 s8 outcome-split reporting needs p99 for saga_completed_duration /
@@ -1245,8 +2242,34 @@ set -e
 # throughput and time-to-peak come from the measurement window only — not a single
 # average over warmup+measurement+cooldown. Never fatal: emits valid JSON regardless.
 "$REPO_ROOT/tools/aggregate-k6-throughput.sh" "$K6_TIMESERIES_CSV" "$K6_THROUGHPUT_SERIES_JSON" || true
+# Classify the exit code instead of assuming it. "Non-zero means thresholds" is
+# wrong in the one case that matters most: a run killed from outside exits non-zero
+# and has NO verdict about the target at all, yet was being written into
+# claim-status.json as `threshold_failure` -- a measured statement about the stack,
+# manufactured from an operator pressing Ctrl-C. One is on disk already: the campaign
+# of 2026-08-19 07:32 recorded exeris-community rep 1 as a threshold failure when its
+# own k6 console says "test run was aborted because k6 received a 'terminated' signal"
+# 4m21s into a 15m window.
+#
+# 99 and 105 are pinned from evidence, not from memory of the exit-code table: 99 is
+# k6's documented threshold-breach code, and 105 was observed in this k6 (v2.0.0)
+# alongside exactly that abort message. Anything else stays deliberately unclassified
+# rather than being folded into either bucket.
+case "$K6_EXIT_CODE" in
+  0)   K6_EXIT_CLASS="clean" ;;
+  99)  K6_EXIT_CLASS="threshold_failure" ;;
+  105) K6_EXIT_CLASS="run_aborted" ;;
+  *)   K6_EXIT_CLASS="k6_exit_nonzero" ;;
+esac
 if [[ "$K6_EXIT_CODE" -ne 0 ]]; then
-  echo "Warning: k6 exited with code ${K6_EXIT_CODE} (likely threshold failures). Continuing artifact collection." >&2
+  case "$K6_EXIT_CLASS" in
+    threshold_failure)
+      echo "Warning: k6 exited ${K6_EXIT_CODE} -- thresholds breached. Continuing artifact collection." >&2 ;;
+    run_aborted)
+      echo "Warning: k6 exited ${K6_EXIT_CODE} -- the RUN WAS ABORTED (signal), not a threshold breach. This run supports no claim about the target in either direction; artifacts are collected for post-mortem only." >&2 ;;
+    *)
+      echo "Warning: k6 exited ${K6_EXIT_CODE} -- cause not classified. Read ${K6_CONSOLE_LOG} before drawing any conclusion from this run." >&2 ;;
+  esac
 fi
 
 bench_stop_resource_sampler
@@ -1262,19 +2285,377 @@ if [[ -n "$HOST_MPSTAT_PID" ]]; then
   HOST_MPSTAT_PID=""
 fi
 
-# Stop Axon Server docker stats sampler
-if [[ -n "$AXON_STATS_PID" ]]; then
-  kill "$AXON_STATS_PID" >/dev/null 2>&1 || true
-  wait "$AXON_STATS_PID" 2>/dev/null || true
-  AXON_STATS_PID=""
+# Which stack-specific engines belong to THIS arm's §1 deployment unit. Do not re-derive it:
+# the sampler start gates above already made that decision (_deployment_uses_axon_server,
+# _deployment_uses_lra_coordinator, and the explicit axon-embedded exclusion), so read their
+# result. Every container in this compose stack is up on every run, so asking `docker ps`
+# instead would put another arm's engine inside this arm's unit — which is the exact error
+# that once charged quarkus-lra for an Axon Server it does not use. Captured here because
+# _stop_container_samplers blanks these pids.
+# if/fi, not `[[ ... ]] && x`: this script runs under `set -euo pipefail`, and a trailing
+# && whose left side is false returns 1 as the statement status, which errexit turns into an
+# aborted run. It would have fired on every arm that has no Axon Server.
+_settle_unit_engines=""
+if [[ -n "${AXON_STATS_PID:-}" ]]; then      _settle_unit_engines+="exeris-e2e-saga-axonserver "; fi
+if [[ -n "${RESTATE_STATS_PID:-}" ]]; then   _settle_unit_engines+="exeris-e2e-saga-restate-server "; fi
+if [[ -n "${LRA_COORD_STATS_PID:-}" ]]; then _settle_unit_engines+="exeris-e2e-saga-lra-coordinator "; fi
+
+# Stop the container/backend samplers (same helper the EXIT trap uses).
+_stop_container_samplers
+
+# --- CONTRACT-v2 §8 post-load settle window ---------------------------------
+#
+# Sampling that stops when k6 stops measures the cost of a stack that has not
+# finished working. Measured 2026-08-21 on quarkus-lra at 70 sessions/s: the
+# Narayana LRA coordinator's RSS peaked at 341 MB inside the measurement window
+# and was still climbing ~1.2 MB/s at ~6% of a core SEVEN MINUTES after the last
+# request, settling at 834 MB -- 2.4x the number the footprint recorded. A
+# deployment-unit comparison built on the in-window figure understates whichever
+# stack defers the most work, which is the opposite of what §1 is for.
+#
+# So: after the measurement samplers are closed, keep watching until the saga
+# engines go quiet, and record what happens in SEPARATE artifacts. The in-window
+# numbers keep their exact meaning; the drain is a second axis and is never
+# summed into the first.
+#
+# Idle is evaluated on the STACK-SPECIFIC engines (Axon Server, restate-server,
+# LRA coordinator) AND the target JVM -- never on containers alone. exeris runs
+# its saga in-process, so a detector that watched only containers would report
+# "settled instantly" for the one arm whose work it could not see, which is the
+# blind-detector mistake this campaign has already made twice. Postgres and the
+# gateway are sampled but NOT gated on: autovacuum would hold the gate open
+# forever and neither is the thing deferring saga work.
+SETTLE_CSV="$LOGS_DIR/post-load-settle.csv"
+SETTLE_JSON="$OUTPUT_DIR/post-load-settle.json"
+RETENTION_CSV="$LOGS_DIR/post-load-retention.csv"
+if [[ "${BENCH_SETTLE_ENABLED:-1}" == "1" ]]; then
+  _settle_max="${BENCH_SETTLE_MAX_SECONDS:-600}"
+  _settle_pct="${BENCH_SETTLE_IDLE_PCT:-3.0}"
+  _settle_need="${BENCH_SETTLE_IDLE_SAMPLES:-5}"
+  _settle_interval="${BENCH_SETTLE_INTERVAL_SECONDS:-3}"
+
+  _settle_engines=""
+  for _c in ${_settle_unit_engines:-}; do
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$_c"; then
+      _settle_engines="${_settle_engines}${_c} "
+    fi
+  done
+  # An arm with no external engine (axon-embedded, exeris) legitimately has an empty set here.
+  # It is then gated on its target JVM alone, which is correct: that is where its saga engine
+  # lives. It is NOT a reason to fall back to "every engine container that happens to be up".
+  _settle_watched="$_settle_engines"
+  for _c in exeris-e2e-saga-postgres exeris-e2e-saga-payment-gateway exeris-e2e-saga-neo4j; do
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$_c"; then
+      _settle_watched="${_settle_watched}${_c} "
+    fi
+  done
+
+  # Target pid via the port it actually listens on, not the pid file: the pid
+  # file has been observed to name a wrapper while the JVM ran under another pid
+  # (see runtime/drivers/stop-target.sh).
+  _settle_port=""
+  if [[ "$BASE_URL" =~ :([0-9]+)(/|$) ]]; then _settle_port="${BASH_REMATCH[1]}"; fi
+  _settle_target_pid=""
+  if [[ -n "$_settle_port" ]]; then
+    _settle_target_pid="$(ss -ltnp 2>/dev/null | grep ":${_settle_port} " | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2 || true)"
+  fi
+
+  # utime+stime out of /proc/<pid>/stat. The comm field is parenthesised and may
+  # contain spaces, so drop everything through the final ") " before counting:
+  # after that, state is $1, so utime (field 14) is $12 and stime (15) is $13.
+  _settle_jiffies() {
+    local raw rest
+    raw="$(cat "/proc/$1/stat" 2>/dev/null || true)"
+    if [[ -z "$raw" ]]; then printf '0'; return 0; fi
+    rest="${raw#*) }"
+    printf '%s' "$rest" | awk '{print $12+$13}'
+    return 0
+  }
+
+  # A gate with nothing to watch is not a gate. If this arm has no engine container in its
+  # unit AND its target pid could not be resolved, the loop goes quiet immediately and would
+  # report settled=true having observed nothing at all -- the blind-detector failure this
+  # campaign has now hit three times. Record it and refuse the clean verdict.
+  _settle_blind="false"
+  if [[ -z "${_settle_engines// /}" && -z "$_settle_target_pid" ]]; then _settle_blind="true"; fi
+
+  _settle_hz="$(getconf CLK_TCK 2>/dev/null || echo 100)"
+  echo "epoch_ms,component,cpu_pct,mem_mb" > "$SETTLE_CSV"
+  echo "Post-load settle window: watching [${_settle_engines:-none}] + target pid ${_settle_target_pid:-unknown}, max ${_settle_max}s, idle<${_settle_pct}% x${_settle_need}."
+
+  _settle_start_epoch="$(date +%s)"
+  _settle_quiet=0
+  _settle_settled="false"
+  _settle_prev_jiff="$(_settle_jiffies "${_settle_target_pid:-0}")"
+  _settle_tgt_jiff0="$_settle_prev_jiff"
+  while :; do
+    sleep "$_settle_interval"
+    _settle_now="$(date +%s)"
+    _settle_elapsed=$(( _settle_now - _settle_start_epoch ))
+    _settle_busy=0
+
+    if [[ -n "$_settle_watched" ]]; then
+      while IFS=, read -r _n _cpu _mem; do
+        [[ -z "$_n" ]] && continue
+        printf '%s,%s,%s,%s\n' "$(( _settle_now * 1000 ))" "$_n" "$_cpu" "$_mem" >> "$SETTLE_CSV"
+        case " $_settle_engines " in
+          *" $_n "*)
+            if awk -v c="$_cpu" -v t="$_settle_pct" 'BEGIN{exit !(c+0 > t+0)}'; then _settle_busy=1; fi
+            ;;
+        esac
+      done < <(timeout 20 docker stats --no-stream --format '{{.Name}},{{.CPUPerc}},{{.MemUsage}}' $_settle_watched 2>/dev/null \
+                 | sed 's/%//; s| / [0-9.]*[A-Za-z]*$||; s/MiB//; s/GiB/*1024/' \
+                 | awk -F, '{m=$3; if (m ~ /\*1024/) { sub(/\*1024/,"",m); m=m*1024 } printf "%s,%s,%.2f\n", $1, $2, m+0}' || true)
+    fi
+
+    if [[ -n "$_settle_target_pid" ]]; then
+      _settle_jiff="$(_settle_jiffies "$_settle_target_pid")"
+      _settle_tgt_pct="$(awk -v a="$_settle_prev_jiff" -v b="$_settle_jiff" -v i="$_settle_interval" -v hz="$_settle_hz" \
+        'BEGIN{ printf "%.2f", 100.0*((b-a)/hz)/i }')"
+      _settle_prev_jiff="$_settle_jiff"
+      printf '%s,%s,%s,%s\n' "$(( _settle_now * 1000 ))" "target-jvm" "$_settle_tgt_pct" "" >> "$SETTLE_CSV"
+      if awk -v c="$_settle_tgt_pct" -v t="$_settle_pct" 'BEGIN{exit !(c+0 > t+0)}'; then _settle_busy=1; fi
+    fi
+
+    if [[ "$_settle_busy" -eq 0 ]]; then
+      _settle_quiet=$(( _settle_quiet + 1 ))
+    else
+      _settle_quiet=0
+    fi
+    if [[ "$_settle_quiet" -ge "$_settle_need" ]]; then _settle_settled="true"; break; fi
+    if [[ "$_settle_elapsed" -ge "$_settle_max" ]]; then _settle_settled="false"; break; fi
+  done
+  if [[ "$_settle_blind" == "true" ]]; then _settle_settled="false"; fi
+  # --- retention probe -----------------------------------------------------
+  #
+  # A resting footprint has two very different explanations and docker stats cannot tell
+  # them apart: live state the engine still needs, or heap it simply has not collected.
+  # Page cache is a third, and MemUsage includes it. So read the cgroup split (anon vs
+  # file), ask the JVM for a full collection, and read it again. Measured by hand on
+  # 2026-08-21: one coordinator sat at 1 055 MB anon against 124 MB of file cache and a
+  # forced GC moved it from 1 125 to 1 155 MB -- released nothing. That reading existed
+  # only in a terminal, which under this repo's own traceability rule makes it unusable.
+  # It is an artifact now.
+  #
+  # The target JVM is probed on the same terms as any engine container. An arm whose saga
+  # engine is in-process would otherwise be the one arm whose retention goes unmeasured,
+  # and that arm is ours.
+  echo "component,phase,anon_bytes,file_bytes,rss_kb,gc_invoked" > "$RETENTION_CSV"
+
+  _cg_mem() {
+    local cid base
+    cid="$(docker inspect -f '{{.Id}}' "$1" 2>/dev/null || true)"
+    if [[ -z "$cid" ]]; then printf '0 0'; return 0; fi
+    for base in "/sys/fs/cgroup/system.slice/docker-${cid}.scope" "/sys/fs/cgroup/memory/docker/${cid}"; do
+      if [[ -r "$base/memory.stat" ]]; then
+        awk '$1=="anon"{a=$2} $1=="file"{f=$2} END{printf "%d %d", a+0, f+0}' "$base/memory.stat"
+        return 0
+      fi
+    done
+    printf '0 0'
+    return 0
+  }
+  _proc_rss_kb() {
+    local v
+    v="$(awk '/^VmRSS:/{print $2}' "/proc/$1/status" 2>/dev/null || true)"
+    printf '%s' "${v:-0}"
+    return 0
+  }
+
+  for _c in ${_settle_engines:-}; do
+    read -r _a0 _f0 <<< "$(_cg_mem "$_c")"
+    printf '%s,before,%s,%s,,\n' "$_c" "$_a0" "$_f0" >> "$RETENTION_CSV"
+    _gc="no"
+    if timeout 30 docker exec "$_c" sh -c 'jcmd 1 GC.run' >/dev/null 2>&1; then _gc="yes"; fi
+    sleep 6
+    read -r _a1 _f1 <<< "$(_cg_mem "$_c")"
+    printf '%s,after,%s,%s,,%s\n' "$_c" "$_a1" "$_f1" "$_gc" >> "$RETENTION_CSV"
+  done
+
+  if [[ -n "$_settle_target_pid" ]]; then
+    printf 'target-jvm,before,,,%s,\n' "$(_proc_rss_kb "$_settle_target_pid")" >> "$RETENTION_CSV"
+    _gc="no"
+    _jcmd="${JAVA_HOME:-/opt/jdk26}/bin/jcmd"
+    if [[ -x "$_jcmd" ]]; then
+      if timeout 30 "$_jcmd" "$_settle_target_pid" GC.run >/dev/null 2>&1; then _gc="yes"; fi
+    fi
+    sleep 6
+    printf 'target-jvm,after,,,%s,%s\n' "$(_proc_rss_kb "$_settle_target_pid")" "$_gc" >> "$RETENTION_CSV"
+  fi
+
+  _settle_seconds=$(( $(date +%s) - _settle_start_epoch ))
+  _settle_tgt_core_s="$(awk -v a="$_settle_tgt_jiff0" -v b="$(_settle_jiffies "${_settle_target_pid:-0}")" -v hz="$_settle_hz" \
+    'BEGIN{ printf "%.3f", (b-a)/hz }')"
+
+  jq -n \
+    --arg contract "$CONTRACT_ID" --arg target "$TARGET_APP" \
+    --argjson settle_seconds "${_settle_seconds:-0}" \
+    --argjson settled "${_settle_settled}" \
+    --argjson idle_pct "${_settle_pct}" \
+    --argjson idle_samples "${_settle_need}" \
+    --argjson max_seconds "${_settle_max}" \
+    --argjson target_cpu_core_seconds "${_settle_tgt_core_s:-0}" \
+    --arg engines "${_settle_engines:-}" \
+    --slurpfile retention <(awk -F, 'NR>1{printf "%s{\"component\":\"%s\",\"phase\":\"%s\",\"anon_bytes\":%d,\"file_bytes\":%d,\"rss_kb\":%d,\"gc_invoked\":\"%s\"}", (n++?",":"["), $1, $2, $3+0, $4+0, $5+0, ($6==""?"n/a":$6)} END{printf "%s\n", (n?"]":"[]")}' "$RETENTION_CSV") \
+    --argjson watched_nothing "${_settle_blind}" \
+    --slurpfile rows <(awk -F, 'NR>1 && $2!="" {print}' "$SETTLE_CSV" \
+        | awk -F, '{c[$2]++; if($3+0>mx[$2]) mx[$2]=$3+0; s[$2]+=$3+0; if($4!="" && $4+0>mm[$2]) mm[$2]=$4+0}
+                   END{printf "["; f=1; for (k in c){ if(!f) printf ","; f=0;
+                     printf "{\"component\":\"%s\",\"samples\":%d,\"cpu_pct_max\":%.2f,\"cpu_pct_avg\":%.2f,\"rss_mb_max\":%.2f}", k, c[k], mx[k], s[k]/c[k], mm[k] } printf "]"}') \
+    '{
+      schema_version: "1",
+      contract_ref: "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#8",
+      contract_id: $contract,
+      target_app: $target,
+      axis: "post_load_settle",
+      settle_seconds: $settle_seconds,
+      settled: $settled,
+      idle_definition: { cpu_pct_below: $idle_pct, consecutive_samples: $idle_samples, cap_seconds: $max_seconds },
+      watched_nothing: $watched_nothing,
+      retention: $retention[0],
+      retention_note: "anon vs file separates live state from reclaimable page cache; gc_invoked records whether a full collection was actually requested. A resting footprint that survives a forced GC is retained state, not uncollected garbage. rss_kb is populated for the target JVM only, anon/file for containers only - the two are read from different interfaces and must not be compared as if they were one number.",
+      deployment_unit_engines: ($engines | split(" ") | map(select(length > 0))),
+      gated_on: ($engines | split(" ") | map(select(length > 0)) + ["target-jvm"]),
+      target_cpu_core_seconds_after_load: $target_cpu_core_seconds,
+      components: $rows[0],
+      unit_note: "components[] also carries containers sampled for context: Postgres, the gateway, and any engine owned by ANOTHER arm sharing this compose stack. Per CONTRACT-v2 section 1, only deployment_unit_engines plus target-jvm belong to THIS arm. Taking a max across components[] without that filter reports a foreign idle container as a cost of this arm. NOTE: no apostrophes in this string - the jq program is bash single-quoted, and one apostrophe here silently broke this rollup once already, in the same file that already carries this warning on the footprint rollup.",
+      note: "SEPARATE AXIS from deployment-footprint.json, which covers the measurement window only. Never sum the two: this window has no load and no iteration denominator, so a per-saga figure derived from it is meaningless. settled=false means the cap was hit and the numbers are a lower bound, not a resting state. Postgres and the payment gateway are sampled here but not gated on - autovacuum would hold the gate open indefinitely and neither defers saga work."
+    }' > "$SETTLE_JSON" 2>/dev/null || echo '{"schema_version":"1","axis":"post_load_settle","error":"rollup failed"}' > "$SETTLE_JSON"
+
+  echo "Post-load settle: ${_settle_seconds}s, settled=${_settle_settled}. -> $SETTLE_JSON"
 fi
 
-# Stop restate-server docker stats sampler
-if [[ -n "$RESTATE_STATS_PID" ]]; then
-  kill "$RESTATE_STATS_PID" >/dev/null 2>&1 || true
-  wait "$RESTATE_STATS_PID" 2>/dev/null || true
-  RESTATE_STATS_PID=""
-fi
+# --- CONTRACT-v2 §1/§8 whole-deployment footprint rollup --------------------
+#
+# Σ over every process in the deployment unit, not just the target JVM. Reports
+# per-component figures alongside the sum so a reader can see WHERE the cost
+# sits — the whole point when one stack runs the saga in-process and another
+# externalises it to Axon Server.
+#
+# Two deliberate asymmetries in how the numbers are formed:
+#  * shared backends (Postgres, Neo4j) also report rss_delta_over_idle_mb,
+#    because their raw RSS is mostly fixed allocation identical on every stack;
+#    the sum of raw RSS is reported but is the WEAKER comparator.
+#  * CPU is summed without correction — a shared backend's CPU under load is
+#    attributable to the stack driving it.
+_csv_stat() { # <csv> <col-index-1based> <mean|max>
+  local f="$1" c="$2" mode="$3"
+  [[ -s "$f" ]] || { printf 'null\n'; return 0; }
+  awk -F, -v c="$c" -v m="$mode" 'NR>1 && $c ~ /^[0-9.]+$/ {
+      n++; s+=$c; if ($c>mx) mx=$c
+    } END {
+      if (n==0) { print "null" } else if (m=="max") { printf "%.1f\n", mx } else { printf "%.2f\n", s/n }
+    }' "$f"
+}
+
+_component_json() { # <name> <csv> <role> <sample-seconds>
+  local name="$1" csv="$2" role="$3" secs="${4:-0}"
+  [[ -s "$csv" ]] || return 0
+  jq -n --arg n "$name" --arg role "$role" --argjson secs "${secs:-0}" \
+    --argjson cpu_avg "$(_csv_stat "$csv" 2 mean)" \
+    --argjson cpu_max "$(_csv_stat "$csv" 2 max)" \
+    --argjson rss_avg "$(_csv_stat "$csv" 3 mean)" \
+    --argjson rss_max "$(_csv_stat "$csv" 3 max)" \
+    '{component:$n, role:$role, sample_span_seconds:$secs,
+      cpu_pct_avg:$cpu_avg, cpu_pct_max:$cpu_max,
+      rss_mb_avg:$rss_avg, rss_mb_max:$rss_max,
+      cpu_core_seconds: (if $cpu_avg == null then null else (($cpu_avg/100)*$secs) end)}'
+}
+
+# Wall-clock span of a stats CSV, from the epoch_ms column.
+#
+# NOT the row count. An earlier version used row count as seconds on the
+# assumption that the sampler ticks at 1 Hz because the loop says `sleep 1` —
+# but `docker stats --no-stream` takes ~2 s itself (it samples twice to compute
+# a CPU delta), so the real interval is ~3 s. Measured on a campaign CSV: 113
+# rows spanning 335.7 s, i.e. 2.97 s per sample. Every container's
+# cpu_core_seconds was therefore understated by ~3x, and so was the
+# whole-deployment CPU per saga.
+_csv_span_seconds() {
+  local f="$1"
+  [[ -s "$f" ]] || { printf '0\n'; return 0; }
+  awk -F, 'NR==2{first=$1} END{ if (NR>2 && first>0) printf "%.1f\n", ($1-first)/1000; else print 0 }' "$f"
+}
+
+# Defined here next to its helpers, but CALLED after resource-metrics.json is
+# finalized — it reads the target JVM's figures from that file, and an earlier
+# call silently produced a rollup whose target component was null, i.e. a
+# whole-deployment sum with the target missing from it.
+_write_deployment_footprint() {
+  _comp_target="$(jq -n \
+    --argjson cores "$(jq -r '.avg_cores_used // null' "$RESOURCE_METRICS_JSON" 2>/dev/null || echo null)" \
+    --argjson rssmax "$(jq -r 'if .peak_rss_kb then ((.peak_rss_kb/1024)*10|floor/10) else null end' "$RESOURCE_METRICS_JSON" 2>/dev/null || echo null)" \
+    '{component:"target-jvm", role:"target", cores_used_avg:$cores, rss_mb_max:$rssmax}')"
+
+  _comps="$(printf '%s\n' \
+    "$(_component_json exeris-e2e-saga-postgres "$POSTGRES_STATS_CSV" shared-backend "$(_csv_span_seconds "$POSTGRES_STATS_CSV")")" \
+    "$(if [[ "$GRAPH_TRACK" == "neo4j" ]]; then _component_json exeris-e2e-saga-neo4j "$NEO4J_STATS_CSV" shared-backend "$(_csv_span_seconds "$NEO4J_STATS_CSV")"; fi)" \
+    "$(_component_json exeris-e2e-saga-axonserver "$AXON_STATS_CSV" stack-specific "$(_csv_span_seconds "$AXON_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-restate-server "$RESTATE_STATS_CSV" stack-specific "$(_csv_span_seconds "$RESTATE_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-lra-coordinator "$LRA_COORD_STATS_CSV" stack-specific "$(_csv_span_seconds "$LRA_COORD_STATS_CSV")")" \
+    "$(_component_json exeris-e2e-saga-payment-gateway "$PAYMENT_GATEWAY_STATS_CSV" shared-external "$(_csv_span_seconds "$PAYMENT_GATEWAY_STATS_CSV")")" \
+    | jq -s '.')"
+
+  # Throughput normalization. Raw cpu_pct is an average over the sampling
+  # window, so it is NOT comparable between runs that served different volumes —
+  # and the sweep already showed throughput varying run to run. Convert to
+  # core-seconds and divide by completed iterations so the figure is per saga.
+  _iters="$(jq -r '.metrics.iterations.count // 0' "$K6_SUMMARY_JSON" 2>/dev/null || echo 0)"
+  _pg_peak="$(_csv_stat "$PG_CONNECTIONS_CSV" 2 max)"
+  _pg_peak_active="$(_csv_stat "$PG_CONNECTIONS_CSV" 3 max)"
+  _pg_server_max="$(awk -F, 'NR>1 && $6 ~ /^[0-9]+$/ {print $6; exit}' "$PG_CONNECTIONS_CSV" 2>/dev/null)"
+
+  jq -n \
+    --arg contract "$CONTRACT_ID" --arg target "$TARGET_APP" \
+    --argjson target_comp "$_comp_target" \
+    --argjson components "$_comps" \
+    --argjson iterations "${_iters:-0}" \
+    --argjson pool_max "${EXERIS_DB_POOL_MAX_SIZE:-0}" \
+    --argjson pg_peak "${_pg_peak:-null}" \
+    --argjson pg_peak_active "${_pg_peak_active:-null}" \
+    --argjson pg_server_max "${_pg_server_max:-null}" \
+    --slurpfile idle "$BACKEND_IDLE_BASELINE_JSON" \
+    --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{
+      schema_version: "1",
+      contract_ref: "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#1",
+      contract_id: $contract,
+      target_app: $target,
+      target: $target_comp,
+      components: $components,
+      iterations: $iterations,
+      # Fairness evidence, not a performance metric: every stack is configured
+      # with the same pool ceiling, but "configured" != "obtained". peak == the
+      # configured max means the stack was pool-CAPPED and its numbers reflect
+      # the pool, not the runtime; peak well below means the pool was not the
+      # limiter. Without this the two are indistinguishable.
+      postgres_connections: {
+        pool_max_configured: $pool_max,
+        peak_backends: $pg_peak,
+        peak_active: $pg_peak_active,
+        server_max_connections: $pg_server_max,
+        pool_capped: (if ($pool_max > 0 and $pg_peak >= $pool_max) then true else false end),
+        note: "client backends only, sampled at 1 Hz for the whole run (includes warmup and cooldown). NOTE: keep this string free of single quotes — the jq program is bash single-quoted, and an apostrophe here silently broke the whole rollup once."
+      },
+      sum_container_cpu_pct_avg: ([$components[].cpu_pct_avg // 0] | add),
+      sum_container_rss_mb_max:  ([$components[].rss_mb_max  // 0] | add),
+      sum_container_cpu_core_seconds: ([$components[].cpu_core_seconds // 0] | add),
+      # The comparable figure: throughput-normalized, so runs that served
+      # different volumes can be put side by side.
+      container_cpu_core_seconds_per_iteration:
+        (if $iterations > 0
+         then (([$components[].cpu_core_seconds // 0] | add) / $iterations)
+         else null end),
+      backend_idle_baseline: ($idle[0] // null),
+      interpretation: {
+        why: "CONTRACT-v2 §1 makes the unit of comparison the whole deployment. exeris-community runs the saga in-process and checkpoints flow state to Postgres; the Axon stacks run saga progression in a separate Axon Server container. Target-JVM-only figures measure where the work lives, not what it costs.",
+        rss_caveat: "sum_container_rss_mb_max includes Postgres, whose RSS is dominated by fixed shared_buffers and is near-identical on every stack. Summing it raw COMPRESSES real between-stack differences; use backend_idle_baseline to take the delta, and prefer CPU for shared backends.",
+        cpu_note: "Container CPU is summed without correction: a shared backend'"'"'s CPU under load is attributable to the stack driving it.",
+        units: "cpu_pct is docker-stats percent-of-one-core; target cores_used_avg is cores. Do not add the two without converting."
+      },
+      generated_at_utc: $generated_at_utc
+    }' > "$DEPLOYMENT_FOOTPRINT_JSON" 2>/dev/null || echo '{"schema_version":"1","error":"footprint rollup failed"}' > "$DEPLOYMENT_FOOTPRINT_JSON"
+}
 
 # Capture JFR dump and metadata after the run
 if [[ "$ENABLE_JFR" == "true" ]]; then
@@ -1293,6 +2674,12 @@ else
   jq '. + {note: "target pid could not be detected"}' "$RESOURCE_METRICS_JSON" > "$RESOURCE_METRICS_JSON.tmp"
   mv "$RESOURCE_METRICS_JSON.tmp" "$RESOURCE_METRICS_JSON"
 fi
+
+# CONTRACT-v2 §1/§8 whole-deployment rollup. Must run HERE, after
+# resource-metrics.json is finalized and the k6 summary exists — it reads the
+# target JVM's figures from the former and the iteration count (for throughput
+# normalization) from the latter.
+_write_deployment_footprint
 
 bench_collect_target_runtime_log "$TARGET_PID" "$TARGET_APP" "$TARGET_RUNTIME_LOG" || true
 
@@ -1334,6 +2721,11 @@ GATE_OBSERVED=""
 GATE_ISSUED=""
 GATE_POP_COUNTS=""
 GATE_DENSITY_NOTE=""
+# ids_file  = oracle ran over the exactly-issued orderId list read back from the
+#             `oidx`-tagged NDJSON (no density assumption).
+# regenerated = oracle ran over a dense 0..N-1 range per scenario rebuilt from
+#             counts (pre-tag artifacts); guarded by the density check below.
+GATE_POPULATION_SOURCE="none"
 # Defaults MUST match ORDER_SEED / generateOrderId() in scenarios/e2e-shop-order-saga/k6.js.
 GATE_ORDER_SEED="${K6_ORDER_SEED:-exeris-saga-v2}"
 GATE_ORDER_ID_FORMAT="{seed}-{scenario}-i{index}"
@@ -1376,16 +2768,254 @@ else
   # compensations were observed — exactly the v1 Axon defect class the gate
   # must catch — so it counts as 0, never as "skip".
   [[ -z "$GATE_OBSERVED" ]] && GATE_OBSERVED="0"
-  if [[ "$FAULT_MODE" == "transient" ]]; then
+
+  # --- CONTRACT-v2 §7 O0: outcome accounting, PRECONDITION for O1-O3 ------------
+  #
+  # A lone compensation counter cannot distinguish "the system did not compensate"
+  # from "the observer did not see it": both read zero. That is not hypothetical —
+  # it is the v1 zero-compensation defect, a detector fault reported as a
+  # measurement. A balanced set CAN distinguish them, because a blind detector
+  # cannot satisfy the identity: whatever it failed to classify has to land
+  # somewhere.
+  #
+  #   completed + compensated + unrecovered + unresolved + submit_rejected == issued
+  #
+  # saga_not_submitted_total is deliberately NOT in the sum: those iterations
+  # aborted before issuance and never incremented saga_issued_total.
+  # --- CONTRACT-v2 §2 load model: was the DECLARED arrival rate actually delivered? -----
+  #
+  # constant-arrival-rate drops iterations when no VU is free. k6 counts them in
+  # dropped_iterations and then reports a perfectly healthy run: the gate passes, the
+  # latency percentiles look fine, and the workload was simply smaller than the contract
+  # says. §2 pins 50 sessions/s as normative, so a run that could not deliver it did not
+  # run this contract.
+  #
+  # Measured 2026-08-19 on a 90 s rate check: 190 dropped against 4 313 issued (4.4%),
+  # entirely during the initial ramp. Bound is 0.5% — above that the shortfall is
+  # structural rather than ramp noise.
+  _dropped="$(jq -r '.metrics.dropped_iterations.count // 0' "$K6_SUMMARY_JSON" 2>/dev/null || echo 0)"
+  _dropped="${_dropped%%.*}"
+  if [[ "${GATE_ISSUED%%.*}" -gt 0 && "$_dropped" -gt 0 ]]; then
+    _drop_bp=$(( _dropped * 10000 / ${GATE_ISSUED%%.*} ))
+    if [[ "$_drop_bp" -gt 50 ]]; then
+      GATE_STATUS="error"
+      GATE_REASON="§2 load model not delivered: k6 dropped ${_dropped} iterations against ${GATE_ISSUED} issued ($(( _drop_bp / 100 )).$(( _drop_bp % 100 ))%), above the 0.5% bound. constant-arrival-rate drops when no VU is free, so the workload actually applied was smaller than the declared 50 sessions/s. Raise K6_*_VUS_MAX / _PRE, or the arm cannot sustain the contract rate — either way this is not a run of this contract."
+    fi
+  fi
+
+  _o0_count() { jq -r ".metrics.${1}.count // 0" "$K6_SUMMARY_JSON" 2>/dev/null || echo 0; }
+  # k6 omits zero-sample metrics, so absence means zero — never "unknown".
+  GATE_O0_COMPLETED="$(_o0_count saga_completed_total)"
+  GATE_O0_COMPENSATED="$(_o0_count saga_compensated_total)"
+  GATE_O0_UNRECOVERED="$(_o0_count saga_failed_unrecovered_total)"
+  GATE_O0_UNRESOLVED="$(_o0_count saga_unresolved_total)"
+  GATE_O0_REJECTED="$(_o0_count saga_submit_rejected_total)"
+  GATE_O0_SUM=$(( ${GATE_O0_COMPLETED%%.*} + ${GATE_O0_COMPENSATED%%.*} + ${GATE_O0_UNRECOVERED%%.*}                   + ${GATE_O0_UNRESOLVED%%.*} + ${GATE_O0_REJECTED%%.*} ))
+  # Capability marker, same posture as GATE_V2_CAPABLE: a k6 script predating the
+  # O0 counters cannot balance, and must be recorded as not-evaluable rather than
+  # accused of a detector fault it has no way to report.
+  GATE_O0_CAPABLE="false"
+  if grep -q 'saga_unresolved_total' "$K6_SCRIPT" 2>/dev/null; then
+    GATE_O0_CAPABLE="true"
+  fi
+
+  # The identity is necessary but NOT sufficient, and seeing why matters: a detector
+  # that cannot recognise a stack's COMPENSATED token classifies those sagas as
+  # UNRESOLVED, and the sum still balances. O0 alone would pass while the compensation
+  # count is exactly as wrong as it was in v1.
+  #
+  # An unresolved saga is an OBSERVATION failure, not an outcome — whatever caused it,
+  # the compensation figure cannot be trusted in either direction. Bound is the same 2%
+  # the k6 saga_status_resolved threshold uses, so the two agree rather than conflict.
+  # The shortfall between issued and the five buckets is NOT automatically a
+  # misclassification. k6 stops iterations still in flight at each phase boundary
+  # (gracefulStop): they incremented saga_issued_total and were then killed before any
+  # outcome. That is TRUNCATION — the load generator stopped watching — and it is a
+  # different thing from a detector that cannot recognise an outcome it was shown.
+  #
+  # Measured 2026-08-19: a 100 s three-phase run truncated 210 of 4 611 (4.6%), which my
+  # first O0 called detector_fault. Wrong verdict on a real signal, which is exactly what
+  # this gate exists to prevent in the other direction. Truncation scales with phase
+  # count rather than duration, so at the contract's 300/900/30 its share should be well
+  # under the 1% bound below.
+  # k6 counts an iteration only when it RUNS TO COMPLETION, so issued-minus-iterations is
+  # the number of sessions cut off mid-flight by a phase gracefulStop. Those sessions have
+  # already incremented saga_issued_total and can never reach a terminal bucket, which is
+  # the mechanical way truncation happens. Reading it lets the message below report the
+  # cause instead of guessing at one.
+  GATE_O0_ITERATIONS="$(jq -r '.metrics.iterations.count // 0' "$K6_SUMMARY_JSON" 2>/dev/null || echo 0)"
+  GATE_O0_INTERRUPTED=$(( ${GATE_ISSUED%%.*} - ${GATE_O0_ITERATIONS%%.*} ))
+  [[ "$GATE_O0_INTERRUPTED" -lt 0 ]] && GATE_O0_INTERRUPTED=0
+  GATE_O0_TRUNCATED=$(( ${GATE_ISSUED%%.*} - GATE_O0_SUM ))
+  GATE_O0_TRUNCATED_BP=0
+  if [[ "${GATE_ISSUED%%.*}" -gt 0 && "$GATE_O0_TRUNCATED" -gt 0 ]]; then
+    GATE_O0_TRUNCATED_BP=$(( GATE_O0_TRUNCATED * 10000 / ${GATE_ISSUED%%.*} ))
+  fi
+  GATE_O0_UNRESOLVED_PCT=0   # basis points
+  if [[ "${GATE_ISSUED%%.*}" -gt 0 ]]; then
+    GATE_O0_UNRESOLVED_PCT=$(( ${GATE_O0_UNRESOLVED%%.*} * 10000 / ${GATE_ISSUED%%.*} ))
+  fi
+  # Second detector_fault condition, added after the negative control measured its own
+  # margin: a fully blind detector produces unresolved ~= the decline rate, so at 3%
+  # declines the run above landed at 2.29% — over the 2% bound, but only just. At a 1%
+  # decline rate the same total blindness would slip UNDER it.
+  #
+  # Observing zero compensations where the oracle expects some is the exact v1 signature.
+  # It is reported as detector_fault rather than gate FAIL deliberately: the run cannot
+  # distinguish "did not compensate" from "could not see it", and saying so is honest
+  # where either verdict would be a guess.
+  if [[ "$GATE_O0_CAPABLE" == "true" && "${GATE_OBSERVED%%.*}" -eq 0 && -n "${GATE_EXPECTED:-}" && "${GATE_EXPECTED%%.*}" -gt 0 ]]; then
+    GATE_STATUS="detector_fault"
+    GATE_REASON="O0: zero compensations observed where the §4.1 oracle expects ${GATE_EXPECTED} over ${GATE_ISSUED} issued. Zero-against-nonzero is the v1 signature and cannot distinguish a stack that did not compensate from a detector that could not see it. Check this stack's declared terminal_tokens (§3.1) first."
+  elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_UNRESOLVED_PCT" -gt 200 ]]; then
+    GATE_STATUS="detector_fault"
+    GATE_REASON="O0: ${GATE_O0_UNRESOLVED} of ${GATE_ISSUED} issued sagas ($(( GATE_O0_UNRESOLVED_PCT / 100 )).$(( GATE_O0_UNRESOLVED_PCT % 100 ))%) reached no terminal outcome the detector recognises, above the 2% bound. An unresolved saga is an observation failure, not an outcome, so the compensation count cannot be trusted in either direction. First thing to check: this stack's declared terminal_tokens (CONTRACT-v2 §3.1) against what it actually emits."
+  elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_TRUNCATED" -lt 0 ]]; then
+    GATE_STATUS="detector_fault"
+    GATE_REASON="O0: the five terminal buckets sum to ${GATE_O0_SUM}, MORE than the ${GATE_ISSUED} issued. A saga counted twice is as wrong as one counted never, and no truncation explains it."
+  elif [[ "$GATE_O0_CAPABLE" == "true" && "$GATE_O0_TRUNCATED_BP" -gt 100 ]]; then
+
+    # The identity did not close. This is an instrument failure, NOT a result: it
+
+    # supports no correctness claim in either direction, the same standing as
+
+    # `error` and `skipped`. Reporting the compensation figure here is exactly the
+
+    # mistake v1 made.
+
+    GATE_STATUS="detector_fault"
+
+    # Name the mechanism rather than guessing at it. The §3.1 preflight runs BEFORE the
+    # measurement window and fails the run closed, so if execution reached here the
+    # declared vocabulary already matched what the stack emits — pointing at §3.1 anyway
+    # sends the reader to re-check the one thing this run has already proved. Interrupted
+    # iterations are the honest first suspect, and they are a WINDOW problem: truncation
+    # scales with phase count, so short windows inflate it and the contract's 300/900/30
+    # is where the 1% bound is meant to hold.
+    _o0_hint="Check the phase windows first: truncation scales with phase count, not duration, so abbreviated windows inflate it."
+    if [[ "$GATE_O0_INTERRUPTED" -gt 0 ]]; then
+      _o0_hint="k6 completed ${GATE_O0_ITERATIONS} iterations against ${GATE_ISSUED} issued, i.e. ${GATE_O0_INTERRUPTED} session(s) were cut off mid-flight by a phase gracefulStop — that, not a vocabulary mismatch, is what put sagas in no bucket. Compare saga_completed_duration against the 30s gracefulStop BEFORE assuming short windows: measured 2026-08-19, lengthening the windows made this WORSE on an arm whose p95 saga settle time was 28.6s, because the sessions themselves outlived the stop. A settle time approaching gracefulStop is a stack finding; only if it is comfortably below one should you suspect the windows."
+    fi
+    GATE_REASON="O0: ${GATE_O0_TRUNCATED} of ${GATE_ISSUED} issued reached no terminal bucket ($(( GATE_O0_TRUNCATED_BP / 100 )).$(( GATE_O0_TRUNCATED_BP % 100 ))%), above the 1% truncation bound. Buckets: completed(${GATE_O0_COMPLETED}) + compensated(${GATE_O0_COMPENSATED}) + unrecovered(${GATE_O0_UNRECOVERED}) + unresolved(${GATE_O0_UNRESOLVED}) + submit_rejected(${GATE_O0_REJECTED}) = ${GATE_O0_SUM} != issued(${GATE_ISSUED}). Some issued sagas were classified into no terminal bucket, so the compensation count cannot be trusted in either direction. ${_o0_hint}"
+
+  elif [[ "$FAULT_MODE" == "transient" ]]; then
     # s4.2 inverse assertion: transient faults must NOT produce compensations.
     GATE_EXPECTED="0"
   elif [[ "$GATE_ISSUED" == "0" ]]; then
-    # No orders issued → no declined subset → zero compensations expected.
-    GATE_EXPECTED="0"
+    # VACUOUS-PASS GUARD. Arithmetically, zero issued orders means zero expected
+    # declines, so observed(0) == expected(0) and the gate would report PASS —
+    # certifying a run in which nothing happened. That is not hypothetical: on
+    # 2026-07-30 a failed DB seed left the database empty, every session died
+    # before order creation, and only the seed fail-closed checks (added in the
+    # same change) stopped an empty run reaching this branch.
+    #
+    # A run that issues nothing is broken, not correct. Fail closed.
+    GATE_STATUS="error"
+    GATE_REASON="zero orders issued — the gate cannot certify a run in which no saga ran. Arithmetically 0 == 0 would PASS; that would certify an empty run. Check the seed, the target readiness and the k6 error taxonomy."
   elif ! command -v python3 >/dev/null 2>&1; then
     GATE_STATUS="error"
     GATE_REASON="python3 unavailable; expected declines not computable — failing closed on a v2-capable run"
   else
+    # --- Preferred population source: the exactly-issued orderId list ---------
+    #
+    # k6.js tags every saga_issued_total sample with `oidx` = the per-scenario
+    # iterationInTest of that issuance, so the NDJSON stream names the issued
+    # population directly. Reconstructing `${seed}-${scenario}-i${oidx}` and
+    # passing it via --ids-file makes the oracle exact with no density
+    # assumption at all — an iteration that aborted before order creation
+    # simply never contributed a sample. The count-based path below stays as
+    # the fallback for artifacts produced before the tag existed, and keeps its
+    # fail-closed density check.
+    GATE_IDS_FILE="$LOGS_DIR/gate-issued-order-ids.txt"
+    _gate_ids_ok="false"
+    if [[ -s "$K6_OUTPUT_JSON" ]]; then
+      # Emit one id per issuance; drop a stray CR (CRLF-contaminated streams)
+      # before it silently changes the hashed orderId.
+      jq -r --arg seed "$GATE_ORDER_SEED" \
+        'select(.type=="Point" and .metric=="saga_issued_total")
+         | (.data.tags.scenario // "") as $s
+         | (.data.tags.oidx // "") as $i
+         | if $s == "" or $i == "" then "__UNTAGGED__" else "\($seed)-\($s)-i\($i)" end' \
+        "$K6_OUTPUT_JSON" 2>/dev/null | tr -d '\r' > "$GATE_IDS_FILE" || true
+
+      _gate_ids_total="$(wc -l < "$GATE_IDS_FILE" | tr -d ' ')"
+      _gate_ids_untagged="$(grep -c '^__UNTAGGED__$' "$GATE_IDS_FILE" 2>/dev/null || true)"
+      _gate_ids_untagged="${_gate_ids_untagged:-0}"
+      _gate_ids_unique="$(sort -u "$GATE_IDS_FILE" | grep -c . 2>/dev/null || true)"
+      _gate_ids_unique="${_gate_ids_unique:-0}"
+
+      if [[ "$_gate_ids_untagged" -gt 0 ]]; then
+        echo "Correctness gate: ${_gate_ids_untagged}/${_gate_ids_total} saga_issued_total samples carry no oidx tag; falling back to the count-based population." >&2
+      elif [[ "$_gate_ids_total" -eq 0 ]]; then
+        : # no samples in the stream — let the count-based path report it
+      elif [[ "$_gate_ids_total" -ne "$_gate_ids_unique" ]]; then
+        # Duplicate (scenario, index) pairs cannot happen for a dense
+        # per-scenario iterationInTest; treat as a corrupted/merged stream and
+        # fail closed rather than silently hashing a wrong population.
+        GATE_STATUS="error"
+        GATE_REASON="issued orderId list has duplicates (${_gate_ids_total} samples, ${_gate_ids_unique} unique) in $(basename "$K6_OUTPUT_JSON"); population untrustworthy"
+      elif [[ "$_gate_ids_total" -ne "$GATE_ISSUED" ]]; then
+        GATE_STATUS="error"
+        GATE_REASON="issued orderId list size (${_gate_ids_total}) != summary saga_issued_total (${GATE_ISSUED}); inconsistent k6 artifacts"
+      else
+        _gate_ids_ok="true"
+      fi
+    fi
+
+    if [[ "$_gate_ids_ok" == "true" ]]; then
+      GATE_POPULATION_SOURCE="ids_file"
+      # Per-scenario breakdown is reporting metadata only here — the oracle runs
+      # over the literal id list, not over a regenerated dense range. Read the
+      # scenario back from the stream rather than parsing it out of the composed
+      # id (the seed itself contains '-').
+      GATE_POP_COUNTS="$(jq -r 'select(.type=="Point" and .metric=="saga_issued_total")
+                                | .data.tags.scenario // "unknown"' \
+                           "$K6_OUTPUT_JSON" 2>/dev/null | tr -d '\r' \
+        | sort | uniq -c \
+        | awk '{printf "%s%s=%s", (NR>1 ? "," : ""), $2, $1}')"
+      GATE_EXPECTED="$(python3 "$FNV1A64_HELPER" --ids-file "$GATE_IDS_FILE" 2>&1)" || true
+      if [[ ! "$GATE_EXPECTED" =~ ^[0-9]+$ ]]; then
+        GATE_STATUS="error"
+        GATE_REASON="fnv1a64.py --ids-file did not produce an integer (output: ${GATE_EXPECTED:-empty})"
+        GATE_EXPECTED=""
+      fi
+
+      # §4.1 scopes exactness to "the actually-issued population". An order REFUSED at
+      # submission is in that population — saga_issued_total increments before the submit
+      # check — but it can never produce a compensation, because no saga ever started. So a
+      # refused order whose fnv1a64 marks it for decline inflates `expected` by one against
+      # an `observed` that is structurally incapable of matching it, and the gate reports a
+      # shortfall the stack could not have avoided.
+      #
+      # Measured on quarkus-lra-jdbc, the only arm taking any 503s, across both 2026-08-20
+      # campaigns: 68 refused -> exactly 2 compensations short (68 x 0.03 = 2.04); 3 refused
+      # -> 1 short; and every rep with 1, 5, 8 or 13 refused passed. Two "correctness
+      # failures" on the same arm, in two independent campaigns, both explained by the
+      # population being one order wider than the set that can answer the question.
+      #
+      # Subtract exactly the declines among refused submissions — computed by the same
+      # normative helper over the same id space, never by estimating 3% of the refused count.
+      # Runs that predate the oidx tag on saga_submit_rejected_total leave the adjustment at
+      # zero and behave as before, so this cannot silently change an old verdict.
+      GATE_REJECTED_IDS_FILE="$LOGS_DIR/gate-submit-rejected-order-ids.txt"
+      jq -r 'select(.type=="Point" and .metric=="saga_submit_rejected_total")
+             | (.data.tags.oidx // "")
+             | select(. != "")' "$K6_OUTPUT_JSON" 2>/dev/null | tr -d '
+' > "$GATE_REJECTED_IDS_FILE" || true
+      GATE_EXPECTED_UNADJUSTED="$GATE_EXPECTED"
+      GATE_DECLINE_UNREACHABLE=0
+      if [[ -s "$GATE_REJECTED_IDS_FILE" && "$GATE_EXPECTED" =~ ^[0-9]+$ ]]; then
+        _unreachable="$(python3 "$FNV1A64_HELPER" --ids-file "$GATE_REJECTED_IDS_FILE" 2>/dev/null || true)"
+        if [[ "$_unreachable" =~ ^[0-9]+$ ]] && (( _unreachable > 0 )); then
+          GATE_DECLINE_UNREACHABLE="$_unreachable"
+          GATE_EXPECTED=$(( GATE_EXPECTED - _unreachable ))
+          echo "Correctness gate: ${_unreachable} of $(wc -l < "$GATE_REJECTED_IDS_FILE" | tr -d " ") submission-refused orders were decline-destined; expected ${GATE_EXPECTED_UNADJUSTED} -> ${GATE_EXPECTED} (§4.1 actually-issued population excludes orders that never started a saga)."
+        fi
+      fi
+    elif [[ "$GATE_STATUS" == "error" ]]; then
+      : # already failed closed above
+    else
+
     # Per-scenario issued counts and completed-iteration counts from the k6
     # NDJSON stream (--out json=). iterations > issued in any scenario means an
     # iteration aborted BEFORE order creation → the issued index set is no
@@ -1436,6 +3066,7 @@ else
         GATE_STATUS="error"
         GATE_REASON="per-scenario issued sum (${_gate_total_issued}) != summary saga_issued_total (${GATE_ISSUED}); inconsistent k6 artifacts"
       else
+        GATE_POPULATION_SOURCE="regenerated"
         GATE_EXPECTED="$(python3 "$FNV1A64_HELPER" --seed "$GATE_ORDER_SEED" --counts "$GATE_POP_COUNTS" 2>&1)" || true
         if [[ ! "$GATE_EXPECTED" =~ ^[0-9]+$ ]]; then
           GATE_STATUS="error"
@@ -1444,7 +3075,29 @@ else
         fi
       fi
     fi
+
+    fi  # end: exact ids_file path vs. count-based fallback
   fi
+fi
+
+# CONTRACT-v2 §4.1 corroboration leg (added 2026-08-21).
+#
+# GATE_OBSERVED counts a CLIENT-VISIBLE terminal token. That is not the same claim as "the
+# backward-recovery path ran": on 2026-08-21 a clean quarkus-lra run reported 310 of 310
+# compensations and passed this gate, while the domain store held 311 PAYMENT_DECLINED rows
+# and zero CANCELLED, zero PAYMENT_REFUNDED and zero ORDER_COMPENSATED — the arm returns
+# COMPENSATED on the strength of `lraClient.cancel()` being ACCEPTED, and the coordinator's
+# compensation callback never lands. An oracle satisfiable by an acknowledgement is not an
+# oracle for the work.
+#
+# The rule is deliberately qualitative, not a tuned threshold: a POSITIVE client-observed
+# count against a store showing ZERO compensated rows is unambiguous. A partial gap could be
+# ordinary write-visibility timing, so it is reported, not judged.
+GATE_DOMAIN_COMPENSATED=""
+GATE_COMPENSATED_TOKENS="$(jq -r --arg c "$CONTRACT_ID"   '.fixed_contracts[$c].domain_row_vocabulary.compensated_tokens // [] | .[]'   scenarios/e2e-shop-order-saga/scenario.json 2>/dev/null | sed "s/.*/'&'/" | paste -sd',' -)"
+if [[ -n "$GATE_COMPENSATED_TOKENS" ]]; then
+  GATE_DOMAIN_COMPENSATED="$(docker exec exeris-e2e-saga-postgres psql -U postgres -tAc     "select count(*) from orders where status in (${GATE_COMPENSATED_TOKENS})" 2>/dev/null | tr -d ' 
+' || true)"
 fi
 
 if [[ -n "$GATE_EXPECTED" ]]; then
@@ -1452,9 +3105,34 @@ if [[ -n "$GATE_EXPECTED" ]]; then
     GATE_STATUS="pass"
     GATE_REASON="observed_compensations == expected_declines (${GATE_OBSERVED}); issued=${GATE_ISSUED}${GATE_POP_COUNTS:+ (${GATE_POP_COUNTS})} seed=${GATE_ORDER_SEED} fault=${FAULT_MODE}"
   else
-    GATE_STATUS="fail"
+    GATE_STATUS="fail"; GATE_FAIL_KIND="count_mismatch"
     GATE_REASON="observed_compensations=${GATE_OBSERVED} != expected_declines=${GATE_EXPECTED} (issued=${GATE_ISSUED}${GATE_POP_COUNTS:+ (${GATE_POP_COUNTS})} seed=${GATE_ORDER_SEED} fault=${FAULT_MODE}); CONTRACT-v2 s4.1 requires exact equality"
   fi
+  # The corroboration leg is evaluated INDEPENDENTLY of the count leg. Gating it on
+  # `GATE_STATUS == pass` masked it exactly where it mattered: in the 2026-08-21 W3a run
+  # quarkus-lra failed the count leg first (118 vs 121), so its ZERO compensated rows were
+  # never judged — the one arm the leg exists to catch was the one it skipped.
+  if [[ "${GATE_OBSERVED:-0}" =~ ^[0-9]+$ && "${GATE_OBSERVED:-0}" -gt 0 ]]; then
+    if [[ "$GATE_DOMAIN_COMPENSATED" == "0" ]]; then
+      GATE_REASON="observed_compensations=${GATE_OBSERVED} but the domain store holds ZERO rows in a compensated terminal state (${GATE_COMPENSATED_TOKENS}). The client-visible token was emitted without the backward-recovery path running; s4.1 is not satisfied by an acknowledgement. [count leg: ${GATE_REASON}]"
+      GATE_STATUS="fail"; GATE_FAIL_KIND="uncorroborated"
+    elif [[ -z "$GATE_DOMAIN_COMPENSATED" ]]; then
+      GATE_REASON="${GATE_REASON}; domain corroboration NOT MEASURED (no compensated_tokens declared or psql unavailable)"
+    else
+      GATE_REASON="${GATE_REASON}; domain-corroborated (${GATE_DOMAIN_COMPENSATED} compensated rows)"
+    fi
+  fi
+fi
+
+# A deliberately injected crash makes the exact-equality leg inapplicable by construction:
+# SIGKILL mid-run strands whatever declines were in flight, so observed < expected is the
+# fault doing its job, not a defect. Reporting that as `fail` marked every arm of the
+# 2026-08-21 W3a campaign runner_status=compensation_mismatch and made five correctness
+# runs read as five broken runs. The numbers are kept; only the verdict changes, and ONLY
+# for the count leg — a store with zero compensated rows is still a failure under any fault.
+if [[ -n "${BENCH_SAGA_FAULT_INJECTION:-}" && "$GATE_STATUS" == "fail" && "${GATE_FAIL_KIND:-}" == "count_mismatch" ]]; then
+  GATE_STATUS="skipped"
+  GATE_REASON="not applicable: fault injection declared (BENCH_SAGA_FAULT_INJECTION=${BENCH_SAGA_FAULT_INJECTION}). ${GATE_REASON}"
 fi
 
 case "$GATE_STATUS" in
@@ -1462,6 +3140,7 @@ case "$GATE_STATUS" in
   fail)    echo "ERROR: correctness gate FAIL: ${GATE_REASON}" >&2 ;;
   error)   echo "ERROR: correctness gate ERROR (fails closed): ${GATE_REASON}" >&2 ;;
   skipped) echo "WARN: correctness gate SKIPPED: ${GATE_REASON}" >&2 ;;
+  detector_fault) echo "ERROR: correctness gate DETECTOR_FAULT (instrument failure, not a result): ${GATE_REASON}" >&2 ;;
 esac
 
 jq -n \
@@ -1473,9 +3152,13 @@ jq -n \
   --arg order_seed       "$GATE_ORDER_SEED" \
   --arg order_id_format  "$GATE_ORDER_ID_FORMAT" \
   --arg pop_counts       "$GATE_POP_COUNTS" \
+  --arg pop_source       "$GATE_POPULATION_SOURCE" \
   --arg density_note     "$GATE_DENSITY_NOTE" \
   --arg fault_mode       "$FAULT_MODE" \
+  --arg fault_injection  "${BENCH_SAGA_FAULT_INJECTION:-}" \
   --arg durability_tier  "$DURABILITY_TIER" \
+  --arg domain_compensated "${GATE_DOMAIN_COMPENSATED:-}" \
+  --arg compensated_tokens "${GATE_COMPENSATED_TOKENS:-}" \
   --arg durability_tier_source "$DURABILITY_TIER_SOURCE" \
   --arg generated_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{
@@ -1485,9 +3168,16 @@ jq -n \
     contract_ref:     "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
     decline_rule:     "fnv1a64(orderId) mod 1000 < 30 (unsigned, FNV-1a 64 over UTF-8 bytes)",
     fault_mode:       $fault_mode,
+    fault_injection:  (if $fault_injection == "" then null else $fault_injection end),
     durability_tier:  $durability_tier,
     durability_tier_source: $durability_tier_source,
     status:           $status,
+    domain_corroboration: {
+      note: "observed_compensations counts a client-visible token; this leg counts rows left in a compensated terminal state in the domain store. A positive observed count against zero such rows fails the gate — see the 2026-08-21 quarkus-lra finding.",
+      compensated_tokens: $compensated_tokens,
+      compensated_rows: (if $domain_compensated == "" then null else ($domain_compensated | tonumber? // null) end),
+      measured: ($domain_compensated != "")
+    },
     pass_fail:        (if $status == "pass" then "pass" elif $status == "fail" then "fail" else "not_evaluated" end),
     expected:         (if $expected == "" then null else ($expected | tonumber) end),
     observed:         (if $observed == "" then null else ($observed | tonumber) end),
@@ -1499,7 +3189,12 @@ jq -n \
                          else ($pop_counts | split(",") | map(split("=") | {(.[0]): (.[1] | tonumber)}) | add)
                          end),
     density_note:     (if $density_note == "" then null else $density_note end),
-    population_assumption: "one dense iteration-index sequence 0..N-1 per k6 scenario (exec.scenario.iterationInTest); density checked via per-scenario completed iterations vs saga_issued_total from the k6 NDJSON stream (see fnv1a64.py)",
+    population_source: $pop_source,
+    population_assumption:
+      (if $pop_source == "ids_file"
+       then "none: the oracle ran over the exactly-issued orderId list reconstructed from the oidx-tagged saga_issued_total samples in the k6 NDJSON stream (fnv1a64.py --ids-file). Iterations that aborted before order creation contribute no sample and are correctly absent from the population."
+       else "one dense iteration-index sequence 0..N-1 per k6 scenario (exec.scenario.iterationInTest); density checked via per-scenario completed iterations vs saga_issued_total from the k6 NDJSON stream (see fnv1a64.py)"
+       end),
     helper_ref:       "tools/bench/lib/fnv1a64.py",
     reason:           $reason,
     generated_at_utc: $generated_at_utc
@@ -1507,6 +3202,13 @@ jq -n \
 
 if [[ "$GATE_STATUS" == "fail" ]]; then
   RUNNER_STATUS="compensation_mismatch"
+elif [[ "$GATE_STATUS" == "detector_fault" ]]; then
+  # O0 identity did not close: some issued sagas were classified into no terminal
+  # bucket. Distinct from compensation_gate_error on purpose — the gate RAN and the
+  # INSTRUMENT is what failed, so the run supports no correctness claim in either
+  # direction. Collapsing it into `error` would relose the distinction O0 exists
+  # to make.
+  RUNNER_STATUS="detector_fault"
 elif [[ "$GATE_STATUS" == "error" ]]; then
   # Gate not evaluable on a v2-capable run (missing k6 metrics, helper crash,
   # python3 unavailable, inconsistent artifacts) — fails closed, never silent.
@@ -1514,7 +3216,9 @@ elif [[ "$GATE_STATUS" == "error" ]]; then
 elif [[ "$K6_EXIT_CODE" -eq 0 ]]; then
   RUNNER_STATUS="clean"
 else
-  RUNNER_STATUS="threshold_failure"
+  # Same classification as the warning above: an aborted run and a threshold
+  # breach are different claims and must not share a status.
+  RUNNER_STATUS="$K6_EXIT_CLASS"
 fi
 
 jq -n \
@@ -1565,6 +3269,7 @@ jq -n \
   --arg seed_overlay_verification_script_sha256 "$SEED_VERIFY_SCRIPT_SHA256" \
   --arg seed_overlay_verification_skipped "$SKIP_SEED_VERIFY" \
   --argjson k6_exit_code "$K6_EXIT_CODE" \
+  --arg k6_exit_class "$K6_EXIT_CLASS" \
   --arg runner_status "$RUNNER_STATUS" \
   '{
     scenario_id: $scenario_id,
@@ -1647,6 +3352,7 @@ jq -n \
   --arg claim_scope      "exploratory" \
   --arg correctness_gate_status "$GATE_STATUS" \
   --argjson k6_exit_code "$K6_EXIT_CODE" \
+  --arg k6_exit_class "$K6_EXIT_CLASS" \
   '{
     schema_version:   "1",
     scenario_id:      $scenario_id,
@@ -1661,7 +3367,7 @@ jq -n \
       (if $correctness_gate_status == "fail" then ["compensation_mismatch"] else [] end)
       + (if $correctness_gate_status == "error" then ["compensation_gate_error"] else [] end)
       + (if $hardware_profile != "perf-box-amd64" then ["non_canonical_hardware_profile"] else [] end)
-      + (if $k6_exit_code != 0 then ["threshold_failure"] else [] end)
+      + (if $k6_exit_code != 0 then [$k6_exit_class] else [] end)
     ),
     reason: (
       if $correctness_gate_status == "fail"
@@ -1670,8 +3376,11 @@ jq -n \
       then "correctness gate errored: CONTRACT-v2 s4.1 not evaluable on a v2-capable run (fails closed); performance numbers excluded from headline tables"
       elif $hardware_profile != "perf-box-amd64"
       then "not perf-box-amd64 hardware profile"
+      elif $k6_exit_class == "run_aborted"
+      then ("k6 exited with code " + ($k6_exit_code | tostring) +
+            ": the run was ABORTED by a signal. This is a runner fault, not a measured threshold breach -- it supports no claim about the target in either direction.")
       elif $k6_exit_code != 0
-      then ("k6 exited with code " + ($k6_exit_code | tostring))
+      then ("k6 exited with code " + ($k6_exit_code | tostring) + " (" + $k6_exit_class + ")")
       else "eligible"
       end
     )
@@ -1772,7 +3481,14 @@ done
 # result.json records the window split explicitly — a fairness/reproducibility
 # field: throughput is steady-state from the measurement window, not a flat average.
 _k6_dur_to_s() {
-  local d="${1:-}" total=0 num unit rest="$d"
+  # NOTE: `rest="$d"` must NOT share a `local` statement with `d`. Bash expands
+  # every word of the command BEFORE `local` performs any assignment, so `$d`
+  # is still unset at expansion time and `set -u` aborts the script here. That
+  # killed the runner immediately after the correctness gate, so result.json —
+  # the run's primary artifact — was never assembled on ANY run.
+  local d="${1:-}"
+  local total=0 num unit
+  local rest="$d"
   [[ -z "$rest" ]] && { printf '0\n'; return 0; }
   while [[ "$rest" =~ ^([0-9]+)(ms|h|m|s)(.*)$ ]]; do
     num="${BASH_REMATCH[1]}"; unit="${BASH_REMATCH[2]}"; rest="${BASH_REMATCH[3]}"
@@ -1860,24 +3576,26 @@ if [[ -f "$RUN_METADATA_JSON" && -f "$K6_SUMMARY_JSON" && -f "$RESOURCE_METRICS_
         saga_failed_unrecovered_total: ($km.saga_failed_unrecovered_total.count // null),
         http_reqs_total:             ($km.http_reqs.count // 0),
         http_reqs_rate:              ($km.http_reqs.rate // 0),
-        http_req_duration_avg_ms:    ($km.http_req_duration.avg // null),
-        http_req_duration_p90_ms:    ($km.http_req_duration["p(90)"] // null),
-        http_req_duration_p95_ms:    ($km.http_req_duration["p(95)"] // null),
-        iteration_duration_avg_ms:   ($km.iteration_duration.avg // null),
-        iteration_duration_p90_ms:   ($km.iteration_duration["p(90)"] // null),
-        iteration_duration_p95_ms:   ($km.iteration_duration["p(95)"] // null),
+        http_req_duration_avg_ms:    ($km["http_req_duration{phase:measurement}"].avg // $km.http_req_duration.avg // null),
+        http_req_duration_p90_ms:    ($km["http_req_duration{phase:measurement}"]["p(90)"] // $km.http_req_duration["p(90)"] // null),
+        http_req_duration_p95_ms:    ($km["http_req_duration{phase:measurement}"]["p(95)"] // $km.http_req_duration["p(95)"] // null),
+        iteration_duration_avg_ms:   ($km["iteration_duration{phase:measurement}"].avg // $km.iteration_duration.avg // null),
+        iteration_duration_p90_ms:   ($km["iteration_duration{phase:measurement}"]["p(90)"] // $km.iteration_duration["p(90)"] // null),
+        iteration_duration_p95_ms:   ($km["iteration_duration{phase:measurement}"]["p(95)"] // $km.iteration_duration["p(95)"] // null),
         error_rate_pct:              (($km.http_req_failed.value // 0) * 100),
         latency_by_outcome: {
           note: "CONTRACT-v2 s8: COMPLETED and COMPENSATED are separate populations (structurally different code paths); never mix or average across them",
+          window: (if ($km["saga_completed_duration{phase:measurement}"] // null) != null then "measurement" else "whole-run-legacy" end),
+          window_note: "Percentiles are taken from the {phase:measurement} submetric. k6 end-of-test summary aggregates warmup+measurement+cooldown, but the scenario declares warmup and cooldown EXCLUDED from analysis; reading the unscoped metric folded the cold-start ramp back into the published tail (measured 2026-08-20, spring-axon-jdbc rep-1: whole-run p95 4654 ms vs measurement 431 ms). whole-run-legacy means the run predates the submetric and its percentiles are NOT phase-scoped.",
           completed: {
             count:  ($km.saga_completed_total.count // null),
-            p50_ms: ($km.saga_completed_duration["p(50)"] // $km.saga_completed_duration.med // null),
-            p99_ms: ($km.saga_completed_duration["p(99)"] // null)
+            p50_ms: ($km["saga_completed_duration{phase:measurement}"]["p(50)"] // $km["saga_completed_duration{phase:measurement}"].med // $km.saga_completed_duration["p(50)"] // $km.saga_completed_duration.med // null),
+            p99_ms: ($km["saga_completed_duration{phase:measurement}"]["p(99)"] // $km.saga_completed_duration["p(99)"] // null)
           },
           compensated: {
             count:  ($km.saga_compensated_total.count // null),
-            p50_ms: ($km.saga_compensated_duration["p(50)"] // $km.saga_compensated_duration.med // null),
-            p99_ms: ($km.saga_compensated_duration["p(99)"] // null)
+            p50_ms: ($km["saga_compensated_duration{phase:measurement}"]["p(50)"] // $km["saga_compensated_duration{phase:measurement}"].med // $km.saga_compensated_duration["p(50)"] // $km.saga_compensated_duration.med // null),
+            p99_ms: ($km["saga_compensated_duration{phase:measurement}"]["p(99)"] // $km.saga_compensated_duration["p(99)"] // null)
           }
         },
         cores_effective:             (if $cores_effective == "" then null else ($cores_effective | tonumber) end),
@@ -1947,7 +3665,14 @@ echo "env metadata: $ENV_JSON"
 echo "run metadata: $RUN_METADATA_JSON"
 echo "resource samples: $RESOURCE_SAMPLES_CSV"
 echo "resource metrics: $RESOURCE_METRICS_JSON"
-if [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]; then
+# The embedded arm matches *axon* but never starts Axon Server, and announcing a stats
+# file that was never written told a reader the three-process deployment unit had been
+# measured when CONTRACT-v2 §1 says this arm has two. Say what is actually true per arm.
+if [[ "$CONTRACT_ID" == *axon_embedded* || "$TARGET_APP" == *axon-embedded* ]]; then
+  echo "Note: no Axon Server in this arm — CONTRACT-v2 §1 deployment unit is target JVM + Postgres."
+  echo "      The saga engine runs in-process, so no third process holds part of its CPU/RSS;"
+  echo "      Postgres stays outside resource-metrics.json exactly as it does for every arm."
+elif [[ "$CONTRACT_ID" == *axon* || "$TARGET_APP" == *axon* ]]; then
   echo "axon server stats: $AXON_STATS_CSV"
   echo "Note: Axon Server CPU/RSS is in $AXON_STATS_CSV (separate process). Not included in resource-metrics.json."
 fi
@@ -1959,6 +3684,7 @@ echo "logs dir: $LOGS_DIR"
 echo "jcmd diagnostics: $JCMD_DIAGNOSTICS_JSON"
 echo "endpoint preflight: $ENDPOINT_PREFLIGHT_TXT"
 echo "claim status: $CLAIM_STATUS_JSON"
+echo "deployment footprint: $DEPLOYMENT_FOOTPRINT_JSON"
 echo "correctness gate: $CORRECTNESS_GATE_JSON (status: ${GATE_STATUS})"
 echo "result: $RESULT_JSON"
 echo "runtime log metadata: $RUNTIME_LOG_METADATA_JSON"
@@ -1983,6 +3709,10 @@ if [[ "$GATE_STATUS" == "fail" ]]; then
   echo "ERROR: CONTRACT-v2 s4.1 correctness gate FAILED: observed_compensations=${GATE_OBSERVED} expected_declines=${GATE_EXPECTED} (issued=${GATE_ISSUED}, seed=${GATE_ORDER_SEED})." >&2
   echo "ERROR: run marked runner_status=compensation_mismatch; performance numbers from this run are excluded from headline tables. Details: $CORRECTNESS_GATE_JSON" >&2
   exit 3
+elif [[ "$GATE_STATUS" == "detector_fault" ]]; then
+  echo "ERROR: CONTRACT-v2 s7 O0 DETECTOR FAULT: ${GATE_REASON}" >&2
+  echo "ERROR: this is an instrument failure, not a measurement — the run supports NO correctness claim in either direction, and its compensation count must not be quoted. Details: $CORRECTNESS_GATE_JSON" >&2
+  exit 5
 elif [[ "$GATE_STATUS" == "error" ]]; then
   echo "ERROR: CONTRACT-v2 s4.1 correctness gate ERROR (fails closed): ${GATE_REASON}" >&2
   echo "ERROR: run marked runner_status=compensation_gate_error; performance numbers from this run are excluded from headline tables. Details: $CORRECTNESS_GATE_JSON" >&2

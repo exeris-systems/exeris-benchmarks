@@ -195,6 +195,35 @@ case "${START_MODE}" in
     # Java 26 module system compatibility for Neo4j driver + Eclipse Collections
     # Add --add-opens flag to EXERIS_JAVA_OPTS so it's used by EXTERNAL_START_CMD
     export EXERIS_JAVA_OPTS="${EXERIS_JAVA_OPTS:-} --add-opens java.base/jdk.internal.module=ALL-UNNAMED"
+    # CPU pinning (BENCH_TARGET_CPUS). Disjoint core sets for target / load generator /
+    # backends are what make a throughput number mean anything on a single box: without
+    # them k6, the JVM, Postgres and the saga servers all compete, and the arrival rate
+    # the contract declares is not the rate the target sees. Measured 2026-08-19 on this
+    # box: 50/s declared, 36.5/s delivered, nothing pinned.
+    #
+    # Fails closed rather than running unpinned, for the same reason the memory cap does:
+    # an unpinned run looks identical to a pinned one in every artifact it produces.
+    if [[ -n "${BENCH_TARGET_CPUS:-}" ]]; then
+      if ! command -v taskset >/dev/null 2>&1; then
+        echo "ERROR: BENCH_TARGET_CPUS=${BENCH_TARGET_CPUS} set but taskset is unavailable;" >&2
+        echo "       refusing to run unpinned — indistinguishable from pinned in every artifact." >&2
+        exit 1
+      fi
+      # Feed the env files' OWN affinity hook rather than prefixing the whole command.
+      # EXTERNAL_START_CMD begins with environment assignments (EXERIS_PORT=... java ...),
+      # so `taskset -c <set> EXERIS_PORT=9000 java ...` makes taskset try to EXECUTE
+      # "EXERIS_PORT=9000" and the target dies before it logs a line — measured here on
+      # 2026-08-19 as a 120 s health timeout with an empty log. Every env file already
+      # places ${SERVER_CPU_AFFINITY:+taskset -c ... } immediately before `java`, which is
+      # the one position that both binds the JVM and leaves the assignments alone.
+      export SERVER_CPU_AFFINITY="${BENCH_TARGET_CPUS}"
+      if [[ "$EXTERNAL_START_CMD" != *SERVER_CPU_AFFINITY* ]]; then
+        echo "ERROR: BENCH_TARGET_CPUS=${BENCH_TARGET_CPUS} set but ${TARGET_ENV} does not honour" >&2
+        echo "       SERVER_CPU_AFFINITY in EXTERNAL_START_CMD; the run would be silently unpinned." >&2
+        exit 1
+      fi
+      echo "  Target CPU affinity: ${BENCH_TARGET_CPUS}"
+    fi
     bash -lc "cd '$ROOT' && $EXTERNAL_START_CMD"
     ;;
   *)

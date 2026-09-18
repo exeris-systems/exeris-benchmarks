@@ -38,11 +38,11 @@ import java.util.UUID;
 public class GraphShopService {
 
     private static final String RECOMMEND_CYPHER =
-            "MATCH (u:User {id: $uid})<-[:PURCHASED_BY]-(bought:Product)-[:SIMILAR_TO]->(rec:Product) " +
-            "RETURN DISTINCT rec.id AS productId LIMIT $limit";
+            "MATCH (u:User {id: $uid})-[:BOUGHT]->(bought:Product)-[:SIMILAR_TO]->(rec:Product) " +
+            "RETURN DISTINCT rec.pg_id AS productId LIMIT $limit";
 
     private static final String CART_READ_CYPHER =
-            "MATCH (u:User {id: $uid})-[:IN_CART]->(p:Product) RETURN p.id AS productId";
+            "MATCH (u:User {id: $uid})-[:IN_CART]->(p:Product) RETURN p.pg_id AS productId";
 
     private static final String CART_UPSERT_CYPHER =
             "MERGE (u:User {id: $uid}) " +
@@ -120,7 +120,7 @@ public class GraphShopService {
             try (var session = driver.session(SessionConfig.forDatabase(
                     neo4jDatabase == null || neo4jDatabase.isBlank() ? "neo4j" : neo4jDatabase))) {
                 return session.run(RECOMMEND_CYPHER,
-                                Map.<String, Object>of("uid", userId, "limit", limit))
+                                Map.<String, Object>of("uid", userNodeId(userId).toString(), "limit", limit))
                         .list(r -> r.get("productId").asLong());
             } catch (Exception ignored) {
                 return List.of();
@@ -146,7 +146,7 @@ public class GraphShopService {
             try (var session = driver.session(SessionConfig.forDatabase(
                     neo4jDatabase == null || neo4jDatabase.isBlank() ? "neo4j" : neo4jDatabase))) {
                 return session.run(CART_READ_CYPHER,
-                                Map.<String, Object>of("uid", userId))
+                                Map.<String, Object>of("uid", userNodeId(userId).toString()))
                         .list(r -> r.get("productId").asLong());
             } catch (Exception ignored) {
                 return List.of();
@@ -168,7 +168,7 @@ public class GraphShopService {
             try (var session = driver.session(SessionConfig.forDatabase(
                     neo4jDatabase == null || neo4jDatabase.isBlank() ? "neo4j" : neo4jDatabase))) {
                 session.run(CART_UPSERT_CYPHER,
-                        Map.<String, Object>of("uid", userId, "pid", productId, "qty", quantity));
+                        Map.<String, Object>of("uid", userNodeId(userId).toString(), "pid", productNodeId(productId).toString(), "qty", quantity));
             } catch (Exception ignored) {}
             return;
         }

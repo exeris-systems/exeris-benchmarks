@@ -1,0 +1,89 @@
+{
+  "schema_version": "1",
+  "probe_id": "e2e-shop-order-saga-graph-path-defect",
+  "campaign_ts": "20260730T161215Z",
+  "generated_at_utc": "2026-07-30T19:52:00Z",
+  "hardware_profile": "perf-box-amd64",
+  "claim_scope": "exploratory",
+  "purpose": "Establish (a) whether exeris-community's recommendation traversal could match anything in the seeded Neo4j graph, and (b) the mechanism behind its Neo4j CPU and cart-read latency. Read-only Cypher against the live container; no run, no mutation.",
+
+  "provenance_caveat": "Probed AFTER the campaign, against the graph state left by the last run on the box (spring-hibernate rep-3 re-run: 17369 User nodes = 1000 seeded + 16369 registered; 16369 IN_CART edges = that rep's iteration count; all ids integer). Relationship-TYPE and node-KEY findings transfer regardless, because both are properties of the seed script, which is unchanged and hash-pinned in run-metadata.infra_contract.seed_overlay. What this state canNOT show is what exeris's own IN_CART writes looked like during its reps.",
+
+  "a_edge_type_mismatch": {
+    "finding": "The relationship type exeris-community traverses on hop 1 does not exist in the Neo4j track.",
+    "adapter_hop1_descriptor": "GraphEdgeDescriptor.create(\"User\", \"BOUGHT\", \"Product\")",
+    "adapter_ref": "targets/exeris-community-app/src/main/java/eu/exeris/benchmarks/targets/exeriscommunity/infrastructure/graph/GraphShopAdapter.java:15-16",
+    "probe": "CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType",
+    "observed_relationship_types": ["SIMILAR_TO", "PURCHASED_BY", "IN_CART"],
+    "probe_bought_count": "MATCH ()-[r:BOUGHT]->() RETURN count(r)",
+    "observed_bought_edges": 0,
+    "seed_ref": "scenarios/e2e-shop-order-saga/seed/seed-neo4j-from-postgres.sh:276,312",
+    "seed_creates": ["(:Product)-[:SIMILAR_TO]->(:Product)", "(:Product)-[:PURCHASED_BY]->(:User)"],
+    "note": "BOUGHT exists only in runtime/db/seed/v4_pgq_graph.sql, i.e. the PGQ backend, not the neo4j graph_track this campaign pinned. Direction differs as well: seed writes Product->User, adapter asks User->Product."
+  },
+
+  "b_node_key_mismatch": {
+    "finding": "Independent of (a): node identity does not match. Either mismatch alone is sufficient to make hop 1 return empty.",
+    "adapter_key": "UUID.nameUUIDFromBytes(\"user-\" + userId) / (\"product-\" + productId)",
+    "seed_key": "MERGE (u:User {id: toInteger(row.id)}) / MERGE (p:Product {id: toInteger(row.id)})",
+    "probe": "MATCH (n) WHERE n.id IS NOT NULL AND toString(n.id) CONTAINS \"-\" RETURN count(n)",
+    "observed_uuid_shaped_ids": 0,
+    "observed_sample_user_ids": [17376, 17375, 17374]
+  },
+
+  "c_silent_fallback": {
+    "finding": "Empty hop 1 is not an error path — it is silently absorbed, which is why the defect survived a full campaign.",
+    "adapter_behaviour": "GraphShopAdapter.java:48-50 — if (purchasedProducts.isEmpty()) return List.of(); the N loop never starts",
+    "service_ref": "targets/exeris-community-app/src/main/java/eu/exeris/benchmarks/targets/exeriscommunity/application/RepositoryBackedBenchmarkUseCaseService.java:128-139",
+    "service_behaviour": "catch (RuntimeException ignored) {} plus an empty-ids fall-through; both routes end at productRepository.findRecommendedForUser(userId, limit) in Postgres",
+    "consequence": "recommend_latency_ms for exeris-community = one fruitless Neo4j lookup + a Postgres recommendation query; for quarkus/spring = a working two-hop Cypher recommendation. Not comparable in any sense, platform-natural included.",
+    "consequence_cpu": "Part of exeris's +1.4 ms/saga Postgres CPU over the Axon stacks is this fallback query, which neither Axon stack issues."
+  },
+
+  "d_scan_vs_seek_profile": {
+    "finding": "The mechanism behind the Neo4j CPU and the cart-read latency is an unlabelled traversal anchor, not query count. Labels alone account for the entire db-hit difference; the redundant path binding accounts for none of it.",
+    "emitted_shape_attribution": "Shape A/A2 reconstructed from a reading of CommunityGraphDialect.buildMultiHopQuery (exeris-kernel source, NOT present in this repository). The db-hit measurements below are ours; the claim that the dialect emits this shape is attributed, not verified here.",
+    "graph_state_at_probe": {"User": 17369, "Product": 500, "SIMILAR_TO": 1166, "PURCHASED_BY": 2000, "IN_CART": 16369},
+    "rows_returned_by_every_shape": 1,
+    "shapes": [
+      {"id": "A",  "label": "unlabelled anchor + MATCH p= (as emitted)", "cypher": "PROFILE MATCH p = (source)-[:IN_CART*1..1]->(target) WHERE source.id = 1262 RETURN DISTINCT target.id AS id", "db_hits": 35742},
+      {"id": "A2", "label": "unlabelled anchor, no path binding",        "cypher": "PROFILE MATCH (source)-[:IN_CART*1..1]->(target) WHERE source.id = 1262 RETURN DISTINCT target.id AS id", "db_hits": 35742},
+      {"id": "A3", "label": "labelled anchor, path binding retained",    "cypher": "PROFILE MATCH p = (source:User)-[:IN_CART*1..1]->(target:Product) WHERE source.id = 1262 RETURN DISTINCT target.id AS id", "db_hits": 6},
+      {"id": "B",  "label": "label-scoped seek (quarkus/spring shape)",  "cypher": "PROFILE MATCH (u:User {id: 1262})-[:IN_CART]->(pr:Product) RETURN pr.id AS id", "db_hits": 6}
+    ],
+    "decomposition": {
+      "labels_cost_ratio": "A2 vs A3 = 35742 / 6 = 5957x — the whole effect",
+      "path_binding_cost": "A vs A2 = 35742 / 35742 = 1.00x — zero db hits",
+      "fix": "Emit the sourceNode()/targetNode() labels the descriptor already carries. Dropping MATCH p= is worth doing for allocation but is measurably not the lever."
+    },
+    "why_seek_is_impossible_without_labels": "Neo4j indexes are label-scoped, including the seed's own user_id_unique / product_id_unique constraints (seed-neo4j-from-postgres.sh:183-184). An unlabelled anchor cannot use them, so the plan degrades to a scan + filter.",
+    "caveats": [
+      "db hits are not a wall-clock model: a 5957x db-hit ratio produced a 5.5x cart-read latency ratio, because the traversal is a small part of a request that also does HTTP, JSON and a Postgres cart read.",
+      "The scan cost is not constant during a run: the graph grew by ~16400 User nodes and ~16400 IN_CART edges per rep, so a scanning plan degrades over the window while a seek does not.",
+      "Probed with integer ids so both shapes can actually match, isolating the planner effect from the key mismatch in (b)."
+    ]
+  },
+
+  "e_why_cart_read_is_the_controlled_comparison": {
+    "finding": "cart-get isolates the planner effect: same query count, same discard-and-serve-from-Postgres shape, self-consistent keys on both sides.",
+    "exeris": "RepositoryBackedBenchmarkUseCaseService.getCart — graphShopAdapter.readCartProductNodeIds(userId) inside try/catch(RuntimeException ignored), result DISCARDED, view served from cartRepository.getCart(userId)",
+    "quarkus": "ShopSagaStateService.getOrCreateCart — graphShopService.cartProductIds(uid), result DISCARDED, view served from buildCartView(conn, uid)",
+    "round_trips": "one per stack; no N+1 on either side (single-hop over one edge type, which the SPI expresses well)",
+    "exeris_self_consistency": "writer and reader both key by UUID, so unlike the recommendation path the cart traversal does find its own edges",
+    "measured_latency_median_ms": {"exeris-community": 4.587, "quarkus-hibernate": 0.823, "spring-hibernate": 1.000}
+  },
+
+  "scope": {
+    "unaffected_by_this_defect": [
+      "Saga latency (report section 3): POST /api/v1/orders touches no graph in any of the three apps — all three call their graph adapter at exactly three sites (recommend, cart-add upsert, cart-get read).",
+      "Footprint (report section 6): the defect costs CPU and latency, not resident memory.",
+      "Correctness gate: 497/497 in all nine reps, independent of the graph path.",
+      "quarkus-hibernate vs spring-hibernate cost comparison: both run the working graph path."
+    ],
+    "invalidated_by_this_defect": [
+      "Every exeris-vs-* cost comparison (target-JVM CPU, Postgres CPU, Neo4j CPU, whole-deployment total).",
+      "recommend_latency_ms as a cross-stack row, in any sense including platform-natural.",
+      "CONTRACT-v2 section 2's stated mechanism for exeris's Neo4j cost, and its 2.6x / 2.5x figures."
+    ]
+  }
+}

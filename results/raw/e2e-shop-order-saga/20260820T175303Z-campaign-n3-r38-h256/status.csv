@@ -1,0 +1,16 @@
+rep,target_app,contract_id,baseline_only,graph_track,run_dir,runner_status,k6_exit_code,baseline_exit_code,result_json_present,fault_mode,durability_tier,correctness_gate
+1,exeris-community,exeris_community_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/exeris-community-rep-1,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+2,exeris-community,exeris_community_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/exeris-community-rep-2,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+3,exeris-community,exeris_community_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/exeris-community-rep-3,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+1,quarkus-lra-jdbc,quarkus_lra_jdbc_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/quarkus-lra-jdbc-rep-1,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+2,quarkus-lra-jdbc,quarkus_lra_jdbc_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/quarkus-lra-jdbc-rep-2,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+3,quarkus-lra-jdbc,quarkus_lra_jdbc_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/quarkus-lra-jdbc-rep-3,compensation_mismatch,0,3,true,terminal,T2-fsync-node-durable-postgres,fail
+1,spring-axon-jdbc,spring_axon_jdbc_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/spring-axon-jdbc-rep-1,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+2,spring-axon-jdbc,spring_axon_jdbc_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/spring-axon-jdbc-rep-2,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+3,spring-axon-jdbc,spring_axon_jdbc_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/spring-axon-jdbc-rep-3,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+1,spring-axon-embedded-jdbc,spring_axon_embedded_jdbc_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/spring-axon-embedded-jdbc-rep-1,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+2,spring-axon-embedded-jdbc,spring_axon_embedded_jdbc_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/spring-axon-embedded-jdbc-rep-2,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+3,spring-axon-embedded-jdbc,spring_axon_embedded_jdbc_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/spring-axon-embedded-jdbc-rep-3,clean,0,0,true,terminal,T2-fsync-node-durable-postgres,pass
+1,restate,restate_saga_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/restate-rep-1,clean,0,0,true,terminal,T2-fsync-node-durable,pass
+2,restate,restate_saga_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/restate-rep-2,clean,0,0,true,terminal,T2-fsync-node-durable,pass
+3,restate,restate_saga_h1_park100_v3,false,none,/home/bench/saga-campaign-k011-h256-20260820T175303Z/restate-rep-3,clean,0,0,true,terminal,T2-fsync-node-durable,pass

@@ -68,7 +68,10 @@ public class ShopSagaStateService {
             // harmless for a SELECT but sloppy. Reading-before-commit is correct.
             CartView view = buildCartView(conn, uid);
             conn.commit();
-            graphShopService.upsertCartEdge(uid, pid, quantity);
+            // CONTRACT-v2 §2 (2026-07-31): graph removed from the saga scenario. This
+            // edge was written and its read discarded on EVERY stack — synthetic load,
+            // not a modelled use case. GraphShopService is retained for the separate
+            // graph benchmark; it is simply not on this path any more.
             return view;
         } catch (Exception e) {
             throw new RuntimeException("addToCart failed", e);
@@ -83,7 +86,10 @@ public class ShopSagaStateService {
             // Read inside the same tx, before commit (see addToCart for why).
             CartView view = buildCartView(conn, uid);
             conn.commit();
-            graphShopService.cartProductIds(uid);
+            // CONTRACT-v2 §2 (2026-07-31): graph removed from the saga scenario. This
+            // edge was written and its read discarded on EVERY stack — synthetic load,
+            // not a modelled use case. GraphShopService is retained for the separate
+            // graph benchmark; it is simply not on this path any more.
             return view;
         } catch (Exception e) {
             throw new RuntimeException("getCart failed", e);

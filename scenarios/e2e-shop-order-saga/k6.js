@@ -42,6 +42,25 @@ const sagaCompletedTotal = new Counter('saga_completed_total');
 const sagaCompensatedTotal = new Counter('saga_compensated_total');
 const sagaFailedUnrecoveredTotal = new Counter('saga_failed_unrecovered_total');
 const sagaIssuedTotal = new Counter('saga_issued_total');
+// CONTRACT-v2 §7 O0 outcome accounting. Every issued orderId lands in exactly one of the
+// five terminal buckets, and the harness asserts the identity
+//
+//   completed + compensated + unrecovered + unresolved + submit_rejected == issued
+//
+// WHY this exists rather than a lone compensation counter: a single counter cannot tell
+// "the system did not compensate" from "the observer did not see it" — both read zero. A
+// balanced set can, because a blind detector cannot satisfy the identity: the sagas it
+// failed to classify have to land somewhere. The v1 zero-compensation defect was the
+// second kind reported as the first.
+//
+// saga_not_submitted_total is deliberately OUTSIDE the identity: those iterations aborted
+// BEFORE issuance (register/recommend/cart failure) and never incremented saga_issued_total,
+// so adding them to a sum that equals issued would break the very check this exists to make.
+// The review's O0 draft listed NOT_SUBMITTED inside the identity; that is the one place its
+// formula does not survive contact with where sagaIssuedTotal.add() actually sits.
+const sagaUnresolvedTotal = new Counter('saga_unresolved_total');
+const sagaSubmitRejectedTotal = new Counter('saga_submit_rejected_total');
+const sagaNotSubmittedTotal = new Counter('saga_not_submitted_total');
 
 // Override BASE_URL via --env BASE_URL=...; K6_BASE_URL is kept as secondary compatibility input.
 const BASE_URL = __ENV.BASE_URL || __ENV.K6_BASE_URL || 'http://localhost:8080';
@@ -52,7 +71,49 @@ const REGISTER_MAX_ATTEMPTS = Number.parseInt(__ENV.K6_REGISTER_MAX_ATTEMPTS || 
 // FAILED_UNRECOVERED is the CONTRACT-v2 §5/§6 terminal-failure state (compensation retry
 // budget exhausted); FAILED is kept for pre-v2 targets. COMPENSATING is non-terminal: saga
 // rollback still in progress.
-const TERMINAL_SAGA_STATUSES = new Set(['COMPLETED', 'COMPENSATED', 'FAILED', 'FAILED_UNRECOVERED']);
+// CONTRACT-v2 §3.1 — the terminal vocabulary is DECLARED per stack in
+// scenarios/e2e-shop-order-saga/scenario.json and passed in here by the harness.
+// It is never inferred and never widened with a fallback.
+//
+// Why a declaration rather than accepting more spellings: broadening the match
+// raises tolerance without removing the class — the next stack brings a third
+// name. A declaration turns a silent non-match into a loud missing declaration.
+// Two live examples of the class, both found on 2026-07-31:
+//   - the inline path accepted `body.saga_status`, which NO stack emits. Dead
+//     tolerance protects nothing today and hides the real mismatch tomorrow.
+//   - 'FAILED' was accepted "for pre-v2 targets" though §3 never defines it, and
+//     was bucketed as unrecovered — so a stack emitting it on a declined payment
+//     would turn a MISSING COMPENSATION (a §6 G2 violation) into an O3 line item.
+const SAGA_VOCABULARY = (() => {
+  const raw = __ENV.K6_TERMINAL_VOCABULARY;
+  if (!raw) {
+    throw new Error(
+      'K6_TERMINAL_VOCABULARY is not set. CONTRACT-v2 §3.1 requires the terminal ' +
+      'vocabulary to be declared per stack and read by the harness; guessing it is ' +
+      'what produced the v1 zero-compensation defect. Refusing to run.');
+  }
+  const v = JSON.parse(raw);
+  const tokens = v.terminal_tokens || {};
+  for (const required of ['COMPLETED', 'COMPENSATED', 'FAILED_UNRECOVERED']) {
+    if (!tokens[required]) {
+      throw new Error(`terminal_tokens.${required} missing from the declaration for this stack.`);
+    }
+  }
+  if (!v.terminal_field) {
+    throw new Error('terminal_field missing from the declaration for this stack.');
+  }
+  return {
+    field: v.terminal_field,
+    pollField: v.poll_terminal_field || v.terminal_field,
+    completed: tokens.COMPLETED,
+    compensated: tokens.COMPENSATED,
+    unrecovered: tokens.FAILED_UNRECOVERED,
+  };
+})();
+
+const TERMINAL_SAGA_STATUSES = new Set([
+  SAGA_VOCABULARY.completed, SAGA_VOCABULARY.compensated, SAGA_VOCABULARY.unrecovered,
+]);
 const POLL_EXPECTED_STATUSES = http.expectedStatuses(200, 404);
 // Set K6_EXPECTED_PROTO=HTTP/2.0 to enforce an http2_rate>0.99 threshold.
 const EXPECTED_PROTO = __ENV.K6_EXPECTED_PROTO || '';
@@ -141,6 +202,26 @@ const _thresholds = {
   admission_rejected:      ['rate<0.05'],
   req_timed_out:           ['rate<0.02'],
   req_failed_other:        ['rate<0.02'],
+
+  // CONTRACT-v2 phase scoping. The phase comment further down states that warmup and cooldown
+  // are EXCLUDED from analysis and that consumers must filter by the `phase` tag - but k6's
+  // end-of-test summary aggregates every phase, and the harness reads that summary. So the
+  // published p95/p99 silently folded the cold-start ramp back in.
+  //
+  // Measured 2026-08-20, spring-axon-jdbc rep-1: whole-run p95 4654 ms vs measurement-window
+  // p95 431 ms. All 2989 slow sagas sat in one contiguous 98 s window starting 11 s into the
+  // run and never recurred; reps 2 and 3 of the same arm read 433/433 ms. The defect is
+  // INVISIBLE on an arm with no cold-start transient (exeris: 129 ms either way), so it
+  // survives review and penalises only the arm that has one.
+  //
+  // A threshold expression is the only way to make k6 emit a tag-scoped submetric into the
+  // summary. These are deliberately non-failing - `p(99)>=0` always holds - because they
+  // exist to CREATE the submetric, not to gate. Latency gating lives in the correctness and
+  // comparative strict gates; adding one here would be a new policy, not a bug fix.
+  'saga_completed_duration{phase:measurement}':   ['p(99)>=0'],
+  'saga_compensated_duration{phase:measurement}': ['p(99)>=0'],
+  'http_req_duration{phase:measurement}':         ['p(99)>=0'],
+  'iteration_duration{phase:measurement}':        ['p(95)>=0'],
 };
 if (EXPECTED_PROTO === 'HTTP/2.0') {
   _thresholds['http2_rate'] = ['rate>0.99'];
@@ -157,7 +238,16 @@ export const options = {
       duration: WARMUP_DURATION,
       preAllocatedVUs: WARMUP_VUS_PRE,
       maxVUs: WARMUP_VUS_MAX,
-      gracefulStop: '10s',
+      // 30s, matching the other two phases. It was 10s, and the measured iteration
+      // duration is avg 6.7 s / p95 8.4 s / max 10.07 s - that max IS the gracefulStop,
+      // i.e. iterations were being CUT at the warmup boundary rather than finishing. A
+      // cut iteration has already incremented saga_issued_total and can then reach no
+      // terminal bucket, which is exactly what the O0 identity reported: 244 of 7990
+      // (3.05%) unclassified on the 2026-08-19 pinned run, over the 1% truncation bound,
+      // failing the run as a detector fault. Warmup iterations that finish after the
+      // boundary keep phase=warmup tags, so they add load during measurement - which is
+      // what steady state means - without entering measurement's metrics.
+      gracefulStop: '30s',
       tags: { phase: 'warmup' },
     },
     // Measurement window — filter by phase=measurement for p99 claims
@@ -215,9 +305,25 @@ export function setup() {
 
 // Helper function to generate a deterministic unique identity per test iteration
 function generateIdentity() {
-  const iterationInTest = exec.scenario.iterationInTest;
+  // `exec.scenario.iterationInTest` counts PER SCENARIO and restarts at 0 for each of the
+  // three phases, while k6 hands the same VU to different scenarios in turn. So a VU that
+  // served warmup iteration 400 and later measurement iteration 400 produced the SAME
+  // username twice, and `users.username` carries a unique index shared by every arm.
+  //
+  // The collisions were structural and hit every stack equally; what differed was the
+  // answer. exeris returns 409, the other arms return 200/201 for an existing user, and the
+  // session below aborts on any non-2xx — so the arm with the stricter REST semantics lost
+  // 4.09% of its registrations (1 971 of 48 157) against 0.01% (3 of 46 745) for quarkus,
+  // and roughly 1 100 sessions per rep never reached order submission at all. That is the
+  // workload penalising a difference in conflict handling, not measuring anything.
+  //
+  // `iterationInInstance` is the VU's own counter and does not restart between scenarios, so
+  // (vu, iteration) is unique for the whole test. Fixing the generator is the right layer:
+  // the alternative — accepting 409 as success in the check — would hide a real conflict if
+  // one ever occurred for a different reason.
+  const iterationInVu = exec.vu.iterationInInstance;
   const vuId = exec.vu.idInTest;
-  const username = `user_${vuId}_${iterationInTest}`;
+  const username = `user_${vuId}_${iterationInVu}`;
 
   return {
     username,
@@ -319,7 +425,7 @@ function extractOrderId(response) {
 function extractTerminalStatus(response) {
   try {
     const body = JSON.parse(response.body);
-    const status = body.status || body.saga_status || null;
+    const status = body[SAGA_VOCABULARY.field] || null;
     return TERMINAL_SAGA_STATUSES.has(status) ? status : null;
   } catch (e) {
     return null;
@@ -393,7 +499,7 @@ function pollSagaStatus(token, orderId, baseUrl) {
 
     try {
       const body = JSON.parse(statusRes.body);
-      sagaStatus = body.status || 'UNKNOWN';
+      sagaStatus = body[SAGA_VOCABULARY.pollField] || 'UNKNOWN';
     } catch (e) {
       sagaStatus = 'PARSE_ERROR';
     }
@@ -419,15 +525,40 @@ function pollSagaStatus(token, orderId, baseUrl) {
 //   status === 0  → network failure (timeout, connection refused, etc.)
 //   status === 503 → admission gate rejection (backpressure)
 //   anything else  → unexpected HTTP error code
+//
+// All three Rates are recorded on EVERY classified outcome, not only on the matching one.
+// They used to be one-sided (`.add(true)` and nothing else), which makes a k6 Rate degenerate:
+// with no false samples the rate is 1.0 the moment a single occurrence lands, so a threshold
+// like `rate<0.05` fires on the FIRST 503 and sets k6 exit 99. That is what produced
+// runner_status=threshold_failure on all three quarkus-lra-jdbc reps of the 2026-08-20
+// campaign. Measured 503 counts there were 1, 5 and 68 out of ~46 743 issued orders - a
+// SINGLE 503 in rep-1 breached `rate<0.05` and failed the run, while `errors`, which is
+// correctly two-sided, recorded that same event as 0.0021% and passed.
+//
+// The denominator is deliberately the same as `errors`: one sample per iteration outcome -
+// a failed iteration classifies here, a completed one calls classifyIterationOk below. So
+// `admission_rejected rate<0.05` reads as "fewer than 5% of iterations died on admission",
+// which is what the threshold was always meant to say.
+//
+// These three Rates are NOT the O0 terms and must never be read as such. O0's submit-rejected
+// bucket is the saga_submit_rejected_total Counter incremented at the order-submit failure
+// path; a k6 Rate has passes/fails/value and no `count` at all, so reading `.count` off one
+// silently yields 0 and manufactures a phantom O0 gap exactly the size of the 503 count.
 function classifyFailure(res) {
-  if (res.status === 0) {
-    reqTimedOutRate.add(true);
-  } else if (res.status === 503) {
-    admissionRejectedRate.add(true);
-  } else {
-    reqFailedOtherRate.add(true);
-  }
+  const timedOut = res.status === 0;
+  const admissionRejected = res.status === 503;
+  reqTimedOutRate.add(timedOut);
+  admissionRejectedRate.add(admissionRejected);
+  reqFailedOtherRate.add(!timedOut && !admissionRejected);
   errorRate.add(true);
+}
+
+// The false side of the three cause Rates above, recorded once per iteration that reached a
+// terminal saga outcome. Without it those Rates have no denominator.
+function classifyIterationOk() {
+  reqTimedOutRate.add(false);
+  admissionRejectedRate.add(false);
+  reqFailedOtherRate.add(false);
 }
 
 export default function () {
@@ -442,6 +573,7 @@ export default function () {
   });
 
   if (!registerOk) {
+    sagaNotSubmittedTotal.add(1);
     classifyFailure(registerRes);
     return;  // Abort user session
   }
@@ -468,12 +600,14 @@ export default function () {
   });
 
   if (!recommendOk) {
+    sagaNotSubmittedTotal.add(1);
     classifyFailure(recommendRes);
     return;
   }
 
   const productIds = extractProductIds(recommendRes);
   if (productIds.length === 0) {
+    sagaNotSubmittedTotal.add(1);
     return;  // No products to add to cart
   }
 
@@ -502,6 +636,7 @@ export default function () {
   });
 
   if (!cartAddOk) {
+    sagaNotSubmittedTotal.add(1);
     classifyFailure(cartAddRes);
     return;
   }
@@ -523,12 +658,14 @@ export default function () {
   });
 
   if (!cartGetOk) {
+    sagaNotSubmittedTotal.add(1);
     classifyFailure(cartGetRes);
     return;
   }
 
   const cartId = extractCartId(cartGetRes);
   if (!cartId) {
+    sagaNotSubmittedTotal.add(1);
     return;
   }
 
@@ -560,7 +697,15 @@ export default function () {
   orderCounter.add(1);
   // issued = this deterministic orderId was submitted; input to the §4.1 exact oracle
   // (observed_compensations == |declined ∩ issued|).
-  sagaIssuedTotal.add(1);
+  //
+  // The `oidx` tag carries the per-scenario iterationInTest index of THIS issuance, so the
+  // harness can reconstruct the exactly-issued orderId list from the NDJSON stream
+  // (`${seed}-${scenario}-i${oidx}`) and feed it to fnv1a64.py --ids-file. Without it the
+  // oracle can only regenerate a *dense* 0..N-1 population from counts, which diverges from
+  // reality as soon as one iteration aborts before order creation (register/cart failure) —
+  // and the gate then fails closed, discarding an otherwise-valid run. One tag value per
+  // issued order; identical in every stack, so it introduces no cross-stack asymmetry.
+  sagaIssuedTotal.add(1, { oidx: String(exec.scenario.iterationInTest) });
 
   const orderOk = check(orderRes, {
     // 200 = CONTRACT-v2 §3 request-response (final outcome in the response body);
@@ -569,6 +714,25 @@ export default function () {
   });
 
   if (!orderOk) {
+    // Issued (saga_issued_total already incremented above) but the submission was
+    // refused, so no terminal outcome can ever arrive. Counted, or the O0 identity
+    // would not balance and every rejected submission would read as detector_fault.
+    //
+    // TAGGED with the same oidx as saga_issued_total, added 2026-08-21, because O0 balancing
+    // was not the only thing these orders affect. The §4.1 expected-decline count is computed
+    // by applying fnv1a64 to the WHOLE issued-id list, and a refused submission is in that
+    // list — so a refused order whose hash marks it for decline inflates `expected` while
+    // being structurally incapable of ever producing a compensation. The gate then reports a
+    // shortfall the stack could not have avoided.
+    //
+    // Measured on quarkus-lra-jdbc, the only arm that gets any 503s: 1024m rep-3 had 68
+    // submit-rejected and came up exactly 2 compensations short (68 x 0.03 = 2.04); 256m
+    // rep-3 had 3 rejected and came up 1 short. Every rep with a small rejected count
+    // (1, 5, 8, 13) passed. That is the §4.1 population being one order wider than the set
+    // that can answer it, not a stack failing to compensate.
+    //
+    // The tag lets the gate subtract the declines among refused submissions from `expected`.
+    sagaSubmitRejectedTotal.add(1, { oidx: String(exec.scenario.iterationInTest) });
     classifyFailure(orderRes);
     return;
   }
@@ -589,11 +753,11 @@ export default function () {
   }
   const sagaDurationMs = Date.now() - orderSubmitStartMs;
 
-  const sagaSuccess = pollResult.sagaStatus === 'COMPLETED';
-  const sagaCompensated = pollResult.sagaStatus === 'COMPENSATED';
+  const sagaSuccess = pollResult.sagaStatus === SAGA_VOCABULARY.completed;
+  const sagaCompensated = pollResult.sagaStatus === SAGA_VOCABULARY.compensated;
   // FAILED_UNRECOVERED per CONTRACT-v2 §5 (compensation retry budget exhausted); FAILED kept
   // for pre-v2 targets — both count into the unrecovered-failure bucket.
-  const sagaUnrecovered = pollResult.sagaStatus === 'FAILED' || pollResult.sagaStatus === 'FAILED_UNRECOVERED';
+  const sagaUnrecovered = pollResult.sagaStatus === SAGA_VOCABULARY.unrecovered;
   const sagaFailed = sagaUnrecovered || pollResult.pollFailed;
   const sagaUnresolved = !pollResult.resolved;
 
@@ -605,6 +769,7 @@ export default function () {
   sagaStatusResolvedRate.add(pollResult.resolved);
   sagaPoll404ExhaustedRate.add(pollResult.exhausted404);
   errorRate.add(!pollResult.resolved || pollResult.pollFailed || sagaUnrecovered);
+  classifyIterationOk();
 
   // CONTRACT-v2 §8 outcome-split metrics: one duration Trend per terminal outcome population.
   if (sagaSuccess) {
@@ -615,5 +780,11 @@ export default function () {
     sagaCompensatedDuration.add(sagaDurationMs);
   } else if (sagaUnrecovered) {
     sagaFailedUnrecoveredTotal.add(1);
+  } else {
+    // The branch whose absence WAS the defect: a saga that resolved to nothing the
+    // client recognised incremented no total at all, so an oracle reading
+    // saga_compensated_total saw a clean zero. Counted now, and the O0 identity
+    // has to balance.
+    sagaUnresolvedTotal.add(1);
   }
 }

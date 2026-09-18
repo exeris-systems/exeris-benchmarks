@@ -1,0 +1,8 @@
+983881:
+No available recordings.
+
+Use jcmd 983881 JFR.start to start a recording.
+983881:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 983881 JFR.dump name=quarkus_hibernate_20260730T163340Z filename=FILEPATH to copy recording data to file.

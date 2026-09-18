@@ -38,6 +38,34 @@ import java.util.UUID;
 @Service
 public class ShopOrderFlowService {
 
+    /**
+     * Prefix of the API-level saga id. The remainder is the flow instance UUID, which
+     * is what makes {@link #settlePayment} able to find a parked flow from a callback
+     * that carries only the saga id.
+     */
+    private static final String SAGA_ID_PREFIX = "saga-";
+
+    /**
+     * CONTRACT-v2 section 3 request-response budget. Matched to the client's own
+     * resolution budget (k6 polls 25 x 1 s) so this stack never gives up before the
+     * client would.
+     */
+    private static final long SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS =
+            Long.getLong("exeris.benchmark.saga.terminalAwaitTimeoutMillis",
+                    parseEnvLong("EXERIS_SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS", 25_000L));
+
+    private static long parseEnvLong(String name, long fallback) {
+        String raw = System.getenv(name);
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException invalid) {
+            return fallback;
+        }
+    }
+
     private final ExerisFlowTemplate flowTemplate;
     private final ShopOrderFlowInputRegistry inputRegistry;
     private final ShopOrderSqlSteps sqlSteps;
@@ -88,9 +116,18 @@ public class ShopOrderFlowService {
         String orderId = (clientOrderId == null || clientOrderId.isBlank())
                 ? UUID.randomUUID().toString()
                 : clientOrderId.trim();
-        String sagaId = "saga-" + UUID.randomUUID();
 
-        // Synchronous insert: orders + order_items rows exist before the 202 returns.
+        // The context is minted FIRST so the sagaId can carry the flow instance id.
+        // CONTRACT-v2 section 4 (parking workload): the gateway callback knows only the
+        // sagaId, and it has to find the parked flow — deriving one from the other is
+        // what lets it call lookupParked directly, with no sagaId -> instance index to
+        // keep consistent. Same coupling exeris-community-app has, where the sagaId IS
+        // the flow instance UUID.
+        FlowContext seed = flowTemplate.newContext(ShopOrderFlowDefinition.FLOW_NAME);
+        String sagaId = SAGA_ID_PREFIX
+                + new UUID(seed.instanceIdMost(), seed.instanceIdLeast());
+
+        // Synchronous insert: orders + order_items rows exist before the response returns.
         // Matches the pre-migration API shape exactly (see class javadoc + README).
         long dbOrderId = sqlSteps.insertOrder(userId, cartId, sagaId);
 
@@ -98,16 +135,73 @@ public class ShopOrderFlowService {
         // pre-migration projection which wrote SAGA_INITIATED on the same event.
         inputRegistry.recordStatus(orderId, userId, "SAGA_INITIATED", sagaId);
 
-        FlowContext seed = flowTemplate.newContext(ShopOrderFlowDefinition.FLOW_NAME);
         inputRegistry.bind(
                 seed,
                 new ShopOrderFlowInputRegistry.Input(
                         orderId, sagaId, userId, cartId, paymentMethod, dbOrderId));
+        // Registered BEFORE schedule: a saga that settles immediately must not signal
+        // into a missing entry and strand the caller until its timeout.
+        inputRegistry.expectTerminalOutcome(orderId);
         flowTemplate.schedule(ShopOrderFlowDefinition.FLOW_NAME, seed);
 
-        OrderAcceptedView candidate = new OrderAcceptedView(orderId, "ACCEPTED", sagaId);
+        // CONTRACT-v2 section 3: the response carries the FINAL outcome. Falls back to
+        // the pre-v2 async ACCEPTED on timeout, so a slow saga degrades to client
+        // polling rather than failing the request.
+        String terminal = inputRegistry
+                .awaitTerminalOutcome(orderId, SAGA_TERMINAL_AWAIT_TIMEOUT_MILLIS)
+                .map(ShopOrderFlowService::toContractStatus)
+                .orElse("ACCEPTED");
+
+        OrderAcceptedView candidate = new OrderAcceptedView(orderId, terminal, sagaId);
         // bindIdempotencyKey returns the existing entry if a concurrent POST won the race.
         return Optional.of(inputRegistry.bindIdempotencyKey(idempotencyKey, candidate));
+    }
+
+    /**
+     * Settles a flow parked on charge-payment, driven by the external gateway's
+     * callback (CONTRACT-v2 section 4). Persists the outcome BEFORE waking: the
+     * reverse order races, because a woken step could read the row before the
+     * outcome landed and park again — this time with no callback left to arrive.
+     *
+     * @return false when no flow was parked on payment under {@code sagaId} — a
+     *         duplicate callback, or one for a saga this process never had
+     */
+    public boolean settlePayment(String sagaId, boolean authorized) {
+        if (sagaId == null || !sagaId.startsWith(SAGA_ID_PREFIX)) {
+            return false;
+        }
+        UUID instance;
+        try {
+            instance = UUID.fromString(sagaId.substring(SAGA_ID_PREFIX.length()));
+        } catch (IllegalArgumentException notAFlowInstance) {
+            return false;
+        }
+        if (sqlSteps.settleParkedPayment(sagaId, authorized).isEmpty()) {
+            return false;
+        }
+        // The callback can beat the park: at the shape-A gateway delay (~1 ms) the round
+        // trip is comparable to the time the engine needs to reach await-payment and
+        // register the instance. Giving up on the first miss strands the saga with its
+        // outcome already persisted — a hang that reads as "slow stack", not as a race.
+        Optional<FlowContext> parked = Optional.empty();
+        for (int attempt = 0; attempt < 200; attempt++) {
+            parked = flowTemplate.lookupParked(
+                    instance.getMostSignificantBits(), instance.getLeastSignificantBits());
+            if (parked.isPresent()) {
+                break;
+            }
+            try {
+                Thread.sleep(5L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        if (parked.isEmpty()) {
+            return false;
+        }
+        flowTemplate.wake(parked.get());
+        return true;
     }
 
     /**
@@ -148,9 +242,19 @@ public class ShopOrderFlowService {
      */
     private static String toContractStatus(String internalStatus) {
         return switch (internalStatus) {
-            case "COMPLETED", "CONFIRMED" -> "COMPLETED";
-            case "CANCELLED", "PAYMENT_REFUNDED" -> "COMPENSATED";
+            case "COMPLETED" -> "COMPLETED";
+            case "CANCELLED" -> "COMPENSATED";
             case "FAILED" -> "FAILED_UNRECOVERED";
+            // CONFIRMED and PAYMENT_REFUNDED used to map to the terminal COMPLETED /
+            // COMPENSATED. That was wrong and it was wrong in this stack only: both are
+            // MID-path states (confirm-order done but complete-order pending; payment
+            // refunded but restore-inventory pending), so a poller could observe a
+            // terminal outcome that later regresses to the opposite one. quarkus-hibernate
+            // maps them to the non-terminal COMPLETING / COMPENSATING for exactly this
+            // reason; the four stacks now agree on the terminal surface, which they must,
+            // because the §7 oracles count terminal observations.
+            case "CONFIRMED" -> "COMPLETING";
+            case "PAYMENT_REFUNDED" -> "COMPENSATING";
             default -> internalStatus;
         };
     }

@@ -24,6 +24,19 @@ DECLARE
     'exeris_outbox_dlq',
     'domain_event_entry',
     'snapshot_entry',
+    -- Axon's real snapshot table name, plus the JPA saga store's two tables. Empty while
+    -- Axon Server held the stores; the embedded arm (CONTRACT-v2 s9(e)) writes all three,
+    -- and a saga row surviving into the next rep would let a previous run's saga resume
+    -- inside a measurement window. Same reason the Axon Server volume is force-recreated.
+    -- exeris_saga_state was missing from this list until 2026-08-19, so the Flow engine's
+    -- durable saga rows accumulated across every run AND across kernel versions -- 17 988 of
+    -- them by the time it was noticed, some written by 0.10.2 under an older schema_version.
+    -- Not the cause of any measured defect so far (checked: truncating it did not change the
+    -- 0.11.0 stall), but a seed that leaves state behind is not a seed.
+    'exeris_saga_state',
+    'snapshot_event_entry',
+    'saga_entry',
+    'association_value_entry',
     'token_entry',
     'in_cart_edges',
     'bought_edges',
@@ -50,3 +63,27 @@ BEGIN
     RAISE NOTICE '[v0_clean] No benchmark tables found — skipping truncate (fresh DB).';
   END IF;
 END $$;
+
+-- ---------------------------------------------------------------------------------------
+-- Orphaned large objects.
+--
+-- Axon's @Lob columns are large-object OIDs on PostgreSQL, and TRUNCATE removes the
+-- REFERENCES while leaving the objects themselves in pg_largeobject. Across a campaign
+-- that writes an event per saga step, that is unbounded growth in a table nothing in the
+-- benchmark ever reads — measured as disk, attributed to nothing.
+--
+-- Unconditional unlink is safe here: this database exists only for the benchmark seed and
+-- has no other large-object user. It runs AFTER the truncate above, so nothing live is
+-- pointed at what it removes.
+-- ---------------------------------------------------------------------------------------
+DO $lo_cleanup$
+DECLARE
+  removed bigint := 0;
+BEGIN
+  SELECT count(*) INTO removed FROM pg_largeobject_metadata;
+  IF removed > 0 THEN
+    PERFORM lo_unlink(oid) FROM pg_largeobject_metadata;
+    RAISE NOTICE '[v0_clean] Unlinked % orphaned large object(s) left by Axon @Lob columns.', removed;
+  END IF;
+END
+$lo_cleanup$;

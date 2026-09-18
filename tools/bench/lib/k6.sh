@@ -101,7 +101,18 @@ bench_run_k6() {
       [[ -z "$_lk6_key" ]] && continue
       _local_env_args+=( --env "${_lk6_key}=${_lk6_rest}" )
     done < <(env | grep -E '^(K6_|EXERIS_)')
-    k6 run \
+    # Load generator pinned to its own cores. k6 is goroutine-per-VU: at 50 sessions/s
+    # with several hundred VUs it is not a negligible neighbour, and sharing cores with
+    # the target makes the generator part of what the target competes against.
+    _k6_taskset=()
+    if [[ -n "${BENCH_LOADGEN_CPUS:-}" ]]; then
+      if ! command -v taskset >/dev/null 2>&1; then
+        echo "ERROR: BENCH_LOADGEN_CPUS set but taskset is unavailable." >&2
+        return 1
+      fi
+      _k6_taskset=(taskset -c "${BENCH_LOADGEN_CPUS}")
+    fi
+    "${_k6_taskset[@]}" k6 run \
       --out "json=$output_json" \
       "${csv_out_args[@]}" \
       --summary-export="$summary_json" \

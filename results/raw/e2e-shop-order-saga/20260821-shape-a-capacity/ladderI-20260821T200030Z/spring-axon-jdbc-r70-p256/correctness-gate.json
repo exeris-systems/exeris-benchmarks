@@ -1,0 +1,31 @@
+{
+  "schema_version": "1",
+  "gate_id": "contract_v2_s4_1_exact_compensation",
+  "gate_name": "observed_compensations == expected_declines",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#4.1",
+  "decline_rule": "fnv1a64(orderId) mod 1000 < 30 (unsigned, FNV-1a 64 over UTF-8 bytes)",
+  "fault_mode": "terminal",
+  "fault_injection": null,
+  "durability_tier": "T2-fsync-node-durable-postgres",
+  "durability_tier_source": "default:postgres-synchronous-commit-on",
+  "status": "detector_fault",
+  "domain_corroboration": {
+    "note": "observed_compensations counts a client-visible token; this leg counts rows left in a compensated terminal state in the domain store. A positive observed count against zero such rows fails the gate — see the 2026-08-21 quarkus-lra finding.",
+    "compensated_tokens": "'CANCELLED'",
+    "compensated_rows": 21,
+    "measured": true
+  },
+  "pass_fail": "not_evaluated",
+  "expected": null,
+  "observed": 17,
+  "issued_orders": 1442,
+  "order_seed": "exeris-saga-v2",
+  "order_id_format": "{seed}-{scenario}-i{index}",
+  "issued_by_scenario": null,
+  "density_note": null,
+  "population_source": "none",
+  "population_assumption": "one dense iteration-index sequence 0..N-1 per k6 scenario (exec.scenario.iterationInTest); density checked via per-scenario completed iterations vs saga_issued_total from the k6 NDJSON stream (see fnv1a64.py)",
+  "helper_ref": "tools/bench/lib/fnv1a64.py",
+  "reason": "O0: 264 of 1442 issued sagas (18.30%) reached no terminal outcome the detector recognises, above the 2% bound. An unresolved saga is an observation failure, not an outcome, so the compensation count cannot be trusted in either direction. First thing to check: this stack's declared terminal_tokens (CONTRACT-v2 §3.1) against what it actually emits.",
+  "generated_at_utc": "2026-08-21T20:17:00Z"
+}

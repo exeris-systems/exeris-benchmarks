@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "quarkus_lra_jdbc_h1_park100_v3",
+  "target_app": "quarkus-lra-jdbc",
+  "graph_track": "none",
+  "fault_mode": "terminal",
+  "hardware_profile": "dev-laptop",
+  "claim_scope": "exploratory",
+  "correctness_gate_status": "fail",
+  "rejection_codes": [
+    "compensation_mismatch",
+    "non_canonical_hardware_profile",
+    "threshold_failure"
+  ],
+  "reason": "correctness gate failed: observed compensations != expected declines (CONTRACT-v2 s4.1); performance numbers excluded from headline tables"
+}

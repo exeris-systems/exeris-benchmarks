@@ -12,14 +12,23 @@ MATRIX_PATH="${REPO_ROOT}/runtime/drivers/target-asset-matrix.json"
 #   quarkus-tuned: pure-JDBC, tuned transport (native epoll + native BoringSSL TLS)
 #     counterpart of default-Quarkus quarkus-hibernate; app in flight, not yet promoted
 #     to a comparative-pair-manifest (quarkus-hibernate__quarkus-tuned) as comparison_eligible.
+#     NOT the saga arm: the e2e-shop-order-saga roster runs the same jar under the separate
+#     target id quarkus-lra-jdbc, which IS in the pair manifest. Same artifact, different
+#     deployment (cleartext h1 + LRA coordinator vs TLS), so a different target id.
 #   restate: baseline-only per scenarios/e2e-shop-order-saga/CONTRACT-v2-IMPLEMENTATION.md
 #     (anti-overclaim ledger, "No Restate comparisons"): not comparison-eligible until the
 #     h1-facade-vs-h2c-canonical-contract protocol mismatch is resolved or scoped h1-vs-h1;
 #     descriptive single-stack baseline runs only.
+#   spring-axon-embedded: SUPERSEDED by spring-axon-embedded-jdbc. Same CONTRACT-v2 s9(e)
+#     deployment shape, but its jar still carries Spring Data JPA for the non-saga session
+#     steps, and every arm in the saga scenario is measured on JDBC because Exeris is. Kept
+#     runnable so runs already recorded under spring_axon_embedded_h1_park1_v3 stay
+#     reproducible; not part of the v3 roster and not comparison-eligible.
 JUSTIFIED_UNUSED_RUNNABLE_TARGETS=(
   "spring-on-exeris"
   "quarkus-tuned"
   "restate"
+  "spring-axon-embedded"
 )
 
 fail_count=0

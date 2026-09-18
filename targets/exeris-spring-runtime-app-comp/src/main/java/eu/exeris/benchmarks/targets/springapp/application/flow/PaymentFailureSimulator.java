@@ -8,7 +8,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 /**
- * Deterministic payment-decline rule for the e2e-shop-order-saga benchmark
+ * <strong>Reference implementation, no longer on the saga path.</strong> Under the
+ * CONTRACT-v2 section 4 parking workload the decline is decided by the external
+ * payment gateway ({@code targets/payment-gateway-stub/payment_stub.py}), so no
+ * target evaluates the rule in-process any more. This class is retained solely
+ * because {@code PaymentFailureSimulatorTest} pins the normative FNV-1a constants
+ * and known-answer vectors that the gateway must agree with — delete the class and
+ * that check goes with it. Nothing injects this bean; do not re-wire it into a step
+ * without removing the gateway's copy first, because two implementations of a rule
+ * that must be identical everywhere is a drift waiting to happen.
+ *
+ * <p>Deterministic payment-decline rule for the e2e-shop-order-saga benchmark
  * (CONTRACT-v2 section 4.1). Replaces the Axon-era probabilistic simulator:
  * a payment is <em>declined</em> per-{@code orderId}, never per-attempt —
  * {@code decline(orderId) := Long.remainderUnsigned(fnv1a64(orderId), 1000) < 30},

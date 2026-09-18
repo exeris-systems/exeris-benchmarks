@@ -58,7 +58,10 @@ public final class ShopSagaStateService {
             BigDecimal price = getProductPrice(conn, pid);
             long cartId = getOrCreateCartId(conn, uid);
             upsertCartItem(conn, cartId, pid, quantity, price);
-            graphShopService.upsertCartEdge(uid, pid, quantity);
+            // CONTRACT-v2 §2 (2026-07-31): graph removed from the saga scenario. This
+            // edge was written and its read discarded on EVERY stack — synthetic load,
+            // not a modelled use case. GraphShopService is retained for the separate
+            // graph benchmark; it is simply not on this path any more.
             return buildCartView(conn, uid);
         } catch (Exception e) {
             throw new RuntimeException("addToCart failed", e);
@@ -69,7 +72,10 @@ public final class ShopSagaStateService {
         long uid = Long.parseLong(userId);
         try (Connection conn = dataSource.getConnection()) {
             getOrCreateCartId(conn, uid);
-            graphShopService.cartProductIds(uid);
+            // CONTRACT-v2 §2 (2026-07-31): graph removed from the saga scenario. This
+            // edge was written and its read discarded on EVERY stack — synthetic load,
+            // not a modelled use case. GraphShopService is retained for the separate
+            // graph benchmark; it is simply not on this path any more.
             return buildCartView(conn, uid);
         } catch (Exception e) {
             throw new RuntimeException("getCart failed", e);

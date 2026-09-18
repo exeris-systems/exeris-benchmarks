@@ -3,8 +3,6 @@ package eu.exeris.benchmarks.targets.springapp.application.axon;
 import eu.exeris.benchmarks.targets.springapp.application.axon.command.CompensatePaymentCommand;
 import eu.exeris.benchmarks.targets.springapp.application.axon.command.ProcessPaymentCommand;
 import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentCompensatedEvent;
-import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentDeclinedEvent;
-import eu.exeris.benchmarks.targets.springapp.application.axon.event.PaymentProcessedEvent;
 
 import org.axonframework.commandhandling.CommandHandler;
 import org.axonframework.eventhandling.EventBus;
@@ -47,15 +45,30 @@ public class PaymentService {
     private final DataSource dataSource;
     private final EventBus eventBus;
     private final FaultMode faultMode;
+    private final PaymentGatewayClient gateway;
 
-    public PaymentService(DataSource dataSource, EventBus eventBus) {
+    public PaymentService(DataSource dataSource, EventBus eventBus, PaymentGatewayClient gateway) {
         this.dataSource = dataSource;
         this.eventBus = eventBus;
+        this.gateway = gateway;
         this.faultMode = parseFaultMode(System.getenv(FAULT_MODE_ENV));
         warnIfLegacyKnobSet(LEGACY_FAIL_RATE_ENV);
         warnIfLegacyKnobSet(LEGACY_FAILURE_MODE_ENV);
     }
 
+    /**
+     * CONTRACT-v2 §4 (parking workload): S_pay does not answer inline. It commits its
+     * forward writes, dispatches to the external gateway, and publishes NOTHING — so
+     * the Axon saga simply has no next event and sits in the saga store until the
+     * gateway's callback publishes {@code PaymentProcessedEvent} or
+     * {@code PaymentDeclinedEvent} (see {@code PaymentCallbackController}).
+     *
+     * <p>This is Axon's park: no thread, no connection and no request is held across
+     * the wait — the saga instance is persisted state, and the tracking processor is
+     * free to advance other sagas. It is also the idiomatic shape; the previous
+     * inline decision was only possible because the workload had no external system
+     * in it.
+     */
     @CommandHandler
     public void handle(ProcessPaymentCommand cmd) {
         try (Connection conn = dataSource.getConnection()) {
@@ -76,17 +89,23 @@ public class PaymentService {
         } catch (Exception e) {
             throw new RuntimeException("processPayment failed for saga " + cmd.sagaId(), e);
         }
-        // CONTRACT-v2 §4.1: deterministic per-orderId business decline. A decline is
-        // BUSINESS-TERMINAL — published as an explicitly modeled event (never thrown),
-        // so the command gateway's transient-fault retry scheduler (§5) can never see
-        // it: zero retries on decline, routed straight to saga compensation.
-        if (faultMode == FaultMode.TERMINAL && PaymentDeclineRule.isDeclined(cmd.orderId())) {
-            eventBus.publish(GenericEventMessage.asEventMessage(
-                    new PaymentDeclinedEvent(cmd.sagaId(), cmd.orderId(), cmd.userId(), cmd.dbOrderId())));
-        } else {
-            eventBus.publish(GenericEventMessage.asEventMessage(
-                    new PaymentProcessedEvent(cmd.sagaId(), cmd.orderId(), cmd.userId(), cmd.dbOrderId())));
+        // The §4.1 decline decision now lives in the external gateway, bit-identical
+        // (same FNV-1a constants, same modulus and threshold, same orderId key), so the
+        // deterministic declined subset and the exact-compensation oracle are unchanged.
+        // Deciding it here as well would be a second implementation of a rule that must
+        // be identical everywhere — and the two could drift silently.
+        //
+        // faultMode is still parsed so a stale EXERIS_SAGA_FAULT_MODE is not read as
+        // authoritative: for parking shapes the effective switch is the gateway's
+        // PAYMENT_STUB_FAULT_MODE, and disagreement is worth a warning rather than a
+        // silent divergence between what the operator set and what was injected.
+        if (faultMode == FaultMode.OFF) {
+            log.warn("{}=off has no effect in the parking workload: the CONTRACT-v2 §4.1 decline is "
+                    + "decided by the external gateway. Set PAYMENT_STUB_FAULT_MODE=off instead.",
+                    FAULT_MODE_ENV);
         }
+        gateway.dispatch(cmd.orderId(), cmd.sagaId());
+        // No event published: the saga parks here until the gateway calls back.
     }
 
     @CommandHandler

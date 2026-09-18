@@ -1,0 +1,69 @@
+{
+  "scenario_id": "e2e-shop-order-saga",
+  "contract_id": "quarkus_lra_jdbc_h1_park1_v3",
+  "target_app": "quarkus-lra-jdbc",
+  "graph_track": "none",
+  "fault_mode": "terminal",
+  "durability_tier": "T2-fsync-node-durable-postgres",
+  "durability_tier_source": "default:postgres-synchronous-commit-on",
+  "hardware_profile": "dev-laptop",
+  "tier": "community",
+  "benchmark_family": "runtime",
+  "protocol_mode": "h1",
+  "transport_mode": "loopback-h1",
+  "protocol_mode_declared": "h1",
+  "protocol_mode_observed": "h1",
+  "protocol_mode_observed_k6": "h1",
+  "protocol_tags_observed_k6": "HTTP/1.1",
+  "transport_mode_declared": "loopback-h1",
+  "transport_mode_observed": "loopback-h1",
+  "protocol_probe_non_blocking": true,
+  "protocol_probe_endpoint": "http://localhost:9015/health",
+  "comparison_axis": "within-tier-protocol",
+  "claim_scope": "exploratory",
+  "commit_sha": "80330016b3ed31744ff77c933bcfd8b87398f872",
+  "run_timestamp_utc": "20260822T082457Z",
+  "base_url": "http://localhost:9015",
+  "output_dir": "/home/bench/saga-ladderJ-20260822T081030Z/quarkus-lra-jdbc-r50-p256",
+  "env_file": "env.json",
+  "tool": "k6",
+  "jfr_enabled": true,
+  "jfr_settings": "profile",
+  "jfr_file": "/home/bench/saga-ladderJ-20260822T081030Z/quarkus-lra-jdbc-r50-p256/target-quarkus-lra-jdbc-20260822T082457Z.jfr",
+  "perf_stat_enabled": false,
+  "k6_exit_code": 0,
+  "runner_status": "clean",
+  "correctness_gate_status": "pass",
+  "logs_dir": "/home/bench/saga-ladderJ-20260822T081030Z/quarkus-lra-jdbc-r50-p256/logs",
+  "backend_network_mode": "bridge",
+  "fault_injection": {
+    "fault_mode": "terminal",
+    "selection": "per-orderId, deterministic, business-terminal (CONTRACT-v2 s4.1)",
+    "decline_rule": "fnv1a64(orderId) mod 1000 < 30 (unsigned)",
+    "nominal_decline_fraction": 0.03,
+    "transient_retry_policy": {
+      "max_attempts": 3,
+      "initial_backoff_ms": 50,
+      "backoff_factor": 2,
+      "jitter": false
+    }
+  },
+  "infra_contract": {
+    "compose_ref": "runtime/compose/e2e-shop-order-saga.yml",
+    "compose_sha256": "85f08310bea65ae1c8b2d2917cba844f54147ece007019c091eeb79b1942ea1a",
+    "backend_network_mode": "bridge",
+    "seed_baseline": {
+      "apply_script_ref": "runtime/db/seed/seed-apply.sh",
+      "apply_script_sha256": "77d0ccffa51ff726881cb9d8301af6b178f712c5b42fee9c8e16941c4219203d"
+    },
+    "seed_overlay": {
+      "manifest_ref": "scenarios/e2e-shop-order-saga/seed/seed-manifest.json",
+      "manifest_version": "1",
+      "manifest_id": "e2e-shop-order-saga-seed-v1",
+      "manifest_sha256": "a2e238747d478cbcba69547f463d04874ec5899dd84ca391a37d2fe8ad7515cd",
+      "verification_script_ref": "scenarios/e2e-shop-order-saga/seed/verify-seed.sh",
+      "verification_script_sha256": "e62aa1c6ccf6c83ff4709f9f1a77256d0b4f64e51e43a36aa1aed2b768a41354",
+      "verification_skipped": false
+    }
+  }
+}

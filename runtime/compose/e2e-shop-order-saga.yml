@@ -2,6 +2,27 @@
 # Services: postgres:16.2 (with seed.sql), neo4j:5.16-community, axonserver:2024.2.22,
 #           restate:1.7.2 (started only for the restate target, like axonserver for spring/quarkus)
 # graph_track: neo4j | tier: community | transport: loopback-h2c
+# NETWORKING (changed 2026-08-19): every service runs with network_mode: host.
+# The bridge sat in the measured path — the payment dispatch, the asynchronous callback
+# that un-parks the saga, and every JDBC round trip all crossed docker-proxy/NAT and
+# conntrack. That is per-packet overhead and a shared conntrack table inside the very
+# latency the scenario measures, and it is not the thing under test.
+#
+# Host networking removes the NAT, and with it compose's service-name DNS: containers
+# reach each other and the host-side target JVM at 127.0.0.1. That is why the callback
+# and advertised URLs default to 127.0.0.1 rather than host.docker.internal (host
+# processes) or benchmark-restate-server (compose DNS).
+#
+# EXPOSURE, and why every service binds loopback explicitly below: with published ports
+# docker bound 127.0.0.1 for us. Under host networking a service binds whatever its own
+# default is — 0.0.0.0 for all five of these — and this box is on a public IP with no
+# firewall this account can inspect or change. It has been compromised this exact way
+# before (Postgres reachable from the internet, rogue superuser roles, 2026-07-30). Each
+# service therefore carries its own bind-address setting, and the baseline audits the
+# listening sockets and refuses to run if any stack port is bound off-loopback — the
+# audit is the safety net, not the per-service settings, because one wrong knob is
+# invisible until someone scans the box.
+#
 # Usage: docker compose -f runtime/compose/e2e-shop-order-saga.yml up -d
 # Seed is loaded automatically via initdb on first start.
 # Stop: docker compose -f runtime/compose/e2e-shop-order-saga.yml down -v
@@ -26,8 +47,13 @@ services:
   benchmark-postgres:
     image: postgres:16.2
     container_name: exeris-e2e-saga-postgres
+    network_mode: host
     command:
       - postgres
+      - -c
+      # Loopback only: host networking means this is the host's own :5432. See the
+      # exposure note in the file header.
+      - listen_addresses=127.0.0.1
       - -c
       - max_connections=300
       - -c
@@ -40,8 +66,6 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
     volumes:
       - ../db/seed/v1_core.sql:/docker-entrypoint-initdb.d/01-v1-core.sql:ro
       - ../db/seed/v2_shop.sql:/docker-entrypoint-initdb.d/02-v2-shop.sql:ro
@@ -57,11 +81,13 @@ services:
   benchmark-db-seed:
     image: postgres:16.2
     container_name: exeris-e2e-saga-db-seed
+    network_mode: host
     depends_on:
       benchmark-postgres:
         condition: service_healthy
     environment:
-      PGHOST: benchmark-postgres
+      # 127.0.0.1, not the service name: host networking has no compose DNS.
+      PGHOST: 127.0.0.1
       PGPORT: "5432"
       PGDATABASE: postgres
       PGUSER: postgres
@@ -88,10 +114,22 @@ services:
       "
     restart: "no"
 
+  # Behind a profile since 2026-07-31: the graph was removed from the saga scenario
+  # (CONTRACT-v2 §2), so Neo4j is NOT part of the §1 deployment unit for saga runs.
+  # A plain `docker compose up -d` must not start it — it idles at ~2.1 GB RSS next
+  # to the measurement, which is exactly the kind of unaccounted process the §1
+  # deployment-unit definition exists to prevent.
+  #
+  # Start it explicitly for the separate graph benchmark:
+  #   docker compose --profile graph up -d benchmark-neo4j
   benchmark-neo4j:
+    profiles: ["graph"]
     image: neo4j:5.16-community
     container_name: exeris-e2e-saga-neo4j
+    network_mode: host
     environment:
+      # Loopback binds for the same reason as every other service here.
+      NEO4J_server_default__listen__address: 127.0.0.1
       NEO4J_AUTH: neo4j/password
       NEO4J_PLUGINS: "[]"
       NEO4J_server_memory_heap_initial__size: 512m
@@ -101,9 +139,6 @@ services:
       NEO4J_server_bolt_thread__pool__min__size: 20
       NEO4J_server_bolt_thread__pool__max__size: 200
       NEO4J_dbms_security_procedures_unrestricted: apoc.*
-    ports:
-      - "7474:7474"
-      - "7687:7687"
     volumes:
       - e2e-saga-neo4jdata:/data
     healthcheck:
@@ -119,10 +154,27 @@ services:
       AXONIQ_AXONSERVER_NAME: exeris-bench-axonserver
       AXONIQ_AXONSERVER_HOSTNAME: localhost
       AXONIQ_AXONSERVER_DEVMODE_ENABLED: "true"
-      JAVA_TOOL_OPTIONS: "-Daxoniq.axonserver.devmode.enabled=true"
-    ports:
-      - "8024:8024"
-      - "8124:8124"
+      # server.address binds the Spring Boot HTTP port (8024); the gRPC ports read
+      # axoniq.axonserver.internal-hostname/hostname for advertisement, so the loopback
+      # bind of 8124 is what the baseline's listener audit verifies rather than assumes.
+      # server.address binds the Spring Boot HTTP port (8024). The gRPC ports (8124
+      # client, 8224 internal) are bound by Axon Server itself; bind-address is the
+      # property that moves 8124, and internal-bind-address is a SECOND property that
+      # moves 8224 - bind-address alone left the internal port on 0.0.0.0, which is how
+      # the audit caught it. Verified against ss, not assumed.
+      # MEMORY CAP, kept in sync with the target JVMs (see the heap block in the campaign
+      # wrapper). Without it this sidecar sizes itself from HOST RAM -- the LRA coordinator
+      # image ships -XX:MaxRAMPercentage=80.0, i.e. 80% of a 62 GB box -- and it is not a
+      # small term: measured 2026-08-19 it was 1642 MB peak / 958 MB average RSS and 181
+      # core-seconds, more than double the target JVM it serves, and the single largest
+      # component of that arm's CONTRACT-v2 §1 unit.
+      #
+      # Capping the targets while leaving the sidecars uncapped equalises the smaller half of
+      # the deployment and lets the larger half be decided by how much RAM the bench box
+      # happens to have. The same figure on an 8 GB host would be a fraction of this, which
+      # makes it an artifact rather than a property of the stack.
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAM=2048m -Xmx1536m -Daxoniq.axonserver.devmode.enabled=true -Dserver.address=127.0.0.1 -Daxoniq.axonserver.hostname=127.0.0.1 -Daxoniq.axonserver.internal-hostname=127.0.0.1 -Daxoniq.axonserver.bind-address=127.0.0.1 -Daxoniq.axonserver.internal-bind-address=127.0.0.1"
+    network_mode: host
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8024/actuator/health"]
       interval: 5s
@@ -142,22 +194,96 @@ services:
   # relabeling the run's durability tier.
   # No container healthcheck: the image ships no shell/wget; the baseline polls
   # the admin API (http://localhost:9070/health) from the host instead.
-  # host.docker.internal is required so the server can invoke the SDK endpoint
-  # (:9084) running in the target JVM on the host.
+  # Under host networking the SDK endpoint (:9084) in the target JVM on the host is
+  # reachable as 127.0.0.1:9084 directly.
   benchmark-restate-server:
     image: docker.restate.dev/restatedev/restate:1.7.2
     container_name: exeris-e2e-saga-restate-server
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "8080:8080"   # HTTP ingress
-      - "9070:9070"   # Admin API + web UI
-      - "9071:9071"
+    network_mode: host
+    environment:
+      # Loopback binds (8080 ingress, 9070 admin). Under host networking the SDK
+      # endpoint in the target JVM is simply 127.0.0.1:9084 - no host-gateway hop.
+      RESTATE_INGRESS__BIND_ADDRESS: "127.0.0.1:8080"
+      RESTATE_ADMIN__BIND_ADDRESS: "127.0.0.1:9070"
+      # Node-to-node message fabric (5122). Single node here, so loopback is the whole
+      # cluster; it defaults to [::]:5122 and was the one port the audit caught exposed.
+      RESTATE_BIND_ADDRESS: "127.0.0.1:5122"
+      RESTATE_ADVERTISED_ADDRESS: "http://127.0.0.1:5122/"
     volumes:
       # Anonymous volume ON PURPOSE: the baseline force-recreates this service
       # with `rm -sf --volumes` per run so stale invocation journals from a
       # previous run can never replay into the next one.
       - /restate-data
+
+  # CONTRACT-v2 §4 / §9(a): MicroProfile LRA coordinator, the saga engine for the
+  # quarkus arm. Started only for that arm, exactly like axonserver for spring and
+  # restate-server for restate, and counted in its §1 deployment unit.
+  #
+  # Port 8090 deliberately: 8080 is restate's ingress, and a silent clash would make
+  # one arm's coordinator answer the other's requests.
+  benchmark-lra-coordinator:
+    image: quay.io/jbosstm/lra-coordinator:latest
+    container_name: exeris-e2e-saga-lra-coordinator
+    network_mode: host
+    environment:
+      QUARKUS_HTTP_PORT: "8090"
+      # QUARKUS_HTTP_HOST alone does NOT bind loopback here: the image bakes
+      # JAVA_OPTS_APPEND=-Dquarkus.http.host=0.0.0.0, and a system property outranks the
+      # env var in Quarkus config ordering. Overriding JAVA_OPTS_APPEND is what actually
+      # moves the socket - verified against ss, not assumed.
+      QUARKUS_HTTP_HOST: "127.0.0.1"
+      # MEMORY CAP, kept in sync with the target JVMs (see the heap block in the campaign
+      # wrapper). Without it this sidecar sizes itself from HOST RAM -- the LRA coordinator
+      # image ships -XX:MaxRAMPercentage=80.0, i.e. 80% of a 62 GB box -- and it is not a
+      # small term: measured 2026-08-19 it was 1642 MB peak / 958 MB average RSS and 181
+      # core-seconds, more than double the target JVM it serves, and the single largest
+      # component of that arm's CONTRACT-v2 §1 unit.
+      #
+      # Capping the targets while leaving the sidecars uncapped equalises the smaller half of
+      # the deployment and lets the larger half be decided by how much RAM the bench box
+      # happens to have. The same figure on an 8 GB host would be a fraction of this, which
+      # makes it an artifact rather than a property of the stack.
+      JAVA_OPTS_APPEND: "-XX:MaxRAM=2048m -Xmx1536m -Dquarkus.http.host=127.0.0.1 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+
+  # CONTRACT-v2 §4 (parking workload): external payment gateway.
+  #
+  # S_pay does not answer inline — the target dispatches here, gets 202, and the
+  # saga PARKS. This service answers asynchronously after PAYMENT_STUB_DELAY_MS,
+  # which is the parameter that sets parked concurrency (parked ≈ arrival rate ×
+  # delay): 100 ms for perf runs, 1000 ms for crash runs.
+  #
+  # Part of the §1 deployment unit and sampled by the whole-deployment footprint,
+  # same policy as Axon Server and restate-server.
+  #
+  # Under host networking the callback goes to 127.0.0.1:<target port>: this container
+  # shares the host's network namespace, so the target JVM on the host IS localhost.
+  # (It was host.docker.internal while the stack ran on the bridge.)
+  #
+  # No image build: the stub is stdlib-only Python mounted read-only, so there is
+  # nothing to keep in sync between a Dockerfile and the source.
+  benchmark-payment-gateway:
+    image: python:3.12-alpine
+    container_name: exeris-e2e-saga-payment-gateway
+    command: ["python", "-u", "/app/payment_stub.py"]
+    environment:
+      PAYMENT_STUB_PORT: "9300"
+      PAYMENT_STUB_HOST: "127.0.0.1"
+      PAYMENT_STUB_DELAY_MS: "${PAYMENT_STUB_DELAY_MS:-100}"
+      PAYMENT_STUB_DELAY_JITTER_MS: "${PAYMENT_STUB_DELAY_JITTER_MS:-0}"
+      # The §4.1 decline rule lives in the stub now, so this — not the targets'
+      # EXERIS_SAGA_FAULT_MODE — is what actually switches business faults off
+      # for any parking shape. Defaults to terminal, matching every target's
+      # default. The §7 oracle's expected compensation count must agree with it.
+      PAYMENT_STUB_FAULT_MODE: "${PAYMENT_STUB_FAULT_MODE:-terminal}"
+    network_mode: host
+    volumes:
+      - ../../targets/payment-gateway-stub/payment_stub.py:/app/payment_stub.py:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9300/health',timeout=2).status==200 else 1)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
 
 volumes:
   e2e-saga-pgdata:

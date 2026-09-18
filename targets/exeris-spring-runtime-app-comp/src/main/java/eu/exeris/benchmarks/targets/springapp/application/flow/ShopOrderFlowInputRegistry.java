@@ -196,6 +196,77 @@ public class ShopOrderFlowInputRegistry {
     public void recordStatus(String orderId, String userId, String status, String sagaId) {
         Objects.requireNonNull(orderId, "orderId");
         statusByOrderId.put(orderId, new StatusEntry(userId, status, sagaId));
+        if (TERMINAL_INTERNAL_STATUSES.contains(status)) {
+            signalTerminal(orderId, status);
+        }
+    }
+
+    // --- CONTRACT-v2 section 3 request-response support -----------------------
+    //
+    // The flow runs asynchronously on kernel-owned virtual threads, so schedule()
+    // returns long before the saga settles. Section 3 requires the HTTP response to
+    // carry the FINAL outcome, and the step lambdas are the first place a terminal
+    // state is observed — so this is where the waiting request is released.
+    //
+    // Idiom deviation registered under section 9(a), and the same one the sibling
+    // stacks make: a production service would return 202 and let the client poll.
+    // It is done here because polling quantization measured ~1 s of client sleep
+    // against ~30 ms of actual saga duration — an artifact large enough to reverse
+    // the apparent ordering between stacks.
+
+    /**
+     * Internal (step-lambda) statuses that are genuinely terminal. Deliberately NOT
+     * including {@code CONFIRMED} or {@code PAYMENT_REFUNDED}: both are mid-path
+     * states that can still regress to the opposite outcome if the remaining step
+     * or compensation exhausts its retry budget.
+     */
+    private static final java.util.Set<String> TERMINAL_INTERNAL_STATUSES =
+            java.util.Set.of("COMPLETED", "CANCELLED", "FAILED");
+
+    private final ConcurrentMap<String, java.util.concurrent.CompletableFuture<String>> terminalOutcome =
+            new ConcurrentHashMap<>();
+
+    /**
+     * Registers interest in {@code orderId}'s terminal outcome. MUST be called before
+     * the flow is scheduled, otherwise a fast saga settles before anyone is waiting
+     * and the caller blocks until its timeout.
+     */
+    public void expectTerminalOutcome(String orderId) {
+        terminalOutcome.putIfAbsent(orderId, new java.util.concurrent.CompletableFuture<>());
+    }
+
+    /**
+     * Blocks until the saga for {@code orderId} reaches a terminal status, or the
+     * timeout elapses. Empty means "not settled in time" — the caller then falls back
+     * to the pre-v2 async response and the client resolves by polling.
+     */
+    public Optional<String> awaitTerminalOutcome(String orderId, long timeoutMillis) {
+        java.util.concurrent.CompletableFuture<String> future = terminalOutcome.get(orderId);
+        if (future == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.ofNullable(
+                    future.get(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS));
+        } catch (java.util.concurrent.TimeoutException timeout) {
+            return Optional.empty();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (java.util.concurrent.ExecutionException failure) {
+            return Optional.empty();
+        } finally {
+            // Drop on timeout too, or a saga that never settles leaks its future for
+            // the lifetime of the process.
+            terminalOutcome.remove(orderId);
+        }
+    }
+
+    private void signalTerminal(String orderId, String internalStatus) {
+        java.util.concurrent.CompletableFuture<String> future = terminalOutcome.get(orderId);
+        if (future != null) {
+            future.complete(internalStatus);
+        }
     }
 
     /**

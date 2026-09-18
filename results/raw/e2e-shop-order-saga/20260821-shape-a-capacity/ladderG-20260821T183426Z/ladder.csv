@@ -1,0 +1,5 @@
+arm,pool,rate,configured_rate,achieved_rate,exit,orders,error_rate,dropped,iter_p95_ms,vus_peak,pg_backends_max,conn_x,gate,domain,lg_cpu4,lg_cpu12,tgt_cpu,pg_cpu,coord_cpu,gw_cpu,verdict
+exeris-community,256,175,175.00,46.4,5,5566,78.11%,0,8367,1503,258,190,detector_fault,138,10.7,10.6,7.6,6.9,1.3,2.8,FAILED
+exeris-community,256,200,200.00,45.8,5,5499,81.16%,0,8167,1803,258,192,detector_fault,144,11.4,11.5,7.9,8.8,1.2,2.8,FAILED
+exeris-community,256,100,100.00,100.0,0,12005,0.00%,0,8266,687,39,0,pass,368,9.0,9.4,10.2,12.9,1.3,3.8,CLEAN
+quarkus-lra-jdbc,256,70,70.00,69.7,0,8368,0.44%,0,8510,504,28,0,pass,257,7.8,7.5,12.7,7.6,20.0,3.7,CLEAN

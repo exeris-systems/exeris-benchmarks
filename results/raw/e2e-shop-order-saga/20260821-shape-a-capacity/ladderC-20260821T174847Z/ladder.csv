@@ -1,0 +1,4 @@
+arm,pool,rate,configured_rate,achieved_rate,exit,orders,error_rate,dropped,pg_backends_max,conn_x,gate,domain,lg_cpu4,lg_cpu12,tgt_cpu,pg_cpu,verdict
+quarkus-lra-jdbc,128,80,80.00,76.5,3,9180,2.77%,162,33,0,fail,283,7.7,7.6,13.9,8.1,FAILED
+quarkus-lra-jdbc,128,100,100.00,78.3,3,9394,18.34%,501,47,0,fail,287,9.1,8.9,17.5,9.0,FAILED
+exeris-community,32,200,200.00,189.0,0,22676,0.00%,1328,34,0,pass,690,14.2,14.1,15.8,16.9,SCHEDULE-MISSED

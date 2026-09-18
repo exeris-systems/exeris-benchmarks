@@ -255,6 +255,20 @@ else
     echo -e "Using Neo4j mode: docker (${NEO4J_CONTAINER_NAME})"
   fi
 
+  # Is Neo4j load-bearing for this run? It serves the recommendation step of
+  # every session on the neo4j graph track, and is genuinely optional only on
+  # the postgres-graph tracks. Derived from whatever the caller set; override
+  # with SEED_VERIFY_REQUIRE_NEO4J=1|0.
+  _neo4j_required="false"
+  if [[ "${SEED_VERIFY_REQUIRE_NEO4J:-}" == "1" ]]; then
+    _neo4j_required="true"
+  elif [[ "${SEED_VERIFY_REQUIRE_NEO4J:-}" == "0" ]]; then
+    _neo4j_required="false"
+  elif [[ "${EXERIS_GRAPH_BACKEND_TYPE:-}" == "neo4j" || "${GRAPH_TRACK:-}" == "neo4j" ]]; then
+    _neo4j_required="true"
+  fi
+  echo -e "Neo4j required for this graph track: ${_neo4j_required}"
+
   if neo4j_exec "RETURN 1;" &>/dev/null; then
     echo -e "${GREEN}[OK] Neo4j accessible${NC}"
     passed=$((passed + 1))
@@ -266,12 +280,22 @@ else
     if [[ "$NEO4J_PRODUCT_COUNT" -ge 500 ]] 2>/dev/null; then
       echo -e "${GREEN}[OK] Neo4j Product nodes: $NEO4J_PRODUCT_COUNT (expected: >= 500)${NC}"
       passed=$((passed + 1))
+    elif [[ "$_neo4j_required" == "true" ]]; then
+      # Neo4j is NOT optional when it IS the graph track: it serves the
+      # recommendation step of every session. Observed 2026-07-30: a failed
+      # Postgres seed left the graph with 0 Product nodes, the seed script
+      # reported success, and this check warned instead of failing — so a run
+      # against an empty recommendation graph was one step from being measured.
+      echo -e "${RED}[FAIL] Neo4j Product nodes: $NEO4J_PRODUCT_COUNT (expected: >= 500) and Neo4j IS the active graph track${NC}"
+      failed=$((failed + 1))
     else
-      echo -e "${YELLOW}[WARN] Neo4j Product nodes: $NEO4J_PRODUCT_COUNT (expected: >= 500)${NC}"
-      # Neo4j is optional, don't fail on this
+      echo -e "${YELLOW}[WARN] Neo4j Product nodes: $NEO4J_PRODUCT_COUNT (expected: >= 500); Neo4j is not the active graph track${NC}"
     fi
+  elif [[ "$_neo4j_required" == "true" ]]; then
+    echo -e "${RED}[FAIL] Neo4j not accessible and Neo4j IS the active graph track${NC}"
+    failed=$((failed + 1))
   else
-    echo -e "${YELLOW}[WARN] Neo4j not accessible (optional)${NC}"
+    echo -e "${YELLOW}[WARN] Neo4j not accessible (not the active graph track)${NC}"
   fi
 fi
 

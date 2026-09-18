@@ -3,7 +3,16 @@ package eu.exeris.benchmarks.targets.restateapp.saga;
 import java.nio.charset.StandardCharsets;
 
 /**
- * CONTRACT-v2 §4.1 deterministic business-terminal payment decline
+ * <strong>Reference implementation, no longer on the saga path.</strong> Under the
+ * CONTRACT-v2 §4 parking workload the decline is decided by the external payment
+ * gateway ({@code targets/payment-gateway-stub/payment_stub.py}), so no target
+ * evaluates the rule in-process any more. This class is retained solely because
+ * {@code PaymentDeclineRuleTest} pins the normative constants and known-answer
+ * vectors that the gateway must agree with. Do not re-wire it into a step without
+ * removing the gateway's copy first: two implementations of a rule that must be
+ * identical everywhere is a drift waiting to happen.
+ *
+ * <p>CONTRACT-v2 §4.1 deterministic business-terminal payment decline
  * (scenarios/e2e-shop-order-saga/CONTRACT-v2.md).
  *
  * Normative rule, identical in every stack — deviation is a correctness bug:

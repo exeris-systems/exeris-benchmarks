@@ -1,0 +1,7 @@
+arm,pool,rate,configured_rate,achieved_rate,exit,orders,error_rate,dropped,iter_p95_ms,vus_peak,pg_backends_max,conn_x,gate,domain,lg_cpu4,lg_cpu12,tgt_cpu,pg_cpu,coord_cpu,gw_cpu,settle_s,settled,engine_rss_after_mb,verdict
+restate,256,200,200.00,200.0,0,24005,0.00%,0,8527,1410,66,0,pass,728,20.0,20.1,15.4,9.6,17.8,6.1,20,true,508.00,CLEAN
+restate,256,175,175.00,175.0,0,21002,0.00%,0,8549,1242,58,0,pass,635,18.4,18.0,12.8,16.4,16.8,5.8,20,true,450.90,CLEAN
+spring-axon-jdbc,256,60,60.00,48.9,3,5873,0.00%,1332,28401,1189,48,0,fail,180,6.5,6.3,24.9,15.3,11.8,3.8,20,true,1075.20,FAILED
+spring-axon-jdbc,256,70,70.00,11.1,5,1329,74.33%,4518,91277,1785,58,0,detector_fault,21,4.3,4.2,14.6,6.3,7.7,2.8,21,true,907.60,FAILED
+spring-axon-embedded-jdbc,256,60,60.00,50.6,0,6077,0.00%,1127,25288,1175,45,0,pass,186,5.1,4.8,16.9,17.5,1.2,2.8,30,true,-,TARGET-SATURATED
+spring-axon-embedded-jdbc,256,70,70.00,13.3,3,1602,71.55%,4060,67206,1619,50,0,fail,27,2.4,2.1,58.3,4.3,1.1,2.1,156,false,-,FAILED

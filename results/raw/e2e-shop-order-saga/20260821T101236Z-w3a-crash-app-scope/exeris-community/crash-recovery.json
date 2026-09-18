@@ -1,0 +1,43 @@
+{
+  "schema_version": "1",
+  "contract_ref": "scenarios/e2e-shop-order-saga/CONTRACT-v2.md#6",
+  "design_ref": "scenarios/e2e-shop-order-saga/CRASH-INJECTION.md",
+  "fault_class": "crash",
+  "crash_scope": "app",
+  "scope_meaning": "SIGKILL of the target JVM only; Postgres/Neo4j/Axon Server stayed up. Tests whether saga state is externalised and an in-flight saga resumes. Cross-stack comparable.",
+  "target_app": "exeris-community",
+  "contract_id": "exeris_community_h1_park100_v3",
+  "crash_epoch_s": 1787307318,
+  "drain_seconds": 120,
+  "coordinators_crashed": [],
+  "total_orders_pre_crash": 3849,
+  "total_orders_post_drain": 3854,
+  "nonterminal_orders_pre_crash": 2,
+  "nonterminal_orders_post_drain": 5,
+  "order_status_pre_crash": "CANCELLED=114,COMPLETED=3733,PAYMENT_PROCESSING=2",
+  "order_status_post_drain": "CANCELLED=114,COMPLETED=3735,PAYMENT_PROCESSING=5",
+  "declared_terminal_tokens": [
+    "COMPLETED",
+    "CANCELLED"
+  ],
+  "undeclared_status_tokens": [],
+  "recovered_target_healthy": true,
+  "recovered_target_affinity": "0-2,8-10",
+  "orders_write_counters": {
+    "note": "pg_stat_user_tables on orders: n_tup_ins|n_tup_upd|n_tup_hot_upd. Counters are not reset, so only the after-minus-before delta is meaningful. exeris/restate persist four status transitions per successful saga, spring/quarkus five; §2 declares no required sequence, so this measures the difference instead of arguing it from source.",
+    "before": "3681265|19005861|1",
+    "after": "3685119|19028970|1"
+  },
+  "in_flight_cohort_at_crash": {
+    "note": "The sagas non-terminal at the pre-crash census, tracked BY ID. This is the resumption question; the raw post-drain count is not, because load continues through the restart and mixes late arrivals into it.",
+    "size": 5,
+    "resolved_by_drain": 0,
+    "still_nonterminal": 5
+  },
+  "orders_with_duplicate_payment_step": 0,
+  "verdict": "sagas_stranded_after_recovery",
+  "verdict_guards": "An empty orders table is NOT a pass: the 2026-08-21 run reported all_sagas_reached_terminal_state for an arm whose 3.1 preflight had aborted before a single order was issued. A status token in neither declared list is NOT bucketed as terminal. A recovered target that never became healthy cannot evidence non-resumption.",
+  "interpretation": "nonterminal_orders_post_drain > 0 means in-flight sagas did NOT resume after the crash. orders_with_duplicate_payment_step > 0 means a step was RE-EXECUTED rather than resumed, which is a duplicate-execution (O1) signal, not recovery.",
+  "claim_limits": "CORRECTNESS ONLY. Never cite in a latency or throughput table. Not a full §7 oracle: no per-(orderId,stepId,direction) ledger, so LIFO ordering stays unverified.",
+  "generated_at_utc": "2026-08-21T10:20:19Z"
+}

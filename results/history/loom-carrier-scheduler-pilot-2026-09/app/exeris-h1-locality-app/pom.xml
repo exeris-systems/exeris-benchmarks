@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>eu.exeris.benchmarks</groupId>
+  <artifactId>exeris-h1-locality-app</artifactId>
+  <version>1.0.0-RESEARCH-LOCALITY</version>
+  <packaging>jar</packaging>
+
+  <name>Exeris :: Benchmarks :: H1 Locality App</name>
+  <description>Clean H1 benchmark target app for continuation locality comparative evaluation.</description>
+
+  <properties>
+    <java.version>28</java.version>
+    <maven.compiler.release>${java.version}</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <exeris.kernel.version>0.6.0-RESEARCH-LOCALITY</exeris.kernel.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-spi</artifactId>
+      <version>${exeris.kernel.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-core</artifactId>
+      <version>${exeris.kernel.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-community</artifactId>
+      <version>${exeris.kernel.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>eu.exeris</groupId>
+      <artifactId>exeris-kernel-enterprise</artifactId>
+      <version>0.6.0-SNAPSHOT</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>28</release>
+          <enablePreview>true</enablePreview>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

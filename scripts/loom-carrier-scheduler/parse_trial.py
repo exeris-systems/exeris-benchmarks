@@ -176,6 +176,49 @@ def parse_perf_sched(out, names):
     return dist
 
 
+def interrupts_per_cpu(path):
+    if not path.exists():
+        return None
+    lines = path.read_text().splitlines()
+    ncpu = len(lines[0].split())
+    totals = [0] * ncpu
+    for line in lines[1:]:
+        parts = line.split()
+        for i, v in enumerate(parts[1:1 + ncpu]):
+            if v.isdigit():
+                totals[i] += int(v)
+    return totals
+
+
+def parse_host(out, bench_cpus, carrier_cpus):
+    state = {}
+    host_file = out / "host.txt"
+    if host_file.exists():
+        for line in host_file.read_text().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                state[k] = v
+    problems = []
+    if state.get("graphical_target") == "active":
+        problems.append("graphical session active")
+    for sl in ("system.slice", "user.slice", "init.scope"):
+        allowed = state.get(f"allowed_cpus.{sl}", "")
+        if not allowed:
+            problems.append(f"{sl} unconfined")
+        elif cpu_set(allowed) & bench_cpus:
+            problems.append(f"{sl} allowed on benchmark CPUs ({allowed})")
+    own = state.get("own_cpus_allowed", "")
+    if own and not bench_cpus <= cpu_set(own):
+        problems.append(f"the harness may not use every benchmark CPU (allowed {own})")
+    start, end = interrupts_per_cpu(out / "interrupts-start.txt"), interrupts_per_cpu(out / "interrupts-end.txt")
+    irq = None
+    if start and end:
+        delta = [e - s for s, e in zip(start, end)]
+        irq = {f"cpu{c}": delta[c] for c in sorted(carrier_cpus) if c < len(delta)}
+    return {"state": state, "shielded": not problems, "problems": problems,
+            "interrupts_on_carrier_cpus_during_window": irq}
+
+
 def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
     if not path.exists():
         return False, ["affinity dump missing"], {}
@@ -203,6 +246,10 @@ def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
         if len(set(pinned)) != len(pinned):
             problems.append("two carriers pinned to the same CPU")
     return not problems, problems, carriers
+
+
+# Gates that decide whether a valid trial may be cited, not whether its measurement is sound.
+EVIDENCE_ONLY_GATES = ("harness_clean", "host_shielded")
 
 
 def main():
@@ -249,6 +296,9 @@ def main():
                  (["perf sched record"] if a.perf_sched != "none" else [])
     gates["unperturbed"] = {"pass": not perturbers,
                             "reason": "no tracer or profiler attached" if not perturbers else ", ".join(perturbers) + " attached"}
+    bench_cpus = carrier_cpus | cpu_set(a.mock_cpus) | cpu_set(a.load_cpus)
+    host = parse_host(out, bench_cpus, carrier_cpus)
+    gates["host_shielded"] = {"pass": host["shielded"], "problems": host["problems"]}
     gates["harness_clean"] = {"pass": a.bench_dirty == "0",
                               "reason": "harness files committed" if a.bench_dirty == "0"
                               else f"{a.bench_dirty} uncommitted harness file(s)"}
@@ -276,7 +326,8 @@ def main():
         "profile": a.profile,
         "perf_sched": parse_perf_sched(out, names) if a.perf_sched != "none" else None,
         "gates": gates,
-        "valid": all(g["pass"] for k, g in gates.items() if k != "harness_clean"),
+        "host": host,
+        "valid": all(g["pass"] for k, g in gates.items() if k not in EVIDENCE_ONLY_GATES),
         "evidence": all(g["pass"] for g in gates.values()),
     }
     (out / "trial.json").write_text(json.dumps(trial, indent=2) + "\n")

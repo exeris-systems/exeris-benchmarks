@@ -70,6 +70,32 @@ Campaigns land in `results/raw/loom-carrier-scheduler/<UTC>-<backend>-k<sha12>/`
 per trial, `campaign.json`, `order.txt` and `summary.md` / `summary.json`. Every file is `.txt` or
 `.json` so the campaign can be committed as it ran.
 
+## Shielding the host
+
+Run campaigns from a text console with the graphical session stopped, and with everything else
+confined to the auxiliary core by `scripts/loom-carrier-scheduler/host-shield.sh`:
+
+```bash
+sudo systemctl isolate multi-user.target           # log in on a text console, start tmux
+sudo scripts/loom-carrier-scheduler/host-shield.sh apply --sys-cpus 0,6 --boost off
+sudo scripts/loom-carrier-scheduler/host-shield.sh run -- \
+  scripts/loom-carrier-scheduler/run-campaign.sh --kernel-commit <rev> --backend jdk --poller-mode 3
+sudo scripts/loom-carrier-scheduler/host-shield.sh revert
+sudo systemctl isolate graphical.target
+```
+
+`apply` confines `system.slice`, `user.slice` and `init.scope` to `--sys-cpus`, moves every movable
+IRQ there, sets the `performance` governor and the requested boost; `run` starts the campaign as the
+invoking user in `bench.slice`, which may use every CPU; `revert` restores the saved state. All of
+it is runtime only. The shield is a cgroup cpuset rather than `isolcpus`, because `isolcpus` also
+disables load balancing on the isolated CPUs and would stop the kernel from moving the floating
+arms' carriers between their CPUs — the behaviour those arms measure.
+
+Every trial records the host state it ran under (`host.txt`, `host` in `trial.json`): graphical
+session, slice masks, its own CPU mask, boost, governors, and the interrupts each carrier CPU took
+during the measurement window. The `host_shielded` gate does not invalidate a trial; it decides
+whether the campaign is evidence.
+
 ## What each trial records
 
 | File | Content |
@@ -85,7 +111,8 @@ per trial, `campaign.json`, `order.txt` and `summary.md` / `summary.json`. Every
 ## Gates
 
 A trial is `valid` only if all of these hold; `evidence` additionally requires the harness files to
-be committed. Invalid trials stay in the campaign and are listed in `summary.md`, never averaged.
+be committed and the host to be shielded. Invalid trials stay in the campaign and are listed in
+`summary.md`, never averaged.
 
 - **transport** — the server log reports `active=posix-hybrid, ffmArmed=true`: socket I/O went
   through the FFM descriptor path. Without the `--add-opens` the harness passes, the transport falls

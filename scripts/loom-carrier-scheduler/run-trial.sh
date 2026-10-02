@@ -198,6 +198,24 @@ pin_threads() {  # <pid> <map>
   done
 }
 
+# The host's isolation is recorded, not assumed: a campaign run on an unshielded desktop is still a
+# campaign, but its summary has to say so. See host-shield.sh.
+host_state() {  # <file>
+  local cg
+  cg="$(sed -n 's/^0:://p' /proc/self/cgroup)"
+  {
+    echo "graphical_target=$(systemctl is-active graphical.target 2>/dev/null || true)"
+    for sl in system.slice user.slice init.scope; do
+      echo "allowed_cpus.$sl=$(systemctl show "$sl" -p AllowedCPUs --value 2>/dev/null)"
+    done
+    echo "own_cgroup=$cg"
+    echo "own_cpus_allowed=$(awk '/Cpus_allowed_list/{print $2}' /proc/self/status)"
+    echo "isolated=$(cat /sys/devices/system/cpu/isolated 2>/dev/null)"
+    echo "boost=$(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null || echo n/a)"
+    echo "governors=$(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | sort | uniq -c | xargs)"
+  } >"$1"
+}
+
 # --- run ----------------------------------------------------------------------------------------
 log "trial arm=$ARM backend=$BACKEND rate=$RATE out=$OUT"
 taskset -c "$MOCK_CPUS" "${MOCK_CMD[@]}" >"$OUT/mock-stdout.txt" 2>&1 &
@@ -220,6 +238,9 @@ taskset -c "$LOAD_CPUS" "$WRK" -t"$LOAD_THREADS" -c"$CONNECTIONS" -d"${WARMUP}s"
 thread_map "$SERVER_PID" "$OUT/threads.txt"
 pin_threads "$SERVER_PID" "$OUT/threads.txt"
 affinity_dump "$SERVER_PID" "$OUT/threads.txt" "$OUT/affinity-start.txt"
+
+host_state "$OUT/host.txt"
+cp /proc/interrupts "$OUT/interrupts-start.txt"
 
 # Probes run for the measurement window only.
 pidstat -u -w -t -p "$SERVER_PID" 1 "$DURATION" >"$OUT/pidstat-server.txt" 2>&1 &
@@ -263,6 +284,7 @@ else
 fi
 
 affinity_dump "$SERVER_PID" "$OUT/threads.txt" "$OUT/affinity-end.txt"
+cp /proc/interrupts "$OUT/interrupts-end.txt"
 wait "$PIDSTAT_PID" 2>/dev/null || true
 sleep 2
 

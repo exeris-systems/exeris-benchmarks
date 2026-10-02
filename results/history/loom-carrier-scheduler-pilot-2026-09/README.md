@@ -36,22 +36,26 @@ host that produced them.
    `exeris-kernel/*/target/classes` of a local working tree on the classpath. No run records a
    kernel commit SHA, whether that tree was clean, or the JDK build string. That is
    `reproducibility_status: incomplete_metadata`.
-2. **n = 3 per cell, with one failed trial.** At 70 % load one A trial delivered 126,825 of
+2. **The target application's classpath was not fixed either.** `app/exeris-h1-locality-app/build.sh`
+   compiled against the first 30 `eu.exeris` jars `find` returned from the local Maven repository,
+   alongside the working-tree classes.
+3. **n = 3 per cell, with one failed trial.** At 70 % load one A trial delivered 126,825 of
    141,796 req/s, and its p99 (3,100 ms) is the headline "worst p99" for A. A failed trial is a
    failed trial, not a latency observation.
-3. **The cache sweep at 10,000 connections did not run at its target rate.** It delivered about
+4. **The cache sweep at 10,000 connections did not run at its target rate.** It delivered about
    272 of 3,000 req/s: `wrk2` opens connections 5 ms apart per thread, so 10,000 connections on 2
    threads take about 25 s to establish. At 1,000 connections the deficit is about 11 %. Those
    cells measure the ramp, not the scheduler.
-4. **The cache sweep could not exercise the cache hierarchy at any connection count.** At a fixed
+5. **The cache sweep could not exercise the cache hierarchy at any connection count.** At a fixed
    3,000 req/s and 20 ms delay, about 60 requests are in flight regardless of the connection count
    (Little's law), about 480 KB of touched state, which fits in one core's L2.
-5. **The host was not partitioned.** No `isolcpus`; the reactor CPUs saw 17–31 % run-queue wait
+6. **The host was not partitioned.** No `isolcpus`; the reactor CPUs saw 17–31 % run-queue wait
    from processes outside the JVM.
-6. **The carrier idle path is suspect.** The carrier loop shares one state word between its own
-   park handshake and the poller's, and a state left `PARKED` by the poller stops the carrier from
-   parking at all. The high carrier `%usr` at low load is consistent with that, not yet measured
-   against it.
+7. **The carrier CPU at low load is unexplained.** The pilot reports 60–70 % `%usr` per carrier at
+   3,000 req/s. The carrier loop on its own, without the transport, parks when idle and spends
+   about 2.3 % per carrier at that rate (kernel branch,
+   `docs/research/loom-carrier-scheduler/probes/CarrierIdleProbe.java`), so the CPU went
+   somewhere in the transport path and the pilot's CPU columns cannot be attributed.
 
 ## What it is useful for
 

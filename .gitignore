@@ -114,3 +114,8 @@ tools/bench/lib/__pycache__/
 # recorded per leaf, so the binaries themselves need not be in git.
 targets/_staging/
 __pycache__/
+
+# loom-carrier-scheduler: kernel builds exported by commit; rebuilt on demand, never evidence
+work/
+# perf sched recordings are binary and large; the per-thread distribution is derived into a .txt
+results/raw/loom-carrier-scheduler/**/perf-sched.data

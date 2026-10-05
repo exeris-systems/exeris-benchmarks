@@ -23,7 +23,9 @@ def to_ms(text):
 
 def cpu_set(text):
     out = set()
-    for part in text.strip().split(","):
+    # systemctl show -p AllowedCPUs emits space-separated lists (e.g. "0 6"); normalise to commas.
+    normalised = text.strip().replace(" ", ",")
+    for part in normalised.split(","):
         if not part:
             continue
         if "-" in part:

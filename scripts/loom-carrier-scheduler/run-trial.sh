@@ -11,8 +11,8 @@
 #       --arm A_iso|C_iso|D --backend jdk|kernel --rate <req/s>|max --out <dir> [options]
 #
 # Options (defaults are the CPU-bound regime on a 6-core / 12-thread host):
-#   --connections 100   --load-threads 4      --warmup 10   --duration 30   (seconds)
-#   --think-ms 1        --mock-threads 2      --poller-mode ""  (empty = JVM default)
+#   --connections 100   --load-threads 4      --warmup 30   --duration 30   (seconds)
+#   --think-ms 1        --mock-threads 2      --pool 128    --poller-mode ""  (empty = JVM default)
 #   --server-aux-cpus 0,6     JVM auxiliary threads and transport reactors
 #   --carrier-cpus 2,3        scheduler carriers (one per CPU for arm D)
 #   --mock-cpus 1,7           mock backend JVM
@@ -46,7 +46,7 @@ ASYNC_PROFILER="${ASYNC_PROFILER:-$WORKSPACE_ROOT/tools/async-profiler}"
 APP_DIR="$BENCH_ROOT/targets/exeris-loom-scheduler-app"
 
 KERNEL_DIR="" ARM="" BACKEND="" RATE="" OUT=""
-CONNECTIONS=100 LOAD_THREADS=4 WARMUP=10 DURATION=30 THINK_MS=1 MOCK_THREADS=2 POLLER_MODE=""
+CONNECTIONS=100 LOAD_THREADS=4 WARMUP=30 DURATION=30 THINK_MS=1 MOCK_THREADS=2 POOL=128 POLLER_MODE=""
 SERVER_AUX_CPUS="0,6" CARRIER_CPUS="2,3" MOCK_CPUS="1,7" LOAD_CPUS="4,5,10,11" HEAP="1g" PROFILE="none"
 SERVER_PORT="" MOCK_PORT="" PERF_SCHED="no"
 
@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
     --kernel-dir) KERNEL_DIR="$2" ;;   --arm) ARM="$2" ;;            --backend) BACKEND="$2" ;;
     --rate) RATE="$2" ;;               --out) OUT="$2" ;;            --connections) CONNECTIONS="$2" ;;
     --load-threads) LOAD_THREADS="$2" ;; --warmup) WARMUP="$2" ;;    --duration) DURATION="$2" ;;
-    --think-ms) THINK_MS="$2" ;;       --mock-threads) MOCK_THREADS="$2" ;;
+    --think-ms) THINK_MS="$2" ;;       --mock-threads) MOCK_THREADS="$2" ;;  --pool) POOL="$2" ;;
     --poller-mode) POLLER_MODE="$2" ;; --server-aux-cpus) SERVER_AUX_CPUS="$2" ;;
     --carrier-cpus) CARRIER_CPUS="$2" ;; --mock-cpus) MOCK_CPUS="$2" ;; --load-cpus) LOAD_CPUS="$2" ;;
     --heap) HEAP="$2" ;;               --profile) PROFILE="$2" ;;
@@ -131,6 +131,7 @@ SERVER_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${A
   -Dexeris.transport.reactorCount="$REACTOR_COUNT" -Dexeris.reactor.affinity="$SERVER_AUX_CPUS"
   -Dexeris.http.port="$SERVER_PORT" -Dexeris.http.bindHost=127.0.0.1
   -Dloom.bench.backend="$BACKEND" -Dloom.bench.backend.host=127.0.0.1 -Dloom.bench.backend.port="$MOCK_PORT"
+  -Dloom.bench.backend.pool="$POOL"
   -cp "$APP_CP" eu.exeris.benchmarks.targets.loomscheduler.LoomSchedulerServer)
 MOCK_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${ACCESS_OPTS[@]}"
   -Djdk.virtualThreadScheduler.parallelism="$MOCK_THREADS"
@@ -312,5 +313,5 @@ python3 "$SCRIPT_DIR/parse_trial.py" "$OUT" \
   --warmup "$WARMUP" --duration "$DURATION" --think-ms "$THINK_MS" --poller-mode "${POLLER_MODE:-default}" \
   --carrier-cpus "$CARRIER_CPUS" --server-aux-cpus "$SERVER_AUX_CPUS" --mock-cpus "$MOCK_CPUS" --load-cpus "$LOAD_CPUS" \
   --carrier-name-re "$CARRIER_NAME_RE" --perf "$PERF_STATUS" --profile "$PROFILE_STATUS" \
-  --perf-sched "$PERF_SCHED_STATUS" \
+  --perf-sched "$PERF_SCHED_STATUS" --pool "$POOL" \
   --bench-commit "$BENCH_SHA" --bench-dirty "$BENCH_DIRTY"

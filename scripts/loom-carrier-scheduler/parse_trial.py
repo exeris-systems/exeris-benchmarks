@@ -259,7 +259,7 @@ def main():
     ap.add_argument("out")
     for opt in ("arm", "backend", "rate", "connections", "load-threads", "warmup", "duration", "think-ms",
                 "poller-mode", "carrier-cpus", "server-aux-cpus", "mock-cpus", "load-cpus", "carrier-name-re",
-                "perf", "profile", "perf-sched", "bench-commit", "bench-dirty"):
+                "perf", "profile", "perf-sched", "pool", "bench-commit", "bench-dirty"):
         ap.add_argument("--" + opt, required=True)
     a = ap.parse_args()
     out = Path(a.out)
@@ -317,6 +317,7 @@ def main():
         "warmup_s": int(a.warmup),
         "duration_s": int(a.duration),
         "think_ms": float(a.think_ms),
+        "pool": int(a.pool),
         "poller_mode": a.poller_mode,
         "layout": {"carriers": a.carrier_cpus, "server_aux": a.server_aux_cpus, "mock": a.mock_cpus, "load": a.load_cpus},
         "kernel": identity,

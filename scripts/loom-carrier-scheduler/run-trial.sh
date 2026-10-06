@@ -12,7 +12,14 @@
 #
 # Options (defaults are the CPU-bound regime on a 6-core / 12-thread host):
 #   --connections 100   --load-threads 4      --warmup 30   --duration 30   (seconds)
+#   --warmup-mode closed|open   closed: wrk at saturation; open: wrk2 at the trial's own rate, so the
+#                               measurement starts from the load shape it measures (rate=max
+#                               always warms closed-loop)
 #   --think-ms 1        --mock-threads 2      --pool 128    --poller-mode ""  (empty = JVM default)
+#   --max-connections N  raise the kernel's connection and admission limits on server and mock
+#                        (http.maxConnections, transport.maxConnections and
+#                        transport.paqs.maxActiveStreams; defaults 4096 / 4096 / 5000), for
+#                        connection counts or in-flight requests above those defaults
 #   --server-aux-cpus 0,6     JVM auxiliary threads and transport reactors
 #   --carrier-cpus 2,3        scheduler carriers (one per CPU for arm D)
 #   --mock-cpus 1,7           mock backend JVM
@@ -46,7 +53,7 @@ ASYNC_PROFILER="${ASYNC_PROFILER:-$WORKSPACE_ROOT/tools/async-profiler}"
 APP_DIR="$BENCH_ROOT/targets/exeris-loom-scheduler-app"
 
 KERNEL_DIR="" ARM="" BACKEND="" RATE="" OUT=""
-CONNECTIONS=100 LOAD_THREADS=4 WARMUP=30 DURATION=30 THINK_MS=1 MOCK_THREADS=2 POOL=128 POLLER_MODE=""
+CONNECTIONS=100 LOAD_THREADS=4 WARMUP=30 DURATION=30 THINK_MS=1 MOCK_THREADS=2 POOL=128 POLLER_MODE="" WARMUP_MODE="closed" MAX_CONNECTIONS=""
 SERVER_AUX_CPUS="0,6" CARRIER_CPUS="2,3" MOCK_CPUS="1,7" LOAD_CPUS="4,5,10,11" HEAP="1g" PROFILE="none"
 SERVER_PORT="" MOCK_PORT="" PERF_SCHED="no"
 
@@ -57,8 +64,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --kernel-dir) KERNEL_DIR="$2" ;;   --arm) ARM="$2" ;;            --backend) BACKEND="$2" ;;
     --rate) RATE="$2" ;;               --out) OUT="$2" ;;            --connections) CONNECTIONS="$2" ;;
-    --load-threads) LOAD_THREADS="$2" ;; --warmup) WARMUP="$2" ;;    --duration) DURATION="$2" ;;
-    --think-ms) THINK_MS="$2" ;;       --mock-threads) MOCK_THREADS="$2" ;;  --pool) POOL="$2" ;;
+    --load-threads) LOAD_THREADS="$2" ;; --warmup) WARMUP="$2" ;; --warmup-mode) WARMUP_MODE="$2" ;;    --duration) DURATION="$2" ;;
+    --think-ms) THINK_MS="$2" ;;       --mock-threads) MOCK_THREADS="$2" ;;  --pool) POOL="$2" ;; --max-connections) MAX_CONNECTIONS="$2" ;;
     --poller-mode) POLLER_MODE="$2" ;; --server-aux-cpus) SERVER_AUX_CPUS="$2" ;;
     --carrier-cpus) CARRIER_CPUS="$2" ;; --mock-cpus) MOCK_CPUS="$2" ;; --load-cpus) LOAD_CPUS="$2" ;;
     --heap) HEAP="$2" ;;               --profile) PROFILE="$2" ;;
@@ -74,6 +81,7 @@ done
 [[ "$BACKEND" =~ ^(jdk|kernel)$ ]] || die "--backend must be jdk or kernel"
 [[ "$RATE" == "max" || "$RATE" =~ ^[0-9]+$ ]] || die "--rate must be max or an integer"
 [[ "$PROFILE" =~ ^(none|cpu|wall)$ ]] || die "--profile must be none, cpu or wall"
+[[ "$WARMUP_MODE" =~ ^(closed|open)$ ]] || die "--warmup-mode must be closed or open"
 [[ -n "$OUT" ]] || die "--out is required"
 [[ -x "$LOOM_JDK/bin/java" ]] || die "no java under LOOM_JDK=$LOOM_JDK"
 [[ -x "$WRK" ]] || die "wrk not found (warmup always uses it)"
@@ -125,16 +133,19 @@ POLLER_OPTS=()
 ACCESS_OPTS=(--add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED
   --enable-native-access=ALL-UNNAMED)
 REACTOR_COUNT="$(awk -F, '{print NF}' <<<"$SERVER_AUX_CPUS")"
+LIMIT_OPTS=()
+[[ -n "$MAX_CONNECTIONS" ]] && LIMIT_OPTS=(-Dexeris.http.maxConnections="$MAX_CONNECTIONS"
+  -Dexeris.transport.maxConnections="$MAX_CONNECTIONS" -Dexeris.transport.paqs.maxActiveStreams="$MAX_CONNECTIONS")
 
 SERVER_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${ACCESS_OPTS[@]}"
-  "${ARM_OPTS[@]}" "${POLLER_OPTS[@]}"
+  "${ARM_OPTS[@]}" "${POLLER_OPTS[@]}" "${LIMIT_OPTS[@]}"
   -Dexeris.transport.reactorCount="$REACTOR_COUNT" -Dexeris.reactor.affinity="$SERVER_AUX_CPUS"
   -Dexeris.http.port="$SERVER_PORT" -Dexeris.http.bindHost=127.0.0.1
   -Dloom.bench.backend="$BACKEND" -Dloom.bench.backend.host=127.0.0.1 -Dloom.bench.backend.port="$MOCK_PORT"
   -Dloom.bench.backend.pool="$POOL"
   -cp "$APP_CP" eu.exeris.benchmarks.targets.loomscheduler.LoomSchedulerServer)
 MOCK_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${ACCESS_OPTS[@]}"
-  -Djdk.virtualThreadScheduler.parallelism="$MOCK_THREADS"
+  -Djdk.virtualThreadScheduler.parallelism="$MOCK_THREADS" "${LIMIT_OPTS[@]}"
   -Dexeris.http.port="$MOCK_PORT" -Dexeris.http.bindHost=127.0.0.1 -Dloom.bench.mock.thinkMs="$THINK_MS"
   -cp "$APP_CP" eu.exeris.benchmarks.targets.loomscheduler.MockBackend)
 
@@ -233,8 +244,14 @@ curl -sf "$URL" >/dev/null || die "smoke request to $URL failed"
 thread_map "$SERVER_PID" "$OUT/threads-ready.txt"
 pin_threads "$SERVER_PID" "$OUT/threads-ready.txt"
 
-log "warmup ${WARMUP}s (closed loop)"
-taskset -c "$LOAD_CPUS" "$WRK" -t"$LOAD_THREADS" -c"$CONNECTIONS" -d"${WARMUP}s" "$URL" >"$OUT/warmup.txt" 2>&1
+if [[ "$WARMUP_MODE" == "open" && "$RATE" != "max" ]]; then
+  log "warmup ${WARMUP}s (open loop at ${RATE} req/s)"
+  taskset -c "$LOAD_CPUS" "$WRK2" -t"$LOAD_THREADS" -c"$CONNECTIONS" -d"${WARMUP}s" -R"$RATE" --latency "$URL" \
+    >"$OUT/warmup.txt" 2>&1
+else
+  log "warmup ${WARMUP}s (closed loop)"
+  taskset -c "$LOAD_CPUS" "$WRK" -t"$LOAD_THREADS" -c"$CONNECTIONS" -d"${WARMUP}s" "$URL" >"$OUT/warmup.txt" 2>&1
+fi
 
 thread_map "$SERVER_PID" "$OUT/threads.txt"
 pin_threads "$SERVER_PID" "$OUT/threads.txt"
@@ -310,8 +327,8 @@ BENCH_DIRTY="$(git -C "$BENCH_ROOT" status --porcelain -- scripts/loom-carrier-s
 
 python3 "$SCRIPT_DIR/parse_trial.py" "$OUT" \
   --arm "$ARM" --backend "$BACKEND" --rate "$RATE" --connections "$CONNECTIONS" --load-threads "$LOAD_THREADS" \
-  --warmup "$WARMUP" --duration "$DURATION" --think-ms "$THINK_MS" --poller-mode "${POLLER_MODE:-default}" \
+  --warmup "$WARMUP" --warmup-mode "$WARMUP_MODE" --duration "$DURATION" --think-ms "$THINK_MS" --poller-mode "${POLLER_MODE:-default}" \
   --carrier-cpus "$CARRIER_CPUS" --server-aux-cpus "$SERVER_AUX_CPUS" --mock-cpus "$MOCK_CPUS" --load-cpus "$LOAD_CPUS" \
   --carrier-name-re "$CARRIER_NAME_RE" --perf "$PERF_STATUS" --profile "$PROFILE_STATUS" \
-  --perf-sched "$PERF_SCHED_STATUS" --pool "$POOL" \
+  --perf-sched "$PERF_SCHED_STATUS" --pool "$POOL" --max-connections "${MAX_CONNECTIONS:-default}" \
   --bench-commit "$BENCH_SHA" --bench-dirty "$BENCH_DIRTY"

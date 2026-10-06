@@ -49,6 +49,8 @@ def parse_load(path, rate):
             res["percentiles_ms"][key] = to_ms(val)
     m = re.search(r"Socket errors: connect (\d+), read (\d+), write (\d+), timeout (\d+)", text)
     res["socket_errors"] = {k: int(v) for k, v in zip(("connect", "read", "write", "timeout"), m.groups())} if m else None
+    cal = [float(v) for v in re.findall(r"calibration: mean lat\.: ([0-9.]+)ms", text)]
+    res["calibration_mean_ms"] = round(sum(cal) / len(cal), 3) if cal else None
     m = re.search(r"Non-2xx or 3xx responses:\s+(\d+)", text)
     res["non_2xx"] = int(m.group(1)) if m else 0
     return res
@@ -257,9 +259,9 @@ EVIDENCE_ONLY_GATES = ("harness_clean", "host_shielded")
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
-    for opt in ("arm", "backend", "rate", "connections", "load-threads", "warmup", "duration", "think-ms",
+    for opt in ("arm", "backend", "rate", "connections", "load-threads", "warmup", "warmup-mode", "duration", "think-ms",
                 "poller-mode", "carrier-cpus", "server-aux-cpus", "mock-cpus", "load-cpus", "carrier-name-re",
-                "perf", "profile", "perf-sched", "pool", "bench-commit", "bench-dirty"):
+                "perf", "profile", "perf-sched", "pool", "max-connections", "bench-commit", "bench-dirty"):
         ap.add_argument("--" + opt, required=True)
     a = ap.parse_args()
     out = Path(a.out)
@@ -275,10 +277,17 @@ def main():
     elif a.rate == "max":
         gates["load"] = {"pass": True, "reason": "closed loop"}
     else:
+        # wrk2 opens each thread's connections 5 ms apart and divides by the whole duration, so a
+        # server that keeps up still reports rate x (1 - ramp / (2 x duration)). The gate compares
+        # against that expectation; the latency histogram is unaffected, because wrk2 resets it after
+        # its calibration period, which already covers the ramp.
         target = float(a.rate)
-        ratio = rps / target
+        ramp_s = 0.005 * int(a.connections) / int(a.load_threads)
+        expected = target * (1.0 - ramp_s / (2.0 * int(a.duration)))
+        ratio = rps / expected
         gates["load"] = {"pass": ratio >= 0.99, "achieved_ratio": round(ratio, 4),
-                         "reason": f"achieved {rps:.1f} of {target:.0f} req/s"}
+                         "raw_ratio": round(rps / target, 4), "connection_ramp_s": round(ramp_s, 3),
+                         "reason": f"achieved {rps:.1f} req/s of {expected:.0f} expected at target {target:.0f}"}
 
     errs = load["socket_errors"] or {}
     err_total = sum(errs.values()) + load["non_2xx"]
@@ -315,9 +324,11 @@ def main():
         "connections": int(a.connections),
         "load_threads": int(a.load_threads),
         "warmup_s": int(a.warmup),
+        "warmup_mode": a.warmup_mode,
         "duration_s": int(a.duration),
         "think_ms": float(a.think_ms),
         "pool": int(a.pool),
+        "max_connections": a.max_connections,
         "poller_mode": a.poller_mode,
         "layout": {"carriers": a.carrier_cpus, "server_aux": a.server_aux_cpus, "mock": a.mock_cpus, "load": a.load_cpus},
         "kernel": identity,

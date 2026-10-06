@@ -70,6 +70,24 @@ Campaigns land in `results/raw/loom-carrier-scheduler/<UTC>-<backend>-k<sha12>/`
 per trial, `campaign.json`, `order.txt` and `summary.md` / `summary.json`. Every file is `.txt` or
 `.json` so the campaign can be committed as it ran.
 
+## Regimes
+
+| Regime | Think time | Connections | Pool | Extra options |
+|:--|--:|--:|--:|:--|
+| CPU-bound (default) | 1 ms | 100 | 128 | — |
+| I/O-bound | 30 ms | 2,000 | 2,000 | `--max-connections 8192 --duration 60` |
+
+The I/O-bound regime keeps the request latency dominated by the backend wait, so in-flight requests
+(`rate × ~31 ms`) are in the hundreds to low thousands. Its connection count is above the kernel's
+default connection and admission limits only with margin to spare, so `--max-connections` raises
+`http.maxConnections`, `transport.maxConnections` and `transport.paqs.maxActiveStreams` on both
+JVMs. The 2,000-connection ramp is 2.5 s on 4 load threads; a 60 s window keeps it a small share
+of the run.
+
+`--warmup-mode open` warms up with `wrk2` at the trial's own rate instead of `wrk` at saturation,
+so the measurement starts from the load shape it measures. Whether that changes the measured
+window is an open question for the campaign, not a default.
+
 ## Shielding the host
 
 Run campaigns from a text console with the graphical session stopped, and with everything else
@@ -117,7 +135,11 @@ be committed and the host to be shielded. Invalid trials stay in the campaign an
 - **transport** — the server log reports `active=posix-hybrid, ffmArmed=true`: socket I/O went
   through the FFM descriptor path. Without the `--add-opens` the harness passes, the transport falls
   back to NIO, which is not the path under study.
-- **load** — `wrk2` achieved at least 99 % of the target rate.
+- **load** — `wrk2` achieved at least 99 % of the rate it can report for a server that keeps up:
+  wrk2 opens each thread's connections 5 ms apart and divides by the whole duration, so the
+  expectation is `rate × (1 − ramp / (2 × duration))` with `ramp = 5 ms × connections / threads`.
+  The latency histogram excludes the ramp: wrk2 resets it after a calibration period of
+  `10 s + ramp`.
 - **errors** — no socket errors and no non-2xx responses.
 - **isolation** — at the end of the window: the right number of carrier threads; shared-CPU arms
   allow exactly the carrier CPUs; arm `D` has each carrier on its own single CPU; no other server

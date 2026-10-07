@@ -138,7 +138,7 @@ Flipped 2026-08-12. Every headline figure was re-derived a second time directly 
 `results/raw/entity-read-by-id/`, without reading this report's text, using independent queries
 over the artefacts. That pass found one derivation error (§6 presented a telescoping identity as a
 closure check), one mislabelled column (§7.1), and a set of scope and unit slips — all fixed, and
-recorded in `docs/CLAIMS.md`'s retraction register (#18–#21) and in the report's revision history.
+recorded in `docs/CLAIMS.md`'s Withdrawn list (#18–#21) and in the report's revision history.
 
 **What that is not: third-party review.** The re-derivation was performed on the author's side,
 independently of the pass that wrote the prose, but not by an unaffiliated reviewer. An earlier

@@ -32,7 +32,7 @@ hardware_profile: perf-box-amd64
 > rebuilt a second time directly from the artefacts, **without reading this report's text** — a
 > pass that found one derivation error in §6, one mislabelled column in §7.1 and a set of scope
 > and unit slips, all fixed and all recorded in the revision history and in `docs/CLAIMS.md`'s
-> retraction register. **Every headline number survived it.** That pass was run on the author's
+> Withdrawn list. **Every headline number survived it.** That pass was run on the author's
 > side: it is a second derivation, **not third-party review**, and `complete` should not be read
 > as one.
 >
@@ -165,7 +165,7 @@ is Postgres *plus* container networking plus a userspace `docker-proxy` relay, s
 bound on Postgres, not a measurement of it**. The size of the deformation is measured: on the
 light contract the same arm at the same delivered throughput read **87.36 % busy under bridge and
 37.34 % under host** — ~50 points, of which 55 of the 87 were `sys`+`soft`, i.e. kernel networking
-(the 2026-08-08 correction in `docs/CLAIMS.md` L2). Heavy is unaffected to within noise
+(`docs/CLAIMS.md`, Withdrawn #8). Heavy is unaffected to within noise
 (99.80 → 99.84 %), because heavy's wall is genuine query execution. **Never compare a bridge
 DB-busy figure with a host one**, and never read a bridge one as Postgres utilisation.
 
@@ -174,8 +174,7 @@ DB-busy figure with a host one**, and never read a bridge one as Postgres utilis
 1. **Pure and compat are never blended.** Arm 3 is compat; the two pairs that cross the axis are
    `non_eligible` by design (`EQUIVALENCE_MISMATCH`) and their numbers are reported as
    *compatibility overhead* in the `compat/` track, never as a comparative claim. This is a
-   labelling and aggregation rule, **not** a confidentiality one — see the 2026-08-11 correction
-   in `docs/CLAIMS.md`.
+   labelling and aggregation rule, **not** a confidentiality one.
 2. **The SQL is equalised across every arm; the mechanism is not.** Every statement is
    shape-identical (same predicates, same `row_number() OVER (PARTITION BY …)` windowing, three
    queries per heavy request). What differs is how each stack issues and maps it — which is the
@@ -278,7 +277,7 @@ difference is never overridable.
 
 | fence | measured magnitude, **from this report's own campaigns** | source |
 |---|---|---|
-| `backend_network_mode` (bridge vs host) | **DB-cpuset busy 87.36 % → 37.34 %** on the light contract, *same arm, same delivered throughput* — ~50 points, 55 of the 87 being `sys`+`soft`, i.e. kernel networking. Heavy unaffected to within noise (99.80 → 99.84 %). | Setup above; `docs/CLAIMS.md` L2 (2026-08-08 correction) |
+| `backend_network_mode` (bridge vs host) | **DB-cpuset busy 87.36 % → 37.34 %** on the light contract, *same arm, same delivered throughput* — ~50 points, 55 of the 87 being `sys`+`soft`, i.e. kernel networking. Heavy unaffected to within noise (99.80 → 99.84 %). | Setup above; `docs/CLAIMS.md` Withdrawn #8 |
 | `db_cpuset` (pinned vs unpinned) | unpinned Postgres shares all 16 cores with a target pinned to 0-1,8-9 — contends with the arm *and* makes DB CPU unattributable | verified 2026-08-06 (`postmaster Cpus_allowed_list`) |
 
 The network-mode row is deliberately quoted from **this** campaign set rather than from the
@@ -809,7 +808,7 @@ Heavy cpu/req arm-means, ladder campaign (n=12):
 > contracts" stands as written.
 >
 > **Where the control is cited, and what each carrier needs.** A fairness control used across a
-> series leaves stale copies behind unless the propagation is named, so: `docs/CLAIMS.md` (L11)
+> series leaves stale copies behind unless the propagation is named, so: `docs/CLAIMS.md` (Withdrawn #7)
 > carries the correction as of 2026-08-11. `runtime/drivers/target-asset-matrix.json` and
 > `scenarios/entity-read-by-id/comparative-pair-manifest.json` **need no change** — both already
 > say *body* ("body byte-identical to all four ladder arms", "confirmed equal by response-body
@@ -1191,7 +1190,7 @@ chasing by the same test: **could the answer overturn a headline?**
   overstated it ~2.5×. CLAIMS L5 rewritten.
 - **The hosting step's security confound. ANSWERED (§6), and it cost the rung a quarter of its
   size.** +28.31 ± 3.25 µs/req, 23.3 % of the 121.52 µs step, correcting it to ×1.09–1.10. The
-  term had been carried as *unbounded*; ×1.127 is now retired from the citation canon rather than
+  term had been carried as *unbounded*; ×1.127 is now retired under `docs/CLAIMS.md`'s "Never quote alone" rather than
   merely qualified.
 
 **Nothing remaining passes that test, which is why this report ships with the rest open.** Each is
@@ -1390,7 +1389,7 @@ together because the pattern is the point: the footer rule is not folklore, it i
 - **2026-08-12 — an independent re-derivation, and what it cost.** A second pass rebuilt every
   headline figure from the artefacts without reading this report. **Every headline number
   survived**, including all 36 percentile cells, the gate counts and the error budget. Four
-  substantive corrections went to the retraction register (**#18–#21**: §6's telescoping
+  substantive corrections went to `docs/CLAIMS.md`'s Withdrawn list (**#18–#21**: §6's telescoping
   "closure", the over-stated `publishable=false`, §4.2's sourceless "5–15 %", and the "~125 B"
   light payload that contradicted §6's own 30 B). The presentation slips it also found, fixed
   here: **§7.1's excursion table headed a column `p50` when it held Δp50 percentages**, and its
@@ -1411,9 +1410,9 @@ together because the pattern is the point: the footer rule is not folklore, it i
   about a person — and the flip claimed to meet *"exactly the condition this comment used to set"*
   while the pass was on the author's side. The field now **defines** what "independent" meant
   (from the artefacts, without reading the report's text, separate from the pass that wrote the
-  prose) and says plainly that it is **not third-party review** (register #22). **§6b's qualifier
+  prose) and says plainly that it is **not third-party review** (Withdrawn #22). **§6b's qualifier
   did not follow its number**: when 0.0280 → 0.0278 landed, `~2 %` stayed over deltas of −2.80 %
-  and −2.19 % — the same clause wrong twice, now `~3 %` and mirrored to CLAIMS L8. **§7's lede**
+  and −2.19 % — the same clause wrong twice, now `~3 %` and mirrored to CLAIMS Withdrawn #13. **§7's lede**
   still carried the blanket `publishable=false` that fairness posture 6 had just qualified
   (42/48). **The closure bullet said "the rungs"** directly beneath a table the new footnote
   declares tautological — now "L4's per-pair rungs". **§4.2's replacement band was also wrong**:

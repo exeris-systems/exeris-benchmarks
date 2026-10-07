@@ -81,8 +81,10 @@ Two earlier entries came close and are flagged ⚠ rather than cleared:
   verbatim. No report carried it, but a copy string is a distribution surface of a different kind.
 
 **#15–#22 were found after the 2026-08-11 Spring report reached what was then its final shape.**
-That report is still DRAFT and has **not** been distributed, so they are caught-before-shipping
-like the other thirteen — but they are a useful warning about this column: *"has not travelled"*
+All eight were corrected on its pull-request branch before it merged (`10cab491`, 2026-08-12); the
+report on main carries no DRAFT marker and none of the eight in its withdrawn form, so they are
+caught-before-shipping like the other thirteen. Whether the report has since been distributed is
+not checkable from here. They are a useful warning about this column: *"has not travelled"*
 is a fact about a moment, not a property of a claim. It is the only column here that decays.
 
 **#18–#22 came from an independent re-derivation** that rebuilt every headline figure from
@@ -141,7 +143,7 @@ and only two are checkable from inside this repo:
 | 1 | *"Hibernate is 67 % of the cost"* — the plain-"ORM" label on the L3 pool | 2026-08-11 | *"the Spring Data JPA + Hibernate repository layer"*; largest identified contributor is projection proxies, split **unmeasured** (L10) | ⚠ **the EN copy string in L3** — the one surface this registry tells consumers to copy verbatim. Old string kept struck-through and labelled DO NOT COPY. No finished report carried it. |
 | 2 | **×1.127** hosting rung | 2026-08-11 | **≈ 89–96 µs, ×1.09–1.10** — 23.3 % of the step was Spring Security (L11) | no finished report; canon says do not quote it at all |
 | 3 | **×1.488 / 67.2 %** Amdahl ceiling quoted for Tomcat | 2026-08-11 | **×1.338 / 74.7 %** measured directly on Tomcat; ×1.488 survives, *named to* the Exeris-hosted derivation | no |
-| 4 | **±2.80 %** cpu/req error budget (4 summed rows) | 2026-08-11 | **±2.52 % heavy / ±3.71 % light**, per contract, quadrature, derived by `tools/derive-error-budget.sh` | no — draft only |
+| 4 | **±2.80 %** cpu/req error budget (4 summed rows) | 2026-08-11 | **±2.52 % heavy / ±3.71 % light**, per contract, quadrature, derived by `tools/derive-error-budget.sh` | no — pre-merge draft only; never on main |
 | 5 | a bare **"18×"** idle-CPU ratio | 2026-08-11 | absolute **~0.027 cores / ~0.67 % of a 4-core pin**; the ratio is 18.1–29.6× depending on the comparator | no |
 | 6 | L8's idle-RSS column read as a **footprint** | 2026-08-11 | a **rank**, not a footprint: it averages never-served and after-serving states, which differ 1.9×–5.5× | no |
 | 7 | *"the two arms' responses were byte-identical"* | 2026-08-11 | **bodies only**; never covered full responses on **any auth-crossing pair**, across all four ladder arms + `comp-native` | no |
@@ -152,15 +154,15 @@ and only two are checkable from inside this repo:
 | 12 | L5: *"worst p99 of all four arms"*, *"p99/p50 = 6.26× vs 5.05×"*, *"12.49 ms"* | 2026-08-11 | open-loop: tracks the native baseline within 5–22 % to 40 000 rps; **3.2× vs 2.4×**; **4.51–5.00 ms** — closed loop inflated it ~2.5× | no |
 | 13 | *"idle cores are state-invariant to three decimal places"* | 2026-08-11 | **to within ~3 %** — 0.0286 vs 0.0278 does not survive three decimals. Finding unaffected. Wrong **twice in the same clause**: first the precision (`three decimal places`), then the qualifier — when the re-derivation moved 0.0280 → 0.0278 the number was updated and `~2 %` was left standing over two deltas (−2.80 %, −2.19 %) that both exceed it. | no — corrected one commit after it landed |
 | 14 | the **agent-laden RSS profiles** (284/346/430 MiB light) | 2026-07-30 | agent-free medians, n=3: **233/276/352 MiB**; the agent tax is arm-dependent (~51/70/78 MiB) and **understated** Exeris's advantage | ⚠ **the closest call.** It sat in the 2026-07-21 triad — non-DRAFT, `comparison_eligible`, `reproducibility_status: complete` — for **~1.6 days across four PRs** (`cf7f4df9` → `ae333638`, 28–30 Jul), in the body, TL;DR **and** conclusions. **The triad was later distributed outside this repo — but after `ae333638`, its last commit, which is the correction.** So the wrong figures never left in a distributed artefact; the corrected report did, with the retraction visible in it. |
-| 15 | *"×3.95 cpu/req on the **DB-bound aggregate**"* (report TL;DR) | 2026-08-12 | *"on the **~200-row aggregate**"*. On heavy `spring-hibernate` runs at **98.7 % of its own pin against a database at 26.4 %** — CPU-bound on its own repository work. Heavy is DB-bound for the **fast** arms only (L2) | no — the Spring report is still DRAFT and undistributed. Caught in review after it reached what was then final shape; precisely the inversion L2 forbids, and it was in the TL;DR |
+| 15 | *"×3.95 cpu/req on the **DB-bound aggregate**"* (report TL;DR) | 2026-08-12 | *"on the **~200-row aggregate**"*. On heavy `spring-hibernate` runs at **98.7 % of its own pin against a database at 26.4 %** — CPU-bound on its own repository work. Heavy is DB-bound for the **fast** arms only (L2) | no — the Spring report's pre-merge draft only; never on main. Caught in review after it reached what was then final shape; precisely the inversion L2 forbids, and it was in the TL;DR |
 | 16 | L3's *"on a **DB-bound workload** the repositories go first"* | 2026-08-12 | the layer dominates where the arm is **not yet** DB-bound; DB-bound is where you *arrive* once it is gone. Restated without either term: the layer is **74.7 % of a heavy request and 14.7 % of a light one** — same code, **5.1× different share**. **Migration order is a property of the row count in the contract, not of the stack** | ⚠ **this file** — L3 has carried the inverted phrasing since 2026-08-06 and the draft report quoted it. No distributed artefact carried it |
-| 17 | §6's ladder table: two rungs shown against a *"whole stack ×5.118 direct"* row | 2026-08-12 | the third rung was missing — `pure-native` → `exeris-community`, **×1.100**, dropping Spring itself. Shown rungs multiplied to **×4.646**, a silent **10.2 %** gap. All three now shown; closes to **+0.2 %** | no — draft only. But a reader multiplying the visible rows got a different number from the one printed beside them, with no footnote |
-| 18 | §6's decomposition *"product ×5.109 vs directly measured ×5.118 — closes to +0.2 %"* | 2026-08-12 | **there was no check.** The three rungs are consecutive ratios of the same four pooled arm-means, so they **telescope**: their product *is* the end ratio, ×5.110, identically. The ×5.118 came from **L4**, a different derivation. §6 now presents the table as an accounting identity and points at L4 for the real, non-tautological closure — rungs measured in their own pair runs, **×5.222 product vs ×5.118 direct, +2.0 %** | no — draft only |
-| 19 | *"the artefacts stamp `latency_percentile_eligibility.publishable=false`"* | 2026-08-12 | **42 of the ladder's 48 units** do; the other **6** stamp `true` with reason `below_saturation` (heavy `purenative-vs-native`, neither arm at its knee). No claim rested on those six. **Fixed twice**: the first pass corrected fairness posture 6 and left §7's lede — the section that *uses* the fact — carrying the blanket form | no — draft only |
-| 20 | §4.2's *"the two ORM-free stacks sit within roughly **5–15 %**"*, then its replacement *"a **3–17 %** band whose width is entirely the security assumption"* | 2026-08-12 | **two numbers answering two questions, not one band.** As deployed: **17.2 %**. Security-normalised: **3–5 %** (5.0 % light term, 3.1 % heavy variant). The first version's upper bound had no source; the second wrongly called 17.2 % a variant of the assumption when it is the case where the assumption is *not applied* | no — draft only |
-| 21 | Setup's light contract *"~125 B"* | 2026-08-12 | the measured body is **30 B** (`{"id":"1","username":"user_1"}`) — 144 B on the wire without Spring Security's headers, 314 B with them. The figure contradicted §6 inside the same document and matched neither the body nor either full response | no — draft only |
+| 17 | §6's ladder table: two rungs shown against a *"whole stack ×5.118 direct"* row | 2026-08-12 | the third rung was missing — `pure-native` → `exeris-community`, **×1.100**, dropping Spring itself. Shown rungs multiplied to **×4.646**, a silent **10.2 %** gap. All three now shown; closes to **+0.2 %** | no — pre-merge draft only; never on main. But a reader multiplying the visible rows got a different number from the one printed beside them, with no footnote |
+| 18 | §6's decomposition *"product ×5.109 vs directly measured ×5.118 — closes to +0.2 %"* | 2026-08-12 | **there was no check.** The three rungs are consecutive ratios of the same four pooled arm-means, so they **telescope**: their product *is* the end ratio, ×5.110, identically. The ×5.118 came from **L4**, a different derivation. §6 now presents the table as an accounting identity and points at L4 for the real, non-tautological closure — rungs measured in their own pair runs, **×5.222 product vs ×5.118 direct, +2.0 %** | no — pre-merge draft only; never on main |
+| 19 | *"the artefacts stamp `latency_percentile_eligibility.publishable=false`"* | 2026-08-12 | **42 of the ladder's 48 units** do; the other **6** stamp `true` with reason `below_saturation` (heavy `purenative-vs-native`, neither arm at its knee). No claim rested on those six. **Fixed twice**: the first pass corrected fairness posture 6 and left §7's lede — the section that *uses* the fact — carrying the blanket form | no — pre-merge draft only; never on main |
+| 20 | §4.2's *"the two ORM-free stacks sit within roughly **5–15 %**"*, then its replacement *"a **3–17 %** band whose width is entirely the security assumption"* | 2026-08-12 | **two numbers answering two questions, not one band.** As deployed: **17.2 %**. Security-normalised: **3–5 %** (5.0 % light term, 3.1 % heavy variant). The first version's upper bound had no source; the second wrongly called 17.2 % a variant of the assumption when it is the case where the assumption is *not applied* | no — pre-merge draft only; never on main |
+| 21 | Setup's light contract *"~125 B"* | 2026-08-12 | the measured body is **30 B** (`{"id":"1","username":"user_1"}`) — 144 B on the wire without Spring Security's headers, 314 B with them. The figure contradicted §6 inside the same document and matched neither the body nor either full response | no — pre-merge draft only; never on main |
 | 22 | `reproducibility_status: complete` justified as meeting *"exactly the condition this comment used to set"* | 2026-08-12 | the old bar was **"someone ELSE re-derives"** — a condition about a *person*. What happened was a second pass **from the artefacts without reading the report**, on the author's side. Real and valuable, but not third-party review. The field now **defines what "independent" meant** instead of asserting an equivalence between "a second pass" and "a second person" | ⚠ **frontmatter** — a machine-read field that travels to aggregators as "someone checked this". Corrected before distribution |
-| 23 | the **v1 saga correctness asymmetry** — *"both Axon-based stacks report 0% compensations under a configured 3% failure rate"*, the `saga_unresolved` columns (1.82% / 1.22%), the mechanism offered for them (*"the structural signature of async event-sourced dispatch returning before the work is done"*), and the **3.4× / 4.7× whole-deployment density multipliers** derived from the same 2026-05-05 dev-laptop run | 2026-08-27 | **Nothing numeric.** Three defects, any one of which is sufficient: (a) the Quarkus arm never ran an Axon saga — no `@Saga` type exists in that target, the orchestration was hand-rolled over Axon's command bus, so the run is not evidence about Axon Framework and *"Axon" may never appear next to a number from it*; (b) the correctness columns measured **our own harness** — the k6 poller's terminal-state dictionary did not recognise `CANCELLED`, the status a compensated saga wrote, so compensations fired and were scored unresolved (fix recorded in `AxonOrderSagaProjection`); (c) `scenarios/e2e-shop-order-saga/CONTRACT-v2.md` §10 classes the v1 finding **superseded** and any mixed-population latency table **"invalid under v2, do not cite"**. What replaces it is **structural, not a re-derived multiplier**: a saga engine is a deployment decision before a performance one, measured in processes the operator must run (CONTRACT-v2 §1 deployment-unit table). The statistic is replaced by an **exact oracle** — §4.1's deterministic decline set makes the expected compensation count an integer known before the run, so `observed == expected` is a hard assertion and this defect class now fails a gate instead of passing unnoticed. **No comparative saga numbers under contract v2 exist yet** | ⚠⚠ **YES — the only entry in this register that travelled in its wrong form, and it travelled widely.** Live for ~15 weeks (2026-05-14 → 2026-08-27) on: `arkstack-dev/portfolio:CLAIMS.md` as claim `saga-footprint`, **stamped `comparison-eligible`** when the source run stamps `claim_scope: exploratory` on `hardware_profile: dev-laptop`; the site hero + product outcomes, EN and PL; both CV variants (`cv-f`, `cv-r`) including their `<meta name="description">`; the EN blog post `compensation-correctness-saga-benchmark` (`published: true`); its PL translation (marked `published: false`, but that flag filters only RSS in that build — the page was served and linked); and the dev.to syndication of the EN post (`3668798`). All fixed 2026-08-27 except dev.to, which takes a correction note rather than an edit. No *report* in `results/reports/` ever carried it — which is exactly why the "finished report" column was too narrow a test, and why this row reports surfaces instead |
+| 23 | the **v1 saga correctness asymmetry** — *"both Axon-based stacks report 0% compensations under a configured 3% failure rate"*, the `saga_unresolved` columns (1.82% / 1.22%), the mechanism offered for them (*"the structural signature of async event-sourced dispatch returning before the work is done"*), and the **3.4× / 4.7× whole-deployment density multipliers** derived from the same 2026-05-05 dev-laptop run | 2026-08-27 | **Nothing numeric.** Three defects, any one of which is sufficient: (a) the Quarkus arm never ran an Axon saga — no `@Saga` type exists in that target, the orchestration was hand-rolled over Axon's command bus, so the run is not evidence about Axon Framework and *"Axon" may never appear next to a number from it*; (b) the correctness columns measured **our own harness** — the k6 poller's terminal-state dictionary did not recognise `CANCELLED`, the status a compensated saga wrote, so compensations fired and were scored unresolved (fix recorded in `AxonOrderSagaProjection`); (c) `scenarios/e2e-shop-order-saga/CONTRACT-v2.md` §10 classes the v1 finding **superseded** and any mixed-population latency table **"invalid under v2, do not cite"**. What replaces it is **structural, not a re-derived multiplier**: a saga engine is a deployment decision before a performance one, measured in processes the operator must run (CONTRACT-v2 §1 deployment-unit table). The statistic is replaced by an **exact oracle** — §4.1's deterministic decline set makes the expected compensation count an integer known before the run, so `observed == expected` is a hard assertion and this defect class now fails a gate instead of passing unnoticed. **Nothing from the v1 run is re-derived or re-quoted under v2.** Contract-v2 campaigns are separate evidence: their artifacted rows are quotable under their own fences, set out in the citation canon | ⚠⚠ **YES — the only entry in this register that travelled in its wrong form, and it travelled widely.** Live for ~15 weeks (2026-05-14 → 2026-08-27) on: `arkstack-dev/portfolio:CLAIMS.md` as claim `saga-footprint`, **stamped `comparison-eligible`** when the source run stamps `claim_scope: exploratory` on `hardware_profile: dev-laptop`; the site hero + product outcomes, EN and PL; both CV variants (`cv-f`, `cv-r`) including their `<meta name="description">`; the EN blog post `compensation-correctness-saga-benchmark` (`published: true`); its PL translation (marked `published: false`, but that flag filters only RSS in that build — the page was served and linked); and the dev.to syndication of the EN post (`3668798`). All fixed 2026-08-27 except dev.to, which takes a correction note rather than an edit. No *report* in `results/reports/` ever carried it — which is exactly why the "finished report" column was too narrow a test, and why this row reports surfaces instead |
 
 
 **Two entries are worth reading as a pair, because they run in opposite directions.** #14 moved
@@ -233,12 +235,22 @@ is a cpu/req figure, so it survives the L2 ceiling rule that makes heavy through
 - **Any heavy throughput ratio between a fast and a slow arm.** It reads the Postgres ceiling
   (L2). Use cpu/req.
 - **Anything at all from the 2026-05-05 `e2e-shop-order-saga` run — not "alone", but at all**
-  (register #23). Two rules follow from it and bind every claim in this file: **"Axon" never
-  appears next to a number**, and **no figure may depend on the v1 unresolved-rate gap.** The
-  saga scenario currently has *no* quotable comparative numbers; contract v2 has an oracle and a
-  gate, but no campaign has run through them yet. The quotable saga statement is structural —
-  the engine runs in the application process and adds no process the deployment did not already
-  have — and it cites ADR-013 §3 and CONTRACT-v2 §1, not a measurement.
+  (register #23). Two rules follow from it: **no number from that run appears next to "Axon"** —
+  its Quarkus arm never ran an Axon saga, so the run is not evidence about Axon Framework — and
+  **no figure may depend on the v1 unresolved-rate gap.** Both rules are about that run; neither
+  reaches a contract-v2 campaign. The `ladderH` and `ladderI` campaigns measured real Axon arms
+  (`spring-axon-jdbc` with Axon Server, `spring-axon-embedded-jdbc` without it) on
+  `perf-box-amd64`, artifacted under
+  [`results/raw/e2e-shop-order-saga/20260821-shape-a-capacity/`](../results/raw/e2e-shop-order-saga/20260821-shape-a-capacity/)
+  and indexed in the [tJUG evidence bundle](../results/reports/2026-08-22-tjug-talk-evidence.md).
+  The bundle's rows marked CITABLE are quotable, Axon's name included, under its own fences:
+  `claim_scope: exploratory`; every comparison names its frameworks and arms and belongs on an
+  evidence page with its fence, never in a headline; the per-arm cohort-resumption counts (5–14
+  sagas) are too small to conclude from; and the
+  [2026-07-30 straight-through report](../results/reports/2026-07-30-e2e-shop-order-saga-v2-straight-through.md)
+  stays retired and uncitable, its own corrections included. The structural saga statement needs
+  no measurement — the engine runs in the application process and adds no process the deployment
+  did not already have — and it cites ADR-013 §3 and CONTRACT-v2 §1.
 
 **The objection this canon will attract, and the honest answer.** A careful reader will say: *your
 own benchmark says the runtime is optimising the smaller third.* That is exactly what it says, and
@@ -987,3 +999,155 @@ second.
 On heavy the arm **with** the filter chain is markedly more reproducible across repeats
 (sd 0.21 %) than the arm without it (0.82 %, range 15 us). The configuration with fewer layers is
 the less stable one. n=3, no mechanism proposed, and no claim rests on it.
+
+## L12 — single-row read on bare metal: CPU per request, open-loop tail, footprint (triad)
+
+- **Copy status: DRAFT — awaiting owner approval.** The strings below are not yet approved for
+  copying; remove this line when they are.
+- **EN (absolute):** `Exeris Community serves a single-row Postgres read for 51.3 µs of CPU per request (HTTP/1.1, JVM, dedicated bare metal, mean of 4 gated legs)`
+- **PL (absolute):** `Exeris Community obsługuje odczyt pojedynczego wiersza z Postgresa kosztem 51,3 µs CPU na żądanie (HTTP/1.1, JVM, dedykowany bare metal, średnia z 4 bramkowanych przebiegów)`
+- **EN (comparison):** `On a single-row read, Exeris Community uses 25.6% less CPU per request than hand-tuned pure-JDBC Quarkus (51.3 vs 68.9 µs) and 33.3% less than Quarkus + Hibernate (51.3 vs 76.9 µs); both Quarkus arms in JVM mode, head-to-head AB/BA pairs on the same box`
+- **PL (comparison):** `Przy odczycie pojedynczego wiersza Exeris Community zużywa o 25,6% mniej CPU na żądanie niż ręcznie strojony Quarkus na czystym JDBC (51,3 vs 68,9 µs) i o 33,3% mniej niż Quarkus + Hibernate (51,3 vs 76,9 µs); oba ramiona Quarkusa w trybie JVM, pary AB/BA na tej samej maszynie`
+- **EN (tail):** `Exeris Community's open-loop p99.9 on a single-row read stays within 1.95–2.61 ms from 6,000 to 30,000 requests per second`
+- **PL (tail):** `W otwartej pętli p99.9 Exeris Community przy odczycie pojedynczego wiersza mieści się w 1,95–2,61 ms od 6 000 do 30 000 żądań na sekundę`
+- **EN (footprint):** `Under an equal 2 GiB memory budget Exeris Community runs in ~1/2.7 the RSS of hand-tuned Quarkus; at a matched 256 MiB heap the gap is 1.18–1.26×`
+- **PL (footprint):** `Przy równym budżecie pamięci 2 GiB Exeris Community zajmuje ~1/2,7 RSS ręcznie strojonego Quarkusa; przy wyrównanej stercie 256 MiB różnica wynosi 1,18–1,26×`
+- Class: comparison-eligible (CPU/req, tail) · exploratory (matched-heap ratio) · Tier: Community ·
+  Track: **public-eligible** once the copy is approved
+- Report: [`2026-07-21-entity-read-by-id-tuned-pg-triad-comparison-eligible.md`](../results/reports/2026-07-21-entity-read-by-id-tuned-pg-triad-comparison-eligible.md)
+  §2 (CPU/req), §5 (footprint), §7 (tail), §8 (budget points)
+- Conditions: `perf-box-amd64` (Ryzen 7 7700, turbo off), Temurin 26.0.1, HTTP/1.1 cleartext over
+  loopback, Postgres 16.2 on **host networking** with cpuset isolation (the bridge fence at the top
+  of this file does not apply), targets pinned `0-1,8-9`; Exeris on Jackson 3, both Quarkus arms on
+  Jackson 2, **all three in JVM mode**. Light contract `GET /api/v1/user?id=1`, a 30-byte body.
+
+| figure | contract · campaign | n | artifacts |
+|---|---|---|---|
+| CPU/req 51.3 µs (51.26) | `fixed_contract_cross_runtime_h1_single_read_v1` · `20260721-081435-full-triad-ab-ba` | 4 legs (2 pairs × ab/ba), 12/12 leaves `comparison_eligible` | [`results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/`](../results/raw/entity-read-by-id/20260721-081435-full-triad-ab-ba/), `cpu_time_seconds / total_requests` per leaf |
+| −25.6 % / −33.3 % | same, pair 1 (51.26 vs 68.94 µs) and pair 2 (51.27 vs 76.85 µs), ab/ba means | 2 legs per pair | same |
+| p99.9 1.95–2.61 ms | `fixed_contract_p99_stable_h1_wrk2_single_read_v1` (wrk2, open loop) · `20260723-155158-latency-curve-triad` | ab+ba mean per rung, pair-1 leaves, 5 rungs 6k–30k | [`…/20260723-155158-latency-curve-triad/light/`](../results/raw/entity-read-by-id/20260723-155158-latency-curve-triad/light/), `latency_p999_us` |
+| RSS ~1/2.7 (≈ 385 vs 1 049 MB) | 2 GiB `MaxRAM` budget, heaps 256 MB vs 1 280 MB · triad leaves | 4 legs | `resource-metrics.json` per leaf |
+| matched heap 1.18× light / 1.26× heavy | identical `-Xms256m -Xmx256m`, agent-free · `20260729-entity-read-by-id-3way-footprint-decomposition` | median of n=3, exploratory | [`results/raw/20260729-entity-read-by-id-3way-footprint-decomposition/`](../results/raw/20260729-entity-read-by-id-3way-footprint-decomposition/) |
+
+Fences:
+
+- **Light contract only.** The heavy aggregate is DB-bound (L2) and its throughput reads the
+  Postgres ceiling. **The §8 heavy lead (+5–7 %) needs the fetch-all DB normalisation; with each arm
+  on its own default fetch configuration quarkus-tuned leads the aggregate by +17–23 %.** Any
+  statement about the aggregate carries that result, not just the normalised one.
+- **Name the comparator.** quarkus-tuned is a hand-tuned pure-JDBC target (no ORM, Agroal,
+  `@RunOnVirtualThread`), not a stock Quarkus deployment. Quarkus+Hibernate is the idiomatic stack.
+  Every row is **Quarkus in JVM mode**; nothing here speaks to Quarkus native image.
+- **CPU/req is the comparison; throughput is not registered here.** The two numbers in the
+  comparison string are the pair's own ab/ba means, so each percentage recomputes from the numbers
+  printed beside it. The pooled per-arm means (51.3 / 68.9 / 77.4 µs) are a different derivation;
+  do not mix 77.4 µs into the −33.3 % string.
+- **The tail is a range, never a point.** Rung means of the pair-1 leaves; single leaves span
+  1.93–2.63 ms. The same arm measured beside Quarkus+Hibernate reads 2.76 / 3.71 ms at 30 k (§7's
+  co-residence effect), which is why the pair-1 leaves are the curve. Closed-loop percentiles from
+  the fixed-contract campaigns are queue occupancy and are never quoted.
+- **The ~1/2.7 RSS ratio never travels without the matched-heap qualifier.** It is a budget-matched
+  ratio (256 MB vs 1 280 MB heap by design); at an identical 256 MiB heap the gap is **1.18–1.26×**
+  against quarkus-tuned and 1.51–1.80× against Quarkus+Hibernate. The matched-heap campaign is
+  exploratory (no gate), and the ratio is a class-loading and JIT-surface difference, not an
+  off-heap one (§5).
+- **n=1 per leg.** AB/BA legs and cross-pair repeats bound same-day drift (≤ 1.6 % within pair,
+  ≤ 2.7 % cross-pair), not day-to-day variance.
+
+## L13 — the budget matrix: a 128 MiB floor, flat CPU per request, and the TLS tax
+
+- **Copy status: DRAFT — awaiting owner approval.** The strings below are not yet approved for
+  copying; remove this line when they are.
+- **EN (floor):** `Exeris Community serves a Postgres-backed single-row read inside a 128 MiB memory limit: 3 of 3 runs clean, 0 errors, peak cgroup memory 113.5–121.5 MiB`
+- **PL (floor):** `Exeris Community obsługuje odczyt pojedynczego wiersza z Postgresa w limicie pamięci 128 MiB: 3 z 3 przebiegów bez awarii, 0 błędów, szczytowa pamięć cgroup 113,5–121,5 MiB`
+- **EN (CPU/req):** `Exeris Community's CPU per single-row read does not move with its memory budget: ~54.5 µs per request (54.4–55.4 µs) from 128 MiB to 2 GiB, a 16× range`
+- **PL (CPU/req):** `Koszt CPU Exeris Community na odczyt pojedynczego wiersza nie zależy od budżetu pamięci: ~54,5 µs na żądanie (54,4–55,4 µs) od 128 MiB do 2 GiB, w zakresie 16×`
+- **EN (TLS tax):** `Enabling TLS raises Exeris Community's CPU per request by 12.7% (54.0 → 60.9 µs) and Quarkus's on netty-tcnative/BoringSSL by 5.8% (69.1 → 73.1 µs): Exeris pays the larger TLS tax, from the lower base`
+- **PL (TLS tax):** `Włączenie TLS podnosi koszt CPU na żądanie Exeris Community o 12,7% (54,0 → 60,9 µs), a Quarkusa na netty-tcnative/BoringSSL o 5,8% (69,1 → 73,1 µs): Exeris płaci wyższy podatek za TLS, startując z niższego poziomu`
+- Class: exploratory (per-arm facts) · descriptive (cross-arm) · Tier: Community · Track:
+  **public-eligible** once the copy is approved
+- Report: [`2026-07-22-entity-read-by-id-memory-cpu-sweep.md`](../results/reports/2026-07-22-entity-read-by-id-memory-cpu-sweep.md)
+  — `claim_scope: descriptive_only`, `track_id` **track-c**, `comparison_policy: forbidden`; each
+  clean run stamps `exploratory` / `reproducibility_status: complete`
+- Conditions: `perf-box-amd64`, JDK 26, ParallelGC, `systemd-run --scope MemoryMax=<budget>
+  MemorySwapMax=0 CPUQuota=<vCPU×100%>`, 4 vCPU CFS quota, Postgres on host networking pinned
+  `4-7,12-15` and outside the budget, closed-loop wrk 4t/128c, 120 s warmup + 300 s measurement.
+  Exeris plaintext legs run `EXERIS_SUBSYSTEMS=http,persistence` (crypto off), telemetry and JFR off.
+
+| figure | campaign | n | artifacts |
+|---|---|---|---|
+| 128 MiB, 3/3 clean, cgroup peak 113.5 / 121.5 / 115.5 MiB | lean config: 16 MiB heap, pool 8, admission ratio 32 · `20260724-heap-lean-counterfactuals` | 3 interleaved | [`results/constrained/entity-read-by-id/20260724-heap-lean-counterfactuals/n3/lean/`](../results/constrained/entity-read-by-id/20260724-heap-lean-counterfactuals/n3/lean/), `cgroup_memory_current_kb_max` |
+| CPU/req medians 54.5 / 54.5 / 54.6 / 54.4 / 55.4 µs at 128 / 256 / 512 / 1024 / 2048 MiB | heap 0.25 × budget, pool 16 · `20260722T015708Z-memory-cpu-matrix` (pre-fence build) | n=3 medians; 128 MiB cell n=2 | [`…/20260722T015708Z-memory-cpu-matrix/`](../results/constrained/entity-read-by-id/20260722T015708Z-memory-cpu-matrix/) |
+| TLS tax, Exeris 0.0540 → 0.0609 ms, quarkus-tuned 0.0691 → 0.0731 ms | 1 GiB / 4 vCPU · `20260722T174709Z-tls-tax` | n=3 medians, 12/12 clean | [`…/20260722T174709Z-tls-tax/`](../results/constrained/entity-read-by-id/20260722T174709Z-tls-tax/) |
+| floor per arm: Exeris 128 MiB, quarkus-tuned 192 MiB, plaintext and TLS alike | minimal heaps 16 vs 64 MiB, open-loop wrk2 at 1 000 rps · `20260722T154115Z-memory-floor` | n=1 per grid point | [`…/20260722T154115Z-memory-floor/`](../results/constrained/entity-read-by-id/20260722T154115Z-memory-floor/) |
+
+Fences:
+
+- **Per-arm facts only; every cross-arm delta is directional.** There is no stage-7 gate, no AB/BA
+  order control (the Exeris arm always ran first within a point) and no steady-state JFR proof on
+  this track. The TLS-tax string states two per-arm deltas side by side; it is not a gated
+  comparison. Each arm's floor is its own fact; *"Quarkus cannot boot at 128 MiB"* is true only at
+  its declared 0.75 × budget heap policy.
+- **The TLS row is part of the record.** Exeris adds +6.9 µs per request for TLS against +4.0 µs for
+  BoringSSL, about 73 % more added cost — native-vs-native, so it is not a JSSE artefact. A claim
+  that quotes Exeris's absolute TLS figures (49.4 k rps, 60.9 µs, ~248 MB) without this row
+  overstates the result. The Exeris TLS path is the kernel `OffHeapTlsEngine` in a runtime target;
+  it is not one of the JMH B-labels and must not be read as B5.
+- **The floor is the lean configuration, and the single-read only.** The 3/3 result needs the 16 MiB
+  heap and admission ratio 32; at the default admission ratio the same budget shed ~88 % of
+  requests. Throughput inside it varied 47.9–53.9 k rps with CFS throttle, so the floor string
+  claims survival with zero errors, not a throughput. Quote the cgroup figure, never the process
+  RSS (shared pages bill per process and read above 128). The heavy aggregate needs more than
+  128 MiB (first serving budget 256 MiB).
+- **Do not set ~54.5 µs beside L12's 51.3 µs as a trend.** Different track, GC, pool, windows and
+  build: levels are not comparable across the two reports.
+
+## L14 — cold start and time to first request, JVM mode (exploratory, dev laptop)
+
+- **Copy status: DRAFT — awaiting owner approval.** The strings below are not yet approved for
+  copying; remove this line when they are.
+- **EN (absolute):** `Exeris Community in JVM mode, crypto subsystem off, answers its first request 0.86 s after process spawn: ready in 0.80 s, first business response 63 ms later, 173 MB peak RSS (median of 8 cold launches, developer laptop, JDK 26)`
+- **PL (absolute):** `Exeris Community w trybie JVM, z wyłączonym podsystemem kryptografii, odpowiada na pierwsze żądanie 0,86 s po uruchomieniu procesu: gotowość po 0,80 s, pierwsza odpowiedź biznesowa 63 ms później, szczytowe RSS 173 MB (mediana z 8 zimnych startów, laptop deweloperski, JDK 26)`
+- **EN (comparison, evidence page only):** `From process spawn to first served request, median of 8 cold launches per arm, all in JVM mode over cleartext HTTP/1.1 on one developer laptop: Exeris Community 0.86 s, Quarkus (hand-tuned JDBC) 1.18 s, Quarkus + Hibernate 2.00 s, Spring on Exeris (compatibility mode) 4.31 s, Spring Boot + Hibernate 4.88 s. Quarkus native image was not measured.`
+- **PL (comparison, evidence page only):** `Od uruchomienia procesu do pierwszej obsłużonej odpowiedzi, mediana z 8 zimnych startów na ramię, wszystkie w trybie JVM, HTTP/1.1 bez TLS, jeden laptop deweloperski: Exeris Community 0,86 s, Quarkus (ręcznie strojony JDBC) 1,18 s, Quarkus + Hibernate 2,00 s, Spring na Exeris (tryb kompatybilności) 4,31 s, Spring Boot + Hibernate 4,88 s. Quarkusa w trybie native nie mierzono.`
+- Class: exploratory · Tier: Community · Track: **public-eligible** once the copy is approved
+- Scenario: [`scenarios/cold-start-ttfr/scenario.json`](../scenarios/cold-start-ttfr/scenario.json)
+  (`claim_scope: exploratory`, `comparison_axis: within-tier`), added in `cd16af7a` (#16); runner
+  `scripts/run-cold-start-ttfr.sh`; scenario catalog entry `cold-start-ttfr`
+- Conditions: runs 2026-06-26, `hardware_profile: dev-laptop` (Ryzen 5 5600), Oracle JDK 26,
+  `jvm_flags: []` in every `env.json`, every arm `artifact_kind: jvm-jar` / `build_mode: jit`, TLS
+  off on all five, `transport_mode: loopback-h1`, Postgres already running (application cold start
+  only), bench commit `ef6f84e9`. `exeris-community-nocrypto` runs `SUBSYSTEMS=http,persistence`;
+  `spring-on-exeris` is the compatibility-mode target (`targets/exeris-spring-runtime-app-comp/`),
+  the only Spring-on-Exeris target at that commit.
+- Artifacts: `results/cold-start-ttfr/<arm>/20260626T104113Z-n8-res/result.json` for the five arms
+  below. Medians are **nearest-rank**, as the runner defines them, recomputed from `startup.samples`
+  and equal to the stored field in every cell; ranges are min–max.
+
+| arm | variant | n | startup_ms (spawn → health 200) | ttfr_ms (health 200 → first 2xx) | spawn → first request | peak RSS (VmHWM) |
+|---|---|---:|---:|---:|---:|---:|
+| exeris-community-nocrypto | crypto off | 8 | **798** (794–924) | **63** (59–67) | **864** (853–988) | **173 MB** (167–181) |
+| quarkus-tuned | pure JDBC, JVM mode | 8 | 1 025 (963–1 045) | 162 (157–168) | 1 184 (1 129–1 202) | 214 MB (205–224) |
+| quarkus-hibernate-cleartext | Hibernate, JVM mode | 8 | 1 712 (1 663–1 735) | 281 (277–310) | 1 996 (1 958–2 029) | 321 MB (319–326) |
+| spring-on-exeris | compatibility mode | 8 | 4 155 (3 803–4 834) | 156 (148–185) | 4 311 (3 952–4 999) | 538 MB (519–852) |
+| spring-hibernate | Spring Data JPA + Hibernate | 8 | 4 720 (4 651–4 945) | 161 (155–167) | 4 884 (4 812–5 107) | 868 MB (854–1 058) |
+
+Fences:
+
+- **Exploratory, dev laptop, n=8.** No gate, no counterbalancing, one machine that is not a
+  reference profile. Nothing here is comparison-eligible, so the comparison string belongs on an
+  evidence page with this table and these fences, never in a headline.
+- **Readiness is framework-specific.** `startup_ms` ends at the first HTTP 200 from each target's
+  own `/health`, and what that endpoint waits for differs per framework. Health is polled every
+  50 ms, so `startup_ms` resolves to ~50 ms. **spawn → first request** ends at the first business
+  2xx and is the most comparable of the three columns; it is the one the comparison string uses.
+- **ttfr is comparable only between same-transport targets.** All five rows here are cleartext, so
+  the column compares within this table; it does not compare with any TLS run.
+- **Quarkus was measured in JVM mode, not native.** No statement drawn from this entry may be read
+  as a comparison with Quarkus native image, which starts in a different regime (scenario fairness
+  caveat 2).
+- **Pure vs Compat.** The Spring-on-Exeris row is compatibility mode and stays labelled so; it says
+  nothing about a pure-mode Spring-on-Exeris start.
+- **The Exeris row is crypto-off.** The crypto-on arm (`exeris-community`, n=15 run
+  `20260626T103430Z-n15-crypto-on`) is not in this table; the crypto-off note records a ~61 ms
+  startup saving at n=15. Quote the crypto state with the Exeris figure.

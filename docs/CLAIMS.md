@@ -1002,8 +1002,6 @@ the less stable one. n=3, no mechanism proposed, and no claim rests on it.
 
 ## L12 — single-row read on bare metal: CPU per request, open-loop tail, footprint (triad)
 
-- **Copy status: DRAFT — awaiting owner approval.** The strings below are not yet approved for
-  copying; remove this line when they are.
 - **EN (absolute):** `Exeris Community serves a single-row Postgres read for 51.3 µs of CPU per request (HTTP/1.1, JVM, dedicated bare metal, mean of 4 gated legs)`
 - **PL (absolute):** `Exeris Community obsługuje odczyt pojedynczego wiersza z Postgresa kosztem 51,3 µs CPU na żądanie (HTTP/1.1, JVM, dedykowany bare metal, średnia z 4 bramkowanych przebiegów)`
 - **EN (comparison):** `On a single-row read, Exeris Community uses 25.6% less CPU per request than hand-tuned pure-JDBC Quarkus (51.3 vs 68.9 µs) and 33.3% less than Quarkus + Hibernate (51.3 vs 76.9 µs); both Quarkus arms in JVM mode, head-to-head AB/BA pairs on the same box`
@@ -1013,7 +1011,7 @@ the less stable one. n=3, no mechanism proposed, and no claim rests on it.
 - **EN (footprint):** `Under an equal 2 GiB memory budget Exeris Community runs in ~1/2.7 the RSS of hand-tuned Quarkus; at a matched 256 MiB heap the gap is 1.18–1.26×`
 - **PL (footprint):** `Przy równym budżecie pamięci 2 GiB Exeris Community zajmuje ~1/2,7 RSS ręcznie strojonego Quarkusa; przy wyrównanej stercie 256 MiB różnica wynosi 1,18–1,26×`
 - Class: comparison-eligible (CPU/req, tail) · exploratory (matched-heap ratio) · Tier: Community ·
-  Track: **public-eligible** once the copy is approved
+  Track: **public-eligible**
 - Report: [`2026-07-21-entity-read-by-id-tuned-pg-triad-comparison-eligible.md`](../results/reports/2026-07-21-entity-read-by-id-tuned-pg-triad-comparison-eligible.md)
   §2 (CPU/req), §5 (footprint), §7 (tail), §8 (budget points)
 - Conditions: `perf-box-amd64` (Ryzen 7 7700, turbo off), Temurin 26.0.1, HTTP/1.1 cleartext over
@@ -1056,8 +1054,6 @@ Fences:
 
 ## L13 — the budget matrix: a 128 MiB floor, flat CPU per request, and the TLS tax
 
-- **Copy status: DRAFT — awaiting owner approval.** The strings below are not yet approved for
-  copying; remove this line when they are.
 - **EN (floor):** `Exeris Community serves a Postgres-backed single-row read inside a 128 MiB memory limit: 3 of 3 runs clean, 0 errors, peak cgroup memory 113.5–121.5 MiB`
 - **PL (floor):** `Exeris Community obsługuje odczyt pojedynczego wiersza z Postgresa w limicie pamięci 128 MiB: 3 z 3 przebiegów bez awarii, 0 błędów, szczytowa pamięć cgroup 113,5–121,5 MiB`
 - **EN (CPU/req):** `Exeris Community's CPU per single-row read does not move with its memory budget: ~54.5 µs per request (54.4–55.4 µs) from 128 MiB to 2 GiB, a 16× range`
@@ -1065,7 +1061,7 @@ Fences:
 - **EN (TLS tax):** `Enabling TLS raises Exeris Community's CPU per request by 12.7% (54.0 → 60.9 µs) and Quarkus's on netty-tcnative/BoringSSL by 5.8% (69.1 → 73.1 µs): Exeris pays the larger TLS tax, from the lower base`
 - **PL (TLS tax):** `Włączenie TLS podnosi koszt CPU na żądanie Exeris Community o 12,7% (54,0 → 60,9 µs), a Quarkusa na netty-tcnative/BoringSSL o 5,8% (69,1 → 73,1 µs): Exeris płaci wyższy podatek za TLS, startując z niższego poziomu`
 - Class: exploratory (per-arm facts) · descriptive (cross-arm) · Tier: Community · Track:
-  **public-eligible** once the copy is approved
+  **public-eligible**
 - Report: [`2026-07-22-entity-read-by-id-memory-cpu-sweep.md`](../results/reports/2026-07-22-entity-read-by-id-memory-cpu-sweep.md)
   — `claim_scope: descriptive_only`, `track_id` **track-c**, `comparison_policy: forbidden`; each
   clean run stamps `exploratory` / `reproducibility_status: complete`
@@ -1104,13 +1100,11 @@ Fences:
 
 ## L14 — cold start and time to first request, JVM mode (exploratory, dev laptop)
 
-- **Copy status: DRAFT — awaiting owner approval.** The strings below are not yet approved for
-  copying; remove this line when they are.
 - **EN (absolute):** `Exeris Community in JVM mode, crypto subsystem off, answers its first request 0.86 s after process spawn: ready in 0.80 s, first business response 63 ms later, 173 MB peak RSS (median of 8 cold launches, developer laptop, JDK 26)`
 - **PL (absolute):** `Exeris Community w trybie JVM, z wyłączonym podsystemem kryptografii, odpowiada na pierwsze żądanie 0,86 s po uruchomieniu procesu: gotowość po 0,80 s, pierwsza odpowiedź biznesowa 63 ms później, szczytowe RSS 173 MB (mediana z 8 zimnych startów, laptop deweloperski, JDK 26)`
 - **EN (comparison, evidence page only):** `From process spawn to first served request, median of 8 cold launches per arm, all in JVM mode over cleartext HTTP/1.1 on one developer laptop: Exeris Community 0.86 s, Quarkus (hand-tuned JDBC) 1.18 s, Quarkus + Hibernate 2.00 s, Spring on Exeris (compatibility mode) 4.31 s, Spring Boot + Hibernate 4.88 s. Quarkus native image was not measured.`
 - **PL (comparison, evidence page only):** `Od uruchomienia procesu do pierwszej obsłużonej odpowiedzi, mediana z 8 zimnych startów na ramię, wszystkie w trybie JVM, HTTP/1.1 bez TLS, jeden laptop deweloperski: Exeris Community 0,86 s, Quarkus (ręcznie strojony JDBC) 1,18 s, Quarkus + Hibernate 2,00 s, Spring na Exeris (tryb kompatybilności) 4,31 s, Spring Boot + Hibernate 4,88 s. Quarkusa w trybie native nie mierzono.`
-- Class: exploratory · Tier: Community · Track: **public-eligible** once the copy is approved
+- Class: exploratory · Tier: Community · Track: **public-eligible**
 - Scenario: [`scenarios/cold-start-ttfr/scenario.json`](../scenarios/cold-start-ttfr/scenario.json)
   (`claim_scope: exploratory`, `comparison_axis: within-tier`), added in `cd16af7a` (#16); runner
   `scripts/run-cold-start-ttfr.sh`; scenario catalog entry `cold-start-ttfr`

@@ -107,8 +107,11 @@ SERVER_PORT="${SERVER_PORT:-$(free_port)}"
 MOCK_PORT="${MOCK_PORT:-$(free_port)}"
 
 # --- build the app against this kernel build -------------------------------------------------
+# The build directory is keyed by the app's sources as well as the kernel, so a changed app is
+# compiled again instead of a stale build being measured under the new harness commit.
 KERNEL_CP="$(cat "$KERNEL_DIR/kernel-cp.txt")"
-APP_BUILD="$KERNEL_DIR/app"
+APP_SRC_HASH="$(cd "$APP_DIR" && find build.sh src -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
+APP_BUILD="$KERNEL_DIR/app-$APP_SRC_HASH"
 if [[ ! -f "$APP_BUILD/app-classpath.txt" ]]; then
   mkdir -p "$APP_BUILD"
   KERNEL_CP="$KERNEL_CP" JAVA_HOME="$LOOM_JDK" APP_TARGET_DIR="$APP_BUILD" bash "$APP_DIR/build.sh" \

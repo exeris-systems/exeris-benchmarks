@@ -10,7 +10,8 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.Semaphore;
 
 /**
  * Calls the mock backend over blocking {@link Socket} I/O on keep-alive connections.
@@ -25,6 +26,12 @@ import java.util.concurrent.LinkedBlockingDeque;
  * peer close. Borrowing takes the most recently returned slot, so under light load only as many
  * sockets are open as there are concurrent calls. When every slot is in use the caller parks until
  * one is returned: the pool size bounds the backend's concurrency.
+ *
+ * <p>Callers waiting for a slot are served in arrival order. With more connections than slots the
+ * pool is a queue, and an unfair one lets a newly arrived call take a returned slot ahead of the
+ * caller just woken for it; how often that happens depends on when the scheduler runs the woken
+ * thread, so the wait would measure the pool's barging under each scheduler instead of the
+ * scheduler. A fair semaphore orders the callers; the deque only chooses which slot they get.
  *
  * <p>The response parser covers what the mock sends and nothing more: a status line, headers with
  * a {@code Content-Length}, and that many body bytes. Anything else is an I/O error, which closes
@@ -42,7 +49,8 @@ final class SocketBackend implements Backend {
     private final InetSocketAddress address;
     private final byte[] request;
     private final int poolSize;
-    private final LinkedBlockingDeque<Connection> idle;
+    private final Semaphore slots;
+    private final ConcurrentLinkedDeque<Connection> idle = new ConcurrentLinkedDeque<>();
 
     SocketBackend(String host, int port, int poolSize) {
         if (poolSize < 1) {
@@ -54,7 +62,7 @@ final class SocketBackend implements Backend {
                 + "Connection: keep-alive\r\n"
                 + "\r\n").getBytes(StandardCharsets.US_ASCII);
         this.poolSize = poolSize;
-        this.idle = new LinkedBlockingDeque<>(poolSize);
+        this.slots = new Semaphore(poolSize, true);
         for (int i = 0; i < poolSize; i++) {
             idle.addLast(new Connection());
         }
@@ -62,7 +70,9 @@ final class SocketBackend implements Backend {
 
     @Override
     public int fetch() throws IOException, InterruptedException {
-        Connection connection = idle.takeFirst();
+        slots.acquire();
+        // A permit guarantees an idle slot: permits and slots are taken and returned in pairs.
+        Connection connection = idle.pollFirst();
         try {
             // A kept-alive socket can have been closed by the peer while idle; that failure says
             // nothing about the backend, so it earns one retry on a fresh socket.
@@ -80,7 +90,8 @@ final class SocketBackend implements Backend {
             connection.close();
             throw e;
         } finally {
-            idle.putFirst(connection);
+            idle.offerFirst(connection);
+            slots.release();
         }
     }
 

@@ -56,6 +56,34 @@ def parse_load(path, rate):
     return res
 
 
+def is_carrier(name, carrier_re):
+    """Match a carrier by Java name, or by the 15-byte name the JVM gives the OS thread.
+
+    The JVM shortens a long thread name for the kernel to its first 7 and last 6 characters around
+    "..", so a carrier whose Java name was not captured still reads as exeris-..rier-<n> or
+    ForkJoi..rker-<n> in /proc.
+    """
+    if re.match(carrier_re, name):
+        return True
+    alias = r"^ForkJoi\.\.rker-\d+$" if "ForkJoinPool" in carrier_re else r"^exeris-\.\.rier-\d+$"
+    return bool(re.match(alias, name))
+
+
+def load_names(out):
+    """TID -> Java name: the dump at readiness, overlaid by the one after warmup, and for any thread
+    neither dump named, the name the affinity dumps read from /proc."""
+    names = load_thread_map(out / "threads-ready.txt")
+    names.update(load_thread_map(out / "threads.txt"))
+    for dump in ("affinity-start.txt", "affinity-end.txt"):
+        path = out / dump
+        if path.exists():
+            for line in path.read_text().splitlines():
+                parts = line.split("\t")
+                if len(parts) == 3 and parts[0] not in names:
+                    names[parts[0]] = parts[1]
+    return names
+
+
 def load_thread_map(path):
     names = {}
     if path.exists():
@@ -98,7 +126,7 @@ def parse_pidstat(path, names, carrier_re):
             continue
         name = names.get(key, "?")
         entry["name"] = name
-        if re.match(carrier_re, name):
+        if is_carrier(name, carrier_re):
             groups["carriers"].append(entry)
         elif name.startswith("carrier/native-tcp/reactor/"):
             groups["reactors"].append(entry)
@@ -234,7 +262,7 @@ def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
             continue
         tid, name, allowed = parts
         cpus = cpu_set(allowed)
-        if re.match(carrier_re, name):
+        if is_carrier(name, carrier_re):
             carriers[name] = sorted(cpus)
             if arm == "D":
                 if len(cpus) != 1 or not cpus <= carrier_cpus:
@@ -271,7 +299,7 @@ def main():
     out = Path(a.out)
 
     carrier_cpus = cpu_set(a.carrier_cpus)
-    names = load_thread_map(out / "threads.txt")
+    names = load_names(out)
     load = parse_load(out / "load.txt", a.rate)
     gates = {}
 

@@ -179,10 +179,13 @@ wait_ready() {  # <file> <pattern> <pid> <what>
 # Linux keeps 15 bytes of a thread name, so carrier-0 and carrier-1 are indistinguishable in
 # /proc and pidstat. The Java names come from a thread dump: nid is the kernel TID.
 thread_map() {  # <pid> <file>: lines "tid<TAB>java-name"
-  "$LOOM_JDK/bin/jcmd" "$1" Thread.print 2>/dev/null | python3 -c '
+  "$LOOM_JDK/bin/jcmd" "$1" Thread.print 2>&1 | tee "${2%.txt}-dump.txt" | python3 -c '
 import re, sys
 for line in sys.stdin:
-    m = re.match(r"\"(.*)\".* nid=(0x[0-9a-fA-F]+|[0-9]+)", line)
+    # A Java thread header carries its OS id as "#<n> [<tid>]"; a carrier that is running a virtual
+    # thread is printed without nid=, so the bracketed id is read first and nid= is the fallback
+    # for VM threads, which have no "#<n>".
+    m = re.match(r"\"(.*)\" #\d+ \[(\d+)\]", line) or re.match(r"\"(.*)\".* nid=(0x[0-9a-fA-F]+|[0-9]+)", line)
     if m:
         print(f"{int(m.group(2), 0)}\t{m.group(1)}")
 ' >"$2"

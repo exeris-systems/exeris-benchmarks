@@ -75,7 +75,11 @@ per trial, `campaign.json`, `order.txt` and `summary.md` / `summary.json`. Every
 | Regime | Think time | Connections | Pool | Extra options |
 |:--|--:|--:|--:|:--|
 | CPU-bound (default) | 1 ms | 100 | 128 | — |
-| I/O-bound | 30 ms | 2,000 | 2,000 | `--max-connections 8192 --duration 60` |
+| I/O-bound | 30 ms | 5,000 | 2,048 | `--max-connections 16384 --duration 60` |
+
+The backend pool is sized to the requests in flight, not to the connection count: with a pool as
+large as 5,000 connections the server keeps thousands of idle backend sockets open, and the p99 at
+half load rises about fivefold in every arm, which says nothing about the scheduler.
 
 The I/O-bound regime keeps the request latency dominated by the backend wait, so in-flight requests
 (`rate × ~31 ms`) are in the hundreds to low thousands. Its connection count is above the kernel's

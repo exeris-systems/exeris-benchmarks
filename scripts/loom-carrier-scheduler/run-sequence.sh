@@ -54,9 +54,13 @@ COMMON=(--kernel-commit "$KERNEL_COMMIT" --backend jdk --poller-mode 3
 CPU_ARGS=(--fractions "0.5 0.7 0.85 0.9")
 
 # I/O-bound: 30 ms think time. 5,000 connections keep the closed-loop ceiling (5,000 / 31 ms)
-# above the CPU ceiling, so saturation measures the server, not the connection count; the pool
-# matches the connection count and the kernel limits are raised above both.
-IO_ARGS=(--fractions "0.5 0.7 0.85" --think-ms 30 --connections 5000 --pool 5000
+# above the CPU ceiling, so saturation measures the server, not the connection count. The backend
+# pool is sized to the in-flight requests the ladder can reach (rate x ~32 ms, ~1,650 at the top
+# rung) rather than to the connection count: a pool as large as the connection count lets the
+# server hold thousands of idle backend sockets, and with it the p99 at half load rises from
+# ~37 ms to ~200 ms in every arm. 2,048 slots still allow ~66,000 req/s at 31 ms, above the CPU
+# ceiling, so saturation stays a measure of the server.
+IO_ARGS=(--fractions "0.5 0.7 0.85" --think-ms 30 --connections 5000 --pool 2048
          --max-connections 16384 --duration 60)
 
 PREV_PARANOID="$(cat /proc/sys/kernel/perf_event_paranoid)"

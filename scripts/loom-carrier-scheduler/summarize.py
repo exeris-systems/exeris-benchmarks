@@ -1,11 +1,30 @@
 #!/usr/bin/env python3
 """Summarise a loom-carrier-scheduler campaign directory into summary.md and summary.json.
 
-Cells report every valid trial's value next to the median, and the worst-trial p99 with its n.
-Invalid trials are listed with the gate they failed and are never folded into a statistic.
+Cells report every sustained trial's value next to the median, and the worst-trial p99 with its n.
+A valid trial that could not carry the target rate is a result about its arm: it is counted in its
+cell ("sustained k of n") and listed with the rate it reached, but its latency stays out of the
+percentiles. Invalid trials — a measurement gate failed — are listed and never used.
+
+Validity is derived from the gates, so trial.json files written before the distinction still read
+the same way.
 """
 import json
 import statistics
+
+MEASUREMENT_EXCLUDED = ("load", "harness_clean", "host_shielded")
+
+
+def is_valid(t):
+    return all(g["pass"] for k, g in t["gates"].items() if k not in MEASUREMENT_EXCLUDED)
+
+
+def is_sustained(t):
+    return t["gates"]["load"]["pass"]
+
+
+def is_evidence(t):
+    return all(g["pass"] for k, g in t["gates"].items() if k != "load")
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -25,24 +44,35 @@ def main(campaign_dir):
     campaign = json.loads((root / "campaign.json").read_text()) if (root / "campaign.json").exists() else {}
     trials = [json.loads(p.read_text()) for p in sorted(root.glob("*/trial.json"))]
     cells = defaultdict(list)
+    attempted = defaultdict(list)
     invalid = []
+    unsustained = []
     for t in trials:
-        if t["valid"]:
-            cells[(t["backend"], t["rate"], t["arm"])].append(t)
-        else:
-            failed = [k for k, g in t["gates"].items()
-                      if not g["pass"] and k not in ("harness_clean", "host_shielded")]
+        key = (t["backend"], t["rate"], t["arm"])
+        if not is_valid(t):
+            failed = [k for k, g in t["gates"].items() if not g["pass"] and k not in MEASUREMENT_EXCLUDED]
             invalid.append({"trial": t["trial_dir"], "failed": failed,
                             "detail": {k: t["gates"][k] for k in failed}})
+            continue
+        attempted[key].append(t)
+        if is_sustained(t):
+            cells[key].append(t)
+        else:
+            g = t["gates"]["load"]
+            unsustained.append({"trial": t["trial_dir"], "backend": key[0], "rate": key[1], "arm": key[2],
+                                "achieved_ratio": g.get("achieved_ratio"), "reason": g.get("reason")})
+    for key in attempted:
+        cells.setdefault(key, [])
 
-    summary = {"campaign": campaign, "cells": [], "invalid_trials": invalid,
-               "evidence_eligible": bool(trials) and all(t["evidence"] for t in trials)}
+    summary = {"campaign": campaign, "cells": [], "invalid_trials": invalid, "unsustained_trials": unsustained,
+               "evidence_eligible": bool(trials) and all(is_evidence(t) for t in trials)}
     for (backend, rate, arm), ts in sorted(cells.items(), key=lambda kv: (kv[0][0], kv[0][1] != "max",
                                                                          0 if kv[0][1] == "max" else int(kv[0][1]), kv[0][2])):
         p = lambda k: [t["load"]["percentiles_ms"].get(k) for t in ts]
         perf = [t["perf_stat"] for t in ts if t.get("perf_stat")]
         cell = {
             "backend": backend, "rate": rate, "arm": arm, "n": len(ts),
+            "attempted": len(attempted[(backend, rate, arm)]),
             "rps": [t["load"]["requests_per_sec"] for t in ts],
             "p50_ms": p("p50"), "p90_ms": p("p90"), "p99_ms": p("p99"), "p99.9_ms": p("p99.9"),
             "carrier_cpu_pct": [t["pidstat"]["carriers"]["cpu_pct"] for t in ts],
@@ -69,22 +99,29 @@ def main(campaign_dir):
     shielded = sum(1 for t in trials if t["gates"].get("host_shielded", {}).get("pass"))
     lines += [f"- kernel: `{ident.get('kernel_commit')}`; JDK: {ident.get('jdk_build')}",
               f"- host shielded (host-shield.sh, no graphical session): {shielded} of {len(trials)} trials",
-              f"- evidence-eligible (every trial valid, harness committed, host shielded): "
+              f"- evidence-eligible (every trial's measurement valid, harness committed, host shielded): "
               f"**{summary['evidence_eligible']}**", ""]
-    lines += ["| backend | rate | arm | n | req/s (median) | p50 | p90 | p99 (median) | p99 all trials | worst p99 | p99.9 "
+    lines += ["| backend | rate | arm | sustained | req/s (median) | p50 | p90 | p99 (median) | p99 all trials | worst p99 | p99.9 "
               "| carrier CPU % | carrier %wait max | CPUs (perf) | IPC | cs/s |",
               "|:--|---:|:--|--:|--:|--:|--:|--:|:--|--:|--:|--:|--:|--:|--:|--:|"]
     for c in summary["cells"]:
         m = c["median"]
         lines.append(
-            f"| {c['backend']} | {c['rate']} | {c['arm']} | {c['n']} | {fmt(m['rps'], 0)} | {fmt(m['p50_ms'])} | {fmt(m['p90_ms'])} "
+            f"| {c['backend']} | {c['rate']} | {c['arm']} | {c['n']} of {c['attempted']} | {fmt(m['rps'], 0)} | {fmt(m['p50_ms'])} | {fmt(m['p90_ms'])} "
             f"| {fmt(m['p99_ms'])} | {', '.join(fmt(v) for v in c['p99_ms'])} | {fmt(c['worst_p99_ms'])} "
             f"| {fmt(m['p99.9_ms'])} | {fmt(m['carrier_cpu_pct'], 1)} | {fmt(m['carrier_wait_max_pct'], 1)} "
             f"| {fmt(m['cpus_utilized'])} | {fmt(m['ipc'])} | {fmt(m['context_switches_per_s'], 0)} |")
     lines += ["", "Latencies in ms. Percentiles from wrk2 (open loop, coordinated-omission corrected) for numeric "
               "rates and from wrk (closed loop) for `max`; closed-loop latency is not a latency result.", ""]
+    if unsustained:
+        lines += ["## Trials that did not sustain the target rate", "",
+                  "A result about the arm: counted under *sustained* in its cell, kept out of the percentiles.", ""]
+        for u in unsustained:
+            lines.append(f"- `{u['trial']}` ({u['arm']} at {u['rate']}): {u['reason']} "
+                         f"(ratio {u['achieved_ratio']})")
+        lines.append("")
     if invalid:
-        lines += ["## Invalid trials (excluded from every statistic)", ""]
+        lines += ["## Invalid trials (a measurement gate failed; excluded from every statistic)", ""]
         for i in invalid:
             lines.append(f"- `{i['trial']}`: failed {', '.join(i['failed'])} — {json.dumps(i['detail'])}")
     (root / "summary.md").write_text("\n".join(lines) + "\n")

@@ -254,6 +254,10 @@ def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
 
 # Gates that decide whether a valid trial may be cited, not whether its measurement is sound.
 EVIDENCE_ONLY_GATES = ("harness_clean", "host_shielded")
+# Gates whose failure is a result about the arm, not a fault in the measurement: an arm that cannot
+# carry the target rate has been measured, and that is reported. Its latency is not comparable with
+# a run that kept up, so it stays out of the percentiles.
+OUTCOME_GATES = ("load",)
 
 
 def main():
@@ -341,11 +345,13 @@ def main():
         "perf_sched": parse_perf_sched(out, names) if a.perf_sched != "none" else None,
         "gates": gates,
         "host": host,
-        "valid": all(g["pass"] for k, g in gates.items() if k not in EVIDENCE_ONLY_GATES),
-        "evidence": all(g["pass"] for g in gates.values()),
+        "valid": all(g["pass"] for k, g in gates.items() if k not in EVIDENCE_ONLY_GATES + OUTCOME_GATES),
+        "sustained": gates["load"]["pass"],
+        "evidence": all(g["pass"] for k, g in gates.items() if k not in OUTCOME_GATES),
     }
     (out / "trial.json").write_text(json.dumps(trial, indent=2) + "\n")
-    print(json.dumps({"trial": out.name, "valid": trial["valid"], "evidence": trial["evidence"],
+    print(json.dumps({"trial": out.name, "valid": trial["valid"], "sustained": trial["sustained"],
+                      "evidence": trial["evidence"],
                       "rps": rps, "p99_ms": load["percentiles_ms"].get("p99"),
                       "failed_gates": [k for k, g in gates.items() if not g["pass"]]}))
     return 0

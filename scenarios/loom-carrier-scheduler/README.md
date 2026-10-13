@@ -128,14 +128,19 @@ whether the campaign is evidence.
 
 ## Gates
 
-A trial is `valid` only if all of these hold; `evidence` additionally requires the harness files to
-be committed and the host to be shielded. Invalid trials stay in the campaign and are listed in
-`summary.md`, never averaged.
+A trial is `valid` when every measurement gate holds (transport, errors, isolation, unperturbed);
+`evidence` additionally requires the harness files to be committed and the host to be shielded.
+Invalid trials stay in the campaign and are listed in `summary.md`, never used.
+
+The load gate is an outcome, not a measurement gate. A valid trial whose arm could not carry the
+target rate has measured something true about that arm: the summary counts it per cell
+("sustained k of n") and lists the rate it reached, and its latency stays out of the percentiles,
+which describe only runs that kept up.
 
 - **transport** — the server log reports `active=posix-hybrid, ffmArmed=true`: socket I/O went
   through the FFM descriptor path. Without the `--add-opens` the harness passes, the transport falls
   back to NIO, which is not the path under study.
-- **load** — `wrk2` achieved at least 99 % of the rate it can report for a server that keeps up:
+- **load** (outcome) — `wrk2` achieved at least 99 % of the rate it can report for a server that keeps up:
   wrk2 opens each thread's connections 5 ms apart and divides by the whole duration, so the
   expectation is `rate × (1 − ramp / (2 × duration))` with `ramp = 5 ms × connections / threads`.
   The latency histogram excludes the ramp: wrk2 resets it after a calibration period of

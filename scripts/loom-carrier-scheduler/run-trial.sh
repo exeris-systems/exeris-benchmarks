@@ -91,6 +91,14 @@ IFS=, read -r -a CARRIERS <<<"$CARRIER_CPUS"
 [[ ${#CARRIERS[@]} -ge 1 ]] || die "--carrier-cpus is empty"
 CARRIER_COUNT=${#CARRIERS[@]}
 
+# wrk and wrk2 need one descriptor per connection and never raise their own limit; a soft limit
+# below that turns the excess connections into connect errors and caps throughput at what the
+# connected ones can carry.
+ulimit -n "$(ulimit -Hn)" 2>/dev/null || true
+NOFILE="$(ulimit -n)"
+[[ "$NOFILE" == "unlimited" || "$NOFILE" -ge $((CONNECTIONS + 64)) ]] \
+  || die "descriptor limit $NOFILE is below $CONNECTIONS connections; raise it (host-shield.sh run sets 1048576)"
+
 mkdir -p "$OUT"
 [[ -e "$OUT/trial.json" ]] && die "$OUT already holds a trial"
 
@@ -313,6 +321,7 @@ sleep 2
   echo "governor: $(cat /sys/devices/system/cpu/cpu"${CARRIERS[0]}"/cpufreq/scaling_governor 2>/dev/null || echo n/a)"
   echo "isolated: $(cat /sys/devices/system/cpu/isolated 2>/dev/null)"
   echo "perf_event_paranoid: $PARANOID"
+  echo "nofile: $NOFILE"
   echo "--- lscpu -e"; lscpu -e
   echo "wrk: $("$WRK" -v 2>&1 | head -1)"
   echo "wrk2: $WRK2 at $(git -C "$(dirname "$WRK2")" rev-parse HEAD 2>/dev/null || echo unknown)"

@@ -109,7 +109,10 @@ run() {
   [[ $# -gt 0 ]] || die "run needs a command after --"
   local cmd
   printf -v cmd '%q ' "$@"
+  # A transient unit starts with a soft descriptor limit of 1024; the load generator holds one
+  # descriptor per connection and does not raise its own limit.
   exec systemd-run --quiet --pty --collect --slice=bench.slice -p AllowedCPUs="$(all_cpus)" \
+    -p LimitNOFILE=1048576 \
     --uid="$user" --working-directory="$PWD" -- /bin/bash -lc "$cmd"
 }
 

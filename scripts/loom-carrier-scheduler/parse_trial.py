@@ -295,6 +295,8 @@ def main():
                 "poller-mode", "carrier-cpus", "server-aux-cpus", "mock-cpus", "load-cpus", "carrier-name-re",
                 "perf", "profile", "perf-sched", "pool", "max-connections", "bench-commit", "bench-dirty"):
         ap.add_argument("--" + opt, required=True)
+    # Diagnostics the trial ran with, comma-separated; absent in trials recorded before it existed.
+    ap.add_argument("--diag", default="none")
     a = ap.parse_args()
     out = Path(a.out)
 
@@ -337,6 +339,7 @@ def main():
 
     perturbers = ([f"async-profiler {a.profile}"] if a.profile != "none" else []) + \
                  (["perf sched record"] if a.perf_sched != "none" else [])
+    perturbers += [d for d in a.diag.split(",") if d not in ("none", "") and d not in perturbers]
     gates["unperturbed"] = {"pass": not perturbers,
                             "reason": "no tracer or profiler attached" if not perturbers else ", ".join(perturbers) + " attached"}
     bench_cpus = carrier_cpus | cpu_set(a.mock_cpus) | cpu_set(a.load_cpus)
@@ -371,6 +374,7 @@ def main():
         "perf_stat_status": a.perf,
         "profile": a.profile,
         "perf_sched": parse_perf_sched(out, names) if a.perf_sched != "none" else None,
+        "diagnostics": [d for d in a.diag.split(",") if d not in ("none", "")],
         "gates": gates,
         "host": host,
         "valid": all(g["pass"] for k, g in gates.items() if k not in EVIDENCE_ONLY_GATES + OUTCOME_GATES),

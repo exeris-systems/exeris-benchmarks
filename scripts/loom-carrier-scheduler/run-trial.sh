@@ -28,10 +28,23 @@
 #   --profile none|cpu|wall   async-profiler on the server during the measurement window. A
 #                             profiled trial is diagnostic only and is marked so: the profiler
 #                             perturbs the latency it would explain.
-#   --perf-sched              record scheduler switch/migration events for the server process
-#                             (perf sched record) and derive each thread's run time per CPU.
-#                             Diagnostic only, for the same reason. Needs perf_event_paranoid <= -1
-#                             and read access to /sys/kernel/tracing.
+#   --perf-sched              record sched_switch and sched_migrate_task on the server's CPUs and
+#                             sched_waking aimed at them from any CPU, on CLOCK_MONOTONIC, and
+#                             derive each server thread's run time per CPU. Diagnostic only, for the same reason. Needs
+#                             perf_event_paranoid <= -1 and read access to /sys/kernel/tracing.
+#   --perf-sched-delay S      start that recording S seconds into the window (default 0)
+#   --perf-sched-seconds S    and record for S seconds (default: the rest of the window)
+#   --wall-interval 5ms       sampling interval of --profile wall, which is written as JFR so that
+#                             stacks can be cut to any time range
+#   --latency-probe R         also send R req/s from a separate client that records every request's
+#                             latency against its intended send time on CLOCK_MONOTONIC
+#                             (latency_probe.py), the one latency timeline the trial has; one
+#                             connection per 10 req/s, so each has 100 ms per request
+#   --gc-log                  GC and safepoint logs from server and mock, with wall-clock time
+#   --jfr                     a JFR recording of the server, virtual-thread pinning from 1 ms
+#
+# Every diagnostic marks the trial as perturbed. When any is on, analyze_diag.py cuts the recorded
+# data to the probe's slow windows and writes diag.txt / diag.json beside trial.json.
 #
 # Environment: LOOM_JDK, WRK, WRK2, ASYNC_PROFILER (default <workspace>/tools/async-profiler).
 set -euo pipefail
@@ -56,6 +69,7 @@ KERNEL_DIR="" ARM="" BACKEND="" RATE="" OUT=""
 CONNECTIONS=100 LOAD_THREADS=4 WARMUP=30 DURATION=30 THINK_MS=1 MOCK_THREADS=2 POOL=128 POLLER_MODE="" WARMUP_MODE="closed" MAX_CONNECTIONS=""
 SERVER_AUX_CPUS="0,6" CARRIER_CPUS="2,3" MOCK_CPUS="1,7" LOAD_CPUS="4,5,10,11" HEAP="1g" PROFILE="none"
 SERVER_PORT="" MOCK_PORT="" PERF_SCHED="no"
+PERF_SCHED_DELAY=0 PERF_SCHED_SECONDS="" WALL_INTERVAL="5ms" PROBE_RATE=0 GC_LOG="no" JFR="no"
 
 die() { echo "run-trial: $*" >&2; exit 2; }
 log() { echo "[$(date +%H:%M:%S)] $*" >&2; }
@@ -71,6 +85,10 @@ while [[ $# -gt 0 ]]; do
     --heap) HEAP="$2" ;;               --profile) PROFILE="$2" ;;
     --server-port) SERVER_PORT="$2" ;; --mock-port) MOCK_PORT="$2" ;;
     --perf-sched) PERF_SCHED="yes"; shift; continue ;;
+    --perf-sched-delay) PERF_SCHED_DELAY="$2" ;; --perf-sched-seconds) PERF_SCHED_SECONDS="$2" ;;
+    --wall-interval) WALL_INTERVAL="$2" ;; --latency-probe) PROBE_RATE="$2" ;;
+    --gc-log) GC_LOG="yes"; shift; continue ;;
+    --jfr) JFR="yes"; shift; continue ;;
     *) die "unknown option $1" ;;
   esac
   shift 2
@@ -83,6 +101,10 @@ done
 [[ "$PROFILE" =~ ^(none|cpu|wall)$ ]] || die "--profile must be none, cpu or wall"
 [[ "$WARMUP_MODE" =~ ^(closed|open)$ ]] || die "--warmup-mode must be closed or open"
 [[ -n "$OUT" ]] || die "--out is required"
+[[ "$PROBE_RATE" =~ ^[0-9]+$ ]] || die "--latency-probe must be an integer req/s"
+[[ -z "$PERF_SCHED_SECONDS" ]] && PERF_SCHED_SECONDS=$((DURATION - PERF_SCHED_DELAY))
+(( PERF_SCHED_DELAY >= 0 && PERF_SCHED_SECONDS > 0 && PERF_SCHED_DELAY + PERF_SCHED_SECONDS <= DURATION )) \
+  || die "--perf-sched-delay + --perf-sched-seconds must fit inside --duration"
 [[ -x "$LOOM_JDK/bin/java" ]] || die "no java under LOOM_JDK=$LOOM_JDK"
 [[ -x "$WRK" ]] || die "wrk not found (warmup always uses it)"
 [[ "$RATE" == "max" || -x "$WRK2" ]] || die "wrk2 not found at $WRK2"
@@ -148,14 +170,31 @@ LIMIT_OPTS=()
 [[ -n "$MAX_CONNECTIONS" ]] && LIMIT_OPTS=(-Dexeris.http.maxConnections="$MAX_CONNECTIONS"
   -Dexeris.transport.maxConnections="$MAX_CONNECTIONS" -Dexeris.transport.paqs.maxActiveStreams="$MAX_CONNECTIONS")
 
-SERVER_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${ACCESS_OPTS[@]}"
+DIAG=()
+SERVER_DIAG_OPTS=() MOCK_DIAG_OPTS=()
+if [[ "$GC_LOG" == "yes" ]]; then
+  SERVER_DIAG_OPTS+=("-Xlog:gc,safepoint:file=$OUT/gc-server.log:time,uptimemillis,level,tags")
+  MOCK_DIAG_OPTS+=("-Xlog:gc,safepoint:file=$OUT/gc-mock.log:time,uptimemillis,level,tags")
+  DIAG+=("gc log")
+fi
+if [[ "$JFR" == "yes" ]]; then
+  # Only the JDK's virtual-thread events: the kernel's own JFR events fire per request, and a
+  # recording that enables them measures the recorder.
+  KERNEL_CLASS_DIRS=()
+  IFS=: read -r -a _cp <<<"$KERNEL_CP"
+  for _e in "${_cp[@]}"; do [[ -d "$_e" ]] && KERNEL_CLASS_DIRS+=("$_e"); done
+  python3 "$SCRIPT_DIR/make_pinning_jfc.py" "${KERNEL_CLASS_DIRS[@]}" >"$OUT/diag.jfc"
+  SERVER_DIAG_OPTS+=("-XX:StartFlightRecording:name=diag,settings=$OUT/diag.jfc")
+  DIAG+=("jfr")
+fi
+SERVER_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${ACCESS_OPTS[@]}" "${SERVER_DIAG_OPTS[@]}"
   "${ARM_OPTS[@]}" "${POLLER_OPTS[@]}" "${LIMIT_OPTS[@]}"
   -Dexeris.transport.reactorCount="$REACTOR_COUNT" -Dexeris.reactor.affinity="$SERVER_AUX_CPUS"
   -Dexeris.http.port="$SERVER_PORT" -Dexeris.http.bindHost=127.0.0.1
   -Dloom.bench.backend="$BACKEND" -Dloom.bench.backend.host=127.0.0.1 -Dloom.bench.backend.port="$MOCK_PORT"
   -Dloom.bench.backend.pool="$POOL"
   -cp "$APP_CP" eu.exeris.benchmarks.targets.loomscheduler.LoomSchedulerServer)
-MOCK_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${ACCESS_OPTS[@]}"
+MOCK_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${ACCESS_OPTS[@]}" "${MOCK_DIAG_OPTS[@]}"
   -Djdk.virtualThreadScheduler.parallelism="$MOCK_THREADS" "${LIMIT_OPTS[@]}"
   -Dexeris.http.port="$MOCK_PORT" -Dexeris.http.bindHost=127.0.0.1 -Dloom.bench.mock.thinkMs="$THINK_MS"
   -cp "$APP_CP" eu.exeris.benchmarks.targets.loomscheduler.MockBackend)
@@ -269,6 +308,7 @@ fi
 
 thread_map "$SERVER_PID" "$OUT/threads.txt"
 pin_threads "$SERVER_PID" "$OUT/threads.txt"
+thread_map "$MOCK_PID" "$OUT/mock-threads.txt"
 affinity_dump "$SERVER_PID" "$OUT/threads.txt" "$OUT/affinity-start.txt"
 
 host_state "$OUT/host.txt"
@@ -293,16 +333,44 @@ fi
 PROFILE_STATUS="none"
 if [[ "$PROFILE" != "none" ]]; then
   [[ -x "$ASYNC_PROFILER/bin/asprof" ]] || die "async-profiler not found at $ASYNC_PROFILER"
-  "$ASYNC_PROFILER/bin/asprof" -e "$PROFILE" -d "$DURATION" -t -o collapsed \
-    -f "$OUT/profile-$PROFILE.collapsed.txt" "$SERVER_PID" >"$OUT/asprof-stdout.txt" 2>&1 &
-  PIDS+=("$!"); PROFILE_STATUS="$PROFILE"
+  if [[ "$PROFILE" == "wall" ]]; then
+    # JFR keeps each sample's time, so the stacks can later be cut to the probe's slow windows.
+    "$ASYNC_PROFILER/bin/asprof" -e wall -i "$WALL_INTERVAL" -d "$DURATION" -t -o jfr \
+      -f "$OUT/profile-wall.jfr" "$SERVER_PID" >"$OUT/asprof-stdout.txt" 2>&1 &
+  else
+    "$ASYNC_PROFILER/bin/asprof" -e "$PROFILE" -d "$DURATION" -t -o collapsed \
+      -f "$OUT/profile-$PROFILE.collapsed.txt" "$SERVER_PID" >"$OUT/asprof-stdout.txt" 2>&1 &
+  fi
+  PIDS+=("$!"); PROFILE_STATUS="$PROFILE"; DIAG+=("async-profiler $PROFILE")
 fi
 
-PERF_SCHED_STATUS="none"
+PERF_SCHED_STATUS="none" PERF_SCHED_PID=""
 if [[ "$PERF_SCHED" == "yes" ]]; then
-  perf sched record -p "$SERVER_PID" -o "$OUT/perf-sched.data" -- sleep "$DURATION" \
-    >/dev/null 2>"$OUT/perf-sched-record.txt" &
-  PIDS+=("$!"); PERF_SCHED_STATUS="recorded"
+  # Switches on the server's CPUs, where its threads run and wait; wake-ups from every CPU, since
+  # the softirq that wakes a server thread runs on the sender's CPU, filtered in the kernel to
+  # those that target a server CPU. Everything else on the host would multiply the volume
+  # without adding a server thread's state. CLOCK_MONOTONIC is the probe's clock. The recorders
+  # run on the load generator's CPUs, away from the CPUs they observe.
+  SCHED_CPUS="$SERVER_AUX_CPUS,$CARRIER_CPUS"
+  WAKE_FILTER="$(tr ',' '\n' <<<"$SCHED_CPUS" | sed 's/.*/target_cpu == &/' | paste -sd'|' | sed 's/|/ || /g')"
+  ( sleep "$PERF_SCHED_DELAY"
+    taskset -c "$LOAD_CPUS" perf record -B -m 64M -C "$SCHED_CPUS" -k CLOCK_MONOTONIC \
+      -e sched:sched_switch -e sched:sched_migrate_task -o "$OUT/perf-sched.data" \
+      -- sleep "$PERF_SCHED_SECONDS" >/dev/null 2>"$OUT/perf-sched-record.txt" &
+    taskset -c "$LOAD_CPUS" perf record -B -m 64M -a -k CLOCK_MONOTONIC \
+      -e sched:sched_waking --filter "$WAKE_FILTER" -o "$OUT/perf-sched-wake.data" \
+      -- sleep "$PERF_SCHED_SECONDS" >/dev/null 2>"$OUT/perf-sched-wake-record.txt" &
+    wait ) &
+  PERF_SCHED_PID=$!; PIDS+=("$PERF_SCHED_PID"); PERF_SCHED_STATUS="recorded"; DIAG+=("perf sched record")
+fi
+
+python3 -c 'import time; print(f"{time.time():.6f} {time.monotonic():.6f}")' >"$OUT/clock.txt"
+PROBE_PID=""
+if (( PROBE_RATE > 0 )); then
+  taskset -c "$LOAD_CPUS" python3 "$SCRIPT_DIR/latency_probe.py" --url "$URL" --rate "$PROBE_RATE" \
+    --connections "$(( (PROBE_RATE + 9) / 10 ))" --duration "$DURATION" --out "$OUT/probe.csv" \
+    >"$OUT/probe-stdout.txt" 2>&1 &
+  PROBE_PID=$!; PIDS+=("$PROBE_PID"); DIAG+=("latency probe ${PROBE_RATE} req/s")
 fi
 
 if [[ "$RATE" == "max" ]]; then
@@ -318,6 +386,11 @@ fi
 affinity_dump "$SERVER_PID" "$OUT/threads.txt" "$OUT/affinity-end.txt"
 cp /proc/interrupts "$OUT/interrupts-end.txt"
 wait "$PIDSTAT_PID" 2>/dev/null || true
+[[ -n "$PROBE_PID" ]] && { wait "$PROBE_PID" 2>/dev/null || true; }
+[[ -n "$PERF_SCHED_PID" ]] && { wait "$PERF_SCHED_PID" 2>/dev/null || true; }
+if [[ "$JFR" == "yes" ]]; then
+  "$LOOM_JDK/bin/jcmd" "$SERVER_PID" JFR.dump name=diag filename="$OUT/server.jfr" >"$OUT/jfr-dump.txt" 2>&1 || true
+fi
 sleep 2
 
 # --- environment record -------------------------------------------------------------------------
@@ -346,4 +419,10 @@ python3 "$SCRIPT_DIR/parse_trial.py" "$OUT" \
   --carrier-cpus "$CARRIER_CPUS" --server-aux-cpus "$SERVER_AUX_CPUS" --mock-cpus "$MOCK_CPUS" --load-cpus "$LOAD_CPUS" \
   --carrier-name-re "$CARRIER_NAME_RE" --perf "$PERF_STATUS" --profile "$PROFILE_STATUS" \
   --perf-sched "$PERF_SCHED_STATUS" --pool "$POOL" --max-connections "${MAX_CONNECTIONS:-default}" \
-  --bench-commit "$BENCH_SHA" --bench-dirty "$BENCH_DIRTY"
+  --bench-commit "$BENCH_SHA" --bench-dirty "$BENCH_DIRTY" \
+  --diag "$(IFS=,; echo "${DIAG[*]:-none}")"
+
+if (( ${#DIAG[@]} > 0 )); then
+  python3 "$SCRIPT_DIR/analyze_diag.py" "$OUT" >"$OUT/analyze-diag-stdout.txt" 2>&1 \
+    || log "analyze_diag.py failed, see $OUT/analyze-diag-stdout.txt"
+fi

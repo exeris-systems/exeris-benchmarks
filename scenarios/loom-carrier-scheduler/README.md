@@ -157,6 +157,25 @@ which describe only runs that kept up.
   `--perf-sched` (`perf sched record`, per-thread run time per CPU in
   `perf-sched-distribution.txt`) produce diagnostic trials only.
 
+## Diagnostic trials
+
+`scripts/loom-carrier-scheduler/run-diagnostics.sh` runs trials that are diagnostic by
+construction, for cells a campaign could not explain. Each carries a latency probe
+(`latency_probe.py`, 200 req/s on its own connections, every request's latency against its
+scheduled send time on `CLOCK_MONOTONIC`) and one recorder: GC and safepoint logs only
+(`light`), a scheduler trace (`sched`), an async-profiler wall-clock profile written as JFR
+(`wall`), or a JFR recording of virtual-thread pinning (`jfr`). `analyze_diag.py` cuts each
+recording to the windows where probe requests were slow and compares them with the rest of the
+trial; `summarize_diag.py` tabulates the run. A second block compares `pollerMode=1` and `=3` on
+light trials only. Results land in `results/raw/loom-carrier-scheduler-diag/`; the binary
+`perf-sched*.data` recordings are not committed.
+
+The scheduler trace records `sched_switch` and `sched_migrate_task` on the server's CPUs and
+`sched_waking` aimed at them from any CPU, about 15 MB/s at the I/O-bound rates, with the
+recorders on the load generator's CPUs. A JFR recording of the server needs the kernel's own
+events disabled, since they fire per request; `make_pinning_jfc.py` writes that settings file from
+the kernel build under test.
+
 ## Host prerequisites
 
 - Loom EA JDK at `<workspace>/tools/jdk-loom/current`; async-profiler at

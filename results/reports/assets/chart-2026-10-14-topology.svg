@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" font-family="Verdana,Helvetica,sans-serif" role="img" aria-label="Request path and CPU layout">
+<rect width="1200" height="660" fill="#0f172a"/>
+<text x="24" y="34" font-size="17" font-weight="bold" fill="#f8fafc">Where every thread runs, and which way a request goes</text>
+<text x="24" y="54" font-size="11" fill="#94a3b8">Ryzen 5 5600, 6 cores / 12 threads (SMT siblings n and n+6) · I/O-bound regime shown: 5,000 client connections, 30 ms backend, backend pool 2,048 · pollerMode=3 in every arm</text>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f8fafc"/></marker></defs>
+<rect x="24" y="90" width="240" height="160" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+<text x="38.0" y="114.0" font-size="13" fill="#f8fafc" text-anchor="start" font-weight="bold">Load generator</text>
+<text x="38.0" y="132.0" font-size="10" fill="#94a3b8" text-anchor="start" font-weight="normal">core 4, 5 · CPUs 4, 5, 10, 11</text>
+<text x="38.0" y="156.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">wrk2, 4 threads, open loop</text>
+<text x="38.0" y="174.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">5,000 keep-alive connections</text>
+<text x="38.0" y="192.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">fixed rate, CO-corrected</text>
+<rect x="330" y="90" width="380" height="200" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+<text x="344.0" y="114.0" font-size="13" fill="#f8fafc" text-anchor="start" font-weight="bold">Server · core 0</text>
+<text x="344.0" y="132.0" font-size="10" fill="#94a3b8" text-anchor="start" font-weight="normal">CPUs 0, 6 · shared with the confined host</text>
+<text x="344.0" y="156.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">transport reactors ×2 (Selector, FFM I/O)</text>
+<text x="344.0" y="174.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">JDK Master-Poller, Write-Poller (platform)</text>
+<text x="344.0" y="192.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">GC, JIT, VM threads</text>
+<text x="344.0" y="210.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">system.slice, user.slice, init.scope, IRQs</text>
+<rect x="330" y="390" width="380" height="200" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+<text x="344.0" y="414.0" font-size="13" fill="#f8fafc" text-anchor="start" font-weight="bold">Server · cores 2, 3</text>
+<text x="344.0" y="432.0" font-size="10" fill="#94a3b8" text-anchor="start" font-weight="normal">CPUs 2, 3 · SMT siblings 8, 9 idle</text>
+<text x="344.0" y="456.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">carrier 0, carrier 1</text>
+<text x="344.0" y="474.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">handler virtual threads, one per request</text>
+<text x="344.0" y="492.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">read sub-pollers (pollerMode=3): one virtual</text>
+<text x="344.0" y="510.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">thread per carrier, in the same queue</text>
+<text x="344.0" y="528.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">handlers block on java.net.Socket</text>
+<rect x="800" y="390" width="376" height="200" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+<text x="814.0" y="414.0" font-size="13" fill="#f8fafc" text-anchor="start" font-weight="bold">Mock backend · core 1</text>
+<text x="814.0" y="432.0" font-size="10" fill="#94a3b8" text-anchor="start" font-weight="normal">CPUs 1, 7 · separate JVM, stock scheduler</text>
+<text x="814.0" y="456.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">answers GET /mock after the think time:</text>
+<text x="814.0" y="474.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">30 ms here, 1 ms in the CPU-bound regime</text>
+<rect x="800" y="90" width="376" height="200" rx="8" fill="#273449" stroke="#334155" stroke-width="1.5"/>
+<text x="814.0" y="114.0" font-size="13" fill="#f8fafc" text-anchor="start" font-weight="bold">Arms · two carriers each</text>
+<text x="814.0" y="132.0" font-size="10" fill="#94a3b8" text-anchor="start" font-weight="normal">what differs is the scheduler and the pinning</text>
+<text x="814.0" y="156.0" font-size="11" fill="#f59e0b" text-anchor="start" font-weight="bold">A_iso</text>
+<text x="872.0" y="156.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">stock ForkJoinPool;</text>
+<text x="814.0" y="174.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="bold"></text>
+<text x="872.0" y="174.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">workers float over CPUs 2, 3</text>
+<text x="814.0" y="192.0" font-size="11" fill="#22d3ee" text-anchor="start" font-weight="bold">C_iso</text>
+<text x="872.0" y="192.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">custom: per-carrier FIFO, no stealing;</text>
+<text x="814.0" y="210.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="bold"></text>
+<text x="872.0" y="210.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">carriers float over CPUs 2, 3</text>
+<text x="814.0" y="228.0" font-size="11" fill="#34d399" text-anchor="start" font-weight="bold">D</text>
+<text x="872.0" y="228.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">custom; carrier 0 → CPU 2,</text>
+<text x="814.0" y="246.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="bold"></text>
+<text x="872.0" y="246.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">carrier 1 → CPU 3</text>
+<polyline points="264,150 330,150" fill="none" stroke="#f8fafc" stroke-width="1.6" marker-end="url(#ah)"/>
+<circle cx="297.0" cy="134.0" r="8" fill="#f8fafc"/><text x="297.0" y="138.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="bold">1</text>
+<text x="297.0" y="170.0" font-size="10" fill="#cbd5e1" text-anchor="middle" font-weight="normal">request</text>
+<polyline points="400,290 400,390" fill="none" stroke="#f8fafc" stroke-width="1.6" marker-end="url(#ah)"/>
+<circle cx="388.0" cy="340.0" r="8" fill="#f8fafc"/><text x="388.0" y="344.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="bold">2</text>
+<text x="410.0" y="344.0" font-size="10" fill="#cbd5e1" text-anchor="start" font-weight="normal">unpark handler</text>
+<polyline points="710,450 800,450" fill="none" stroke="#f8fafc" stroke-width="1.6" marker-end="url(#ah)"/>
+<circle cx="726.0" cy="434.0" r="8" fill="#f8fafc"/><text x="726.0" y="438.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="bold">3</text>
+<text x="790.0" y="438.0" font-size="10" fill="#cbd5e1" text-anchor="end" font-weight="normal">GET /mock</text>
+<polyline points="800,520 710,520" fill="none" stroke="#f8fafc" stroke-width="1.6" marker-end="url(#ah)"/>
+<circle cx="726.0" cy="504.0" r="8" fill="#f8fafc"/><text x="726.0" y="508.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="bold">4</text>
+<text x="790.0" y="508.0" font-size="10" fill="#cbd5e1" text-anchor="end" font-weight="normal">reply</text>
+<polyline points="530,390 530,290" fill="none" stroke="#f8fafc" stroke-width="1.6" marker-end="url(#ah)"/>
+<circle cx="518.0" cy="340.0" r="8" fill="#f8fafc"/><text x="518.0" y="344.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="bold">5</text>
+<text x="540.0" y="344.0" font-size="10" fill="#cbd5e1" text-anchor="start" font-weight="normal">readiness</text>
+<polyline points="650,290 650,390" fill="none" stroke="#f8fafc" stroke-width="1.6" marker-end="url(#ah)"/>
+<circle cx="638.0" cy="340.0" r="8" fill="#f8fafc"/><text x="638.0" y="344.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="bold">6</text>
+<text x="660.0" y="330.0" font-size="10" fill="#cbd5e1" text-anchor="start" font-weight="normal">wake sub-poller</text>
+<polyline points="330,560 144,560 144,250" fill="none" stroke="#f8fafc" stroke-width="1.6" marker-end="url(#ah)"/>
+<circle cx="237.0" cy="560.0" r="8" fill="#f8fafc"/><text x="237.0" y="564.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="bold">7</text>
+<text x="237.0" y="580.0" font-size="10" fill="#cbd5e1" text-anchor="middle" font-weight="normal">response</text>
+<text x="24.0" y="622.0" font-size="10" fill="#94a3b8" text-anchor="start" font-weight="normal">1 a request reaches a reactor · 2 the reactor unparks a handler on a carrier · 3 the handler blocks on the backend socket · 4 the reply arrives · 5 Master-Poller sees it ready · 6 and wakes that carrier's read</text>
+<text x="24.0" y="638.0" font-size="10" fill="#94a3b8" text-anchor="start" font-weight="normal">sub-poller, which unparks the handler · 7 the handler writes the response. Under the custom scheduler (C_iso, D) the sub-poller waits in the same per-carrier FIFO as the handlers it wakes.</text>
+</svg>

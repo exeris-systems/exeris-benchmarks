@@ -82,6 +82,24 @@ whose readiness detection and continuation execution run on different threads.*
    the handler through the transport's reactors rather than the JDK poller), and any rate above
    85 % with a 30 ms backend.
 
+### At a glance
+
+Median p99 in ms over the sustained trials of each cell; *k/10* marks a cell where a trial did not
+sustain its rate. Rates are fractions of `A_iso`'s saturation in the same campaign, the same
+offered load for every arm.
+
+| regime | rate | `A_iso` | `C_iso` | `D` | reading |
+|:--|:--|--:|--:|--:|:--|
+| CPU-bound, 1 ms backend | 50 % | 2.63 | 2.68 | 2.67 | no separation that matters (≤ 0.05 ms) |
+| | 70 % | 2.46 | 2.54 | 2.47 | no separation that matters (≤ 0.08 ms) |
+| | 85 % | 11.89 | 10.79 *9/10* | **2.58** | `D` separates completely from both |
+| | 90 % | 21.39 *9/10* | 13.46 | **2.58** | `D` separates; one trial inside `C_iso`'s range |
+| I/O-bound, 30 ms backend | 50 % | 41.23 | 43.57 | 39.49 | no separation |
+| | 70 % | 65.81 | 52.91 | 96.32 | **`D` worst, bimodal — not explained (§5.3)** |
+| | 85 % | 181.25 | 240.13 *9/10* | **52.61** | `D` separates completely from both |
+
+![Every valid trial's p99 by arm and rate, CPU-bound and I/O-bound panels on log scales: the three arms overlap at 50 %, the pinned arm sits far below both floating arms at 85 and 90 %, and splits into two groups at I/O-bound 70 %](assets/chart-2026-10-14-p99-ladder.svg)
+
 ---
 
 ## 1. Setup
@@ -99,6 +117,8 @@ The transport's own reactors detect readiness on the client connections and wake
 threads with `LockSupport.unpark`.
 
 All arms run two carriers.
+
+![Request path and CPU layout: load generator on cores 4–5, server reactors and JDK platform pollers on core 0 shared with the confined host, carriers with handler virtual threads and per-carrier read sub-pollers on cores 2–3, mock backend on core 1, with the seven steps of one request numbered](assets/chart-2026-10-14-topology.svg)
 
 | arm | scheduler | carrier placement |
 |:--|:--|:--|
@@ -325,6 +345,8 @@ CPU. The tables in §2 and §3 carry the larger of the two carriers' values, med
   85 %, and −0.22 for `C_iso` at I/O-bound 85 %, the worst cell in either campaign, whose wait is
   among the lowest (1.3–2.3 %).
 
+![Carrier run-queue wait against p99 per trial in the near-capacity cells: pinned trials sit at zero wait, floating trials spread over 1–10 % wait, and the worst floating cell has low wait](assets/chart-2026-10-14-wait-vs-p99.svg)
+
 Two floating carriers allowed on two CPUs, with no other server thread allowed there, can only
 wait for each other or for the kernel's own work on those CPUs. That fits the pilot's reading —
 both carriers placed on one CPU, a queue with nobody to drain it — and a scheduler without work
@@ -360,6 +382,8 @@ The latency spectrum of the slowest trial (`r8-D-43300`, p99 128.7 ms) has 95 % 
 below 34.3 ms and the remaining 5 % rising smoothly to a maximum of 184.6 ms. That shape is what
 repeated stalls of up to ~150 ms produce under coordinated-omission correction; a standing queue
 would move the median instead, and the median is 32.0 ms.
+
+![Latency percentile spectrum at I/O-bound 70 %: D's slowest trial stays at the 30 ms floor to about p95 and then climbs steeply to 180 ms; D's fastest trial and the other arms' median trials rise gradually](assets/chart-2026-10-14-d70-spectrum.svg)
 
 The same ordering appears in the abandoned campaign `20261013T062036Z` (5,000-slot pool,
 exploratory, isolation-valid trials only): at 70 % `D`'s median p99 was 260 ms against 147
@@ -493,6 +517,7 @@ test, and they come out differently:
 
 | date | change |
 |---|---|
+| 2026-10-14 | Figures and an *At a glance* table, before publication: the request path and CPU layout (§1.1), every trial's p99 by arm and rate (under TL;DR), carrier wait against p99 (§5.1) and the percentile spectrum of `D` at I/O-bound 70 % (§5.3), rendered from the campaigns' `trial.json` and `load.txt` by `tools/render-report-charts-20261014.py`. No figure or text changes. |
 | 2026-10-14 | Review pass, before publication. §1.1 and §1.2 now say where the JDK pollers run: with `pollerMode=3` the read sub-pollers are virtual threads bound to a carrier (and the scheduler does not consult `preferredCarrier`), only `Master-Poller` and `Write-Poller` are platform threads on core 0, and core 0 is shared with the confined system work. §5.1 gains the reactor and `Master-Poller` run-queue wait, and the `D`-at-85 % correlation between poller wait and tail. §5.3 names the read sub-poller as a candidate with its test. §3 states that 85 % is `C_iso`'s own saturation and ~94 % of `D`'s, and corrects "reaches into `D`'s range" (93.2 ms is above `D`'s 87.9 ms). §2 states the smallest attainable p. §4 records I/O-bound 50 % as "yes, by 1.3 ms" by the criterion's letter and names the 7 points evaluated. §1.4 states the `wrk2` connection ramp. TL;DR 1 and the summary: 90 % is "nearly" complete separation; TL;DR 5 scopes "no CPU cost" to 50 % load; TL;DR 7 and §8 describe the `kernel` backend correctly; §7.1 no longer asserts that work stealing hid the barging. |
 | 2026-10-14 | First publication. Campaigns `20261009T040618Z-jdk-kbc26f9a0e8fc` (CPU-bound, 129 trials) and `20261013T191957Z-jdk-kbc26f9a0e8fc` (I/O-bound, 99 trials), both evidence-eligible under the scenario's gates. Three earlier I/O-bound campaigns did not qualify and are not used: `20261009T062839Z` ran under a 1,024-descriptor limit and connected 1,017 of 5,000 clients; `20261013T062036Z` had carriers moved off their CPUs by the harness in 25 of 99 trials (rejected by the isolation gate) and a 5,000-slot backend pool (§7.2); `20261013T131136Z` was stopped at saturation by the pool's unfair hand-off (§7.1). |
 

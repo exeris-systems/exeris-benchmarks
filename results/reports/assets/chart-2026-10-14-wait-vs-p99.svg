@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" font-family="Verdana,Helvetica,sans-serif" role="img" aria-label="Carrier run-queue wait against p99">
+<rect width="1200" height="560" fill="#0f172a"/>
+<text x="24" y="34" font-size="17" font-weight="bold" fill="#f8fafc">Pinned carriers never wait; floating ones do, and the tail only partly follows</text>
+<text x="24" y="54" font-size="11" fill="#94a3b8">near-capacity cells, sustained trials · ● and ■ distinguish the two rates in each panel</text>
+<text x="90.0" y="96.0" font-size="13" fill="#f8fafc" text-anchor="start" font-weight="bold">CPU-bound · ● 85 %  ■ 90 %</text>
+<line x1="90" y1="445.3" x2="560" y2="445.3" stroke="#334155"/>
+<text x="82.0" y="449.3" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">2</text>
+<line x1="90" y1="366.8" x2="560" y2="366.8" stroke="#334155"/>
+<text x="82.0" y="370.8" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">5</text>
+<line x1="90" y1="307.4" x2="560" y2="307.4" stroke="#334155"/>
+<text x="82.0" y="311.4" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">10</text>
+<line x1="90" y1="248.0" x2="560" y2="248.0" stroke="#334155"/>
+<text x="82.0" y="252.0" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">20</text>
+<line x1="90" y1="169.4" x2="560" y2="169.4" stroke="#334155"/>
+<text x="82.0" y="173.4" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">50</text>
+<line x1="90" y1="110.0" x2="560" y2="110.0" stroke="#334155"/>
+<text x="82.0" y="114.0" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">100</text>
+<line x1="90.0" y1="110" x2="90.0" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="90.0" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">0</text>
+<line x1="246.7" y1="110" x2="246.7" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="246.7" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">2</text>
+<line x1="403.3" y1="110" x2="403.3" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="403.3" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">4</text>
+<line x1="560.0" y1="110" x2="560.0" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="560.0" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">6</text>
+<text x="325.0" y="504.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">carrier run-queue wait, % of window (larger of the two carriers, pidstat)</text>
+<text x="82.0" y="96.0" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">p99 ms</text>
+<circle cx="311.7" cy="217.4" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="385.3" cy="300.9" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="92.3" cy="424.5" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="332.8" cy="265.9" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="296.0" cy="132.3" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="92.3" cy="423.8" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="223.2" cy="297.2" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="311.7" cy="313.2" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="92.3" cy="415.6" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="202.0" cy="270.5" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="90.0" cy="422.8" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="283.5" cy="291.9" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="358.7" cy="271.1" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="90.0" cy="424.2" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="272.5" cy="293.1" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="288.2" cy="343.5" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="92.3" cy="424.5" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="249.0" cy="311.1" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="293.7" cy="348.4" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="92.3" cy="421.2" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="236.5" cy="285.5" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="379.8" cy="262.2" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="92.3" cy="422.8" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="202.0" cy="305.2" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="495.0" cy="196.2" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="90.0" cy="423.8" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="209.9" cy="310.3" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="262.3" cy="341.1" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="92.3" cy="421.9" r="4" fill="#34d399" fill-opacity="0.85"/>
+<rect x="258.3" y="237.5" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="354.7" y="293.1" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="88.3" y="315.7" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="219.2" y="250.8" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="422.8" y="275.2" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="86.0" y="421.2" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="250.5" y="260.0" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="420.5" y="276.2" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="88.3" y="397.1" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="336.7" y="279.6" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="86.0" y="419.2" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="346.9" y="216.9" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="315.5" y="319.2" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="86.0" y="420.2" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="245.0" y="302.1" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="368.0" y="295.1" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="88.3" y="420.5" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="221.5" y="299.6" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="378.2" y="266.9" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="86.0" y="420.2" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="303.0" y="199.6" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="483.2" y="188.5" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="86.0" y="419.8" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="276.4" y="147.2" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="375.8" y="280.6" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="86.0" y="417.2" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="266.2" y="238.2" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="469.8" y="233.4" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="88.3" y="418.2" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<text x="700.0" y="96.0" font-size="13" fill="#f8fafc" text-anchor="start" font-weight="bold">I/O-bound · ● 70 %  ■ 85 %</text>
+<line x1="700" y1="470.0" x2="1170" y2="470.0" stroke="#334155"/>
+<text x="692.0" y="474.0" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">20</text>
+<line x1="700" y1="393.6" x2="1170" y2="393.6" stroke="#334155"/>
+<text x="692.0" y="397.6" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">50</text>
+<line x1="700" y1="335.8" x2="1170" y2="335.8" stroke="#334155"/>
+<text x="692.0" y="339.8" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">100</text>
+<line x1="700" y1="278.0" x2="1170" y2="278.0" stroke="#334155"/>
+<text x="692.0" y="282.0" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">200</text>
+<line x1="700" y1="201.6" x2="1170" y2="201.6" stroke="#334155"/>
+<text x="692.0" y="205.6" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">500</text>
+<line x1="700" y1="143.8" x2="1170" y2="143.8" stroke="#334155"/>
+<text x="692.0" y="147.8" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">1000</text>
+<line x1="700.0" y1="110" x2="700.0" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="700.0" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">0</text>
+<line x1="778.3" y1="110" x2="778.3" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="778.3" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">2</text>
+<line x1="856.7" y1="110" x2="856.7" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="856.7" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">4</text>
+<line x1="935.0" y1="110" x2="935.0" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="935.0" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">6</text>
+<line x1="1013.3" y1="110" x2="1013.3" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="1013.3" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">8</text>
+<line x1="1091.7" y1="110" x2="1091.7" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="1091.7" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">10</text>
+<line x1="1170.0" y1="110" x2="1170.0" y2="470" stroke="#334155" stroke-dasharray="2,4"/>
+<text x="1170.0" y="486.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">12</text>
+<text x="935.0" y="504.0" font-size="10" fill="#94a3b8" text-anchor="middle" font-weight="normal">carrier run-queue wait, % of window (larger of the two carriers, pidstat)</text>
+<text x="692.0" y="96.0" font-size="10" fill="#94a3b8" text-anchor="end" font-weight="normal">p99 ms</text>
+<circle cx="828.5" cy="391.9" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="930.3" cy="388.3" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="700.8" cy="392.9" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="862.5" cy="371.3" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="846.1" cy="390.4" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="700.8" cy="413.6" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="843.7" cy="370.1" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="846.9" cy="389.4" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="700.8" cy="327.7" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="737.2" cy="421.7" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="878.2" cy="386.3" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="700.8" cy="340.6" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="891.1" cy="350.3" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="906.8" cy="388.1" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="701.2" cy="328.7" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="843.7" cy="374.7" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="890.7" cy="393.8" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="700.8" cy="375.5" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="814.8" cy="388.3" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="838.3" cy="387.5" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="700.8" cy="329.7" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="890.0" cy="364.9" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="850.8" cy="390.6" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="700.8" cy="378.6" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="873.5" cy="365.4" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="816.3" cy="386.7" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="700.8" cy="314.8" r="4" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="838.3" cy="360.1" r="4" fill="#f59e0b" fill-opacity="0.85"/>
+<circle cx="903.7" cy="389.9" r="4" fill="#22d3ee" fill-opacity="0.85"/>
+<circle cx="700.8" cy="337.3" r="4" fill="#34d399" fill-opacity="0.85"/>
+<rect x="1027.7" y="284.2" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="746.9" y="328.0" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="696.8" y="398.8" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="1051.2" y="281.5" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="782.2" y="269.8" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="697.2" y="379.3" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="977.2" y="293.1" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="696.8" y="398.7" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="1076.7" y="219.8" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="756.7" y="225.8" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="696.8" y="402.8" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="1055.2" y="261.3" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="786.9" y="337.7" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="696.8" y="401.5" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="1037.5" y="282.9" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="747.7" y="258.8" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="703.8" y="345.0" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="1106.1" y="277.8" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="753.6" y="291.5" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="702.7" y="342.5" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="918.5" y="302.8" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="751.6" y="200.5" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="698.7" y="357.7" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="1048.5" y="289.0" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="752.0" y="198.9" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="701.1" y="347.4" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<rect x="1103.3" y="265.2" width="8" height="8" fill="#f59e0b" fill-opacity="0.85"/>
+<rect x="757.9" y="245.5" width="8" height="8" fill="#22d3ee" fill-opacity="0.85"/>
+<rect x="696.8" y="391.9" width="8" height="8" fill="#34d399" fill-opacity="0.85"/>
+<circle cx="90" cy="536" r="5" fill="#f59e0b"/><text x="102.0" y="540.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">A_iso — stock ForkJoinPool, floating</text>
+<circle cx="420" cy="536" r="5" fill="#22d3ee"/><text x="432.0" y="540.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">C_iso — custom scheduler, floating</text>
+<circle cx="750" cy="536" r="5" fill="#34d399"/><text x="762.0" y="540.0" font-size="11" fill="#cbd5e1" text-anchor="start" font-weight="normal">D — custom scheduler, pinned 1:1</text>
+</svg>

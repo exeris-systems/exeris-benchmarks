@@ -334,14 +334,14 @@ HYP-CPU and HYP-CACHE are in §5.4 and §8.
 `pidstat -t` reports per-thread `%wait`, the share of the window a runnable thread waited for a
 CPU. The tables in §2 and §3 carry the larger of the two carriers' values, medianed over the cell.
 
-- **Pinned carriers do not wait.** `D` reads 0.0 % in every trial of every cell except four
-  I/O-bound 85 % trials at 0.1–0.2 %.
+- **Pinned carriers do not wait.** `D` reads below 0.05 % in every trial of every cell except four
+  I/O-bound 85 % trials at 0.07–0.20 %.
 - **Floating carriers wait, and more as load rises.** CPU-bound: ≤ 0.1 % at 50 %, 1.4–3.1 %
   (`A_iso`) and 2.2–5.2 % (`C_iso`) at 85 %. I/O-bound: 0.1 % at 50 %, up to 10.5 % for `A_iso` at
   85 %.
 - **Within a cell, wait tracks the tail in some cells and not in others.** Spearman ρ between a
   trial's carrier wait and its p99: 0.80 (`A_iso`) and 0.88 (`C_iso`) at CPU-bound 90 %, 0.85 for
-  `A_iso` at I/O-bound 85 %, 0.77 for `A_iso` at I/O-bound 70 % — but 0.45 / 0.63 at CPU-bound
+  `A_iso` at I/O-bound 85 %, 0.78 for `A_iso` at I/O-bound 70 % — but 0.49 / 0.63 at CPU-bound
   85 %, and −0.22 for `C_iso` at I/O-bound 85 %, the worst cell in either campaign, whose wait is
   among the lowest (1.3–2.3 %).
 
@@ -360,7 +360,10 @@ latency results.
 the two reactors' `%wait` has a cell median of 1.6–2.0 % (CPU-bound) and 1.1–1.6 % (I/O-bound),
 with single trials up to 26 % and 7.6 %; `Master-Poller` reads 0.9–1.7 % except at I/O-bound 85 %,
 where it rises to 3.9 % (`C_iso`) and 2.0 % (`D`). In that `D` cell it tracks the tail: the four
-trials with p99 above 70 ms have `Master-Poller` wait 3.5–8.2 %, the six below 57 ms 1.1–2.1 %. The
+trials with p99 above 70 ms have `Master-Poller` wait 3.5–8.2 %, the six below 57 ms 1.1–2.1 %, and
+the same four are the only `D` trials whose pinned carriers waited at all (0.07–0.20 %). Something
+that reached core 0 and the carrier cores in the same trials fits that better than anything in the
+scheduler does; what it was is not traced. The
 pilot, unshielded, saw 17–31 % reactor wait. The poller still shares a core with everything the
 shield confines, and near capacity that shows.
 
@@ -513,10 +516,97 @@ test, and they come out differently:
 
 ---
 
+## 9. Reproducing
+
+Everything below assumes the `exeris-benchmarks` commit this report was published at, on the
+branch `research/loom-carrier-scheduler`, and an `exeris-kernel` checkout beside it.
+
+### 9.1 Re-derive every figure from the recorded trials (no special hardware)
+
+The campaigns' per-trial records are the source of every table and figure here; `trial.json` is
+derived from the raw outputs beside it (`load.txt`, `pidstat-*.txt`, `perf-stat.txt`,
+`affinity-*.txt`, `threads*.txt`, `host.txt`).
+
+```bash
+R=results/raw/loom-carrier-scheduler
+CPU=$R/20261009T040618Z-jdk-kbc26f9a0e8fc   IO=$R/20261013T191957Z-jdk-kbc26f9a0e8fc
+
+# trial.json and summary.md from the raw outputs, with the current parser (rewrites in place;
+# `git diff` shows any change)
+scripts/loom-carrier-scheduler/reparse_campaign.py $CPU
+scripts/loom-carrier-scheduler/reparse_campaign.py $IO
+
+# §2–§5: medians, ranges, worst trials, exact Mann–Whitney for every pair, Spearman ρ, and the
+# number of tests behind the Bonferroni threshold
+scripts/loom-carrier-scheduler/stats.py $CPU $IO
+
+# the four figures
+tools/render-report-charts-20261014.py
+```
+
+Standard-library Python 3 only. `stats.py` enumerates the exact U distribution, and ranks tied
+wait values by their mean rank. The latency spectrum in §5.3 is the `Detailed Percentile spectrum`
+block of a trial's `load.txt`.
+
+### 9.2 Re-run the campaigns on the same class of host
+
+Prerequisites:
+
+- the Loom EA JDK the arms ran on,
+  `28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133` (builds.shipilev.net), at
+  `<workspace>/tools/jdk-loom/current`, where `<workspace>` holds both repositories;
+- `wrk` for warmup and saturation, and `wrk2` built from giltene/wrk2 at `44a94c1` in
+  `<workspace>/tools/wrk2/` (the snap package exits without output on this host);
+- `perf` and `sysstat` (`pidstat`), systemd, and `sudo` from a text console;
+- the kernel's dependencies in the local Maven repository: `build-kernel.sh` builds offline, so run
+  `mvn -B dependency:go-offline` once in the kernel checkout.
+
+Then, from a text console with the graphical session stopped:
+
+```bash
+sudo systemctl isolate multi-user.target        # log in on a text console
+tmux new -s bench
+cd <workspace>/exeris-benchmarks
+sudo KERNEL_COMMIT=bc26f9a0e8fc REPS=10 CAMPAIGNS="cpu io" scripts/loom-carrier-scheduler/run-sequence.sh
+sudo systemctl isolate graphical.target
+```
+
+`run-sequence.sh` applies the host shield (`host-shield.sh`: cpuset, IRQs, governor, boost off),
+builds the kernel at that commit from `git archive`, runs both campaigns with the parameters in
+§1.3, and restores the host on any exit. Each campaign took about 2.5 h here. Its directory under
+`results/raw/loom-carrier-scheduler/` gets `summary.md`, and §9.1's commands apply to it unchanged.
+A campaign is citable when its summary reports every trial valid, the harness committed and the
+host shielded.
+
+The CPU-bound campaign ran on harness `84685a1c` and the I/O-bound one on `e33e9595`. The changes
+between them (busy carriers' thread ids, a fair backend pool, the app rebuilt when its source
+changes) do not touch a 100-connection run whose 128-slot pool never queues, so both campaigns can
+be repeated on the current harness.
+
+### 9.3 On other hardware
+
+The rate ladder is relative to the host's own `A_iso` saturation, so the shape — no separation at
+50 %, separation near capacity — is what a repetition can confirm or refute; absolute rates and
+latencies will differ. The CPU roles are options of `run-trial.sh`, which `run-campaign.sh` passes
+through (`--server-aux-cpus`, `--carrier-cpus`, `--mock-cpus`, `--load-cpus`; check `lscpu -e` for
+SMT siblings first), and `host-shield.sh apply --sys-cpus` must match `--server-aux-cpus`. The
+CPU-bound regime is `run-campaign.sh` with `--warmup-mode open --warmup 30 --poller-mode 3
+--fractions "0.5 0.7 0.85 0.9"`; the I/O-bound regime adds `--think-ms 30 --connections 5000
+--pool 2048 --max-connections 16384 --duration 60` with fractions `0.5 0.7 0.85`.
+
+### 9.4 The diagnostics
+
+`run-diagnostics.sh` runs the cells §5.3 and §5.1 leave open, behind the same shield; see
+`scenarios/loom-carrier-scheduler/README.md`. Its trials carry recorders and are never latency
+results.
+
+---
+
 ## Revision history
 
 | date | change |
 |---|---|
+| 2026-10-14 | §9 *Reproducing* added, with `stats.py`, which now produces every test in §2–§5 from the trial records; it ranks tied wait values by their mean rank, which moves two Spearman values in §5.1 (0.45 → 0.49 at CPU-bound 85 % `A_iso`, 0.77 → 0.78 at I/O-bound 70 % `A_iso`) and changes no conclusion. §5.1 adds that the four slowest `D` trials at I/O-bound 85 % are the only ones whose pinned carriers waited at all, and states `D`'s wait precisely (below 0.05 %, four trials at 0.07–0.20 %). |
 | 2026-10-14 | Figures and an *At a glance* table, before publication: the request path and CPU layout (§1.1), every trial's p99 by arm and rate (under TL;DR), carrier wait against p99 (§5.1) and the percentile spectrum of `D` at I/O-bound 70 % (§5.3), rendered from the campaigns' `trial.json` and `load.txt` by `tools/render-report-charts-20261014.py`. No figure or text changes. |
 | 2026-10-14 | Review pass, before publication. §1.1 and §1.2 now say where the JDK pollers run: with `pollerMode=3` the read sub-pollers are virtual threads bound to a carrier (and the scheduler does not consult `preferredCarrier`), only `Master-Poller` and `Write-Poller` are platform threads on core 0, and core 0 is shared with the confined system work. §5.1 gains the reactor and `Master-Poller` run-queue wait, and the `D`-at-85 % correlation between poller wait and tail. §5.3 names the read sub-poller as a candidate with its test. §3 states that 85 % is `C_iso`'s own saturation and ~94 % of `D`'s, and corrects "reaches into `D`'s range" (93.2 ms is above `D`'s 87.9 ms). §2 states the smallest attainable p. §4 records I/O-bound 50 % as "yes, by 1.3 ms" by the criterion's letter and names the 7 points evaluated. §1.4 states the `wrk2` connection ramp. TL;DR 1 and the summary: 90 % is "nearly" complete separation; TL;DR 5 scopes "no CPU cost" to 50 % load; TL;DR 7 and §8 describe the `kernel` backend correctly; §7.1 no longer asserts that work stealing hid the barging. |
 | 2026-10-14 | First publication. Campaigns `20261009T040618Z-jdk-kbc26f9a0e8fc` (CPU-bound, 129 trials) and `20261013T191957Z-jdk-kbc26f9a0e8fc` (I/O-bound, 99 trials), both evidence-eligible under the scenario's gates. Three earlier I/O-bound campaigns did not qualify and are not used: `20261009T062839Z` ran under a 1,024-descriptor limit and connected 1,017 of 5,000 clients; `20261013T062036Z` had carriers moved off their CPUs by the harness in 25 of 99 trials (rejected by the isolation gate) and a 5,000-slot backend pool (§7.2); `20261013T131136Z` was stopped at saturation by the pool's unfair hand-off (§7.1). |

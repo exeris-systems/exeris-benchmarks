@@ -370,6 +370,8 @@ def collapsed(jfr, frm=None, to=None):
     out = subprocess.run(args + [str(jfr), "/dev/stdout"], capture_output=True, text=True, env=ENV)
     stacks = defaultdict(int)
     for line in out.stdout.splitlines():
+        if not line.startswith("["):
+            continue  # jfrconv's own progress line shares stdout with the output
         stack, _, n = line.rpartition(" ")
         if stack and n.isdigit():
             stacks[stack] += int(n)

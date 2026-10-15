@@ -50,9 +50,14 @@ mapfile -t sources < <(find "${SRC_DIR}" -name '*.java' | sort)
 (( ${#sources[@]} > 0 )) || die "no sources under ${SRC_DIR}"
 
 echo "build.sh: javac $("${JAVA_HOME}/bin/javac" -version 2>&1), ${#sources[@]} sources -> ${CLASSES_DIR}"
+# PinnedForkJoinScheduler subclasses the JDK's CarrierThread and reads the current carrier, so the
+# sources compile against java.base's internal packages; --add-exports is not allowed with
+# --release, and JAVA_HOME is already the JDK the target runs on.
 "${JAVA_HOME}/bin/javac" \
-    --release 28 \
-    -Xlint:all,-processing \
+    --source 28 --target 28 \
+    --add-exports java.base/jdk.internal.misc=ALL-UNNAMED \
+    --add-exports java.base/jdk.internal.access=ALL-UNNAMED \
+    -Xlint:all,-processing,-options \
     -cp "${KERNEL_CP}" \
     -d "${CLASSES_DIR}" \
     "${sources[@]}"

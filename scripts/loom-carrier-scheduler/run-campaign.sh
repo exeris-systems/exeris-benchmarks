@@ -15,6 +15,8 @@
 #   --arms "A_iso C_iso D"   --reps 5   --saturation-reps 3   --fractions "0.5 0.7 0.85"
 #   --rates "<r1> <r2> ..."  fixed ladder instead of fractions (skips the saturation step)
 #   --seed <int>             shuffle seed (default: from the clock, recorded)
+#   --slo-p99-ms <ms>        the p99 objective, recorded in campaign.json before the ladder starts;
+#                            slo_ladder.py then reports each arm's highest rate inside it
 #   --kernel-repo <path>     --out-root <dir>  (default results/raw/loom-carrier-scheduler)
 #   any other option is passed to every run-trial.sh call (layout, think time, poller mode, ...)
 set -euo pipefail
@@ -24,7 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 KERNEL_COMMIT="" KERNEL_REPO="" BACKEND="" ARMS="A_iso C_iso D" REPS=5 SAT_REPS=3
-FRACTIONS="0.5 0.7 0.85" RATES="" SEED="$(date +%s)" OUT_ROOT="$BENCH_ROOT/results/raw/loom-carrier-scheduler"
+FRACTIONS="0.5 0.7 0.85" RATES="" SLO_P99_MS="" SEED="$(date +%s)" OUT_ROOT="$BENCH_ROOT/results/raw/loom-carrier-scheduler"
 TRIAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -34,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     --reps) REPS="$2"; shift 2 ;;                    --saturation-reps) SAT_REPS="$2"; shift 2 ;;
     --fractions) FRACTIONS="$2"; shift 2 ;;          --rates) RATES="$2"; shift 2 ;;
     --seed) SEED="$2"; shift 2 ;;                    --out-root) OUT_ROOT="$2"; shift 2 ;;
+    --slo-p99-ms) SLO_P99_MS="$2"; shift 2 ;;
     *) TRIAL_ARGS+=("$1" "$2"); shift 2 ;;
   esac
 done
@@ -92,6 +95,7 @@ cat >"$CAMPAIGN/campaign.json" <<EOF
   "fractions": "$( [[ -n "$BASE" ]] && echo "$FRACTIONS" )",
   "rates": "$RATES",
   "seed": "$SEED",
+  "slo_p99_ms": ${SLO_P99_MS:-null},
   "trial_args": "$(printf '%s ' "${TRIAL_ARGS[@]:-}")"
 }
 EOF
@@ -105,4 +109,5 @@ for rep in $(seq 1 "$REPS"); do
 done
 
 python3 "$SCRIPT_DIR/summarize.py" "$CAMPAIGN"
+[[ -n "$SLO_P99_MS" ]] && python3 "$SCRIPT_DIR/slo_ladder.py" "$CAMPAIGN"
 echo "$CAMPAIGN"

@@ -8,7 +8,7 @@
 #
 # Usage:
 #   scripts/loom-carrier-scheduler/run-trial.sh --kernel-dir <dir from build-kernel.sh> \
-#       --arm A_iso|C_iso|D --backend jdk|kernel --rate <req/s>|max --out <dir> [options]
+#       --arm A_iso|B_pin|C_iso|D --backend jdk|kernel --rate <req/s>|max --out <dir> [options]
 #
 # Options (defaults are the CPU-bound regime on a 6-core / 12-thread host):
 #   --connections 100   --load-threads 4      --warmup 30   --duration 30   (seconds)
@@ -21,7 +21,7 @@
 #                        transport.paqs.maxActiveStreams; defaults 4096 / 4096 / 5000), for
 #                        connection counts or in-flight requests above those defaults
 #   --server-aux-cpus 0,6     JVM auxiliary threads and transport reactors
-#   --carrier-cpus 2,3        scheduler carriers (one per CPU for arm D)
+#   --carrier-cpus 2,3        scheduler carriers (one per CPU for arms B_pin and D)
 #   --mock-cpus 1,7           mock backend JVM
 #   --load-cpus 4,5,10,11     load generator
 #   --heap 1g
@@ -104,7 +104,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$KERNEL_DIR" && -f "$KERNEL_DIR/kernel-cp.txt" ]] || die "--kernel-dir must point at a build-kernel.sh output"
-[[ "$ARM" =~ ^(A_iso|C_iso|D)$ ]] || die "--arm must be A_iso, C_iso or D"
+[[ "$ARM" =~ ^(A_iso|B_pin|C_iso|D)$ ]] || die "--arm must be A_iso, B_pin, C_iso or D"
 [[ "$BACKEND" =~ ^(jdk|kernel)$ ]] || die "--backend must be jdk or kernel"
 [[ "$RATE" == "max" || "$RATE" =~ ^[0-9]+$ ]] || die "--rate must be max or an integer"
 [[ "$PROFILE" =~ ^(none|cpu|wall)$ ]] || die "--profile must be none, cpu or wall"
@@ -159,6 +159,16 @@ case "$ARM" in
     ARM_OPTS=(-Djdk.virtualThreadScheduler.parallelism="$CARRIER_COUNT"
               -Djdk.virtualThreadScheduler.maxPoolSize="$CARRIER_COUNT")
     CARRIER_NAME_RE='^ForkJoinPool-[0-9]+-worker-[0-9]+$' ;;
+  B_pin)
+    # The stock pool with the same parameters as A_iso, each worker binding itself to one CPU of
+    # the carrier set when it starts (PinnedForkJoinScheduler in the app).
+    ARM_OPTS=(-Djdk.virtualThreadScheduler.implClass=eu.exeris.benchmarks.targets.loomscheduler.PinnedForkJoinScheduler
+              -Djdk.virtualThreadScheduler.parallelism="$CARRIER_COUNT"
+              -Djdk.virtualThreadScheduler.maxPoolSize="$CARRIER_COUNT"
+              -Dexeris.carrier.affinity="$CARRIER_CPUS"
+              --add-exports java.base/jdk.internal.misc=ALL-UNNAMED
+              --add-exports java.base/jdk.internal.access=ALL-UNNAMED)
+    CARRIER_NAME_RE='^pinned-fjp-worker-[0-9]+$' ;;
   C_iso)
     ARM_OPTS=(-Djdk.virtualThreadScheduler.implClass="$SCHED_IMPL" -Dexeris.locality.allVthreads=true
               -Dexeris.transport.locality=true -Dexeris.carrier.count="$CARRIER_COUNT")
@@ -257,8 +267,8 @@ affinity_dump() {  # <pid> <map> <file>: "tid<TAB>java-name<TAB>cpus_allowed_lis
     printf '%s\t%s\t%s\n' "$tid" "$name" "$(awk '/Cpus_allowed_list/{print $2}' "$d/status" 2>/dev/null)" >>"$3"
   done
 }
-# Arms A_iso and C_iso share the carrier CPUs between carriers; arm D binds each carrier itself
-# through exeris.carrier.affinity, and the harness only verifies that binding. Workers the JVM
+# Arms A_iso and C_iso share the carrier CPUs between carriers; arms B_pin and D bind each carrier
+# itself to one CPU of exeris.carrier.affinity, and the harness only verifies that binding. Workers the JVM
 # creates later inherit the creating thread's mask, so placement is re-applied after warmup and
 # checked again at the end of the measurement window.
 # The JDK starts some platform threads lazily from whichever thread first needs them (the poller
@@ -271,7 +281,7 @@ pin_threads() {  # <pid> <map>
     tid="${d##*/}"
     name="$(awk -F'\t' -v t="$tid" '$1==t{print $2}' "$2")"
     if [[ "$name" =~ $CARRIER_NAME_RE ]]; then
-      [[ "$ARM" == "D" ]] || taskset -p -c "$CARRIER_CPUS" "$tid" >/dev/null 2>&1 || true
+      [[ "$ARM" == "D" || "$ARM" == "B_pin" ]] || taskset -p -c "$CARRIER_CPUS" "$tid" >/dev/null 2>&1 || true
     elif [[ "$name" != carrier/native-tcp/reactor/* ]]; then
       taskset -p -c "$SERVER_AUX_CPUS" "$tid" >/dev/null 2>&1 || true
     fi

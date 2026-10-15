@@ -251,6 +251,10 @@ def parse_host(out, bench_cpus, carrier_cpus):
             "interrupts_on_carrier_cpus_during_window": irq}
 
 
+# Arms whose carriers bind themselves, one CPU each.
+PINNED_ARMS = ("B_pin", "D")
+
+
 def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
     if not path.exists():
         return False, ["affinity dump missing"], {}
@@ -264,7 +268,7 @@ def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
         cpus = cpu_set(allowed)
         if is_carrier(name, carrier_re):
             carriers[name] = sorted(cpus)
-            if arm == "D":
+            if arm in PINNED_ARMS:
                 if len(cpus) != 1 or not cpus <= carrier_cpus:
                     problems.append(f"{name} allowed {allowed}, expected one CPU of {sorted(carrier_cpus)}")
             elif cpus != carrier_cpus:
@@ -273,7 +277,7 @@ def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
             problems.append(f"non-carrier {name} (tid {tid}) may run on carrier CPUs: {allowed}")
     if len(carriers) != expected_carriers:
         problems.append(f"{len(carriers)} carrier threads, expected {expected_carriers}")
-    if arm == "D":
+    if arm in PINNED_ARMS:
         pinned = [c[0] for c in carriers.values() if len(c) == 1]
         if len(set(pinned)) != len(pinned):
             problems.append("two carriers pinned to the same CPU")
@@ -334,6 +338,14 @@ def main():
     server_log = (out / "server-stdout.txt").read_text(errors="replace") if (out / "server-stdout.txt").exists() else ""
     m = re.search(r"active=([a-z-]+), ffmArmed=(true|false)", server_log)
     transport = f"active={m.group(1)}, ffmArmed={m.group(2)}" if m else "no socket backend line"
+    if a.arm == "B_pin":
+        # The pool retires idle workers and starts new ones; each start is a fresh binding, so the
+        # count says how often the pinned set changed during the trial.
+        gates["isolation"]["worker_starts"] = len(re.findall(r"\[PinnedForkJoinScheduler\] \S+ started", server_log))
+        gates["isolation"]["unbound_starts"] = server_log.count("NOT BOUND")
+        if gates["isolation"]["unbound_starts"]:
+            gates["isolation"]["pass"] = False
+            gates["isolation"]["problems"].append("a worker started without a free CPU")
     gates["transport"] = {"pass": bool(m) and m.group(1) == "posix-hybrid" and m.group(2) == "true",
                           "observed": transport, "expected": "active=posix-hybrid, ffmArmed=true"}
 

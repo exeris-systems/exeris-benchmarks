@@ -35,10 +35,13 @@ All arms run the same number of carriers (one per `--carrier-cpus` entry, defaul
 | Arm | Scheduler | Carrier placement |
 |:--|:--|:--|
 | `A_iso` | stock `ForkJoinPool` (`parallelism = maxPoolSize = carriers`) | workers share the carrier CPUs |
+| `B_pin` | stock `ForkJoinPool`, same parameters (`PinnedForkJoinScheduler` in the target) | each worker binds itself to a free carrier CPU when it starts |
 | `C_iso` | `ExerisCarrierScheduler`, per-carrier MPSC queue, no work stealing | carriers share the carrier CPUs |
 | `D` | `ExerisCarrierScheduler` | each carrier bound to one carrier CPU (`exeris.carrier.affinity`) |
 
-`C_iso` against `D` isolates pinning; `A_iso` against `C_iso` isolates the scheduler design.
+The four arms are the scheduling algorithm × pinning table: `B_pin` against `A_iso` and `D` against
+`C_iso` isolate pinning; `C_iso` against `A_iso` and `D` against `B_pin` isolate the scheduler
+design. `B_pin` runs in the capacity ladders.
 
 ## CPU layout (defaults, 6 cores / 12 threads, SMT siblings `n` and `n+6`)
 
@@ -91,6 +94,15 @@ of the run.
 `--warmup-mode open` warms up with `wrk2` at the trial's own rate instead of `wrk` at saturation,
 so the measurement starts from the load shape it measures. Whether that changes the measured
 window is an open question for the campaign, not a default.
+
+## Capacity ladders
+
+`run-sequence.sh` with `CAMPAIGNS="cpu-slo io-slo"` runs all four arms at 70–100 % of `A_iso`'s
+saturation in steps of 5 %, 5 fresh JVMs per cell, against a p99 objective recorded in
+`campaign.json`: 5 ms in the CPU-bound regime, 65 ms in the I/O-bound one. `slo_ladder.py` writes
+`slo.md`: a rate passes for an arm when at least 4 trials are valid, every valid trial sustained
+the rate, and their median p99 is inside the objective; the arm's capacity is the highest rate up
+to which every rate passes.
 
 ## Shielding the host
 
@@ -151,8 +163,9 @@ which describe only runs that kept up.
   `10 s + ramp`.
 - **errors** — no socket errors and no non-2xx responses.
 - **isolation** — at the end of the window: the right number of carrier threads; shared-CPU arms
-  allow exactly the carrier CPUs; arm `D` has each carrier on its own single CPU; no other server
-  thread may run on a carrier CPU.
+  allow exactly the carrier CPUs; arms `B_pin` and `D` have each carrier on its own single CPU; no
+  other server thread may run on a carrier CPU. `B_pin` also fails it when a worker started
+  without a free CPU, and records how many workers started (the pool retires idle ones).
 - **unperturbed** — no profiler or tracer attached. `--profile cpu|wall` (async-profiler) and
   `--perf-sched` (`perf sched record`, per-thread run time per CPU in
   `perf-sched-distribution.txt`) produce diagnostic trials only.

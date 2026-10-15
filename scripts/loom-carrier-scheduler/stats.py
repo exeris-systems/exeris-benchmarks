@@ -17,8 +17,10 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-ARMS = ("A_iso", "C_iso", "D")
-PAIRS = (("D", "A_iso"), ("D", "C_iso"), ("C_iso", "A_iso"))
+ARMS = ("A_iso", "B_pin", "C_iso", "D")
+# B_pin's pairs separate the two halves of the 2x2: pinning under the stock algorithm (B_pin vs
+# A_iso) and the algorithm under pinning (D vs B_pin). A pair is tested only where both arms ran.
+PAIRS = (("D", "A_iso"), ("D", "C_iso"), ("C_iso", "A_iso"), ("B_pin", "A_iso"), ("D", "B_pin"))
 
 
 @lru_cache(maxsize=None)

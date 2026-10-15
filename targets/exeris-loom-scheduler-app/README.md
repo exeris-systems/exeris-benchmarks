@@ -118,6 +118,27 @@ FFM socket path only when that line reads `active=posix-hybrid, ffmArmed=true`:
 INFO: [NativeTcpCarrier] Community socket backend mode=auto, active=posix-hybrid, ffmArmed=true - ...
 ```
 
+## Arm `B_pin`: `PinnedForkJoinScheduler`
+
+`eu.exeris.benchmarks.targets.loomscheduler.PinnedForkJoinScheduler` is the stock virtual-thread
+scheduler with each worker bound to one CPU. Everything else is the JDK's built-in scheduler: the
+pool takes the built-in's constructor arguments and reads `jdk.virtualThreadScheduler.parallelism`,
+`maxPoolSize` and `minRunnable` with the same defaults; its workers are `CarrierThread`s; and the
+two submit paths the JDK reserves for its own scheduler (external submit when a virtual thread
+starts another, lazy submit when it unparks one) are taken under the same conditions. Each worker
+binds itself to a free CPU of `exeris.carrier.affinity` when it starts and releases it when it
+ends, so the workers the pool creates after retiring idle ones are bound as well.
+
+```
+-Djdk.virtualThreadScheduler.implClass=eu.exeris.benchmarks.targets.loomscheduler.PinnedForkJoinScheduler
+-Djdk.virtualThreadScheduler.parallelism=2 -Djdk.virtualThreadScheduler.maxPoolSize=2
+-Dexeris.carrier.affinity=2,3
+--add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-exports java.base/jdk.internal.access=ALL-UNNAMED
+```
+
+`maxPoolSize` may not exceed the number of CPUs. The workers are named `pinned-fjp-worker-<n>`,
+and each start prints `[PinnedForkJoinScheduler] pinned-fjp-worker-<n> started, bound to CPU <c>`.
+
 ## Startup output
 
 LoomSchedulerServer prints, before the kernel boots:
@@ -162,8 +183,10 @@ third-party dependency jars. Every entry must exist. The script never searches a
 repository, because a classpath assembled from whatever is installed there cannot be tied to the
 commit a measurement claims to measure.
 
-The sources compile with `--release 28` and without `--enable-preview`, matching the kernel on the
-research branch. Output:
+The sources compile for Java 28 without `--enable-preview`, matching the kernel on the research
+branch, with `jdk.internal.misc` and `jdk.internal.access` exported to the unnamed module for
+`PinnedForkJoinScheduler` (below); `--release` cannot be combined with those exports, so the JDK
+in `JAVA_HOME` must be the one the target runs on. Output:
 
 - `$APP_TARGET_DIR/classes` (default `target/classes`)
 - `$APP_TARGET_DIR/app-classpath.txt` = `$APP_TARGET_DIR/classes:$KERNEL_CP`, absolute paths

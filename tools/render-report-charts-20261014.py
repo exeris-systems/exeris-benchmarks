@@ -408,7 +408,7 @@ def chart_mock(io_trials, out):
     s += text(90, 522, "D: in 9 of 10 trials the mock jumps to 165–200 % at second 53 and stays ~11 points higher; the one "
               "trial without the jump is D's fastest (p99 39 ms).", 10, DIM)
     s += text(90, 538, "A_iso and C_iso never leave 126–149 %. The server's carriers and reactors rise in the same second; "
-              "in the diagnostic trials no connection churn, GC pause or pinning accompanied it (§5.5).", 10, DIM)
+              "in the diagnostic trials no connection churn, GC pause or server-side pinning accompanied it (§5.5).", 10, DIM)
     s += "</svg>\n"
     open(out, "w").write(s)
 

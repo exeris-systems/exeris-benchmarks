@@ -9,6 +9,8 @@
 #   sched  light + scheduler trace of every CPU, 20 s from 20 s into the window
 #   wall   light + async-profiler wall clock, JFR output
 #   jfr    light + JFR, virtual-thread pinning from 1 ms
+#   ctl    light + backend trace (pool connections, mock threads), mock idle timeout at its default
+#   idle   ctl with the mock's idle timeout raised to 600 s
 #
 # Cells, I/O-bound regime (30 ms backend, 5,000 connections, pool 2,048), at the campaign's rates,
 # written arm:rate[:pollerMode] (pollerMode 3 unless given):
@@ -16,7 +18,7 @@
 #   C_iso  52600 (85 %)  floating carriers, worst cell of the campaign
 #   A_iso  52600 (85 %)  floating carriers, stock scheduler
 #
-# A second block runs `light` trials only, POLLER_REPS fresh JVMs per cell, to test one
+# A second block runs POLLER_KINDS (default `light`) only, POLLER_REPS fresh JVMs per cell, to test one
 # explanation for D at 70 %: with jdk.pollerMode=3 each read sub-poller is a virtual thread bound
 # to one carrier, queued behind everything else on that carrier's FIFO, and a late sub-poller
 # delays every backend socket it watches. pollerMode=1 moves the read pollers to platform threads
@@ -34,7 +36,16 @@
 # Environment (defaults in brackets):
 #   KERNEL_COMMIT [bc26f9a0e8fc]   REPS [3] per (cell, kind)   SYS_CPUS [0,6]   BOOST [off]
 #   CELLS ["D:43300 C_iso:52600 A_iso:52600"]   KINDS ["light sched wall jfr"]
-#   POLLER_CELLS ["D:43300:1 D:43300:3"]   POLLER_REPS [6]
+#   POLLER_CELLS ["D:43300:1 D:43300:3"]   POLLER_REPS [6]   POLLER_KINDS [light]
+#
+# The backend test: D at 70 % stalls once at a fixed point ~52 s into the window, while the mock's
+# CPU jumps to its limit and the server's carriers and reactors rise with it. `ctl` records what
+# changes in that second: the server's connections on both sides by TCP state, the mock's threads
+# and its CPU profile. `idle` repeats it with the mock's idle timeout raised from 30 s to 600 s,
+# which removes the stall if it is backend connections expiring together:
+#
+#   sudo REPS=0 POLLER_CELLS="D:43300:3 A_iso:43300:3" POLLER_KINDS="ctl idle" POLLER_REPS=6 \
+#     scripts/loom-carrier-scheduler/run-diagnostics.sh
 #
 # On any exit the shield is reverted and perf_event_paranoid and /sys/kernel/tracing restored.
 set -euo pipefail
@@ -52,6 +63,7 @@ CELLS="${CELLS:-D:43300 C_iso:52600 A_iso:52600}"
 KINDS="${KINDS:-light sched wall jfr}"
 POLLER_CELLS="${POLLER_CELLS:-D:43300:1 D:43300:3}"
 POLLER_REPS="${POLLER_REPS:-6}"
+POLLER_KINDS="${POLLER_KINDS:-light}"
 PROBE_RATE=200
 
 IO_ARGS=(--backend jdk --warmup-mode open --warmup 30 --duration 60 --think-ms 30
@@ -67,6 +79,8 @@ kind_args() {
     sched) echo "${base[*]} --perf-sched --perf-sched-delay 20 --perf-sched-seconds 20" ;;
     wall)  echo "${base[*]} --profile wall" ;;
     jfr)   echo "${base[*]} --jfr" ;;
+    ctl)   echo "${base[*]} --backend-trace" ;;
+    idle)  echo "${base[*]} --backend-trace --mock-idle-timeout 600000" ;;
     *) die "unknown kind $1" ;;
   esac
 }
@@ -84,7 +98,7 @@ if [[ "${1:-}" == "--inner" ]]; then
   {
     echo "seed=$seed harness=$sha"
     echo "block 1: cells=$CELLS kinds=$KINDS reps=$REPS"
-    echo "block 2: cells=$POLLER_CELLS kinds=light reps=$POLLER_REPS"
+    echo "block 2: cells=$POLLER_CELLS kinds=$POLLER_KINDS reps=$POLLER_REPS"
   } >"$OUT_ROOT/plan.txt"
   : >"$OUT_ROOT/order.txt"
   plan() {  # <reps> <cells> <kinds>
@@ -97,7 +111,7 @@ if [[ "${1:-}" == "--inner" ]]; then
     done
   }
   plan "$REPS" "$CELLS" "$KINDS" >>"$OUT_ROOT/order.txt"
-  plan "$POLLER_REPS" "$POLLER_CELLS" light | sed 's/^r/q/' >>"$OUT_ROOT/order.txt"
+  plan "$POLLER_REPS" "$POLLER_CELLS" "$POLLER_KINDS" | sed 's/^r/q/' >>"$OUT_ROOT/order.txt"
   n=0; total="$(wc -l <"$OUT_ROOT/order.txt")"
   while read -r rep arm rate pm kind; do
     n=$((n + 1))
@@ -144,6 +158,6 @@ OUT_ROOT="$BENCH_ROOT/results/raw/loom-carrier-scheduler-diag/$(date -u +%Y%m%dT
 
 log "diagnostics into $OUT_ROOT"
 "$SHIELD" run -- env KERNEL_COMMIT="$KERNEL_COMMIT" CELLS="$CELLS" KINDS="$KINDS" REPS="$REPS" \
-  POLLER_CELLS="$POLLER_CELLS" POLLER_REPS="$POLLER_REPS" \
+  POLLER_CELLS="$POLLER_CELLS" POLLER_REPS="$POLLER_REPS" POLLER_KINDS="$POLLER_KINDS" \
   "$SCRIPT_DIR/run-diagnostics.sh" --inner "$OUT_ROOT"
 log "summary: $OUT_ROOT/summary.md"

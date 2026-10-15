@@ -36,17 +36,19 @@ def main(root):
 
     light = defaultdict(list)
     for d in trials:
-        if d["kind"] == "light":
-            light[(d["arm"], d["rate"], d.get("poller_mode"))].append(d)
+        if d["kind"] in ("light", "ctl", "idle"):
+            light[(d["arm"], d["rate"], d.get("poller_mode"), d["kind"])].append(d)
     if light:
-        out += ["## Light trials by cell and pollerMode", "",
+        out += ["## Least-perturbed trials by cell, pollerMode and kind", "",
                 "The least perturbed trials (probe and GC log only). Across fresh JVMs; the D-at-70 % "
                 "question is whether the split into fast and slow JVMs survives a change of pollerMode.", "",
-                "| arm | rate | pollerMode | n | wrk2 p99, sorted | probe slow ms, sorted |", "|:--|--:|--:|--:|:--|:--|"]
-        for (arm, rate, pm), ds in sorted(light.items()):
+                "`ctl` adds a backend trace; `idle` also raises the mock's idle timeout to 600 s.", "",
+                "| arm | rate | pollerMode | kind | n | wrk2 p99, sorted | probe slow ms, sorted |",
+                "|:--|--:|--:|:--|--:|:--|:--|"]
+        for (arm, rate, pm, kind), ds in sorted(light.items()):
             p99 = sorted(d["wrk2_p99_ms"] for d in ds if d["wrk2_p99_ms"] is not None)
             slow = sorted(d["probe"]["slow_time_ms"] for d in ds)
-            out.append(f"| {arm} | {rate} | {pm} | {len(ds)} | {', '.join(f'{x:.1f}' for x in p99)} | "
+            out.append(f"| {arm} | {rate} | {pm} | {kind} | {len(ds)} | {', '.join(f'{x:.1f}' for x in p99)} | "
                        f"{', '.join(f'{x:.0f}' for x in slow)} |")
         out.append("")
 
@@ -106,6 +108,36 @@ def main(root):
             out.append(f"| {d['trial']} | {j.get('pinned_events', '—')} | {j.get('pinned_total_ms', '—')} | "
                        f"{j.get('pinned_max_ms', '—')} | {j.get('overlapping_slow_windows', '—')} | "
                        f"{fmt({k: v['events'] for k, v in (j.get('by_frame') or {}).items()}, 3)} |")
+
+    backend = [d for d in trials if d.get("backend")]
+    if backend:
+        out += ["", "## Mock backend", "",
+                "The mock JVM's CPU (two CPUs, 200 % at most): median, largest one-second value and the second it "
+                "fell in, and the median after it. Where the backend was traced: the server's connections to the "
+                "mock (pool) and from the load generator (client), as established / CLOSE_WAIT / TIME_WAIT from "
+                "three seconds before that peak to three after, and the mock threads that rose by 5 points or more.", "",
+                "| trial | kind | wrk2 p99 | mock CPU median / peak @ s / after | pool est / CW / TW around peak | "
+                "client est / CW / TW around peak | mock threads at peak |",
+                "|:--|:--|--:|:--|:--|:--|:--|"]
+
+        def conn(c):
+            if not c:
+                return "—"
+            return " / ".join(str(c[f"{n}_around_peak"]) for n in ("established", "close_wait", "time_wait"))
+        for d in backend:
+            b = d["backend"]
+            thr = ", ".join(f"{k} {v['baseline']:.0f}→{v['at_peak']:.0f}"
+                            for k, v in list((b.get("threads_jumping_at_peak") or {}).items())[:4]) or "—"
+            out.append(f"| {d['trial']} | {d['kind']} | {d['wrk2_p99_ms']} | {b['cpu_median_pct']:.0f} / "
+                       f"{b['cpu_peak_pct']:.0f} @ {b['peak_second']} / {b['cpu_after_peak_median_pct']} | "
+                       f"{conn(b.get('pool_connections'))} | {conn(b.get('client_connections'))} | {thr} |")
+        prof = [d for d in backend if d["backend"].get("mock_profile")]
+        if prof:
+            out += ["", "Mock CPU profile, deepest Java frame, share of samples in the peak second against the whole "
+                    "window:", "", "| trial | peak second | whole window |", "|:--|:--|:--|"]
+            for d in prof:
+                mp = d["backend"]["mock_profile"]
+                out.append(f"| {d['trial']} | {fmt(mp['top_frames_peak_second'], 5)} | {fmt(mp['top_frames_whole'], 5)} |")
 
     (root / "summary.md").write_text("\n".join(out) + "\n")
     print(f"wrote {root / 'summary.md'} ({len(trials)} trials, {len(failed)} without diagnosis)")

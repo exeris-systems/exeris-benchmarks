@@ -458,6 +458,75 @@ def analyze_jfr(out, offset, windows, lo, hi):
                          for k, (c, t) in sorted(by_frame.items(), key=lambda kv: -kv[1][1])[:8]}}
 
 
+# --- mock backend ----------------------------------------------------------------------------------
+
+def analyze_backend(out):
+    """The mock JVM's CPU per second (pidstat-mock.txt, every trial), its largest jump, and, when
+    the backend was traced, the pool's open connections and the mock threads around that jump."""
+    path = out / "pidstat-mock.txt"
+    if not path.exists():
+        return None
+    cpu = [float(line.split()[7]) for line in path.read_text().splitlines()
+           if re.match(r"^\d\d:\d\d:\d\d", line) and line.split()[-1] == "java"]
+    if len(cpu) < 10:
+        return None
+    base = sorted(cpu[:len(cpu) * 2 // 3])[len(cpu) // 3]
+    peak = max(range(len(cpu)), key=lambda i: cpu[i])
+    after = cpu[peak + 2:]
+    res = {"cpu_median_pct": base, "cpu_peak_pct": cpu[peak], "peak_second": peak,
+           "cpu_after_peak_median_pct": sorted(after)[len(after) // 2] if after else None,
+           "cpu_by_second": cpu}
+    trace = out / "backend-trace.txt"
+    if trace.exists():
+        rows = [list(map(float, line.split())) for line in trace.read_text().splitlines()[1:]
+                if len(line.split()) == 7]
+        if rows:
+            lo, hi = max(0, peak - 3), min(len(rows), peak + 4)
+            for side, base_col in (("pool", 1), ("client", 4)):
+                cols = {name: [int(r[base_col + k]) for r in rows]
+                        for k, name in enumerate(("established", "close_wait", "time_wait"))}
+                res[f"{side}_connections"] = {
+                    **{f"{name}_around_peak": v[lo:hi] for name, v in cols.items()},
+                    **{f"{name}_max": max(v) for name, v in cols.items()},
+                    **{f"{name}_max_second": max(range(len(v)), key=lambda i: v[i]) for name, v in cols.items()},
+                    "established_min": min(cols["established"]),
+                    "by_second": cols}
+    prof = out / "profile-mock-cpu.jfr"
+    if prof.exists() and JFRCONV.exists():
+        wall0 = float((out / "clock.txt").read_text().split()[0])
+        def leaves(frm=None, to=None):
+            args = [str(JFRCONV), "--cpu", "-o", "collapsed"]
+            if frm is not None:
+                args += ["--from", str(int(frm)), "--to", str(int(to))]
+            text = subprocess.run(args + [str(prof), "/dev/stdout"], capture_output=True, text=True, env=ENV).stdout
+            acc = defaultdict(int)
+            for line in text.splitlines():
+                stack, _, n = line.rpartition(" ")
+                if stack and n.isdigit():
+                    acc[java_leaf(["thread"] + stack.split(";"))] += int(n)
+            tot = sum(acc.values())
+            return tot, {k: round(100 * v / tot, 1) for k, v in sorted(acc.items(), key=lambda kv: -kv[1])[:10]} if tot else {}
+        n_all, all_ = leaves()
+        n_pk, pk = leaves((wall0 + peak) * 1000, (wall0 + peak + 1) * 1000)
+        res["mock_profile"] = {"samples_whole": n_all, "samples_peak_second": n_pk,
+                               "top_frames_peak_second": pk, "top_frames_whole": all_}
+    threads = out / "pidstat-mock-threads.txt"
+    if threads.exists():
+        per = defaultdict(list)
+        for line in threads.read_text().splitlines():
+            f = line.split()
+            if len(f) == 11 and re.match(r"^\d\d:\d\d:\d\d", f[0]) and f[10].startswith("|__"):
+                per[f[10][3:]].append(float(f[8]))
+        jump = {}
+        for name, v in per.items():
+            if peak < len(v):
+                b = sorted(v[:len(v) * 2 // 3])[len(v) // 3]
+                if v[peak] - b >= 5:
+                    jump[name] = {"baseline": b, "at_peak": v[peak]}
+        res["threads_jumping_at_peak"] = dict(sorted(jump.items(), key=lambda kv: -(kv[1]["at_peak"] - kv[1]["baseline"]))[:8])
+    return res
+
+
 # --- report -------------------------------------------------------------------------------------
 
 def main(trial_dir):
@@ -483,6 +552,7 @@ def main(trial_dir):
         "gc_mock": analyze_pauses(out / "gc-mock.log", offset, windows, lo, hi),
         "wall": analyze_wall(out, offset, windows, lo, hi),
         "jfr": analyze_jfr(out, offset, windows, lo, hi),
+        "backend": analyze_backend(out),
     }
     (out / "diag.json").write_text(json.dumps(diag, indent=2) + "\n")
 
@@ -491,7 +561,7 @@ def main(trial_dir):
              f"probe: {probe['requests']} requests, p50 {probe['p50_ms']} p99 {probe['p99_ms']} max {probe['max_ms']} ms; "
              f"slow (> {probe['slow_threshold_ms']} ms): {probe['slow_requests']} requests in {probe['slow_windows']} windows, "
              f"{probe['slow_time_ms']} ms total, longest {probe['longest_window_ms']} ms"]
-    for key in ("sched", "gc_server", "gc_mock", "wall", "jfr"):
+    for key in ("sched", "gc_server", "gc_mock", "wall", "jfr", "backend"):
         if diag[key] is not None:
             lines.append(f"--- {key}")
             lines.append(json.dumps(diag[key], indent=1))

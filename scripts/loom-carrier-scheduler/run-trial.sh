@@ -42,6 +42,12 @@
 #                             connection per 10 req/s, so each has 100 ms per request
 #   --gc-log                  GC and safepoint logs from server and mock, with wall-clock time
 #   --jfr                     a JFR recording of the server, virtual-thread pinning from 1 ms
+#   --backend-trace           every second, on CLOCK_MONOTONIC: the server's connections to the mock
+#                             and from the load generator by TCP state (backend_trace.py), the
+#                             mock's per-thread CPU (pidstat-mock-threads.txt), and the mock's CPU
+#                             profile as JFR (profile-mock-cpu.jfr)
+#   --mock-idle-timeout MS    the mock's HTTP and transport idle timeout (default: the kernel's,
+#                             30 s); a configuration change, recorded as one
 #
 # Every diagnostic marks the trial as perturbed. When any is on, analyze_diag.py cuts the recorded
 # data to the probe's slow windows and writes diag.txt / diag.json beside trial.json.
@@ -70,6 +76,7 @@ CONNECTIONS=100 LOAD_THREADS=4 WARMUP=30 DURATION=30 THINK_MS=1 MOCK_THREADS=2 P
 SERVER_AUX_CPUS="0,6" CARRIER_CPUS="2,3" MOCK_CPUS="1,7" LOAD_CPUS="4,5,10,11" HEAP="1g" PROFILE="none"
 SERVER_PORT="" MOCK_PORT="" PERF_SCHED="no"
 PERF_SCHED_DELAY=0 PERF_SCHED_SECONDS="" WALL_INTERVAL="5ms" PROBE_RATE=0 GC_LOG="no" JFR="no"
+BACKEND_TRACE="no" MOCK_IDLE_TIMEOUT=""
 
 die() { echo "run-trial: $*" >&2; exit 2; }
 log() { echo "[$(date +%H:%M:%S)] $*" >&2; }
@@ -89,6 +96,8 @@ while [[ $# -gt 0 ]]; do
     --wall-interval) WALL_INTERVAL="$2" ;; --latency-probe) PROBE_RATE="$2" ;;
     --gc-log) GC_LOG="yes"; shift; continue ;;
     --jfr) JFR="yes"; shift; continue ;;
+    --backend-trace) BACKEND_TRACE="yes"; shift; continue ;;
+    --mock-idle-timeout) MOCK_IDLE_TIMEOUT="$2" ;;
     *) die "unknown option $1" ;;
   esac
   shift 2
@@ -102,6 +111,7 @@ done
 [[ "$WARMUP_MODE" =~ ^(closed|open)$ ]] || die "--warmup-mode must be closed or open"
 [[ -n "$OUT" ]] || die "--out is required"
 [[ "$PROBE_RATE" =~ ^[0-9]+$ ]] || die "--latency-probe must be an integer req/s"
+[[ -z "$MOCK_IDLE_TIMEOUT" || "$MOCK_IDLE_TIMEOUT" =~ ^[0-9]+$ ]] || die "--mock-idle-timeout must be milliseconds"
 [[ -z "$PERF_SCHED_SECONDS" ]] && PERF_SCHED_SECONDS=$((DURATION - PERF_SCHED_DELAY))
 (( PERF_SCHED_DELAY >= 0 && PERF_SCHED_SECONDS > 0 && PERF_SCHED_DELAY + PERF_SCHED_SECONDS <= DURATION )) \
   || die "--perf-sched-delay + --perf-sched-seconds must fit inside --duration"
@@ -176,6 +186,11 @@ if [[ "$GC_LOG" == "yes" ]]; then
   SERVER_DIAG_OPTS+=("-Xlog:gc,safepoint:file=$OUT/gc-server.log:time,uptimemillis,level,tags")
   MOCK_DIAG_OPTS+=("-Xlog:gc,safepoint:file=$OUT/gc-mock.log:time,uptimemillis,level,tags")
   DIAG+=("gc log")
+fi
+if [[ -n "$MOCK_IDLE_TIMEOUT" ]]; then
+  MOCK_DIAG_OPTS+=(-Dexeris.http.idleTimeoutMillis="$MOCK_IDLE_TIMEOUT"
+                   -Dexeris.transport.idleTimeoutMillis="$MOCK_IDLE_TIMEOUT")
+  DIAG+=("mock idle timeout ${MOCK_IDLE_TIMEOUT} ms")
 fi
 if [[ "$JFR" == "yes" ]]; then
   # Only the JDK's virtual-thread events: the kernel's own JFR events fire per request, and a
@@ -365,6 +380,21 @@ if [[ "$PERF_SCHED" == "yes" ]]; then
 fi
 
 python3 -c 'import time; print(f"{time.time():.6f} {time.monotonic():.6f}")' >"$OUT/clock.txt"
+BACKEND_TRACE_PID=""
+if [[ "$BACKEND_TRACE" == "yes" ]]; then
+  taskset -c "$LOAD_CPUS" python3 "$SCRIPT_DIR/backend_trace.py" "$MOCK_PORT" "$SERVER_PORT" "$DURATION" \
+    >"$OUT/backend-trace.txt" 2>&1 &
+  BACKEND_TRACE_PID=$!; PIDS+=("$BACKEND_TRACE_PID")
+  pidstat -u -t -p "$MOCK_PID" 1 "$DURATION" >"$OUT/pidstat-mock-threads.txt" 2>&1 &
+  PIDS+=("$!")
+  # The mock's CPU profile as JFR, so the second its CPU jumps can be cut out and compared.
+  if [[ -x "$ASYNC_PROFILER/bin/asprof" ]]; then
+    "$ASYNC_PROFILER/bin/asprof" -e cpu -i 5ms -d "$DURATION" -t -o jfr -f "$OUT/profile-mock-cpu.jfr" "$MOCK_PID" \
+      >"$OUT/asprof-mock-stdout.txt" 2>&1 &
+    PIDS+=("$!")
+  fi
+  DIAG+=("backend trace")
+fi
 PROBE_PID=""
 if (( PROBE_RATE > 0 )); then
   taskset -c "$LOAD_CPUS" python3 "$SCRIPT_DIR/latency_probe.py" --url "$URL" --rate "$PROBE_RATE" \
@@ -388,6 +418,7 @@ cp /proc/interrupts "$OUT/interrupts-end.txt"
 wait "$PIDSTAT_PID" 2>/dev/null || true
 [[ -n "$PROBE_PID" ]] && { wait "$PROBE_PID" 2>/dev/null || true; }
 [[ -n "$PERF_SCHED_PID" ]] && { wait "$PERF_SCHED_PID" 2>/dev/null || true; }
+[[ -n "$BACKEND_TRACE_PID" ]] && { wait "$BACKEND_TRACE_PID" 2>/dev/null || true; }
 if [[ "$JFR" == "yes" ]]; then
   "$LOOM_JDK/bin/jcmd" "$SERVER_PID" JFR.dump name=diag filename="$OUT/server.jfr" >"$OUT/jfr-dump.txt" 2>&1 || true
 fi

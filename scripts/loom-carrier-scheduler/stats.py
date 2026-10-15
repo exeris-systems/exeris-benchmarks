@@ -17,10 +17,12 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-ARMS = ("A_iso", "B_pin", "C_iso", "D")
+ARMS = ("A_iso", "B_float", "B_pin", "C_iso", "D")
 # B_pin's pairs separate the two halves of the 2x2: pinning under the stock algorithm (B_pin vs
 # A_iso) and the algorithm under pinning (D vs B_pin). A pair is tested only where both arms ran.
-PAIRS = (("D", "A_iso"), ("D", "C_iso"), ("C_iso", "A_iso"), ("B_pin", "A_iso"), ("D", "B_pin"))
+# B_float against A_iso checks that the SPI reproduction of the built-in scheduler is the built-in.
+PAIRS = (("D", "A_iso"), ("D", "C_iso"), ("C_iso", "A_iso"), ("B_pin", "A_iso"), ("D", "B_pin"),
+         ("B_float", "A_iso"))
 
 
 @lru_cache(maxsize=None)

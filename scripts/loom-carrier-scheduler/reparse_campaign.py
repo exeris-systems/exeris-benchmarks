@@ -14,7 +14,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 CARRIER_RE = {
     "A_iso": r"^ForkJoinPool-[0-9]+-worker-[0-9]+$",
-    "B_pin": r"^pinned-fjp-worker-[0-9]+$",
+    "B_pin": r"^spi-fjp-worker-[0-9]+$",
+    "B_float": r"^spi-fjp-worker-[0-9]+$",
     "C_iso": r"^exeris-carrier-[0-9]+$",
     "D": r"^exeris-carrier-[0-9]+$",
 }

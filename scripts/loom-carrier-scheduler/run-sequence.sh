@@ -23,8 +23,8 @@
 #   CAMPAIGNS [cpu io]            which campaigns to run, in order: cpu, io, cpu-slo, io-slo
 #
 # cpu and io are the three-arm ladders at 50-90 % of A_iso's saturation. cpu-slo and io-slo are the
-# capacity ladders: all four arms, 70-100 % in steps of 5 %, against a p99 objective fixed here
-# before the run (slo_ladder.py applies it):
+# capacity ladders: all four arms at 50 % and 70-100 % in steps of 5 %, plus B_float at 85 %,
+# against a p99 objective fixed here before the run (slo_ladder.py applies it):
 #
 #   sudo CAMPAIGNS="cpu-slo io-slo" scripts/loom-carrier-scheduler/run-sequence.sh
 #
@@ -73,13 +73,17 @@ IO_ARGS=(--fractions "0.5 0.7 0.85")
 IO_LOAD=(--think-ms 30 --connections 5000 --pool 2048 --max-connections 16384 --duration 60)
 
 # Capacity ladders. The objectives: CPU-bound p99 <= 5 ms, about twice the p99 every arm reaches
-# at 50-70 % of saturation; I/O-bound p99 <= 65 ms, twice the 32.5 ms a request costs with nothing
-# queued (30 ms backend think time plus the round trips). B_pin is the stock pool with its workers
-# pinned, the cell that separates pinning from the scheduling algorithm.
+# at 50-70 % of saturation; I/O-bound p99 <= 80 ms, a value no cell of the first campaign's median
+# lies near (the nearest are 65.8 and 96.3 ms). The 50 % rung anchors the ladder: capacity counts
+# only rates above which nothing failed, so the lowest rung has to be one every arm passes.
+# B_pin is the stock pool with its workers pinned, the cell that separates pinning from the
+# scheduling algorithm; B_float is the same class unpinned, run at 85 % only, to check the
+# reproduction against A_iso.
 SLO_ARMS="A_iso B_pin C_iso D"
-SLO_FRACTIONS="0.7 0.75 0.8 0.85 0.9 0.95 1.0"
-CPU_SLO_ARGS=(--arms "$SLO_ARMS" --fractions "$SLO_FRACTIONS" --reps "$SLO_REPS" --slo-p99-ms 5)
-IO_SLO_ARGS=(--arms "$SLO_ARMS" --fractions "$SLO_FRACTIONS" --reps "$SLO_REPS" --slo-p99-ms 65)
+SLO_FRACTIONS="0.5 0.7 0.75 0.8 0.85 0.9 0.95 1.0"
+SLO_COMMON=(--arms "$SLO_ARMS" --fractions "$SLO_FRACTIONS" --extra-cells "B_float:0.85" --reps "$SLO_REPS")
+CPU_SLO_ARGS=("${SLO_COMMON[@]}" --slo-p99-ms 5)
+IO_SLO_ARGS=("${SLO_COMMON[@]}" --slo-p99-ms 80)
 
 PREV_PARANOID="$(cat /proc/sys/kernel/perf_event_paranoid)"
 restore() {

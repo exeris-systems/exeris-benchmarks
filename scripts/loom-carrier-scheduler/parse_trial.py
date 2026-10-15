@@ -338,7 +338,7 @@ def main():
     server_log = (out / "server-stdout.txt").read_text(errors="replace") if (out / "server-stdout.txt").exists() else ""
     m = re.search(r"active=([a-z-]+), ffmArmed=(true|false)", server_log)
     transport = f"active={m.group(1)}, ffmArmed={m.group(2)}" if m else "no socket backend line"
-    if a.arm == "B_pin":
+    if a.arm in ("B_pin", "B_float"):
         # The pool retires idle workers and starts new ones; each start is a fresh binding, so the
         # count says how often the pinned set changed during the trial.
         gates["isolation"]["worker_starts"] = len(re.findall(r"\[PinnedForkJoinScheduler\] \S+ started", server_log))

@@ -44,6 +44,11 @@ import jdk.internal.misc.CarrierThread;
  * at one moment would not reach their replacements. maxPoolSize may not exceed the number of CPUs,
  * so a starting worker always finds one free.
  *
+ * <p>With {@code -Dloom.bench.pinned.bind=false} the workers bind nothing and the class is the
+ * built-in scheduler reproduced through the SPI, nothing more: the arm that checks the
+ * reproduction against the built-in itself, so that a difference between the pinned arm and the
+ * built-in can be attributed to the binding.
+ *
  * <p>Needs {@code --add-exports java.base/jdk.internal.misc=ALL-UNNAMED} and
  * {@code --add-exports java.base/jdk.internal.access=ALL-UNNAMED} at compile time and run time.
  */
@@ -52,12 +57,14 @@ public final class PinnedForkJoinScheduler implements Thread.VirtualThreadSchedu
     private static final JavaLangAccess JLA = SharedSecrets.getJavaLangAccess();
 
     private final ForkJoinPool pool;
+    private final boolean bind;
     private final int[] cpus;
     private final boolean[] held;
     private final AtomicInteger workerSeq = new AtomicInteger();
 
     public PinnedForkJoinScheduler(Thread.VirtualThreadScheduler builtin) {
-        this.cpus = parseCpus(System.getProperty("exeris.carrier.affinity"));
+        this.bind = Boolean.parseBoolean(System.getProperty("loom.bench.pinned.bind", "true"));
+        this.cpus = bind ? parseCpus(System.getProperty("exeris.carrier.affinity")) : new int[0];
         this.held = new boolean[cpus.length];
         String parallelismValue = System.getProperty("jdk.virtualThreadScheduler.parallelism");
         String maxPoolSizeValue = System.getProperty("jdk.virtualThreadScheduler.maxPoolSize");
@@ -75,14 +82,14 @@ public final class PinnedForkJoinScheduler implements Thread.VirtualThreadSchedu
         int minRunnable = minRunnableValue != null
                 ? Integer.parseInt(minRunnableValue)
                 : Integer.max(parallelism / 2, 1);
-        if (maxPoolSize > cpus.length) {
+        if (bind && maxPoolSize > cpus.length) {
             throw new IllegalStateException("jdk.virtualThreadScheduler.maxPoolSize " + maxPoolSize
                     + " exceeds the " + cpus.length + " CPUs of exeris.carrier.affinity; every worker needs its own");
         }
         this.pool = new ForkJoinPool(parallelism, PinnedCarrier::new, (t, e) -> { }, true,
                 0, maxPoolSize, minRunnable, p -> true, 30, TimeUnit.SECONDS);
         System.out.println("[PinnedForkJoinScheduler] parallelism=" + parallelism + " maxPoolSize=" + maxPoolSize
-                + " minRunnable=" + minRunnable + " cpus=" + Arrays.toString(cpus));
+                + " minRunnable=" + minRunnable + (bind ? " cpus=" + Arrays.toString(cpus) : " binding off"));
     }
 
     @Override
@@ -145,7 +152,11 @@ public final class PinnedForkJoinScheduler implements Thread.VirtualThreadSchedu
         @Override
         protected void onStart() {
             super.onStart();
-            setName("pinned-fjp-worker-" + workerSeq.incrementAndGet());
+            setName("spi-fjp-worker-" + workerSeq.incrementAndGet());
+            if (!bind) {
+                System.out.println("[PinnedForkJoinScheduler] " + getName() + " started, binding off");
+                return;
+            }
             slot = acquireCpu();
             // A worker without a CPU keeps the mask it inherited; the harness's isolation gate
             // rejects the trial rather than this scheduler hiding it.

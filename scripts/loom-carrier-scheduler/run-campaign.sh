@@ -15,6 +15,9 @@
 #   --arms "A_iso C_iso D"   --reps 5   --saturation-reps 3   --fractions "0.5 0.7 0.85"
 #   --rates "<r1> <r2> ..."  fixed ladder instead of fractions (skips the saturation step)
 #   --seed <int>             shuffle seed (default: from the clock, recorded)
+#   --extra-cells "<arm>:<fraction> ..."   cells run in every repetition beside the ladder, shuffled
+#                            with it, at a fraction of the same base (for an arm that does not need
+#                            the whole ladder)
 #   --slo-p99-ms <ms>        the p99 objective, recorded in campaign.json before the ladder starts;
 #                            slo_ladder.py then reports each arm's highest rate inside it
 #   --kernel-repo <path>     --out-root <dir>  (default results/raw/loom-carrier-scheduler)
@@ -26,7 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 KERNEL_COMMIT="" KERNEL_REPO="" BACKEND="" ARMS="A_iso C_iso D" REPS=5 SAT_REPS=3
-FRACTIONS="0.5 0.7 0.85" RATES="" SLO_P99_MS="" SEED="$(date +%s)" OUT_ROOT="$BENCH_ROOT/results/raw/loom-carrier-scheduler"
+FRACTIONS="0.5 0.7 0.85" RATES="" EXTRA_CELLS="" SLO_P99_MS="" SEED="$(date +%s)" OUT_ROOT="$BENCH_ROOT/results/raw/loom-carrier-scheduler"
 TRIAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -36,7 +39,7 @@ while [[ $# -gt 0 ]]; do
     --reps) REPS="$2"; shift 2 ;;                    --saturation-reps) SAT_REPS="$2"; shift 2 ;;
     --fractions) FRACTIONS="$2"; shift 2 ;;          --rates) RATES="$2"; shift 2 ;;
     --seed) SEED="$2"; shift 2 ;;                    --out-root) OUT_ROOT="$2"; shift 2 ;;
-    --slo-p99-ms) SLO_P99_MS="$2"; shift 2 ;;
+    --slo-p99-ms) SLO_P99_MS="$2"; shift 2 ;;      --extra-cells) EXTRA_CELLS="$2"; shift 2 ;;
     *) TRIAL_ARGS+=("$1" "$2"); shift 2 ;;
   esac
 done
@@ -78,9 +81,13 @@ print(int(statistics.median(vals)) if vals else 0)
 EOF
 )"
   [[ "$BASE" -gt 0 ]] || { echo "no valid A_iso saturation trial; ladder cannot be set" >&2; exit 1; }
-  RATES="$(for f in $FRACTIONS; do python3 -c "import sys;print(int(round(float(sys.argv[1])*int(sys.argv[2]),-2)))" "$f" "$BASE"; done | xargs)"
+  rate_of() { python3 -c "import sys;print(int(round(float(sys.argv[1])*int(sys.argv[2]),-2)))" "$1" "$BASE"; }
+  RATES="$(for f in $FRACTIONS; do rate_of "$f"; done | xargs)"
+  EXTRA="$(for c in $EXTRA_CELLS; do echo "${c%%:*}@$(rate_of "${c#*:}")"; done | xargs)"
 else
   BASE=""
+  [[ -z "$EXTRA_CELLS" ]] || { echo "--extra-cells needs the saturation base; drop --rates" >&2; exit 2; }
+  EXTRA=""
 fi
 
 cat >"$CAMPAIGN/campaign.json" <<EOF
@@ -94,6 +101,7 @@ cat >"$CAMPAIGN/campaign.json" <<EOF
   "ladder_base_a_iso_rps": ${BASE:-null},
   "fractions": "$( [[ -n "$BASE" ]] && echo "$FRACTIONS" )",
   "rates": "$RATES",
+  "extra_cells": "$EXTRA",
   "seed": "$SEED",
   "slo_p99_ms": ${SLO_P99_MS:-null},
   "trial_args": "$(printf '%s ' "${TRIAL_ARGS[@]:-}")"
@@ -103,6 +111,7 @@ EOF
 for rep in $(seq 1 "$REPS"); do
   cells=()
   for arm in $ARMS; do for rate in $RATES; do cells+=("$arm@$rate"); done; done
+  for cell in $EXTRA; do cells+=("$cell"); done
   for cell in $(printf '%s\n' "${cells[@]}" | shuffle "ladder-$rep"); do
     trial "r$rep-${cell%@*}-${cell#*@}" "${cell%@*}" "${cell#*@}"
   done

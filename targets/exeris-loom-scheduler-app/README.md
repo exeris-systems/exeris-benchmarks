@@ -136,8 +136,13 @@ ends, so the workers the pool creates after retiring idle ones are bound as well
 --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-exports java.base/jdk.internal.access=ALL-UNNAMED
 ```
 
-`maxPoolSize` may not exceed the number of CPUs. The workers are named `pinned-fjp-worker-<n>`,
-and each start prints `[PinnedForkJoinScheduler] pinned-fjp-worker-<n> started, bound to CPU <c>`.
+`maxPoolSize` may not exceed the number of CPUs. The workers are named `spi-fjp-worker-<n>`, and
+each start prints `[PinnedForkJoinScheduler] spi-fjp-worker-<n> started, bound to CPU <c>`.
+
+Arm `B_float` is the same class with `-Dloom.bench.pinned.bind=false` (no `exeris.carrier.affinity`
+needed): nothing is bound, and the arm is the built-in scheduler reproduced through the SPI. Run
+against `A_iso`, it checks the reproduction, so that a difference between `B_pin` and `A_iso` can be
+attributed to the binding.
 
 ## Startup output
 

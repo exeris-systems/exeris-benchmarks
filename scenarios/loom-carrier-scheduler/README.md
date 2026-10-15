@@ -36,12 +36,14 @@ All arms run the same number of carriers (one per `--carrier-cpus` entry, defaul
 |:--|:--|:--|
 | `A_iso` | stock `ForkJoinPool` (`parallelism = maxPoolSize = carriers`) | workers share the carrier CPUs |
 | `B_pin` | stock `ForkJoinPool`, same parameters (`PinnedForkJoinScheduler` in the target) | each worker binds itself to a free carrier CPU when it starts |
+| `B_float` | `B_pin`'s class with the binding off | workers share the carrier CPUs |
 | `C_iso` | `ExerisCarrierScheduler`, per-carrier MPSC queue, no work stealing | carriers share the carrier CPUs |
 | `D` | `ExerisCarrierScheduler` | each carrier bound to one carrier CPU (`exeris.carrier.affinity`) |
 
 The four arms are the scheduling algorithm × pinning table: `B_pin` against `A_iso` and `D` against
 `C_iso` isolate pinning; `C_iso` against `A_iso` and `D` against `B_pin` isolate the scheduler
-design. `B_pin` runs in the capacity ladders.
+design. `B_pin` runs in the capacity ladders. `B_float` checks that the SPI reproduction of the stock
+pool behaves as the stock pool: if it does not, `B_pin` is read against `B_float`.
 
 ## CPU layout (defaults, 6 cores / 12 threads, SMT siblings `n` and `n+6`)
 
@@ -97,12 +99,13 @@ window is an open question for the campaign, not a default.
 
 ## Capacity ladders
 
-`run-sequence.sh` with `CAMPAIGNS="cpu-slo io-slo"` runs all four arms at 70–100 % of `A_iso`'s
-saturation in steps of 5 %, 5 fresh JVMs per cell, against a p99 objective recorded in
-`campaign.json`: 5 ms in the CPU-bound regime, 65 ms in the I/O-bound one. `slo_ladder.py` writes
-`slo.md`: a rate passes for an arm when at least 4 trials are valid, every valid trial sustained
-the rate, and their median p99 is inside the objective; the arm's capacity is the highest rate up
-to which every rate passes.
+`run-sequence.sh` with `CAMPAIGNS="cpu-slo io-slo"` runs all four arms at 50 % and at 70–100 % of
+`A_iso`'s saturation in steps of 5 %, plus `B_float` at 85 %, 5 fresh JVMs per cell, against a p99
+objective recorded in `campaign.json`: 5 ms in the CPU-bound regime, 80 ms in the I/O-bound one.
+`slo_ladder.py` writes `slo.md`: a rate passes for an arm when at least 4 trials are valid, every
+valid trial sustained the rate, and their median p99 is inside the objective. The arm's capacity
+(primary) is the highest rate up to which every rate passes; the highest passing rate is
+supplementary. It also reports the reproduction check of `B_float` against `A_iso`.
 
 ## Shielding the host
 

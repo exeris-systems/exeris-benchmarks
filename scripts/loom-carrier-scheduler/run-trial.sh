@@ -8,7 +8,7 @@
 #
 # Usage:
 #   scripts/loom-carrier-scheduler/run-trial.sh --kernel-dir <dir from build-kernel.sh> \
-#       --arm A_iso|B_pin|C_iso|D --backend jdk|kernel --rate <req/s>|max --out <dir> [options]
+#       --arm A_iso|B_pin|B_float|C_iso|D --backend jdk|kernel --rate <req/s>|max --out <dir> [options]
 #
 # Options (defaults are the CPU-bound regime on a 6-core / 12-thread host):
 #   --connections 100   --load-threads 4      --warmup 30   --duration 30   (seconds)
@@ -104,7 +104,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$KERNEL_DIR" && -f "$KERNEL_DIR/kernel-cp.txt" ]] || die "--kernel-dir must point at a build-kernel.sh output"
-[[ "$ARM" =~ ^(A_iso|B_pin|C_iso|D)$ ]] || die "--arm must be A_iso, B_pin, C_iso or D"
+[[ "$ARM" =~ ^(A_iso|B_pin|B_float|C_iso|D)$ ]] || die "--arm must be A_iso, B_pin, B_float, C_iso or D"
 [[ "$BACKEND" =~ ^(jdk|kernel)$ ]] || die "--backend must be jdk or kernel"
 [[ "$RATE" == "max" || "$RATE" =~ ^[0-9]+$ ]] || die "--rate must be max or an integer"
 [[ "$PROFILE" =~ ^(none|cpu|wall)$ ]] || die "--profile must be none, cpu or wall"
@@ -168,7 +168,17 @@ case "$ARM" in
               -Dexeris.carrier.affinity="$CARRIER_CPUS"
               --add-exports java.base/jdk.internal.misc=ALL-UNNAMED
               --add-exports java.base/jdk.internal.access=ALL-UNNAMED)
-    CARRIER_NAME_RE='^pinned-fjp-worker-[0-9]+$' ;;
+    CARRIER_NAME_RE='^spi-fjp-worker-[0-9]+$' ;;
+  B_float)
+    # B_pin with the binding off: the built-in scheduler reproduced through the SPI, run against
+    # A_iso to check the reproduction. Its workers share the carrier CPUs as A_iso's do.
+    ARM_OPTS=(-Djdk.virtualThreadScheduler.implClass=eu.exeris.benchmarks.targets.loomscheduler.PinnedForkJoinScheduler
+              -Djdk.virtualThreadScheduler.parallelism="$CARRIER_COUNT"
+              -Djdk.virtualThreadScheduler.maxPoolSize="$CARRIER_COUNT"
+              -Dloom.bench.pinned.bind=false
+              --add-exports java.base/jdk.internal.misc=ALL-UNNAMED
+              --add-exports java.base/jdk.internal.access=ALL-UNNAMED)
+    CARRIER_NAME_RE='^spi-fjp-worker-[0-9]+$' ;;
   C_iso)
     ARM_OPTS=(-Djdk.virtualThreadScheduler.implClass="$SCHED_IMPL" -Dexeris.locality.allVthreads=true
               -Dexeris.transport.locality=true -Dexeris.carrier.count="$CARRIER_COUNT")

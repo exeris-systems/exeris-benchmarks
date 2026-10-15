@@ -65,9 +65,11 @@ whose readiness detection and continuation execution run on different threads.*
    Median p99 96 ms against 66 (`A_iso`) and 53 ms (`C_iso`), bimodal across JVMs — four trials
    at 39–62 ms, six at 94–129 ms — with both carriers at ~58 % CPU and no run-queue wait. In 9 of
    those 10 trials the mock backend's CPU jumps to its two-CPU limit at a fixed point near second
-   53 of the window; under the other arms it never does. Diagnostic trials rule out pinning, the
-   JDK read sub-poller, GC and connection churn (§5.3, §5.5). Why only `D` triggers the backend
-   event — the request pattern a pinned server produces, or an artefact of the mock — is open. It is the reason the hypothesis's "at every rate" does not hold.
+   53 of the window; under the other arms it never does. Diagnostic trials rule out virtual-thread
+   pinning in the server, the JDK read sub-poller, GC and connection churn (§5.3, §5.5). Why only
+   `D` triggers the backend event — the request pattern a pinned server produces, or an artefact
+   of the mock — is open. It is one of the two cells where the hypothesis's "at every rate" fails
+   (§4).
 4. **The stock scheduler's tail coincides with carrier stacking; the unpinned custom scheduler's does not.**
    Floating carriers wait 1–10 % of the window for a CPU near capacity; pinned carriers wait
    0.0–0.2 %. In diagnostic scheduler traces at I/O-bound 85 %, during `A_iso`'s slow windows its
@@ -138,8 +140,8 @@ AMD Ryzen 5 5600 (Zen 3, 6 cores / 12 threads, one CCX, 32 MiB L3), Linux `7.0.0
 `performance` governor on all CPUs, boost off. Profile `dev-isolated`: no graphical session,
 everything outside the benchmark confined by a cgroup cpuset (`host-shield.sh`: `system.slice`,
 `user.slice` and `init.scope` on CPUs 0, 6; movable IRQs moved there), the benchmark in its own
-slice. Not `isolcpus`, which would also stop the kernel balancing the floating arms' carriers —
-the behaviour those arms measure. Core 0 is therefore not exclusive: the confined system work and
+slice. I chose a cpuset shield over `isolcpus` deliberately: `isolcpus` would also stop the
+kernel balancing the floating arms' carriers, which is the behaviour those arms measure. Core 0 is therefore not exclusive: the confined system work and
 IRQs share it with the server's auxiliary threads, reactors and `Master-Poller`. §5.1 gives their
 run-queue wait.
 
@@ -374,8 +376,8 @@ where it rises to 3.9 % (`C_iso`) and 2.0 % (`D`). In that `D` cell it tracks th
 trials with p99 above 70 ms have `Master-Poller` wait 3.5–8.2 %, the six below 57 ms 1.1–2.1 %, and
 the same four are the only `D` trials whose pinned carriers waited at all (0.07–0.20 %), and the
 ones with the busiest mock backend (165–178 % against 151–162 %, §5.5). Something that reached core
-0, the carrier cores and the backend in the same trials fits that better than anything in the
-scheduler does; what it was is not traced. The
+0, the carrier cores and the backend in the same trials would explain all four together; what it
+was is not traced. The
 pilot, unshielded, saw 17–31 % reactor wait. The poller still shares a core with everything the
 shield confines, and near capacity that shows.
 
@@ -412,9 +414,12 @@ carriers park more during it than outside it: the server is waiting on its backe
 
 ![Mock backend CPU per second at I/O-bound 70 %, every trial: A_iso and C_iso flat at 126–149 %; under D the mock jumps to its 200 % ceiling near second 53 in nine of ten trials and stays higher afterwards](assets/chart-2026-10-14-mock-cpu-70.svg)
 
-**What it is not** (diagnostic trials, §5.5): virtual-thread pinning in the server (no pinning
-event of 1 ms or more; the mock was not recorded), the `pollerMode=3` read sub-poller (the split
-survives `pollerMode=1`), GC or safepoint pauses in either JVM (the server's cover 0–14 % of the
+My leading candidate was the `pollerMode=3` read sub-poller: a virtual thread queued FIFO behind
+everything else on a carrier that cannot steal, holding every backend socket it watches. The split
+surviving `pollerMode=1`, which moves the read pollers to platform threads, ruled it out.
+
+**What else it is not** (diagnostic trials, §5.5): virtual-thread pinning in the server (no pinning
+event of 1 ms or more; the mock was not recorded), GC or safepoint pauses in either JVM (the server's cover 0–14 % of the
 long slow windows and the mock's 0–2 %; the mock made no full collection, and its young pauses in
 the measured windows are at most 15 ms), carrier CPU contention (no carrier wait), and backend
 connection churn (the server's 2,048 backend connections and 5,000 client connections stay open
@@ -533,8 +538,8 @@ unshielded host. No comparative claim in this report rests on them.*
 
 ### 7.1 An unfair lock in the application starves under the custom scheduler
 
-The backend pool first used `LinkedBlockingDeque.takeFirst()`, which wakes the longest waiter but
-lets a newly arriving caller take a returned slot before the woken one runs. At closed-loop
+I hit this when an I/O-bound campaign stalled at saturation. The backend pool used
+`LinkedBlockingDeque.takeFirst()`, which wakes the longest waiter but lets a newly arriving caller take a returned slot before the woken one runs. At closed-loop
 saturation with 5,000 connections and 2,048 slots (shielded host, one trial per arm, campaign
 `20261013T131136Z-jdk-kbc26f9a0e8fc`, abandoned for this reason):
 
@@ -585,15 +590,16 @@ backend sockets registered with the JDK poller; whether that is the mechanism is
 - **Rates above 85 % in the I/O-bound regime, and 95 % in either.**
 - **More than two carriers, other CPU counts, or a dedicated machine.** Every figure is for two
   carriers on a 6-core desktop under a cgroup shield. `dev-isolated` results are not
-  `perf-box-amd64` results.
+  `perf-box-amd64` results. The shield is also the best case for pinning: a pinned carrier cannot
+  move off a CPU that other work lands on, which a shared host would test and this one does not.
 - **Saturation throughput as a claim** (§6).
 - **Anything about H2, H3, TLS, the Enterprise `io_uring` transport, or the stock JDK.** The
   custom scheduler exists only on the Loom `fibers` EA build.
 
 ### 8.1 Relation to the pilot
 
-The pilot (2026-09-27) is not evidence, but three of its readings were what this track set out to
-test, and they come out differently:
+The pilot (2026-09-27) is not evidence, but I designed this track to test three of its readings,
+and none of the three comes out the same:
 
 - **CPU premium.** The pilot measured ~222 % CPU for `D` against ~155 % for the stock scheduler at
   50 % load. Here the two are equal (§5.4). The carrier loop was measured to park correctly
@@ -706,6 +712,7 @@ Each run's `summary.md` is written by `summarize_diag.py` from the trials' `diag
 
 | date | change |
 |---|---|
+| 2026-10-15 | Third review pass. TL;DR 3 scopes the pinning exclusion to the server and names I/O-bound 70 % as one of the two cells where "at every rate" fails, not the only one. §5.1 no longer says a host-level disturbance fits `D`'s slow trials at 85 % better than the scheduler, which nothing there tested. The decisions and changes of mind are stated in the first person where they were made: the cpuset shield (§1.2), the read sub-poller as the leading candidate and its refutation (§5.3), the barging found when a campaign stalled (§7.1), the pilot's readings (§8.1). §8 states that the shield is the best case for pinning. |
 | 2026-10-15 | Second review pass. The summary, TL;DR 3, §4 and §8 no longer resolve what §5.3 leaves open: the 70 % stall is *observed* on the backend and occurs only under `D`, and whether it reflects `D`'s request pattern or the mock is open. TL;DR 4 and §4 scope the stacking result to what was traced (one cell, n = 3, tracer attached) and say "coincides with" rather than "is". §5.3 and §5.5 state which exclusions were measured in which JVM (pinning in the server only; GC in both, with no full collection in the mock) and add three tests that would separate the remaining candidates. |
 | 2026-10-15 | Diagnostic runs `20261015T041646Z` and `20261015T093021Z` added as §5.5 (exploratory). §5.3 is rewritten: `D`'s stall at I/O-bound 70 % is located on the mock backend's side, from the campaign's own per-second mock CPU (new figure), and five candidates are excluded, including the read sub-poller the review pass had named, which `pollerMode=1` does not remove. §4's mechanism clause is now assessed (stacking present for `A_iso`, absent for `C_iso`) and the 70 % exception attributed to the backend. §5.1 and §8 follow; the summary, TL;DR 3 and 4 and the *At a glance* row are restated to match. |
 | 2026-10-14 | §9 *Reproducing* added, with `stats.py`, which now produces every test in §2–§5 from the trial records; it ranks tied wait values by their mean rank, which moves two Spearman values in §5.1 (0.45 → 0.49 at CPU-bound 85 % `A_iso`, 0.77 → 0.78 at I/O-bound 70 % `A_iso`) and changes no conclusion. §5.1 adds that the four slowest `D` trials at I/O-bound 85 % are the only ones whose pinned carriers waited at all, and states `D`'s wait precisely (below 0.05 %, four trials at 0.07–0.20 %). |

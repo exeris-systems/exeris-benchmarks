@@ -1,0 +1,167 @@
+{
+  "schema": "loom-carrier-scheduler-trial/1",
+  "trial_dir": "r1-D-43300-p3-wall",
+  "arm": "D",
+  "backend": "jdk",
+  "rate": "43300",
+  "connections": 5000,
+  "load_threads": 4,
+  "warmup_s": 30,
+  "warmup_mode": "open",
+  "duration_s": 60,
+  "think_ms": 30.0,
+  "pool": 2048,
+  "max_connections": "16384",
+  "poller_mode": "3",
+  "layout": {
+    "carriers": "2,3",
+    "server_aux": "0,6",
+    "mock": "1,7",
+    "load": "4,5,10,11"
+  },
+  "kernel": {
+    "kernel_commit": "bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "kernel_requested_revision": "research/loom-carrier-scheduler",
+    "kernel_repo": "git@github.com:exeris-systems/exeris-kernel.git",
+    "built_from": "git archive bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "class_file_major": 72,
+    "class_file_minor": 0,
+    "jdk_build": "OpenJDK Runtime Environment (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)",
+    "built_at_utc": "2026-10-05T04:35:17Z"
+  },
+  "bench_commit": "71112fae47da3107cb8d251d58b2df64f91055fd",
+  "load": {
+    "requests_per_sec": 41060.06,
+    "percentiles_ms": {
+      "p50": 32.03,
+      "p75": 32.61,
+      "p90": 33.38,
+      "p99": 89.28,
+      "p99.9": 106.5,
+      "p99.99": 118.46,
+      "p99.999": 120.77,
+      "p100": 123.2
+    },
+    "socket_errors": null,
+    "non_2xx": 0,
+    "calibration_mean_ms": 32.223
+  },
+  "pidstat": {
+    "process": {
+      "tid": "-",
+      "%usr": 66.33,
+      "%system": 92.47,
+      "%wait": 0.0,
+      "%CPU": 158.8,
+      "cswch/s": 0.22,
+      "nvcswch/s": 0.02
+    },
+    "carriers": {
+      "count": 2,
+      "cpu_pct": 106.9,
+      "usr_pct": 35.47,
+      "sys_pct": 71.43,
+      "wait_pct_max": 0.02,
+      "wait_pct_each": {
+        "exeris-carrier-0": 0.02,
+        "exeris-carrier-1": 0.02
+      },
+      "nvcswch_per_s": 0.37
+    },
+    "reactors": {
+      "count": 2,
+      "cpu_pct": 40.09,
+      "usr_pct": 20.64,
+      "sys_pct": 19.45,
+      "wait_pct_max": 2.08,
+      "wait_pct_each": {
+        "carrier/native-tcp/reactor/0": 2.03,
+        "carrier/native-tcp/reactor/1": 2.08
+      },
+      "nvcswch_per_s": 259.31
+    }
+  },
+  "perf_stat": {
+    "task_clock_ms": 95416.14,
+    "elapsed_s": 60.003434055,
+    "cpus_utilized": 1.59,
+    "cycles": 309350200299.0,
+    "instructions": 243219309764.0,
+    "ipc": 0.786,
+    "context_switches_per_s": 32587.9,
+    "cpu_migrations": 39981.0
+  },
+  "perf_stat_status": "measured",
+  "profile": "wall",
+  "perf_sched": null,
+  "diagnostics": [
+    "gc log",
+    "async-profiler wall",
+    "latency probe 200 req/s"
+  ],
+  "gates": {
+    "load": {
+      "pass": true,
+      "achieved_ratio": 1.0004,
+      "raw_ratio": 0.9483,
+      "connection_ramp_s": 6.25,
+      "reason": "achieved 41060.1 req/s of 41045 expected at target 43300"
+    },
+    "errors": {
+      "pass": true,
+      "socket_errors": {},
+      "non_2xx": 0
+    },
+    "isolation": {
+      "pass": true,
+      "problems": [],
+      "carriers": {
+        "exeris-carrier-0": [
+          2
+        ],
+        "exeris-carrier-1": [
+          3
+        ]
+      }
+    },
+    "transport": {
+      "pass": true,
+      "observed": "active=posix-hybrid, ffmArmed=true",
+      "expected": "active=posix-hybrid, ffmArmed=true"
+    },
+    "unperturbed": {
+      "pass": false,
+      "reason": "async-profiler wall, gc log, latency probe 200 req/s attached"
+    },
+    "host_shielded": {
+      "pass": true,
+      "problems": []
+    },
+    "harness_clean": {
+      "pass": false,
+      "reason": "2 uncommitted harness file(s)"
+    }
+  },
+  "host": {
+    "state": {
+      "graphical_target": "inactive",
+      "allowed_cpus.system.slice": "0 6",
+      "allowed_cpus.user.slice": "0 6",
+      "allowed_cpus.init.scope": "0 6",
+      "own_cgroup": "/bench.slice/run-p8536-i964.service",
+      "own_cpus_allowed": "0-11",
+      "isolated": "",
+      "boost": "0",
+      "governors": "12 performance"
+    },
+    "shielded": true,
+    "problems": [],
+    "interrupts_on_carrier_cpus_during_window": {
+      "cpu2": 246768,
+      "cpu3": 246449
+    }
+  },
+  "valid": false,
+  "sustained": true,
+  "evidence": false
+}

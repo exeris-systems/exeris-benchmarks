@@ -1,0 +1,166 @@
+{
+  "schema": "loom-carrier-scheduler-trial/1",
+  "trial_dir": "sat-r1-A_iso",
+  "arm": "A_iso",
+  "backend": "jdk",
+  "rate": "max",
+  "connections": 5000,
+  "load_threads": 4,
+  "warmup_s": 30,
+  "warmup_mode": "open",
+  "duration_s": 60,
+  "think_ms": 30.0,
+  "pool": 5000,
+  "max_connections": "16384",
+  "poller_mode": "3",
+  "layout": {
+    "carriers": "2,3",
+    "server_aux": "0,6",
+    "mock": "1,7",
+    "load": "4,5,10,11"
+  },
+  "kernel": {
+    "kernel_commit": "bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "kernel_requested_revision": "research/loom-carrier-scheduler",
+    "kernel_repo": "git@github.com:exeris-systems/exeris-kernel.git",
+    "built_from": "git archive bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "class_file_major": 72,
+    "class_file_minor": 0,
+    "jdk_build": "OpenJDK Runtime Environment (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)",
+    "built_at_utc": "2026-10-05T04:35:17Z"
+  },
+  "bench_commit": "84685a1c331c9f0193d614be65c9c8406aa4fdff",
+  "load": {
+    "requests_per_sec": 33520.14,
+    "percentiles_ms": {
+      "p50": 30.24,
+      "p75": 30.32,
+      "p90": 30.45,
+      "p99": 31.44
+    },
+    "socket_errors": {
+      "connect": 3983,
+      "read": 0,
+      "write": 0,
+      "timeout": 0
+    },
+    "non_2xx": 0,
+    "calibration_mean_ms": null
+  },
+  "pidstat": {
+    "process": {
+      "tid": "-",
+      "%usr": 37.98,
+      "%system": 75.52,
+      "%wait": 0.0,
+      "%CPU": 113.5,
+      "cswch/s": 0.0,
+      "nvcswch/s": 0.0
+    },
+    "carriers": {
+      "count": 2,
+      "cpu_pct": 82.34,
+      "usr_pct": 28.72,
+      "sys_pct": 53.62,
+      "wait_pct_max": 0.07,
+      "wait_pct_each": {
+        "ForkJoinPool-1-worker-1": 0.07,
+        "ForkJoinPool-1-worker-2": 0.07
+      },
+      "nvcswch_per_s": 5.02
+    },
+    "reactors": {
+      "count": 2,
+      "cpu_pct": 23.45,
+      "usr_pct": 6.38,
+      "sys_pct": 17.07,
+      "wait_pct_max": 0.68,
+      "wait_pct_each": {
+        "carrier/native-tcp/reactor/0": 0.68,
+        "carrier/native-tcp/reactor/1": 0.62
+      },
+      "nvcswch_per_s": 171.25
+    }
+  },
+  "perf_stat": {
+    "task_clock_ms": 68043.39,
+    "elapsed_s": 60.003160777,
+    "cpus_utilized": 1.134,
+    "cycles": 215473912969.0,
+    "instructions": 160999599048.0,
+    "ipc": 0.747,
+    "context_switches_per_s": 31678.8,
+    "cpu_migrations": 46520.0
+  },
+  "perf_stat_status": "measured",
+  "profile": "none",
+  "perf_sched": null,
+  "gates": {
+    "load": {
+      "pass": true,
+      "reason": "closed loop"
+    },
+    "errors": {
+      "pass": false,
+      "socket_errors": {
+        "connect": 3983,
+        "read": 0,
+        "write": 0,
+        "timeout": 0
+      },
+      "non_2xx": 0
+    },
+    "isolation": {
+      "pass": true,
+      "problems": [],
+      "carriers": {
+        "ForkJoinPool-1-worker-1": [
+          2,
+          3
+        ],
+        "ForkJoinPool-1-worker-2": [
+          2,
+          3
+        ]
+      }
+    },
+    "transport": {
+      "pass": true,
+      "observed": "active=posix-hybrid, ffmArmed=true",
+      "expected": "active=posix-hybrid, ffmArmed=true"
+    },
+    "unperturbed": {
+      "pass": true,
+      "reason": "no tracer or profiler attached"
+    },
+    "host_shielded": {
+      "pass": true,
+      "problems": []
+    },
+    "harness_clean": {
+      "pass": true,
+      "reason": "harness files committed"
+    }
+  },
+  "host": {
+    "state": {
+      "graphical_target": "inactive",
+      "allowed_cpus.system.slice": "0 6",
+      "allowed_cpus.user.slice": "0 6",
+      "allowed_cpus.init.scope": "0 6",
+      "own_cgroup": "/bench.slice/run-p90075-i76123.service",
+      "own_cpus_allowed": "0-11",
+      "isolated": "",
+      "boost": "0",
+      "governors": "12 performance"
+    },
+    "shielded": true,
+    "problems": [],
+    "interrupts_on_carrier_cpus_during_window": {
+      "cpu2": 232811,
+      "cpu3": 231498
+    }
+  },
+  "valid": false,
+  "evidence": false
+}

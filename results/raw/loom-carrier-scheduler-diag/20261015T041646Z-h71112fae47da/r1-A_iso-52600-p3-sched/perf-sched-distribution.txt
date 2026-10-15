@@ -1,0 +1,16 @@
+C1 CompilerThread0                              3.7 ms  cpu0=100.0%
+C2 CompilerThread0                             21.3 ms  cpu0=49.6%  cpu6=50.4%
+Cleaner-0                                       0.0 ms  cpu6=100.0%
+Common-Cleaner                                  0.0 ms  cpu6=100.0%
+ForkJoinPool-1-worker-1                     13726.1 ms  cpu2=41.6%  cpu3=58.4%
+ForkJoinPool-1-worker-2                     13729.6 ms  cpu2=48.0%  cpu3=52.0%
+GC Thread#0                                    51.6 ms  cpu0=52.7%  cpu6=47.3%
+GC Thread#1                                    50.0 ms  cpu0=52.3%  cpu6=47.7%
+Master-Poller                                1427.8 ms  cpu0=51.4%  cpu6=48.6%
+Monitor Deflation Thread                        1.2 ms  cpu0=43.4%  cpu6=56.6%
+Service Thread                                  0.3 ms  cpu0=44.5%  cpu6=55.5%
+VM Periodic Task Thread                         0.1 ms  cpu0=25.6%  cpu6=74.4%
+VM Thread                                       1.4 ms  cpu0=18.6%  cpu6=81.4%
+VirtualThread-unparker                          0.1 ms  cpu6=100.0%
+carrier/native-tcp/reactor/0                 4731.9 ms  cpu0=100.0%
+carrier/native-tcp/reactor/1                 4856.8 ms  cpu6=100.0%

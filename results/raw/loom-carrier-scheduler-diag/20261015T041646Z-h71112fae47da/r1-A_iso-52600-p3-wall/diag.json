@@ -1,0 +1,292 @@
+{
+  "trial": "r1-A_iso-52600-p3-wall",
+  "arm": "A_iso",
+  "rate": "52600",
+  "poller_mode": "3",
+  "diagnostics": [
+    "gc log",
+    "async-profiler wall",
+    "latency probe 200 req/s"
+  ],
+  "wrk2_p99_ms": 121.34,
+  "probe": {
+    "requests": 12000,
+    "failed": 0,
+    "p50_ms": 31.1,
+    "p99_ms": 126.03,
+    "max_ms": 210.64,
+    "slow_threshold_ms": 62.2,
+    "slow_requests": 1657,
+    "slow_windows": 27,
+    "slow_time_ms": 11661.5,
+    "longest_window_ms": 2239.3,
+    "top_windows": [
+      {
+        "start_s": 11.985,
+        "duration_ms": 2239.3,
+        "requests": 448,
+        "max_latency_ms": 210.6
+      },
+      {
+        "start_s": 58.9,
+        "duration_ms": 969.6,
+        "requests": 194,
+        "max_latency_ms": 138.4
+      },
+      {
+        "start_s": 8.035,
+        "duration_ms": 812.3,
+        "requests": 163,
+        "max_latency_ms": 164.8
+      },
+      {
+        "start_s": 21.88,
+        "duration_ms": 773.0,
+        "requests": 155,
+        "max_latency_ms": 176.2
+      },
+      {
+        "start_s": 53.75,
+        "duration_ms": 732.7,
+        "requests": 147,
+        "max_latency_ms": 163.6
+      },
+      {
+        "start_s": 10.86,
+        "duration_ms": 672.6,
+        "requests": 135,
+        "max_latency_ms": 164.9
+      },
+      {
+        "start_s": 52.01,
+        "duration_ms": 668.0,
+        "requests": 134,
+        "max_latency_ms": 128.6
+      },
+      {
+        "start_s": 33.0,
+        "duration_ms": 528.9,
+        "requests": 106,
+        "max_latency_ms": 131.1
+      },
+      {
+        "start_s": 55.205,
+        "duration_ms": 483.1,
+        "requests": 97,
+        "max_latency_ms": 135.2
+      },
+      {
+        "start_s": 36.425,
+        "duration_ms": 469.1,
+        "requests": 94,
+        "max_latency_ms": 156.4
+      }
+    ]
+  },
+  "sched": null,
+  "gc_server": {
+    "pauses": 34,
+    "total_ms": 475.0,
+    "max_ms": 29.53,
+    "overlapping_slow_windows": 10,
+    "slow_time_covered_pct": 1.7,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 29.53
+      },
+      {
+        "what": "Pause Young",
+        "ms": 29.11
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 23.52
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 22.97
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 20.81
+      }
+    ]
+  },
+  "gc_mock": {
+    "pauses": 32,
+    "total_ms": 122.0,
+    "max_ms": 5.76,
+    "overlapping_slow_windows": 4,
+    "slow_time_covered_pct": 0.1,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 5.76
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.38
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.29
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.23
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.2
+      }
+    ]
+  },
+  "wall": {
+    "windows_cut": 27,
+    "overall": {
+      "carriers": {
+        "samples": 23992,
+        "top_leaves_pct": {
+          "jdk/internal/misc/Unsafe.park": 36.0,
+          "sun/nio/ch/SocketDispatcher.write0": 16.8,
+          "java/lang/invoke/LambdaForm$MH.0x00000000152b4400.invoke": 16.1,
+          "sun/nio/ch/SocketDispatcher.read0": 6.8,
+          "sun/nio/ch/EPoll.ctl": 2.8,
+          "java/util/concurrent/ForkJoinPool.signalWork": 1.6,
+          "sun/nio/ch/EPoll.wait": 1.5,
+          "eu/exeris/kernel/community/transport/NativeTcpStream.writeDirect": 1.0
+        }
+      },
+      "VirtualThread-unparker": {
+        "samples": 12006,
+        "top_leaves_pct": {
+          "jdk/internal/misc/Unsafe.park": 100.0
+        }
+      },
+      "carrier/native-tcp/acceptor": {
+        "samples": 12011,
+        "top_leaves_pct": {
+          "sun/nio/ch/Net.accept": 99.9,
+          "eu/exeris/kernel/community/transport/NativeTcpCarrier.acceptPendingConnections": 0.0,
+          "sun/nio/ch/IOUtil.configureBlocking": 0.0,
+          "sun/nio/ch/Net.setIntOption0": 0.0,
+          "sun/nio/ch/EventFD.set0": 0.0,
+          "sun/nio/ch/Net.localPort": 0.0,
+          "sun/nio/ch/Net.localInetAddress": 0.0,
+          "eu/exeris/kernel/community/transport/NativeTcpStream.<init>": 0.0
+        }
+      },
+      "carrier/native-tcp/reactor/1": {
+        "samples": 12000,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 85.9,
+          "java/lang/invoke/LambdaForm$MH.0x00000000152b4400.invoke": 5.6,
+          "sun/nio/ch/SelectorImpl.selectNow": 3.0,
+          "jdk/internal/foreign/SharedSession$SharedResourceList.add": 1.6,
+          "jdk/internal/misc/Unsafe.allocateMemory0": 0.7,
+          "sun/nio/ch/EPollSelectorImpl.processUpdateQueue": 0.5,
+          "jdk/internal/misc/Unsafe.unpark": 0.4,
+          "java/util/HashMap.getNode": 0.3
+        }
+      },
+      "Write-Poller": {
+        "samples": 12011,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 100.0
+        }
+      },
+      "Master-Poller": {
+        "samples": 12000,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 99.5,
+          "jdk/internal/misc/Unsafe.unpark": 0.4,
+          "java/util/concurrent/ForkJoinTask.adapt": 0.1,
+          "java/util/concurrent/ForkJoinPool$WorkQueue.push": 0.0,
+          "java/util/concurrent/ConcurrentHashMap.addCount": 0.0,
+          "java/util/concurrent/ForkJoinPool$WorkQueue.tryLockPhase": 0.0
+        }
+      },
+      "carrier/native-tcp/reactor/0": {
+        "samples": 12000,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 86.8,
+          "java/lang/invoke/LambdaForm$MH.0x00000000152b4400.invoke": 6.4,
+          "jdk/internal/foreign/SharedSession$SharedResourceList.add": 1.6,
+          "sun/nio/ch/SelectorImpl.selectNow": 1.6,
+          "jdk/internal/misc/Unsafe.allocateMemory0": 0.6,
+          "sun/nio/ch/EPollSelectorImpl.processUpdateQueue": 0.4,
+          "eu/exeris/kernel/community/memory/CommunityArenaShardPool.allocateSegment": 0.3,
+          "jdk/internal/misc/Unsafe.unpark": 0.3
+        }
+      }
+    },
+    "in_slow": {
+      "carriers": {
+        "samples": 4633,
+        "top_leaves_pct": {
+          "sun/nio/ch/SocketDispatcher.write0": 24.5,
+          "java/lang/invoke/LambdaForm$MH.0x00000000152b4400.invoke": 23.5,
+          "jdk/internal/misc/Unsafe.park": 11.1,
+          "sun/nio/ch/SocketDispatcher.read0": 9.9,
+          "sun/nio/ch/EPoll.ctl": 3.8,
+          "eu/exeris/kernel/community/transport/NativeTcpStream.writeDirect": 1.6,
+          "sun/nio/ch/EPoll.wait": 1.4,
+          "java/util/concurrent/locks/AbstractQueuedSynchronizer.signalNext": 1.1
+        }
+      },
+      "carrier/native-tcp/reactor/0": {
+        "samples": 2304,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 75.5,
+          "java/lang/invoke/LambdaForm$MH.0x00000000152b4400.invoke": 11.2,
+          "jdk/internal/foreign/SharedSession$SharedResourceList.add": 7.1,
+          "jdk/internal/misc/Unsafe.allocateMemory0": 2.7,
+          "sun/nio/ch/SelectorImpl.selectNow": 0.8,
+          "sun/nio/ch/EPollSelectorImpl.processUpdateQueue": 0.4,
+          "eu/exeris/kernel/community/memory/CommunityArenaShardPool.allocateSegment": 0.3,
+          "java/util/HashMap.getNode": 0.2
+        }
+      },
+      "Master-Poller": {
+        "samples": 2122,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 100.0,
+          "java/util/concurrent/ForkJoinPool$WorkQueue.tryLockPhase": 0.0
+        }
+      },
+      "carrier/native-tcp/reactor/1": {
+        "samples": 2314,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 75.7,
+          "java/lang/invoke/LambdaForm$MH.0x00000000152b4400.invoke": 9.6,
+          "jdk/internal/foreign/SharedSession$SharedResourceList.add": 7.4,
+          "jdk/internal/misc/Unsafe.allocateMemory0": 3.3,
+          "sun/nio/ch/SelectorImpl.selectNow": 1.3,
+          "sun/nio/ch/EPollSelectorImpl.processUpdateQueue": 0.6,
+          "java/util/concurrent/ForkJoinTask.adapt": 0.4,
+          "java/util/HashMap.getNode": 0.2
+        }
+      },
+      "VirtualThread-unparker": {
+        "samples": 1031,
+        "top_leaves_pct": {
+          "jdk/internal/misc/Unsafe.park": 100.0
+        }
+      },
+      "Write-Poller": {
+        "samples": 1001,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 100.0
+        }
+      },
+      "carrier/native-tcp/acceptor": {
+        "samples": 1002,
+        "top_leaves_pct": {
+          "sun/nio/ch/Net.accept": 100.0
+        }
+      }
+    }
+  },
+  "jfr": null
+}

@@ -1,0 +1,278 @@
+{
+  "trial": "r3-D-43300-p3-sched",
+  "arm": "D",
+  "rate": "43300",
+  "poller_mode": "3",
+  "diagnostics": [
+    "gc log",
+    "perf sched record",
+    "latency probe 200 req/s"
+  ],
+  "wrk2_p99_ms": 65.28,
+  "probe": {
+    "requests": 12000,
+    "failed": 0,
+    "p50_ms": 30.66,
+    "p99_ms": 53.09,
+    "max_ms": 87.47,
+    "slow_threshold_ms": 61.31,
+    "slow_requests": 94,
+    "slow_windows": 4,
+    "slow_time_ms": 750.6,
+    "longest_window_ms": 503.1,
+    "top_windows": [
+      {
+        "start_s": 52.795,
+        "duration_ms": 503.1,
+        "requests": 101,
+        "max_latency_ms": 87.5
+      },
+      {
+        "start_s": 18.8,
+        "duration_ms": 108.8,
+        "requests": 22,
+        "max_latency_ms": 78.8
+      },
+      {
+        "start_s": 59.795,
+        "duration_ms": 73.9,
+        "requests": 15,
+        "max_latency_ms": 73.9
+      },
+      {
+        "start_s": 4.89,
+        "duration_ms": 64.8,
+        "requests": 13,
+        "max_latency_ms": 64.8
+      }
+    ]
+  },
+  "sched": {
+    "recorded_s": 20.0,
+    "slow_s_in_recording": 0,
+    "threads": {
+      "Master-Poller": {
+        "state_pct_in_slow": {},
+        "state_pct_outside": {
+          "sleep": 88.9,
+          "run": 7.0,
+          "wait": 4.2
+        },
+        "wait_episodes": 128613,
+        "wait_max_ms": 1.08,
+        "wait_p99_ms": 0.031,
+        "waited_behind_in_slow": {},
+        "waited_behind_outside": {
+          "idle": 70.5,
+          "server:carrier/native-tcp/reactor/0": 14.7,
+          "server:carrier/native-tcp/reactor/1": 14.3,
+          "other:irq/87-rtw89_pc": 0.3,
+          "other:NetworkManager": 0.1
+        }
+      },
+      "VirtualThread-unparker": {
+        "state_pct_in_slow": {},
+        "state_pct_outside": {
+          "sleep": 100.0,
+          "run": 0.0,
+          "wait": 0.0
+        },
+        "wait_episodes": 2,
+        "wait_max_ms": 0.03,
+        "wait_p99_ms": 0.026,
+        "waited_behind_in_slow": {},
+        "waited_behind_outside": {
+          "server:carrier/native-tcp/reactor/1": 86.7,
+          "idle": 13.3
+        }
+      },
+      "Write-Poller": {
+        "state_pct_in_slow": {},
+        "state_pct_outside": {},
+        "wait_episodes": 0,
+        "wait_max_ms": 0,
+        "wait_p99_ms": 0,
+        "waited_behind_in_slow": {},
+        "waited_behind_outside": {}
+      },
+      "carrier/native-tcp/acceptor": {
+        "state_pct_in_slow": {},
+        "state_pct_outside": {},
+        "wait_episodes": 0,
+        "wait_max_ms": 0,
+        "wait_p99_ms": 0,
+        "waited_behind_in_slow": {},
+        "waited_behind_outside": {}
+      },
+      "carrier/native-tcp/reactor/0": {
+        "state_pct_in_slow": {},
+        "state_pct_outside": {
+          "sleep": 75.2,
+          "run": 19.5,
+          "wait": 5.3
+        },
+        "wait_episodes": 188397,
+        "wait_max_ms": 3.73,
+        "wait_p99_ms": 0.016,
+        "waited_behind_in_slow": {},
+        "waited_behind_outside": {
+          "idle": 85.5,
+          "server:Master-Poller": 13.2,
+          "server:server JVM internal": 0.7,
+          "other:kworker/u48": 0.2,
+          "other:NetworkManager": 0.2
+        }
+      },
+      "carrier/native-tcp/reactor/1": {
+        "state_pct_in_slow": {},
+        "state_pct_outside": {
+          "sleep": 75.2,
+          "run": 19.4,
+          "wait": 5.3
+        },
+        "wait_episodes": 189272,
+        "wait_max_ms": 3.66,
+        "wait_p99_ms": 0.016,
+        "waited_behind_in_slow": {},
+        "waited_behind_outside": {
+          "idle": 84.8,
+          "server:Master-Poller": 13.1,
+          "other:irq/87-rtw89_pc": 1.0,
+          "server:server JVM internal": 0.6,
+          "other:systemd-oomd": 0.2
+        }
+      },
+      "exeris-carrier-0": {
+        "state_pct_in_slow": {},
+        "state_pct_outside": {
+          "run": 56.3,
+          "sleep": 41.1,
+          "wait": 2.6
+        },
+        "wait_episodes": 111152,
+        "wait_max_ms": 0.06,
+        "wait_p99_ms": 0.008,
+        "waited_behind_in_slow": {},
+        "waited_behind_outside": {
+          "idle": 100.0,
+          "other:kworker/2": 0.0,
+          "other:perf": 0.0,
+          "other:migration": 0.0,
+          "other:ksoftirqd": 0.0
+        }
+      },
+      "exeris-carrier-1": {
+        "state_pct_in_slow": {},
+        "state_pct_outside": {
+          "run": 56.4,
+          "sleep": 41.0,
+          "wait": 2.6
+        },
+        "wait_episodes": 111329,
+        "wait_max_ms": 0.02,
+        "wait_p99_ms": 0.008,
+        "waited_behind_in_slow": {},
+        "waited_behind_outside": {
+          "idle": 100.0,
+          "other:kworker/3": 0.0,
+          "other:migration": 0.0,
+          "other:kworker/u48": 0.0
+        }
+      },
+      "server JVM internal": {
+        "state_pct_in_slow": {},
+        "state_pct_outside": {
+          "sleep": 99.9,
+          "run": 0.1,
+          "wait": 0.0
+        },
+        "wait_episodes": 75,
+        "wait_max_ms": 3.66,
+        "wait_p99_ms": 3.664,
+        "waited_behind_in_slow": {},
+        "waited_behind_outside": {
+          "idle": 58.5,
+          "server:carrier/native-tcp/reactor/0": 20.8,
+          "server:carrier/native-tcp/reactor/1": 18.7,
+          "other:irq/87-rtw89_pc": 1.2,
+          "other:containerd": 0.7
+        }
+      }
+    },
+    "carrier_cpus": {
+      "cpu2": {
+        "idle_pct_in_slow": null,
+        "idle_pct_outside": 43.6
+      },
+      "cpu3": {
+        "idle_pct_in_slow": null,
+        "idle_pct_outside": 43.5
+      }
+    },
+    "stacking": {
+      "stacked_ms_per_s_in_slow": null,
+      "stacked_ms_per_s_outside": 0.0,
+      "longest_episode_ms": 0.0
+    }
+  },
+  "gc_server": {
+    "pauses": 34,
+    "total_ms": 455.1,
+    "max_ms": 27.29,
+    "overlapping_slow_windows": 4,
+    "slow_time_covered_pct": 14.0,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 27.29
+      },
+      {
+        "what": "Pause Young",
+        "ms": 27.15
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 26.93
+      },
+      {
+        "what": "Pause Young",
+        "ms": 23.62
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 22.4
+      }
+    ]
+  },
+  "gc_mock": {
+    "pauses": 28,
+    "total_ms": 100.8,
+    "max_ms": 6.41,
+    "overlapping_slow_windows": 0,
+    "slow_time_covered_pct": 0.0,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 6.41
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.31
+      },
+      {
+        "what": "Pause Young",
+        "ms": 4.28
+      },
+      {
+        "what": "Pause Young",
+        "ms": 4.17
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.04
+      }
+    ]
+  },
+  "wall": null,
+  "jfr": null
+}

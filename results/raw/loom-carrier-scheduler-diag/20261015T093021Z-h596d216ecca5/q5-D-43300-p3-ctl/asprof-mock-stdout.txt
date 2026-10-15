@@ -1,0 +1,5 @@
+[WARN] Kernel symbols are unavailable due to restrictions. Try
+  sysctl kernel.perf_event_paranoid=1
+  sysctl kernel.kptr_restrict=0
+Profiling for 60 seconds
+Done

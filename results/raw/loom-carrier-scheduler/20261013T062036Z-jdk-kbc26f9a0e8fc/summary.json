@@ -1,0 +1,1956 @@
+{
+  "campaign": {
+    "schema": "loom-carrier-scheduler-campaign/1",
+    "kernel_commit_requested": "bc26f9a0e8fc",
+    "backend": "jdk",
+    "arms": "A_iso C_iso D",
+    "reps": 10,
+    "saturation_reps": 3,
+    "ladder_base_a_iso_rps": 60275,
+    "fractions": "0.5 0.7 0.85",
+    "rates": "30100 42200 51200",
+    "seed": "1791872436",
+    "trial_args": "--poller-mode 3 --warmup-mode open --warmup 30 --think-ms 30 --connections 5000 --pool 5000 --max-connections 16384 --duration 60 "
+  },
+  "cells": [
+    {
+      "backend": "jdk",
+      "rate": "max",
+      "arm": "A_iso",
+      "n": 3,
+      "attempted": 3,
+      "rps": [
+        60275.85,
+        59027.96,
+        61262.27
+      ],
+      "p50_ms": [
+        76.76,
+        77.79,
+        76.31
+      ],
+      "p90_ms": [
+        109.65,
+        113.52,
+        104.05
+      ],
+      "p99_ms": [
+        150.64,
+        171.45,
+        147.88
+      ],
+      "p99.9_ms": [
+        null,
+        null,
+        null
+      ],
+      "carrier_cpu_pct": [
+        164.82,
+        162.34,
+        165.07
+      ],
+      "carrier_wait_max_pct": [
+        5.77,
+        7.42,
+        4.4
+      ],
+      "reactor_cpu_pct": [
+        87.65,
+        82.35,
+        81.83
+      ],
+      "cpus_utilized": [
+        2.612,
+        2.539,
+        2.56
+      ],
+      "ipc": [
+        0.782,
+        0.749,
+        0.755
+      ],
+      "context_switches_per_s": [
+        22060.0,
+        27906.0,
+        27842.2
+      ],
+      "median": {
+        "rps": 60275.85,
+        "p50_ms": 76.76,
+        "p90_ms": 109.65,
+        "p99_ms": 150.64,
+        "p99.9_ms": null,
+        "carrier_cpu_pct": 164.82,
+        "carrier_wait_max_pct": 5.77,
+        "reactor_cpu_pct": 82.35,
+        "cpus_utilized": 2.56,
+        "ipc": 0.755,
+        "context_switches_per_s": 27842.2
+      },
+      "worst_p99_ms": 171.45
+    },
+    {
+      "backend": "jdk",
+      "rate": "max",
+      "arm": "C_iso",
+      "n": 3,
+      "attempted": 3,
+      "rps": [
+        61449.92,
+        62007.09,
+        57217.53
+      ],
+      "p50_ms": [
+        75.49,
+        75.64,
+        81.96
+      ],
+      "p90_ms": [
+        110.18,
+        104.52,
+        115.27
+      ],
+      "p99_ms": [
+        126.31,
+        128.86,
+        137.71
+      ],
+      "p99.9_ms": [
+        null,
+        null,
+        null
+      ],
+      "carrier_cpu_pct": [
+        162.05,
+        164.46,
+        153.37
+      ],
+      "carrier_wait_max_pct": [
+        9.13,
+        7.32,
+        11.9
+      ],
+      "reactor_cpu_pct": [
+        86.25,
+        86.62,
+        80.96
+      ],
+      "cpus_utilized": [
+        2.542,
+        2.573,
+        2.417
+      ],
+      "ipc": [
+        0.749,
+        0.749,
+        0.746
+      ],
+      "context_switches_per_s": [
+        30601.5,
+        30931.2,
+        34001.7
+      ],
+      "median": {
+        "rps": 61449.92,
+        "p50_ms": 75.64,
+        "p90_ms": 110.18,
+        "p99_ms": 128.86,
+        "p99.9_ms": null,
+        "carrier_cpu_pct": 162.05,
+        "carrier_wait_max_pct": 9.13,
+        "reactor_cpu_pct": 86.25,
+        "cpus_utilized": 2.542,
+        "ipc": 0.749,
+        "context_switches_per_s": 30931.2
+      },
+      "worst_p99_ms": 137.71
+    },
+    {
+      "backend": "jdk",
+      "rate": "max",
+      "arm": "D",
+      "n": 3,
+      "attempted": 3,
+      "rps": [
+        62921.25,
+        63327.72,
+        63603.54
+      ],
+      "p50_ms": [
+        76.29,
+        76.08,
+        75.75
+      ],
+      "p90_ms": [
+        97.74,
+        95.09,
+        95.22
+      ],
+      "p99_ms": [
+        123.13,
+        119.93,
+        120.89
+      ],
+      "p99.9_ms": [
+        null,
+        null,
+        null
+      ],
+      "carrier_cpu_pct": [
+        167.19,
+        163.98,
+        168.25
+      ],
+      "carrier_wait_max_pct": [
+        0.1,
+        0.12,
+        0.08
+      ],
+      "reactor_cpu_pct": [
+        82.75,
+        92.6,
+        89.98
+      ],
+      "cpus_utilized": [
+        2.578,
+        2.645,
+        2.655
+      ],
+      "ipc": [
+        0.724,
+        0.792,
+        0.742
+      ],
+      "context_switches_per_s": [
+        36243.7,
+        34954.1,
+        34311.0
+      ],
+      "median": {
+        "rps": 63327.72,
+        "p50_ms": 76.08,
+        "p90_ms": 95.22,
+        "p99_ms": 120.89,
+        "p99.9_ms": null,
+        "carrier_cpu_pct": 167.19,
+        "carrier_wait_max_pct": 0.1,
+        "reactor_cpu_pct": 89.98,
+        "cpus_utilized": 2.645,
+        "ipc": 0.742,
+        "context_switches_per_s": 34954.1
+      },
+      "worst_p99_ms": 123.13
+    },
+    {
+      "backend": "jdk",
+      "rate": "30100",
+      "arm": "A_iso",
+      "n": 9,
+      "attempted": 9,
+      "rps": [
+        28554.98,
+        28554.92,
+        28531.07,
+        28554.78,
+        28542.55,
+        28532.53,
+        28554.95,
+        28554.57,
+        28530.26
+      ],
+      "p50_ms": [
+        31.69,
+        31.68,
+        31.77,
+        31.69,
+        31.74,
+        31.77,
+        31.69,
+        31.69,
+        31.81
+      ],
+      "p90_ms": [
+        32.9,
+        32.8,
+        33.38,
+        32.9,
+        33.25,
+        33.18,
+        32.86,
+        32.86,
+        33.53
+      ],
+      "p99_ms": [
+        92.16,
+        33.63,
+        56.96,
+        105.02,
+        55.17,
+        122.94,
+        77.44,
+        94.65,
+        168.45
+      ],
+      "p99.9_ms": [
+        268.8,
+        51.94,
+        259.84,
+        248.57,
+        223.74,
+        289.79,
+        239.74,
+        257.02,
+        304.13
+      ],
+      "carrier_cpu_pct": [
+        93.39,
+        92.31,
+        94.78,
+        93.12,
+        93.85,
+        94.62,
+        93.08,
+        93.5,
+        94.94
+      ],
+      "carrier_wait_max_pct": [
+        0.08,
+        0.08,
+        0.13,
+        0.18,
+        0.13,
+        0.22,
+        0.22,
+        0.35,
+        0.3
+      ],
+      "reactor_cpu_pct": [
+        25.16,
+        25.11,
+        25.57,
+        25.14,
+        30.46,
+        28.01,
+        29.62,
+        26.13,
+        28.66
+      ],
+      "cpus_utilized": [
+        1.304,
+        1.285,
+        1.318,
+        1.303,
+        1.359,
+        1.34,
+        1.344,
+        1.305,
+        1.349
+      ],
+      "ipc": [
+        0.733,
+        0.732,
+        0.726,
+        0.73,
+        0.77,
+        0.752,
+        0.776,
+        0.719,
+        0.737
+      ],
+      "context_switches_per_s": [
+        36379.5,
+        37637.3,
+        36301.2,
+        36984.7,
+        34602.4,
+        35503.6,
+        33318.4,
+        37337.6,
+        36474.9
+      ],
+      "median": {
+        "rps": 28554.57,
+        "p50_ms": 31.69,
+        "p90_ms": 32.9,
+        "p99_ms": 92.16,
+        "p99.9_ms": 257.02,
+        "carrier_cpu_pct": 93.5,
+        "carrier_wait_max_pct": 0.18,
+        "reactor_cpu_pct": 26.13,
+        "cpus_utilized": 1.318,
+        "ipc": 0.733,
+        "context_switches_per_s": 36379.5
+      },
+      "worst_p99_ms": 168.45
+    },
+    {
+      "backend": "jdk",
+      "rate": "30100",
+      "arm": "C_iso",
+      "n": 7,
+      "attempted": 7,
+      "rps": [
+        28544.32,
+        28531.8,
+        28531.29,
+        28555.01,
+        28543.6,
+        28542.94,
+        28555.23
+      ],
+      "p50_ms": [
+        31.73,
+        31.79,
+        31.76,
+        31.68,
+        31.74,
+        31.73,
+        31.68
+      ],
+      "p90_ms": [
+        33.22,
+        33.6,
+        33.12,
+        32.86,
+        33.22,
+        33.22,
+        32.86
+      ],
+      "p99_ms": [
+        87.04,
+        109.06,
+        76.54,
+        55.55,
+        69.76,
+        100.93,
+        74.11
+      ],
+      "p99.9_ms": [
+        229.5,
+        229.25,
+        248.57,
+        253.82,
+        260.73,
+        234.88,
+        217.85
+      ],
+      "carrier_cpu_pct": [
+        88.47,
+        86.91,
+        87.79,
+        85.91,
+        88.47,
+        87.4,
+        84.97
+      ],
+      "carrier_wait_max_pct": [
+        0.27,
+        1.07,
+        0.27,
+        0.1,
+        0.5,
+        0.3,
+        0.22
+      ],
+      "reactor_cpu_pct": [
+        26.25,
+        30.33,
+        26.57,
+        30.13,
+        29.74,
+        30.8,
+        25.4
+      ],
+      "cpus_utilized": [
+        1.249,
+        1.268,
+        1.245,
+        1.257,
+        1.283,
+        1.278,
+        1.196
+      ],
+      "ipc": [
+        0.718,
+        0.784,
+        0.738,
+        0.79,
+        0.751,
+        0.777,
+        0.737
+      ],
+      "context_switches_per_s": [
+        35089.2,
+        29890.0,
+        33227.2,
+        29800.5,
+        34731.8,
+        31200.3,
+        32394.4
+      ],
+      "median": {
+        "rps": 28543.6,
+        "p50_ms": 31.73,
+        "p90_ms": 33.22,
+        "p99_ms": 76.54,
+        "p99.9_ms": 234.88,
+        "carrier_cpu_pct": 87.4,
+        "carrier_wait_max_pct": 0.27,
+        "reactor_cpu_pct": 29.74,
+        "cpus_utilized": 1.257,
+        "ipc": 0.751,
+        "context_switches_per_s": 32394.4
+      },
+      "worst_p99_ms": 109.06
+    },
+    {
+      "backend": "jdk",
+      "rate": "30100",
+      "arm": "D",
+      "n": 8,
+      "attempted": 8,
+      "rps": [
+        28554.61,
+        28531.74,
+        28554.82,
+        28543.37,
+        28543.29,
+        28553.97,
+        28543.24,
+        28554.71
+      ],
+      "p50_ms": [
+        31.68,
+        31.77,
+        31.66,
+        31.73,
+        31.74,
+        31.68,
+        31.74,
+        31.68
+      ],
+      "p90_ms": [
+        32.86,
+        33.38,
+        32.83,
+        33.22,
+        33.22,
+        32.86,
+        33.25,
+        32.9
+      ],
+      "p99_ms": [
+        75.9,
+        53.73,
+        53.18,
+        95.61,
+        175.1,
+        73.15,
+        166.4,
+        90.18
+      ],
+      "p99.9_ms": [
+        300.29,
+        219.39,
+        231.93,
+        279.55,
+        345.34,
+        243.71,
+        357.12,
+        291.33
+      ],
+      "carrier_cpu_pct": [
+        85.55,
+        88.75,
+        85.44,
+        89.17,
+        88.29,
+        85.85,
+        87.12,
+        86.29
+      ],
+      "carrier_wait_max_pct": [
+        0.03,
+        0.02,
+        0.03,
+        0.02,
+        0.03,
+        0.03,
+        0.02,
+        0.03
+      ],
+      "reactor_cpu_pct": [
+        25.22,
+        26.65,
+        25.28,
+        28.69,
+        26.21,
+        25.32,
+        31.59,
+        25.23
+      ],
+      "cpus_utilized": [
+        1.206,
+        1.252,
+        1.206,
+        1.277,
+        1.246,
+        1.206,
+        1.291,
+        1.218
+      ],
+      "ipc": [
+        0.745,
+        0.727,
+        0.737,
+        0.757,
+        0.719,
+        0.731,
+        0.792,
+        0.74
+      ],
+      "context_switches_per_s": [
+        32654.9,
+        35460.2,
+        33071.2,
+        32771.4,
+        35959.6,
+        32666.3,
+        31195.2,
+        32739.1
+      ],
+      "median": {
+        "rps": 28548.67,
+        "p50_ms": 31.705,
+        "p90_ms": 33.06,
+        "p99_ms": 83.04,
+        "p99.9_ms": 285.44,
+        "carrier_cpu_pct": 86.705,
+        "carrier_wait_max_pct": 0.03,
+        "reactor_cpu_pct": 25.765,
+        "cpus_utilized": 1.232,
+        "ipc": 0.738,
+        "context_switches_per_s": 32755.25
+      },
+      "worst_p99_ms": 175.1
+    },
+    {
+      "backend": "jdk",
+      "rate": "42200",
+      "arm": "A_iso",
+      "n": 7,
+      "attempted": 7,
+      "rps": [
+        39988.17,
+        40017.44,
+        40001.54,
+        40017.12,
+        40018.37,
+        40017.05,
+        40017.01
+      ],
+      "p50_ms": [
+        32.29,
+        32.19,
+        32.14,
+        32.17,
+        32.13,
+        32.27,
+        32.16
+      ],
+      "p90_ms": [
+        36.83,
+        40.93,
+        35.26,
+        39.39,
+        34.53,
+        49.73,
+        36.03
+      ],
+      "p99_ms": [
+        89.15,
+        279.81,
+        191.36,
+        146.82,
+        161.66,
+        147.07,
+        95.29
+      ],
+      "p99.9_ms": [
+        147.07,
+        326.65,
+        284.16,
+        249.6,
+        272.38,
+        199.68,
+        181.76
+      ],
+      "carrier_cpu_pct": [
+        123.35,
+        121.67,
+        122.88,
+        121.73,
+        121.95,
+        124.8,
+        122.25
+      ],
+      "carrier_wait_max_pct": [
+        3.37,
+        2.77,
+        2.38,
+        4.87,
+        4.65,
+        6.02,
+        3.82
+      ],
+      "reactor_cpu_pct": [
+        39.82,
+        40.87,
+        42.09,
+        35.82,
+        36.25,
+        40.72,
+        42.67
+      ],
+      "cpus_utilized": [
+        1.761,
+        1.755,
+        1.779,
+        1.707,
+        1.716,
+        1.782,
+        1.783
+      ],
+      "ipc": [
+        0.741,
+        0.774,
+        0.772,
+        0.726,
+        0.72,
+        0.739,
+        0.759
+      ],
+      "context_switches_per_s": [
+        41439.5,
+        37425.0,
+        39630.0,
+        39747.3,
+        41217.6,
+        36931.5,
+        37354.7
+      ],
+      "median": {
+        "rps": 40017.05,
+        "p50_ms": 32.17,
+        "p90_ms": 36.83,
+        "p99_ms": 147.07,
+        "p99.9_ms": 249.6,
+        "carrier_cpu_pct": 122.25,
+        "carrier_wait_max_pct": 3.82,
+        "reactor_cpu_pct": 40.72,
+        "cpus_utilized": 1.761,
+        "ipc": 0.741,
+        "context_switches_per_s": 39630.0
+      },
+      "worst_p99_ms": 279.81
+    },
+    {
+      "backend": "jdk",
+      "rate": "42200",
+      "arm": "C_iso",
+      "n": 4,
+      "attempted": 4,
+      "rps": [
+        40017.08,
+        40019.33,
+        39997.47,
+        40017.31
+      ],
+      "p50_ms": [
+        32.24,
+        32.22,
+        32.27,
+        32.14
+      ],
+      "p90_ms": [
+        49.15,
+        44.32,
+        42.33,
+        39.74
+      ],
+      "p99_ms": [
+        132.86,
+        212.35,
+        155.9,
+        177.92
+      ],
+      "p99.9_ms": [
+        176.51,
+        286.21,
+        226.82,
+        240.51
+      ],
+      "carrier_cpu_pct": [
+        114.18,
+        113.38,
+        116.25,
+        114.53
+      ],
+      "carrier_wait_max_pct": [
+        8.68,
+        5.45,
+        6.33,
+        4.52
+      ],
+      "reactor_cpu_pct": [
+        39.21,
+        34.6,
+        43.5,
+        36.95
+      ],
+      "cpus_utilized": [
+        1.631,
+        1.581,
+        1.7,
+        1.617
+      ],
+      "ipc": [
+        0.749,
+        0.72,
+        0.769,
+        0.757
+      ],
+      "context_switches_per_s": [
+        32879.3,
+        37170.3,
+        34810.1,
+        32867.4
+      ],
+      "median": {
+        "rps": 40017.195,
+        "p50_ms": 32.23,
+        "p90_ms": 43.325,
+        "p99_ms": 166.91,
+        "p99.9_ms": 233.665,
+        "carrier_cpu_pct": 114.355,
+        "carrier_wait_max_pct": 5.89,
+        "reactor_cpu_pct": 38.08,
+        "cpus_utilized": 1.624,
+        "ipc": 0.753,
+        "context_switches_per_s": 33844.7
+      },
+      "worst_p99_ms": 212.35
+    },
+    {
+      "backend": "jdk",
+      "rate": "42200",
+      "arm": "D",
+      "n": 8,
+      "attempted": 8,
+      "rps": [
+        40002.88,
+        40002.34,
+        40016.67,
+        40002.37,
+        39986.46,
+        39988.81,
+        40002.49,
+        40001.58
+      ],
+      "p50_ms": [
+        32.11,
+        32.13,
+        32.06,
+        32.17,
+        32.19,
+        32.27,
+        32.11,
+        32.14
+      ],
+      "p90_ms": [
+        34.49,
+        35.17,
+        33.5,
+        36.96,
+        35.62,
+        37.28,
+        34.91,
+        35.65
+      ],
+      "p99_ms": [
+        86.01,
+        258.3,
+        212.61,
+        332.54,
+        307.71,
+        262.65,
+        282.37,
+        187.52
+      ],
+      "p99.9_ms": [
+        169.09,
+        321.54,
+        271.1,
+        427.01,
+        356.61,
+        342.27,
+        360.19,
+        231.04
+      ],
+      "carrier_cpu_pct": [
+        118.15,
+        118.03,
+        117.98,
+        118.3,
+        118.75,
+        118.23,
+        117.1,
+        117.38
+      ],
+      "carrier_wait_max_pct": [
+        0.03,
+        0.03,
+        0.02,
+        0.03,
+        0.02,
+        0.03,
+        0.03,
+        0.02
+      ],
+      "reactor_cpu_pct": [
+        42.38,
+        42.46,
+        35.57,
+        39.38,
+        39.12,
+        38.11,
+        39.01,
+        36.04
+      ],
+      "cpus_utilized": [
+        1.712,
+        1.717,
+        1.657,
+        1.685,
+        1.681,
+        1.672,
+        1.677,
+        1.648
+      ],
+      "ipc": [
+        0.772,
+        0.768,
+        0.721,
+        0.755,
+        0.744,
+        0.739,
+        0.753,
+        0.722
+      ],
+      "context_switches_per_s": [
+        36674.3,
+        38326.2,
+        40031.3,
+        38878.4,
+        37362.3,
+        38457.5,
+        40148.0,
+        40535.8
+      ],
+      "median": {
+        "rps": 40002.355,
+        "p50_ms": 32.135,
+        "p90_ms": 35.395,
+        "p99_ms": 260.475,
+        "p99.9_ms": 331.905,
+        "carrier_cpu_pct": 118.09,
+        "carrier_wait_max_pct": 0.03,
+        "reactor_cpu_pct": 39.065,
+        "cpus_utilized": 1.679,
+        "ipc": 0.748,
+        "context_switches_per_s": 38667.95
+      },
+      "worst_p99_ms": 332.54
+    },
+    {
+      "backend": "jdk",
+      "rate": "51200",
+      "arm": "A_iso",
+      "n": 8,
+      "attempted": 8,
+      "rps": [
+        48542.06,
+        48519.17,
+        48542.8,
+        48441.75,
+        48542.38,
+        48541.84,
+        48524.56,
+        48496.71
+      ],
+      "p50_ms": [
+        33.15,
+        57.41,
+        32.69,
+        58.59,
+        32.53,
+        62.85,
+        80.51,
+        32.93
+      ],
+      "p90_ms": [
+        124.8,
+        177.02,
+        92.61,
+        164.48,
+        115.9,
+        203.9,
+        279.55,
+        121.79
+      ],
+      "p99_ms": [
+        282.88,
+        279.55,
+        204.93,
+        309.76,
+        325.12,
+        319.49,
+        480.0,
+        194.69
+      ],
+      "p99.9_ms": [
+        334.08,
+        315.14,
+        249.21,
+        371.97,
+        470.27,
+        371.2,
+        569.85,
+        232.96
+      ],
+      "carrier_cpu_pct": [
+        139.7,
+        143.95,
+        139.42,
+        143.6,
+        139.98,
+        141.87,
+        143.32,
+        139.15
+      ],
+      "carrier_wait_max_pct": [
+        11.18,
+        11.47,
+        10.3,
+        11.35,
+        9.17,
+        11.32,
+        12.67,
+        10.92
+      ],
+      "reactor_cpu_pct": [
+        51.71,
+        59.3,
+        50.89,
+        55.15,
+        47.85,
+        61.92,
+        59.87,
+        54.41
+      ],
+      "cpus_utilized": [
+        2.01,
+        2.144,
+        1.997,
+        2.102,
+        1.977,
+        2.144,
+        2.142,
+        2.028
+      ],
+      "ipc": [
+        0.721,
+        0.733,
+        0.713,
+        0.715,
+        0.718,
+        0.756,
+        0.712,
+        0.74
+      ],
+      "context_switches_per_s": [
+        33545.3,
+        31999.8,
+        32730.9,
+        34803.2,
+        34578.8,
+        29237.5,
+        32081.6,
+        30150.8
+      ],
+      "median": {
+        "rps": 48533.2,
+        "p50_ms": 45.28,
+        "p90_ms": 144.64,
+        "p99_ms": 296.32,
+        "p99.9_ms": 352.64,
+        "carrier_cpu_pct": 140.925,
+        "carrier_wait_max_pct": 11.25,
+        "reactor_cpu_pct": 54.78,
+        "cpus_utilized": 2.065,
+        "ipc": 0.72,
+        "context_switches_per_s": 32406.25
+      },
+      "worst_p99_ms": 480.0
+    },
+    {
+      "backend": "jdk",
+      "rate": "51200",
+      "arm": "C_iso",
+      "n": 8,
+      "attempted": 8,
+      "rps": [
+        48502.71,
+        48493.61,
+        48394.89,
+        48542.24,
+        48522.42,
+        48335.8,
+        48532.66,
+        48480.36
+      ],
+      "p50_ms": [
+        75.07,
+        99.52,
+        71.36,
+        38.88,
+        35.81,
+        64.0,
+        50.01,
+        56.74
+      ],
+      "p90_ms": [
+        146.43,
+        181.76,
+        182.4,
+        138.75,
+        124.35,
+        151.42,
+        127.87,
+        163.46
+      ],
+      "p99_ms": [
+        291.33,
+        486.91,
+        446.46,
+        214.27,
+        254.72,
+        271.1,
+        181.76,
+        311.55
+      ],
+      "p99.9_ms": [
+        463.87,
+        659.97,
+        729.09,
+        414.98,
+        465.15,
+        436.48,
+        243.07,
+        361.73
+      ],
+      "carrier_cpu_pct": [
+        135.57,
+        136.28,
+        135.64,
+        134.0,
+        135.37,
+        134.35,
+        132.33,
+        134.63
+      ],
+      "carrier_wait_max_pct": [
+        16.87,
+        16.67,
+        16.9,
+        14.91,
+        14.23,
+        16.58,
+        17.33,
+        15.6
+      ],
+      "reactor_cpu_pct": [
+        53.9,
+        59.3,
+        55.31,
+        53.98,
+        51.65,
+        53.57,
+        52.3,
+        53.48
+      ],
+      "cpus_utilized": [
+        1.972,
+        2.03,
+        1.98,
+        1.947,
+        1.938,
+        1.947,
+        1.917,
+        1.958
+      ],
+      "ipc": [
+        0.728,
+        0.745,
+        0.751,
+        0.771,
+        0.746,
+        0.755,
+        0.763,
+        0.756
+      ],
+      "context_switches_per_s": [
+        28047.7,
+        26509.9,
+        26131.9,
+        24466.2,
+        28327.1,
+        27365.7,
+        24588.7,
+        26778.4
+      ],
+      "median": {
+        "rps": 48498.16,
+        "p50_ms": 60.37,
+        "p90_ms": 148.925,
+        "p99_ms": 281.215,
+        "p99.9_ms": 450.175,
+        "carrier_cpu_pct": 135.0,
+        "carrier_wait_max_pct": 16.625,
+        "reactor_cpu_pct": 53.735,
+        "cpus_utilized": 1.953,
+        "ipc": 0.753,
+        "context_switches_per_s": 26644.15
+      },
+      "worst_p99_ms": 486.91
+    },
+    {
+      "backend": "jdk",
+      "rate": "51200",
+      "arm": "D",
+      "n": 6,
+      "attempted": 6,
+      "rps": [
+        48543.02,
+        48521.56,
+        48520.29,
+        48542.31,
+        48515.86,
+        48539.63
+      ],
+      "p50_ms": [
+        32.19,
+        32.35,
+        32.46,
+        32.27,
+        32.46,
+        32.16
+      ],
+      "p90_ms": [
+        34.05,
+        42.05,
+        141.18,
+        99.39,
+        116.8,
+        33.73
+      ],
+      "p99_ms": [
+        149.89,
+        295.68,
+        376.58,
+        318.72,
+        352.77,
+        164.22
+      ],
+      "p99.9_ms": [
+        230.78,
+        366.85,
+        418.05,
+        362.75,
+        390.91,
+        220.8
+      ],
+      "carrier_cpu_pct": [
+        140.48,
+        140.63,
+        141.51,
+        140.31,
+        141.1,
+        139.87
+      ],
+      "carrier_wait_max_pct": [
+        0.03,
+        0.03,
+        0.05,
+        0.03,
+        0.03,
+        0.03
+      ],
+      "reactor_cpu_pct": [
+        46.83,
+        47.7,
+        49.71,
+        47.7,
+        44.58,
+        47.93
+      ],
+      "cpus_utilized": [
+        2.002,
+        2.004,
+        2.04,
+        2.001,
+        1.976,
+        2.005
+      ],
+      "ipc": [
+        0.744,
+        0.746,
+        0.744,
+        0.737,
+        0.712,
+        0.744
+      ],
+      "context_switches_per_s": [
+        44351.8,
+        43689.9,
+        45746.3,
+        41941.4,
+        46110.3,
+        43689.7
+      ],
+      "median": {
+        "rps": 48530.595,
+        "p50_ms": 32.31,
+        "p90_ms": 70.72,
+        "p99_ms": 307.2,
+        "p99.9_ms": 364.8,
+        "carrier_cpu_pct": 140.555,
+        "carrier_wait_max_pct": 0.03,
+        "reactor_cpu_pct": 47.7,
+        "cpus_utilized": 2.003,
+        "ipc": 0.744,
+        "context_switches_per_s": 44020.85
+      },
+      "worst_p99_ms": 376.58
+    }
+  ],
+  "invalid_trials": [
+    {
+      "trial": "r1-D-51200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-1 allowed 0,6, expected one CPU of [2, 3]"
+          ],
+          "carriers": {
+            "exeris-carrier-0": [
+              2
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r10-A_iso-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "ForkJoi..rker-1 allowed 0,6, expected [2, 3]",
+            "ForkJoi..rker-2 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "ForkJoi..rker-1": [
+              0,
+              6
+            ],
+            "ForkJoi..rker-2": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r10-C_iso-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-1 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-carrier-0": [
+              2,
+              3
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r10-C_iso-51200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected [2, 3]",
+            "exeris-..rier-1 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r10-D-30100",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-1 allowed 0,6, expected one CPU of [2, 3]"
+          ],
+          "carriers": {
+            "exeris-carrier-0": [
+              2
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r2-A_iso-51200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "ForkJoi..rker-2 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "ForkJoinPool-1-worker-1": [
+              2,
+              3
+            ],
+            "ForkJoi..rker-2": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r2-C_iso-30100",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-carrier-1": [
+              2,
+              3
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r2-C_iso-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-carrier-1": [
+              2,
+              3
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r2-C_iso-51200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected [2, 3]",
+            "exeris-..rier-1 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r4-C_iso-30100",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-carrier-1": [
+              2,
+              3
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r4-C_iso-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-1 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-carrier-0": [
+              2,
+              3
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r4-D-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected one CPU of [2, 3]",
+            "exeris-..rier-1 allowed 0,6, expected one CPU of [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r4-D-51200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected one CPU of [2, 3]",
+            "exeris-..rier-1 allowed 0,6, expected one CPU of [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r5-A_iso-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "ForkJoi..rker-1 allowed 0,6, expected [2, 3]",
+            "ForkJoi..rker-2 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "ForkJoi..rker-1": [
+              0,
+              6
+            ],
+            "ForkJoi..rker-2": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r5-C_iso-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-carrier-1": [
+              2,
+              3
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r5-D-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected one CPU of [2, 3]",
+            "exeris-..rier-1 allowed 0,6, expected one CPU of [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r6-C_iso-30100",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-1 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-carrier-0": [
+              2,
+              3
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r6-C_iso-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected [2, 3]",
+            "exeris-..rier-1 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r6-D-30100",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected one CPU of [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-carrier-1": [
+              3
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r6-D-51200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-1 allowed 0,6, expected one CPU of [2, 3]"
+          ],
+          "carriers": {
+            "exeris-carrier-0": [
+              2
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r7-A_iso-51200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "ForkJoi..rker-1 allowed 0,6, expected [2, 3]",
+            "ForkJoi..rker-2 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "ForkJoi..rker-1": [
+              0,
+              6
+            ],
+            "ForkJoi..rker-2": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r7-D-51200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-0 allowed 0,6, expected one CPU of [2, 3]"
+          ],
+          "carriers": {
+            "exeris-..rier-0": [
+              0,
+              6
+            ],
+            "exeris-carrier-1": [
+              3
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r9-A_iso-30100",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "ForkJoi..rker-1 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "ForkJoi..rker-1": [
+              0,
+              6
+            ],
+            "ForkJoinPool-1-worker-2": [
+              2,
+              3
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r9-A_iso-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "ForkJoi..rker-1 allowed 0,6, expected [2, 3]",
+            "ForkJoi..rker-2 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "ForkJoi..rker-1": [
+              0,
+              6
+            ],
+            "ForkJoi..rker-2": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    },
+    {
+      "trial": "r9-C_iso-42200",
+      "failed": [
+        "isolation"
+      ],
+      "detail": {
+        "isolation": {
+          "pass": false,
+          "problems": [
+            "exeris-..rier-1 allowed 0,6, expected [2, 3]"
+          ],
+          "carriers": {
+            "exeris-carrier-0": [
+              2,
+              3
+            ],
+            "exeris-..rier-1": [
+              0,
+              6
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "unsustained_trials": [],
+  "evidence_eligible": false
+}

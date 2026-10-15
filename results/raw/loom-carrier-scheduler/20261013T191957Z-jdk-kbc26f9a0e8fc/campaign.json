@@ -1,0 +1,13 @@
+{
+  "schema": "loom-carrier-scheduler-campaign/1",
+  "kernel_commit_requested": "bc26f9a0e8fc",
+  "backend": "jdk",
+  "arms": "A_iso C_iso D",
+  "reps": 10,
+  "saturation_reps": 3,
+  "ladder_base_a_iso_rps": 61887,
+  "fractions": "0.5 0.7 0.85",
+  "rates": "30900 43300 52600",
+  "seed": "1791919197",
+  "trial_args": "--poller-mode 3 --warmup-mode open --warmup 30 --think-ms 30 --connections 5000 --pool 2048 --max-connections 16384 --duration 60 "
+}

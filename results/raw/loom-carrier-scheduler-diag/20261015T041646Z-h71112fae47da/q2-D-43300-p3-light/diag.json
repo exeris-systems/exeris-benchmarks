@@ -1,0 +1,104 @@
+{
+  "trial": "q2-D-43300-p3-light",
+  "arm": "D",
+  "rate": "43300",
+  "poller_mode": "3",
+  "diagnostics": [
+    "gc log",
+    "latency probe 200 req/s"
+  ],
+  "wrk2_p99_ms": 97.28,
+  "probe": {
+    "requests": 12000,
+    "failed": 0,
+    "p50_ms": 30.48,
+    "p99_ms": 94.8,
+    "max_ms": 115.96,
+    "slow_threshold_ms": 60.96,
+    "slow_requests": 207,
+    "slow_windows": 3,
+    "slow_time_ms": 1210.0,
+    "longest_window_ms": 1081.6,
+    "top_windows": [
+      {
+        "start_s": 52.545,
+        "duration_ms": 1081.6,
+        "requests": 217,
+        "max_latency_ms": 116.0
+      },
+      {
+        "start_s": 5.2,
+        "duration_ms": 64.6,
+        "requests": 13,
+        "max_latency_ms": 64.6
+      },
+      {
+        "start_s": 19.0,
+        "duration_ms": 63.8,
+        "requests": 13,
+        "max_latency_ms": 63.8
+      }
+    ]
+  },
+  "sched": null,
+  "gc_server": {
+    "pauses": 34,
+    "total_ms": 448.3,
+    "max_ms": 27.11,
+    "overlapping_slow_windows": 6,
+    "slow_time_covered_pct": 9.6,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 27.11
+      },
+      {
+        "what": "Pause Young",
+        "ms": 26.94
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 25.28
+      },
+      {
+        "what": "Pause Young",
+        "ms": 24.68
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 22.75
+      }
+    ]
+  },
+  "gc_mock": {
+    "pauses": 30,
+    "total_ms": 116.1,
+    "max_ms": 5.72,
+    "overlapping_slow_windows": 0,
+    "slow_time_covered_pct": 0.0,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 5.72
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 5.39
+      },
+      {
+        "what": "Pause Young",
+        "ms": 5.32
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.84
+      },
+      {
+        "what": "Pause Young",
+        "ms": 4.81
+      }
+    ]
+  },
+  "wall": null,
+  "jfr": null
+}

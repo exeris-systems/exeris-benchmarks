@@ -1,0 +1,166 @@
+{
+  "schema": "loom-carrier-scheduler-trial/1",
+  "trial_dir": "sat-r1-C_iso",
+  "arm": "C_iso",
+  "backend": "jdk",
+  "rate": "max",
+  "connections": 5000,
+  "load_threads": 4,
+  "warmup_s": 30,
+  "warmup_mode": "open",
+  "duration_s": 60,
+  "think_ms": 30.0,
+  "pool": 5000,
+  "max_connections": "16384",
+  "poller_mode": "3",
+  "layout": {
+    "carriers": "2,3",
+    "server_aux": "0,6",
+    "mock": "1,7",
+    "load": "4,5,10,11"
+  },
+  "kernel": {
+    "kernel_commit": "bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "kernel_requested_revision": "research/loom-carrier-scheduler",
+    "kernel_repo": "git@github.com:exeris-systems/exeris-kernel.git",
+    "built_from": "git archive bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "class_file_major": 72,
+    "class_file_minor": 0,
+    "jdk_build": "OpenJDK Runtime Environment (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)",
+    "built_at_utc": "2026-10-05T04:35:17Z"
+  },
+  "bench_commit": "84685a1c331c9f0193d614be65c9c8406aa4fdff",
+  "load": {
+    "requests_per_sec": 33555.25,
+    "percentiles_ms": {
+      "p50": 30.22,
+      "p75": 30.27,
+      "p90": 30.35,
+      "p99": 31.24
+    },
+    "socket_errors": {
+      "connect": 3983,
+      "read": 0,
+      "write": 0,
+      "timeout": 0
+    },
+    "non_2xx": 0,
+    "calibration_mean_ms": null
+  },
+  "pidstat": {
+    "process": {
+      "tid": "-",
+      "%usr": 40.38,
+      "%system": 77.8,
+      "%wait": 0.0,
+      "%CPU": 118.18,
+      "cswch/s": 0.0,
+      "nvcswch/s": 0.0
+    },
+    "carriers": {
+      "count": 2,
+      "cpu_pct": 81.92,
+      "usr_pct": 26.48,
+      "sys_pct": 55.43,
+      "wait_pct_max": 0.23,
+      "wait_pct_each": {
+        "exeris-carrier-0": 0.23,
+        "exeris-carrier-1": 0.23
+      },
+      "nvcswch_per_s": 15.85
+    },
+    "reactors": {
+      "count": 2,
+      "cpu_pct": 28.55,
+      "usr_pct": 10.92,
+      "sys_pct": 17.64,
+      "wait_pct_max": 0.57,
+      "wait_pct_each": {
+        "carrier/native-tcp/reactor/0": 0.57,
+        "carrier/native-tcp/reactor/1": 0.5
+      },
+      "nvcswch_per_s": 67.94
+    }
+  },
+  "perf_stat": {
+    "task_clock_ms": 71013.93,
+    "elapsed_s": 60.003253164,
+    "cpus_utilized": 1.184,
+    "cycles": 224102681264.0,
+    "instructions": 173733674244.0,
+    "ipc": 0.775,
+    "context_switches_per_s": 34161.2,
+    "cpu_migrations": 29457.0
+  },
+  "perf_stat_status": "measured",
+  "profile": "none",
+  "perf_sched": null,
+  "gates": {
+    "load": {
+      "pass": true,
+      "reason": "closed loop"
+    },
+    "errors": {
+      "pass": false,
+      "socket_errors": {
+        "connect": 3983,
+        "read": 0,
+        "write": 0,
+        "timeout": 0
+      },
+      "non_2xx": 0
+    },
+    "isolation": {
+      "pass": true,
+      "problems": [],
+      "carriers": {
+        "exeris-carrier-0": [
+          2,
+          3
+        ],
+        "exeris-carrier-1": [
+          2,
+          3
+        ]
+      }
+    },
+    "transport": {
+      "pass": true,
+      "observed": "active=posix-hybrid, ffmArmed=true",
+      "expected": "active=posix-hybrid, ffmArmed=true"
+    },
+    "unperturbed": {
+      "pass": true,
+      "reason": "no tracer or profiler attached"
+    },
+    "host_shielded": {
+      "pass": true,
+      "problems": []
+    },
+    "harness_clean": {
+      "pass": true,
+      "reason": "harness files committed"
+    }
+  },
+  "host": {
+    "state": {
+      "graphical_target": "inactive",
+      "allowed_cpus.system.slice": "0 6",
+      "allowed_cpus.user.slice": "0 6",
+      "allowed_cpus.init.scope": "0 6",
+      "own_cgroup": "/bench.slice/run-p90075-i76123.service",
+      "own_cpus_allowed": "0-11",
+      "isolated": "",
+      "boost": "0",
+      "governors": "12 performance"
+    },
+    "shielded": true,
+    "problems": [],
+    "interrupts_on_carrier_cpus_during_window": {
+      "cpu2": 266465,
+      "cpu3": 262762
+    }
+  },
+  "valid": false,
+  "evidence": false
+}

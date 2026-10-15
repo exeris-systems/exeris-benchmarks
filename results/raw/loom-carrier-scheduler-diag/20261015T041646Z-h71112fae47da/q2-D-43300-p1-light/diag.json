@@ -1,0 +1,122 @@
+{
+  "trial": "q2-D-43300-p1-light",
+  "arm": "D",
+  "rate": "43300",
+  "poller_mode": "1",
+  "diagnostics": [
+    "gc log",
+    "latency probe 200 req/s"
+  ],
+  "wrk2_p99_ms": 47.39,
+  "probe": {
+    "requests": 12000,
+    "failed": 0,
+    "p50_ms": 30.42,
+    "p99_ms": 47.1,
+    "max_ms": 76.45,
+    "slow_threshold_ms": 60.85,
+    "slow_requests": 36,
+    "slow_windows": 6,
+    "slow_time_ms": 582.4,
+    "longest_window_ms": 172.8,
+    "top_windows": [
+      {
+        "start_s": 52.515,
+        "duration_ms": 172.8,
+        "requests": 35,
+        "max_latency_ms": 72.4
+      },
+      {
+        "start_s": 59.76,
+        "duration_ms": 110.4,
+        "requests": 23,
+        "max_latency_ms": 72.9
+      },
+      {
+        "start_s": 52.85,
+        "duration_ms": 101.8,
+        "requests": 21,
+        "max_latency_ms": 76.5
+      },
+      {
+        "start_s": 17.505,
+        "duration_ms": 72.4,
+        "requests": 15,
+        "max_latency_ms": 70.6
+      },
+      {
+        "start_s": 11.205,
+        "duration_ms": 63.5,
+        "requests": 13,
+        "max_latency_ms": 63.5
+      },
+      {
+        "start_s": 8.045,
+        "duration_ms": 61.5,
+        "requests": 13,
+        "max_latency_ms": 61.5
+      }
+    ]
+  },
+  "sched": null,
+  "gc_server": {
+    "pauses": 34,
+    "total_ms": 446.1,
+    "max_ms": 26.65,
+    "overlapping_slow_windows": 6,
+    "slow_time_covered_pct": 16.4,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 26.65
+      },
+      {
+        "what": "Pause Young",
+        "ms": 26.57
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 23.73
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 22.69
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 21.89
+      }
+    ]
+  },
+  "gc_mock": {
+    "pauses": 28,
+    "total_ms": 108.0,
+    "max_ms": 5.46,
+    "overlapping_slow_windows": 0,
+    "slow_time_covered_pct": 0.0,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 5.46
+      },
+      {
+        "what": "Pause Young",
+        "ms": 5.32
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.51
+      },
+      {
+        "what": "Pause Young",
+        "ms": 4.37
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.34
+      }
+    ]
+  },
+  "wall": null,
+  "jfr": null
+}

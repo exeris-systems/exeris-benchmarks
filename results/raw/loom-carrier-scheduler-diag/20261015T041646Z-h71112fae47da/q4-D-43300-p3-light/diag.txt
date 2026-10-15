@@ -1,0 +1,62 @@
+q4-D-43300-p3-light: arm D rate 43300, wrk2 p99 39.17 ms, diagnostics: gc log, latency probe 200 req/s
+probe: 12000 requests, p50 30.47 p99 38.52 max 70.76 ms; slow (> 60.95 ms): 2 requests in 1 windows, 105.8 ms total, longest 105.8 ms
+--- gc_server
+{
+ "pauses": 34,
+ "total_ms": 470.2,
+ "max_ms": 31.92,
+ "overlapping_slow_windows": 2,
+ "slow_time_covered_pct": 56.7,
+ "longest": [
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 31.92
+  },
+  {
+   "what": "Pause Young",
+   "ms": 28.02
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 25.73
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 24.87
+  },
+  {
+   "what": "Pause Young",
+   "ms": 24.42
+  }
+ ]
+}
+--- gc_mock
+{
+ "pauses": 32,
+ "total_ms": 117.1,
+ "max_ms": 6.79,
+ "overlapping_slow_windows": 0,
+ "slow_time_covered_pct": 0.0,
+ "longest": [
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 6.79
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 4.69
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 4.25
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 4.15
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 4.08
+  }
+ ]
+}

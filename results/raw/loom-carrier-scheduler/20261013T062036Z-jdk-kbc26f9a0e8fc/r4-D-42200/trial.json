@@ -1,0 +1,167 @@
+{
+  "schema": "loom-carrier-scheduler-trial/1",
+  "trial_dir": "r4-D-42200",
+  "arm": "D",
+  "backend": "jdk",
+  "rate": "42200",
+  "connections": 5000,
+  "load_threads": 4,
+  "warmup_s": 30,
+  "warmup_mode": "open",
+  "duration_s": 60,
+  "think_ms": 30.0,
+  "pool": 5000,
+  "max_connections": "16384",
+  "poller_mode": "3",
+  "layout": {
+    "carriers": "2,3",
+    "server_aux": "0,6",
+    "mock": "1,7",
+    "load": "4,5,10,11"
+  },
+  "kernel": {
+    "kernel_commit": "bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "kernel_requested_revision": "research/loom-carrier-scheduler",
+    "kernel_repo": "git@github.com:exeris-systems/exeris-kernel.git",
+    "built_from": "git archive bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "class_file_major": 72,
+    "class_file_minor": 0,
+    "jdk_build": "OpenJDK Runtime Environment (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)",
+    "built_at_utc": "2026-10-05T04:35:17Z"
+  },
+  "bench_commit": "eba18962c54049059ab33582be146dff02082520",
+  "load": {
+    "requests_per_sec": 33697.85,
+    "percentiles_ms": {
+      "p50": 5480.0,
+      "p75": 7280.0,
+      "p90": 8300.0,
+      "p99": 8990.0,
+      "p99.9": 9210.0,
+      "p99.99": 9360.0,
+      "p99.999": 9480.0,
+      "p100": 9670.0
+    },
+    "socket_errors": null,
+    "non_2xx": 0,
+    "calibration_mean_ms": 765.377
+  },
+  "pidstat": {
+    "process": {
+      "tid": "-",
+      "%usr": 58.31,
+      "%system": 135.71,
+      "%wait": 0.0,
+      "%CPU": 194.02,
+      "cswch/s": 0.0,
+      "nvcswch/s": 0.0
+    },
+    "carriers": {
+      "count": 2,
+      "cpu_pct": 139.14,
+      "usr_pct": 40.81,
+      "sys_pct": 98.33,
+      "wait_pct_max": 26.46,
+      "wait_pct_each": {
+        "exeris-carrier-0": 26.46,
+        "exeris-carrier-1": 26.33
+      },
+      "nvcswch_per_s": 9054.51
+    },
+    "reactors": {
+      "count": 2,
+      "cpu_pct": 50.4,
+      "usr_pct": 12.83,
+      "sys_pct": 37.56,
+      "wait_pct_max": 22.71,
+      "wait_pct_each": {
+        "carrier/native-tcp/reactor/0": 22.4,
+        "carrier/native-tcp/reactor/1": 22.71
+      },
+      "nvcswch_per_s": 72.49
+    }
+  },
+  "perf_stat": {
+    "task_clock_ms": 112971.06,
+    "elapsed_s": 60.003396143,
+    "cpus_utilized": 1.883,
+    "cycles": 375437561493.0,
+    "instructions": 211421178546.0,
+    "ipc": 0.563,
+    "context_switches_per_s": 19458.7,
+    "cpu_migrations": 6038.0
+  },
+  "perf_stat_status": "measured",
+  "profile": "none",
+  "perf_sched": null,
+  "gates": {
+    "load": {
+      "pass": false,
+      "achieved_ratio": 0.8424,
+      "raw_ratio": 0.7985,
+      "connection_ramp_s": 6.25,
+      "reason": "achieved 33697.8 req/s of 40002 expected at target 42200"
+    },
+    "errors": {
+      "pass": true,
+      "socket_errors": {},
+      "non_2xx": 0
+    },
+    "isolation": {
+      "pass": false,
+      "problems": [
+        "exeris-..rier-0 allowed 0,6, expected one CPU of [2, 3]",
+        "exeris-..rier-1 allowed 0,6, expected one CPU of [2, 3]"
+      ],
+      "carriers": {
+        "exeris-..rier-0": [
+          0,
+          6
+        ],
+        "exeris-..rier-1": [
+          0,
+          6
+        ]
+      }
+    },
+    "transport": {
+      "pass": true,
+      "observed": "active=posix-hybrid, ffmArmed=true",
+      "expected": "active=posix-hybrid, ffmArmed=true"
+    },
+    "unperturbed": {
+      "pass": true,
+      "reason": "no tracer or profiler attached"
+    },
+    "host_shielded": {
+      "pass": true,
+      "problems": []
+    },
+    "harness_clean": {
+      "pass": true,
+      "reason": "harness files committed"
+    }
+  },
+  "host": {
+    "state": {
+      "graphical_target": "inactive",
+      "allowed_cpus.system.slice": "0 6",
+      "allowed_cpus.user.slice": "0 6",
+      "allowed_cpus.init.scope": "0 6",
+      "own_cgroup": "/bench.slice/run-p252489-i251607.service",
+      "own_cpus_allowed": "0-11",
+      "isolated": "",
+      "boost": "0",
+      "governors": "12 performance"
+    },
+    "shielded": true,
+    "problems": [],
+    "interrupts_on_carrier_cpus_during_window": {
+      "cpu2": 21057,
+      "cpu3": 1718
+    }
+  },
+  "valid": false,
+  "sustained": false,
+  "evidence": false
+}

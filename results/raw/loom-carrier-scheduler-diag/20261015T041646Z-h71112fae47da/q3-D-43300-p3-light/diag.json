@@ -1,0 +1,116 @@
+{
+  "trial": "q3-D-43300-p3-light",
+  "arm": "D",
+  "rate": "43300",
+  "poller_mode": "3",
+  "diagnostics": [
+    "gc log",
+    "latency probe 200 req/s"
+  ],
+  "wrk2_p99_ms": 48.1,
+  "probe": {
+    "requests": 12000,
+    "failed": 0,
+    "p50_ms": 30.51,
+    "p99_ms": 45.56,
+    "max_ms": 71.34,
+    "slow_threshold_ms": 61.02,
+    "slow_requests": 24,
+    "slow_windows": 5,
+    "slow_time_ms": 520.4,
+    "longest_window_ms": 230.2,
+    "top_windows": [
+      {
+        "start_s": 53.305,
+        "duration_ms": 230.2,
+        "requests": 47,
+        "max_latency_ms": 71.3
+      },
+      {
+        "start_s": 52.685,
+        "duration_ms": 93.5,
+        "requests": 19,
+        "max_latency_ms": 64.7
+      },
+      {
+        "start_s": 4.675,
+        "duration_ms": 70.4,
+        "requests": 15,
+        "max_latency_ms": 69.0
+      },
+      {
+        "start_s": 21.445,
+        "duration_ms": 63.4,
+        "requests": 13,
+        "max_latency_ms": 63.4
+      },
+      {
+        "start_s": 59.79,
+        "duration_ms": 62.9,
+        "requests": 13,
+        "max_latency_ms": 62.9
+      }
+    ]
+  },
+  "sched": null,
+  "gc_server": {
+    "pauses": 34,
+    "total_ms": 482.3,
+    "max_ms": 28.1,
+    "overlapping_slow_windows": 4,
+    "slow_time_covered_pct": 19.6,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 28.1
+      },
+      {
+        "what": "Pause Young",
+        "ms": 28.03
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 24.71
+      },
+      {
+        "what": "Pause Young",
+        "ms": 24.62
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 22.84
+      }
+    ]
+  },
+  "gc_mock": {
+    "pauses": 26,
+    "total_ms": 95.8,
+    "max_ms": 5.12,
+    "overlapping_slow_windows": 0,
+    "slow_time_covered_pct": 0.0,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 5.12
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.78
+      },
+      {
+        "what": "Pause Young",
+        "ms": 4.69
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.69
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.07
+      }
+    ]
+  },
+  "wall": null,
+  "jfr": null
+}

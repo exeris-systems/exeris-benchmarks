@@ -1,0 +1,92 @@
+{
+  "trial": "q4-D-43300-p3-light",
+  "arm": "D",
+  "rate": "43300",
+  "poller_mode": "3",
+  "diagnostics": [
+    "gc log",
+    "latency probe 200 req/s"
+  ],
+  "wrk2_p99_ms": 39.17,
+  "probe": {
+    "requests": 12000,
+    "failed": 0,
+    "p50_ms": 30.47,
+    "p99_ms": 38.52,
+    "max_ms": 70.76,
+    "slow_threshold_ms": 60.95,
+    "slow_requests": 2,
+    "slow_windows": 1,
+    "slow_time_ms": 105.8,
+    "longest_window_ms": 105.8,
+    "top_windows": [
+      {
+        "start_s": 18.56,
+        "duration_ms": 105.8,
+        "requests": 22,
+        "max_latency_ms": 70.8
+      }
+    ]
+  },
+  "sched": null,
+  "gc_server": {
+    "pauses": 34,
+    "total_ms": 470.2,
+    "max_ms": 31.92,
+    "overlapping_slow_windows": 2,
+    "slow_time_covered_pct": 56.7,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 31.92
+      },
+      {
+        "what": "Pause Young",
+        "ms": 28.02
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 25.73
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 24.87
+      },
+      {
+        "what": "Pause Young",
+        "ms": 24.42
+      }
+    ]
+  },
+  "gc_mock": {
+    "pauses": 32,
+    "total_ms": 117.1,
+    "max_ms": 6.79,
+    "overlapping_slow_windows": 0,
+    "slow_time_covered_pct": 0.0,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 6.79
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.69
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.25
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.15
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.08
+      }
+    ]
+  },
+  "wall": null,
+  "jfr": null
+}

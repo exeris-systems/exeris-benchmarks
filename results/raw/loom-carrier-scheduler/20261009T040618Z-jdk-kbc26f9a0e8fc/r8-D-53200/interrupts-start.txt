@@ -1,0 +1,67 @@
+            CPU0       CPU1       CPU2       CPU3       CPU4       CPU5       CPU6       CPU7       CPU8       CPU9       CPU10      CPU11      
+   0:        137          0          0          0          0          0          0          0          0          0          0          0 IR-IO-APIC    2-edge      timer
+   6:          0          0          0          0          0          0          0          0          0          0          0          0 IR-IO-APIC    6-edge      AMDI0010:03
+   7:          0          0          0          0          0          0          0          0          0          0          0          0 IR-IO-APIC    7-fasteoi   pinctrl_amd
+   8:          0          0          0          0          0          0          0          0          0          0          0          0 IR-IO-APIC    8-edge      rtc0
+   9:          0          0          0          0          0          0          0          0          0          0          0          0 IR-IO-APIC    9-fasteoi   acpi
+  25:          0          0          0          0          0          0          0          0          0          0          0          0 PCI-MSI-0000:00:00.2    0-edge      AMD-Vi
+  26:          0          0          0          0          0          1          0          0          0          0          0          0 IR-PCI-MSI-0000:00:01.1    0-edge      PCIe PME, PCIe bwctrl
+  27:          0          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSI-0000:00:01.2    0-edge      PCIe PME, PCIe bwctrl
+  28:          0          0          0          0          0          0          0         18          0          0          0          0 IR-PCI-MSI-0000:00:03.1    0-edge      PCIe PME, PCIe bwctrl
+  30:          0          0          0          0          0          0          0          0          1          0          0          0 IR-PCI-MSI-0000:00:07.1    0-edge      PCIe PME, aerdrv, PCIe bwctrl
+  31:          0          0          0          0          0          0          0          0          0          1          0          0 IR-PCI-MSI-0000:00:08.1    0-edge      PCIe PME, aerdrv, PCIe bwctrl
+  34:          0          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSI-0000:03:00.0    0-edge      PCIe bwctrl
+  35:          0          0          0          0          0          0          0          0          0          0          0          1 IR-PCI-MSI-0000:03:04.0    0-edge      PCIe bwctrl
+  36:          1          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSI-0000:03:08.0    0-edge      PCIe bwctrl
+  38:          0          1          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSI-0000:03:09.0    0-edge      PCIe bwctrl
+  39:        174          0       1098          0          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:02:00.0    0-edge      xhci_hcd
+  48:          0          0          0      18445          0          0          9          0          0          0          0          0 IR-PCI-MSIX-0000:0a:00.3    0-edge      xhci_hcd
+  56:          0          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSI-0000:02:00.1    0-edge      ahci[0000:02:00.1]
+  58:          0          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:0a:00.1    0-edge      psp-1
+  61:         50          0          0          0          0          0          0         35          0          0          0          0 IR-PCI-MSIX-0000:05:00.0    0-edge      nvme0q0
+  62:          0          0          0          0          0          0         51          0         44          0          0          0 IR-PCI-MSIX-0000:01:00.0    0-edge      nvme1q0
+  63:          0          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:05:00.0    1-edge      nvme0q1
+  64:          0          0          0          0          0          0          0          0          0         70          0          0 IR-PCI-MSIX-0000:05:00.0    2-edge      nvme0q2
+  65:          0          0          0          0          0          0          0          0          0          0         69          0 IR-PCI-MSIX-0000:05:00.0    3-edge      nvme0q3
+  66:          0          0          0          0          0          0          0          0          0          0          0         55 IR-PCI-MSIX-0000:05:00.0    4-edge      nvme0q4
+  67:          0          0          1          0          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:05:00.0    5-edge      nvme0q5
+  68:          0          0          0          0          0          0          0          0          1          0          0          0 IR-PCI-MSIX-0000:05:00.0    6-edge      nvme0q6
+  69:        624          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:05:00.0    7-edge      nvme0q7
+  70:          0          0          0          0          0          0        747          0          0          0          0          0 IR-PCI-MSIX-0000:05:00.0    8-edge      nvme0q8
+  71:          0       9447          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:01:00.0    1-edge      nvme1q1
+  72:          0          0          0          0          0          0          0       5835          0          0          0          0 IR-PCI-MSIX-0000:01:00.0    2-edge      nvme1q2
+  73:          0          0          0       8894          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:01:00.0    3-edge      nvme1q3
+  74:          0          0          0          0          0          0          0          0          0      13777          0          0 IR-PCI-MSIX-0000:01:00.0    4-edge      nvme1q4
+  75:          0          0          0          0       5663          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:01:00.0    5-edge      nvme1q5
+  76:          0          0          0          0          0          0          0          0          0          0       4676          0 IR-PCI-MSIX-0000:01:00.0    6-edge      nvme1q6
+  77:          0          0          0          0          0       6851          0          0          0          0          0          0 IR-PCI-MSIX-0000:01:00.0    7-edge      nvme1q7
+  78:          0          0          0          0          0          0          0          0          0          0          0       3413 IR-PCI-MSIX-0000:01:00.0    8-edge      nvme1q8
+  79:          0          0       3720          0          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:01:00.0    9-edge      nvme1q9
+  80:          0          0          0          0          0          0          0          0       9782          0          0          0 IR-PCI-MSIX-0000:01:00.0   10-edge      nvme1q10
+  81:      59777          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:01:00.0   11-edge      nvme1q11
+  82:          0          0          0          0          0          0      54689          0          0          0          0          0 IR-PCI-MSIX-0000:01:00.0   12-edge      nvme1q12
+  83:          0          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSIX-0000:07:00.0    0-edge      enp7s0
+  84:          0          0          0          0          0          0        178          0          0       2224          0          0 IR-IO-APIC   31-fasteoi   snd_hda_intel:card0
+  86:          0          0          0          0          0          0          0          0          0          0       3541          0 IR-PCI-MSI-0000:0a:00.4    0-edge      snd_hda_intel:card2
+  88:          0          0          0          0          0          0          6          0          0          0          0      26132 IR-PCI-MSI-0000:08:00.0    0-edge      nvidia
+  89:     273410          0          0          0          0          0          0          0          0          0          0          0 IR-PCI-MSI-0000:06:00.0    0-edge      rtw89_pci
+ NMI:        198        446        359        376        130        131        198        444          1          1        130        131   Non-maskable interrupts
+ LOC:    5681929   25604545    4877898    5020035    5575536    5605833    5661108   25497436     101942      87514    5516051    5533905   Local timer interrupts
+ SPU:          0          0          0          0          0          0          0          0          0          0          0          0   Spurious interrupts
+ PMI:        198        446        359        376        130        131        198        444          1          1        130        131   Performance monitoring interrupts
+ IWI:        126         79        142        124        120         91         30         67        265        100         74       1904   IRQ work interrupts
+ RTR:          0          0          0          0          0          0          0          0          0          0          0          0   APIC ICR read retries
+ RES:      11190      18280      52793      33790      13390      13362      18744      13187       8610       5700      12402       9272   Rescheduling interrupts
+ CAL:   47542408   17700418   18551022   18282711   23552578   23864682   44503385   17828169     923222     168690   23410556   23376693   Function call interrupts
+ TLB:      19273      13200       6064       6766       5802       6635      17959      10625       6324       4443       5912       5348   TLB shootdowns
+ TRM:          0          0          0          0          0          0          0          0          0          0          0          0   Thermal event interrupts
+ THR:          0          0          0          0          0          0          0          0          0          0          0          0   Threshold APIC interrupts
+ DFR:          0          0          0          0          0          0          0          0          0          0          0          0   Deferred Error APIC interrupts
+ MCE:          0          0          0          0          0          0          0          0          0          0          0          0   Machine check exceptions
+ MCP:         20         20         20         20         20         20         20         20         20         20         20         20   Machine check polls
+ ERR:          0
+ MIS:          0
+ PIN:          0          0          0          0          0          0          0          0          0          0          0          0   Posted-interrupt notification event
+ NPI:          0          0          0          0          0          0          0          0          0          0          0          0   Nested posted-interrupt event
+ PIW:          0          0          0          0          0          0          0          0          0          0          0          0   Posted-interrupt wakeup event
+VPMI:          0          0          0          0          0          0          0          0          0          0          0          0  Perf Guest Mediated PMI

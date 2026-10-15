@@ -1,0 +1,66 @@
+r3-C_iso-52600-p3-jfr: arm C_iso rate 52600, wrk2 p99 72.13 ms, diagnostics: gc log, jfr, latency probe 200 req/s
+probe: 12000 requests, p50 31.68 p99 75.68 max 96.49 ms; slow (> 63.36 ms): 368 requests in 13 windows, 3283.2 ms total, longest 713.4 ms
+--- gc_server
+{
+ "pauses": 42,
+ "total_ms": 511.0,
+ "max_ms": 26.34,
+ "overlapping_slow_windows": 8,
+ "slow_time_covered_pct": 4.1,
+ "longest": [
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 26.34
+  },
+  {
+   "what": "Pause Young",
+   "ms": 25.9
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 23.85
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 23.13
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 21.48
+  }
+ ]
+}
+--- gc_mock
+{
+ "pauses": 34,
+ "total_ms": 126.7,
+ "max_ms": 4.86,
+ "overlapping_slow_windows": 8,
+ "slow_time_covered_pct": 0.9,
+ "longest": [
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 4.86
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 4.39
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 4.35
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 4.14
+  },
+  {
+   "what": "safepoint ParallelCollectForAllocation",
+   "ms": 4.14
+  }
+ ]
+}
+--- jfr
+{
+ "pinned_events": 0
+}

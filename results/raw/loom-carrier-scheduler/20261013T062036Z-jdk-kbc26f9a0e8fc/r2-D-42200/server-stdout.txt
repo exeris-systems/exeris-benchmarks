@@ -1,0 +1,100 @@
+LOOM-BENCH pid=264026
+LOOM-BENCH jdk=28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133
+LOOM-BENCH scheduler.implClass=eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierScheduler scheduler.parallelism=<default>
+LOOM-BENCH jdk.pollerMode=3
+LOOM-BENCH exeris.carrier.count=2 exeris.carrier.affinity=2,3 exeris.transport.locality=true exeris.locality.allVthreads=true
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.community.config.CommunityConfigProvider lambda$kernelSettings$0
+INFO: CommunityConfigProvider: KernelSettings resolved ? profile=prod
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.config.DynamicConfigFileWatcher forRegistry
+INFO: DynamicConfigFileWatcher: config dir '/etc/exeris/config' does not exist ? hot-reload disabled
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator initialize
+INFO: ????????????????????????????????????????????????
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator initialize
+INFO: ?    Exeris Subsystem Orchestrator (L0)       ?
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator initialize
+INFO: ????????????????????????????????????????????????
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator initialize
+INFO: Selector=[transport, memory, http], FailurePolicy=FAIL_FAST
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemRegistryLoader loadRegistry
+INFO:   SubsystemProvider: exeris-kernel-community (priority=0)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator initialize
+INFO: 12 subsystem(s) in registry: [memory, crypto, security, persistence, events, graph, transport, http, websocket, flow, scheduling, storage]
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator initialize
+INFO: Selector resolved 4 subsystem(s): memory, crypto, transport, http
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator sortAndAdoptTopologicalOrder
+INFO: Init order: memory -> crypto -> http -> transport
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   init [memory] (phase=FOUNDATION)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   [memory] provider bindings composed
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   [memory] initialized (9 ms)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   init [crypto] (phase=SERVICES)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   [crypto] provider bindings composed
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   [crypto] initialized (157 ms)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   init [http] (phase=RUNTIME)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   [http] provider bindings composed
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   [http] initialized (261 ms)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   init [transport] (phase=SERVICES)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doInitialize
+INFO:   [transport] initialized (6 ms)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator initialize
+INFO: INITIALIZED ? 4 subsystem(s) in 464 ms
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator start
+INFO: Starting 4 subsystem(s)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator startSequential
+INFO: Phase FOUNDATION: sequential start (1 subsystem(s))
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doStart
+INFO:   start [memory] (profile=prod)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doStart
+INFO:   [memory] started (19 ms)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator startParallel
+INFO: Phase SERVICES: start in dependency rounds (2 subsystem(s))
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doStart
+INFO:   start [crypto] (profile=prod)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doStart
+INFO:   [crypto] started (16 ms)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doStart
+INFO:   start [transport] (profile=prod)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doStart
+INFO:   [transport] started (0 ms)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator startParallel
+INFO: Phase RUNTIME: start in dependency rounds (1 subsystem(s))
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doStart
+INFO:   start [http] (profile=prod)
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.transport.syscall.CoreSyscallLoader loadPosix
+INFO: [CoreSyscallLoader] Resolving POSIX Berkeley socket symbols via FFM defaultLookup
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.core.transport.syscall.CoreSyscallLoader loadPosix
+INFO: [CoreSyscallLoader] POSIX socket handles resolved successfully
+Oct 13, 2026 8:56:06 AM eu.exeris.kernel.community.transport.NativeTcpCarrier <init>
+INFO: [NativeTcpCarrier] Community socket backend mode=auto, active=posix-hybrid, ffmArmed=true - Core socket seam armed for plain TCP traffic; selector ownership and NIO fallback remain intact.
+Oct 13, 2026 8:56:07 AM eu.exeris.kernel.community.transport.NativeTcpCarrier resolveExecutionBackend
+INFO: [NativeTcpCarrier] Locality-aware execution enabled with 2 carriers
+Oct 13, 2026 8:56:07 AM eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread bindToCores
+INFO: [ExerisCarrierThread] exeris-carrier-1 pinned to CPU core(s) [3]
+Oct 13, 2026 8:56:07 AM eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread bindToCores
+INFO: [ExerisCarrierThread] exeris-carrier-0 pinned to CPU core(s) [2]
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.jctools.util.UnsafeAccess (file:/home/arkstack/.m2/repository/org/jctools/jctools-core/4.0.7/jctools-core-4.0.7.jar)
+WARNING: Please consider reporting this to the maintainers of class org.jctools.util.UnsafeAccess
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Oct 13, 2026 8:56:07 AM eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread bindToCores
+INFO: [ExerisCarrierThread] carrier/native-tcp/reactor/0 pinned to CPU core(s) [0]
+Oct 13, 2026 8:56:07 AM eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread bindToCores
+INFO: [ExerisCarrierThread] carrier/native-tcp/acceptor pinned to CPU core(s) [0, 6]
+Oct 13, 2026 8:56:07 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator doStart
+INFO:   [http] started (130 ms)
+Oct 13, 2026 8:56:07 AM eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread bindToCores
+INFO: [ExerisCarrierThread] carrier/native-tcp/reactor/1 pinned to CPU core(s) [6]
+Oct 13, 2026 8:56:07 AM eu.exeris.kernel.core.bootstrap.SubsystemOrchestrator start
+INFO: STARTED in 174 ms
+LOOM-BENCH backend=jdk(java.net.Socket) pool=5000 target=127.0.0.1:43917
+LOOM-BENCH READY port=54795
+LOOM-BENCH handler thread virtual=true name=VirtualThread[#27,paqs/CommunityNativeTcpCarrier/NORMAL/1]/runnable@exeris-carrier-0

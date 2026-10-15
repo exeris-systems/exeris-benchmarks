@@ -1,0 +1,164 @@
+{
+  "schema": "loom-carrier-scheduler-trial/1",
+  "trial_dir": "r8-C_iso-42200",
+  "arm": "C_iso",
+  "backend": "jdk",
+  "rate": "42200",
+  "connections": 5000,
+  "load_threads": 4,
+  "warmup_s": 30,
+  "warmup_mode": "open",
+  "duration_s": 60,
+  "think_ms": 30.0,
+  "pool": 5000,
+  "max_connections": "16384",
+  "poller_mode": "3",
+  "layout": {
+    "carriers": "2,3",
+    "server_aux": "0,6",
+    "mock": "1,7",
+    "load": "4,5,10,11"
+  },
+  "kernel": {
+    "kernel_commit": "bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "kernel_requested_revision": "research/loom-carrier-scheduler",
+    "kernel_repo": "git@github.com:exeris-systems/exeris-kernel.git",
+    "built_from": "git archive bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "class_file_major": 72,
+    "class_file_minor": 0,
+    "jdk_build": "OpenJDK Runtime Environment (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)",
+    "built_at_utc": "2026-10-05T04:35:17Z"
+  },
+  "bench_commit": "eba18962c54049059ab33582be146dff02082520",
+  "load": {
+    "requests_per_sec": 40017.31,
+    "percentiles_ms": {
+      "p50": 32.14,
+      "p75": 32.99,
+      "p90": 39.74,
+      "p99": 177.92,
+      "p99.9": 240.51,
+      "p99.99": 273.41,
+      "p99.999": 294.65,
+      "p100": 309.25
+    },
+    "socket_errors": null,
+    "non_2xx": 0,
+    "calibration_mean_ms": 36.672
+  },
+  "pidstat": {
+    "process": {
+      "tid": "-",
+      "%usr": 55.4,
+      "%system": 105.83,
+      "%wait": 0.0,
+      "%CPU": 161.23,
+      "cswch/s": 0.0,
+      "nvcswch/s": 0.0
+    },
+    "carriers": {
+      "count": 2,
+      "cpu_pct": 114.53,
+      "usr_pct": 36.92,
+      "sys_pct": 77.61,
+      "wait_pct_max": 4.52,
+      "wait_pct_each": {
+        "exeris-carrier-0": 4.5,
+        "exeris-carrier-1": 4.52
+      },
+      "nvcswch_per_s": 49.92
+    },
+    "reactors": {
+      "count": 2,
+      "cpu_pct": 36.95,
+      "usr_pct": 14.98,
+      "sys_pct": 21.96,
+      "wait_pct_max": 1.52,
+      "wait_pct_each": {
+        "carrier/native-tcp/reactor/0": 1.52,
+        "carrier/native-tcp/reactor/1": 1.42
+      },
+      "nvcswch_per_s": 152.83
+    }
+  },
+  "perf_stat": {
+    "task_clock_ms": 97049.63,
+    "elapsed_s": 60.003500312,
+    "cpus_utilized": 1.617,
+    "cycles": 315028108242.0,
+    "instructions": 238465580481.0,
+    "ipc": 0.757,
+    "context_switches_per_s": 32867.4,
+    "cpu_migrations": 38974.0
+  },
+  "perf_stat_status": "measured",
+  "profile": "none",
+  "perf_sched": null,
+  "gates": {
+    "load": {
+      "pass": true,
+      "achieved_ratio": 1.0004,
+      "raw_ratio": 0.9483,
+      "connection_ramp_s": 6.25,
+      "reason": "achieved 40017.3 req/s of 40002 expected at target 42200"
+    },
+    "errors": {
+      "pass": true,
+      "socket_errors": {},
+      "non_2xx": 0
+    },
+    "isolation": {
+      "pass": true,
+      "problems": [],
+      "carriers": {
+        "exeris-carrier-0": [
+          2,
+          3
+        ],
+        "exeris-carrier-1": [
+          2,
+          3
+        ]
+      }
+    },
+    "transport": {
+      "pass": true,
+      "observed": "active=posix-hybrid, ffmArmed=true",
+      "expected": "active=posix-hybrid, ffmArmed=true"
+    },
+    "unperturbed": {
+      "pass": true,
+      "reason": "no tracer or profiler attached"
+    },
+    "host_shielded": {
+      "pass": true,
+      "problems": []
+    },
+    "harness_clean": {
+      "pass": true,
+      "reason": "harness files committed"
+    }
+  },
+  "host": {
+    "state": {
+      "graphical_target": "inactive",
+      "allowed_cpus.system.slice": "0 6",
+      "allowed_cpus.user.slice": "0 6",
+      "allowed_cpus.init.scope": "0 6",
+      "own_cgroup": "/bench.slice/run-p252489-i251607.service",
+      "own_cpus_allowed": "0-11",
+      "isolated": "",
+      "boost": "0",
+      "governors": "12 performance"
+    },
+    "shielded": true,
+    "problems": [],
+    "interrupts_on_carrier_cpus_during_window": {
+      "cpu2": 189265,
+      "cpu3": 190043
+    }
+  },
+  "valid": true,
+  "sustained": true,
+  "evidence": true
+}

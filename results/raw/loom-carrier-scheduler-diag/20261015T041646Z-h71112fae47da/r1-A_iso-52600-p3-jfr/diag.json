@@ -1,0 +1,149 @@
+{
+  "trial": "r1-A_iso-52600-p3-jfr",
+  "arm": "A_iso",
+  "rate": "52600",
+  "poller_mode": "3",
+  "diagnostics": [
+    "gc log",
+    "jfr",
+    "latency probe 200 req/s"
+  ],
+  "wrk2_p99_ms": 118.91,
+  "probe": {
+    "requests": 12000,
+    "failed": 0,
+    "p50_ms": 30.93,
+    "p99_ms": 110.28,
+    "max_ms": 166.47,
+    "slow_threshold_ms": 61.86,
+    "slow_requests": 1136,
+    "slow_windows": 32,
+    "slow_time_ms": 9254.4,
+    "longest_window_ms": 782.5,
+    "top_windows": [
+      {
+        "start_s": 32.92,
+        "duration_ms": 782.5,
+        "requests": 157,
+        "max_latency_ms": 128.2
+      },
+      {
+        "start_s": 48.78,
+        "duration_ms": 738.0,
+        "requests": 148,
+        "max_latency_ms": 154.4
+      },
+      {
+        "start_s": 11.43,
+        "duration_ms": 662.0,
+        "requests": 133,
+        "max_latency_ms": 166.5
+      },
+      {
+        "start_s": 34.77,
+        "duration_ms": 592.0,
+        "requests": 119,
+        "max_latency_ms": 147.8
+      },
+      {
+        "start_s": 30.34,
+        "duration_ms": 557.2,
+        "requests": 112,
+        "max_latency_ms": 117.6
+      },
+      {
+        "start_s": 26.4,
+        "duration_ms": 509.0,
+        "requests": 102,
+        "max_latency_ms": 131.3
+      },
+      {
+        "start_s": 36.61,
+        "duration_ms": 457.1,
+        "requests": 92,
+        "max_latency_ms": 100.2
+      },
+      {
+        "start_s": 43.0,
+        "duration_ms": 450.1,
+        "requests": 91,
+        "max_latency_ms": 111.3
+      },
+      {
+        "start_s": 43.955,
+        "duration_ms": 449.2,
+        "requests": 90,
+        "max_latency_ms": 150.2
+      },
+      {
+        "start_s": 32.18,
+        "duration_ms": 337.2,
+        "requests": 68,
+        "max_latency_ms": 127.1
+      }
+    ]
+  },
+  "sched": null,
+  "gc_server": {
+    "pauses": 42,
+    "total_ms": 539.9,
+    "max_ms": 25.26,
+    "overlapping_slow_windows": 14,
+    "slow_time_covered_pct": 2.1,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 25.26
+      },
+      {
+        "what": "Pause Young",
+        "ms": 25.17
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 22.32
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 21.87
+      },
+      {
+        "what": "Pause Young",
+        "ms": 21.72
+      }
+    ]
+  },
+  "gc_mock": {
+    "pauses": 34,
+    "total_ms": 133.2,
+    "max_ms": 6.3,
+    "overlapping_slow_windows": 8,
+    "slow_time_covered_pct": 0.3,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 6.3
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 5.08
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.7
+      },
+      {
+        "what": "Pause Young",
+        "ms": 4.58
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.49
+      }
+    ]
+  },
+  "wall": null,
+  "jfr": {
+    "pinned_events": 0
+  }
+}

@@ -1,0 +1,9 @@
+graphical_target=inactive
+allowed_cpus.system.slice=0 6
+allowed_cpus.user.slice=0 6
+allowed_cpus.init.scope=0 6
+own_cgroup=/bench.slice/run-p856444-i838822.service
+own_cpus_allowed=0-11
+isolated=
+boost=0
+governors=12 performance

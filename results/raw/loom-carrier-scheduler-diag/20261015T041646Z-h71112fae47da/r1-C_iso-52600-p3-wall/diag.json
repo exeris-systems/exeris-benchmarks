@@ -1,0 +1,269 @@
+{
+  "trial": "r1-C_iso-52600-p3-wall",
+  "arm": "C_iso",
+  "rate": "52600",
+  "poller_mode": "3",
+  "diagnostics": [
+    "gc log",
+    "async-profiler wall",
+    "latency probe 200 req/s"
+  ],
+  "wrk2_p99_ms": 68.54,
+  "probe": {
+    "requests": 12000,
+    "failed": 0,
+    "p50_ms": 35.14,
+    "p99_ms": 69.81,
+    "max_ms": 108.2,
+    "slow_threshold_ms": 70.28,
+    "slow_requests": 109,
+    "slow_windows": 9,
+    "slow_time_ms": 1533.2,
+    "longest_window_ms": 365.6,
+    "top_windows": [
+      {
+        "start_s": 7.885,
+        "duration_ms": 365.6,
+        "requests": 74,
+        "max_latency_ms": 85.6
+      },
+      {
+        "start_s": 57.53,
+        "duration_ms": 316.7,
+        "requests": 64,
+        "max_latency_ms": 87.8
+      },
+      {
+        "start_s": 31.825,
+        "duration_ms": 181.0,
+        "requests": 37,
+        "max_latency_ms": 75.0
+      },
+      {
+        "start_s": 37.325,
+        "duration_ms": 175.6,
+        "requests": 36,
+        "max_latency_ms": 74.9
+      },
+      {
+        "start_s": 10.51,
+        "duration_ms": 166.4,
+        "requests": 34,
+        "max_latency_ms": 72.0
+      },
+      {
+        "start_s": 59.75,
+        "duration_ms": 115.7,
+        "requests": 24,
+        "max_latency_ms": 108.2
+      },
+      {
+        "start_s": 45.77,
+        "duration_ms": 71.1,
+        "requests": 15,
+        "max_latency_ms": 71.1
+      },
+      {
+        "start_s": 50.495,
+        "duration_ms": 70.7,
+        "requests": 15,
+        "max_latency_ms": 70.7
+      },
+      {
+        "start_s": 51.405,
+        "duration_ms": 70.4,
+        "requests": 15,
+        "max_latency_ms": 70.4
+      }
+    ]
+  },
+  "sched": null,
+  "gc_server": {
+    "pauses": 40,
+    "total_ms": 534.8,
+    "max_ms": 29.8,
+    "overlapping_slow_windows": 8,
+    "slow_time_covered_pct": 8.4,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 29.8
+      },
+      {
+        "what": "Pause Young",
+        "ms": 25.86
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 25.14
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 23.04
+      },
+      {
+        "what": "Pause Young",
+        "ms": 22.96
+      }
+    ]
+  },
+  "gc_mock": {
+    "pauses": 36,
+    "total_ms": 142.3,
+    "max_ms": 6.56,
+    "overlapping_slow_windows": 2,
+    "slow_time_covered_pct": 0.6,
+    "longest": [
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 6.56
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 6.47
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 6.41
+      },
+      {
+        "what": "safepoint ParallelCollectForAllocation",
+        "ms": 4.6
+      },
+      {
+        "what": "Pause Young",
+        "ms": 4.13
+      }
+    ]
+  },
+  "wall": {
+    "windows_cut": 9,
+    "overall": {
+      "carriers": {
+        "samples": 24000,
+        "top_leaves_pct": {
+          "jdk/internal/misc/Unsafe.park": 35.3,
+          "sun/nio/ch/SocketDispatcher.write0": 18.6,
+          "java/lang/invoke/LambdaForm$MH.0x00000000502b3c00.invoke": 15.6,
+          "sun/nio/ch/SocketDispatcher.read0": 7.1,
+          "sun/nio/ch/EPoll.ctl": 2.9,
+          "sun/nio/ch/EPoll.wait": 1.5,
+          "eu/exeris/kernel/core/memory/AbstractLoanedBuffer.close": 1.1,
+          "eu/exeris/kernel/community/transport/NativeTcpStream.writeDirect": 1.0
+        }
+      },
+      "carrier/native-tcp/acceptor": {
+        "samples": 12010,
+        "top_leaves_pct": {
+          "sun/nio/ch/Net.accept": 99.9,
+          "sun/nio/ch/Net.localInetAddress": 0.0,
+          "sun/nio/ch/Net.setIntOption0": 0.0,
+          "sun/nio/ch/IOUtil.configureBlocking": 0.0,
+          "jdk/internal/misc/Unsafe.allocateInstance": 0.0,
+          "sun/nio/ch/Net.localPort": 0.0,
+          "java/lang/Thread.blockedOn": 0.0,
+          "sun/nio/ch/EventFD.set0": 0.0
+        }
+      },
+      "carrier/native-tcp/reactor/1": {
+        "samples": 12000,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 83.5,
+          "java/lang/invoke/LambdaForm$MH.0x00000000502b3c00.invoke": 7.4,
+          "java/util/HashMap$HashIterator.nextNode": 3.8,
+          "java/util/HashMap$HashIterator.<init>": 2.5,
+          "sun/nio/ch/EPollSelectorImpl.processEvents": 0.6,
+          "java/util/concurrent/ConcurrentLinkedQueue.offer": 0.3,
+          "java/util/concurrent/atomic/AtomicBoolean.get": 0.3,
+          "jdk/internal/misc/Unsafe.unpark": 0.2
+        }
+      },
+      "Master-Poller": {
+        "samples": 12000,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 99.3,
+          "jdk/internal/misc/Unsafe.unpark": 0.6,
+          "java/util/concurrent/ConcurrentLinkedQueue.offer": 0.0,
+          "java/lang/Integer.valueOf": 0.0,
+          "sun/nio/ch/EPollPoller.poll": 0.0,
+          "java/lang/VirtualThread.unpark": 0.0,
+          "eu/exeris/kernel/core/transport/scheduler/locality/ExerisCarrierThread.enqueue": 0.0
+        }
+      },
+      "VirtualThread-unparker": {
+        "samples": 12006,
+        "top_leaves_pct": {
+          "jdk/internal/misc/Unsafe.park": 100.0
+        }
+      },
+      "Write-Poller": {
+        "samples": 12011,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 100.0
+        }
+      },
+      "carrier/native-tcp/reactor/0": {
+        "samples": 12000,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 87.4,
+          "java/lang/invoke/LambdaForm$MH.0x00000000502b3c00.invoke": 7.0,
+          "java/util/HashMap$HashIterator.nextNode": 1.5,
+          "java/util/HashMap$HashIterator.<init>": 1.3,
+          "sun/nio/ch/EPollSelectorImpl.processEvents": 0.4,
+          "eu/exeris/kernel/community/memory/CommunityArenaShardPool.allocateSegment": 0.3,
+          "java/util/concurrent/atomic/AtomicBoolean.get": 0.3,
+          "java/util/concurrent/ConcurrentLinkedQueue.offer": 0.2
+        }
+      }
+    },
+    "in_slow": {
+      "carriers": {
+        "samples": 591,
+        "top_leaves_pct": {
+          "jdk/internal/misc/Unsafe.park": 33.8,
+          "sun/nio/ch/SocketDispatcher.write0": 17.8,
+          "java/lang/invoke/LambdaForm$MH.0x00000000502b3c00.invoke": 13.0,
+          "sun/nio/ch/SocketDispatcher.read0": 8.6,
+          "sun/nio/ch/EPoll.ctl": 2.9,
+          "sun/nio/ch/EPoll.wait": 1.7,
+          "java/util/concurrent/ConcurrentLinkedQueue.poll": 1.4,
+          "eu/exeris/kernel/core/memory/AbstractLoanedBuffer.close": 1.2
+        }
+      },
+      "carrier/native-tcp/reactor/1": {
+        "samples": 268,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 85.8,
+          "java/lang/invoke/LambdaForm$MH.0x00000000502b3c00.invoke": 8.2,
+          "java/util/HashMap$HashIterator.<init>": 1.5,
+          "java/util/HashMap$HashIterator.nextNode": 1.5,
+          "sun/nio/ch/UnixDispatcher.close0": 0.7,
+          "eu/exeris/kernel/community/transport/NativeTcpStream.isClosed": 0.4,
+          "java/util/concurrent/ConcurrentLinkedQueue.offer": 0.4,
+          "eu/exeris/kernel/community/transport/NativeTcpReactor.dispatchSelectedKey": 0.4
+        }
+      },
+      "Master-Poller": {
+        "samples": 298,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 99.7,
+          "jdk/internal/misc/Unsafe.unpark": 0.3
+        }
+      },
+      "carrier/native-tcp/reactor/0": {
+        "samples": 292,
+        "top_leaves_pct": {
+          "sun/nio/ch/EPoll.wait": 85.6,
+          "java/lang/invoke/LambdaForm$MH.0x00000000502b3c00.invoke": 9.2,
+          "sun/nio/ch/EPoll.ctl": 1.0,
+          "sun/nio/ch/EPollSelectorImpl.processEvents": 0.7,
+          "java/util/HashMap$HashIterator.nextNode": 0.7,
+          "eu/exeris/kernel/community/memory/CommunityArenaShardPool.allocateSegment": 0.7,
+          "jdk/internal/foreign/SegmentFactories.allocateNativeInternal": 0.3,
+          "java/util/HashMap$HashIterator.<init>": 0.3
+        }
+      }
+    }
+  },
+  "jfr": null
+}

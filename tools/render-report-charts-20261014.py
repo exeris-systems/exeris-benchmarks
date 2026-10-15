@@ -29,6 +29,11 @@ Figures, and what each is FOR:
      what the text claims and no more: pinned carriers sit at zero wait, floating carriers spread,
      and the worst cell does not follow its wait.
 
+  5. chart-2026-10-14-mock-cpu-70.svg
+     §5.3/§5.5. The mock backend's CPU per second at I/O-bound 70 %, every trial of every arm. The
+     D anomaly is a fixed-time event on the backend's side, and a per-second line per trial shows
+     that in one look where a table of maxima cannot.
+
   4. chart-2026-10-14-d70-spectrum.svg
      §5.3. The percentile spectrum of D's slowest and fastest trials at I/O-bound 70 % against
      the other arms' median trials. A stall signature (flat to p95, then a ramp to the maximum)
@@ -356,6 +361,58 @@ def chart_spectrum(io_trials, out):
     open(out, "w").write(s)
 
 
+# --------------------------------------------------------------------------- 5. mock CPU at 70 %
+
+def mock_cpu(campaign, trial_dir):
+    out = []
+    with open(os.path.join(campaign, trial_dir, "pidstat-mock.txt")) as fh:
+        for line in fh:
+            f = line.split()
+            if f and re.match(r"^\d\d:\d\d:\d\d$", f[0]) and f[-1] == "java":
+                out.append(float(f[7]))
+    return out
+
+
+def chart_mock(io_trials, out):
+    W, H = 1200, 560
+    rate = 43300
+    s = head(W, H, "Mock backend CPU per second at I/O-bound 70 percent")
+    s += title(24, 34, "At I/O-bound 70 % the mock backend, not the server, hits its limit — and only under D",
+               "mock JVM CPU per second of the 60 s window (pidstat; two CPUs, so 200 % is its ceiling) · one line per "
+               "trial, 10 fresh JVMs per arm · campaign 20261013T191957Z")
+    panels = [(arm, 90 + i * 370) for i, arm in enumerate(ARMS)]
+    py, ph, pw = 110, 340, 320
+    lo, hi = 100, 210
+    for arm, px in panels:
+        s += text(px, py - 14, LABEL[arm].split(" — ")[0], 13, COLOR[arm], weight="bold")
+
+        def Y(v):
+            return py + ph - (min(max(v, lo), hi) - lo) / (hi - lo) * ph
+
+        def X(i):
+            return px + i / 59 * pw
+        for v in range(lo, hi + 1, 25):
+            s += f'<line x1="{px}" y1="{Y(v):.1f}" x2="{px + pw}" y2="{Y(v):.1f}" stroke="{GRID}"/>\n'
+            s += text(px - 6, Y(v) + 4, f"{v}", 10, DIM, "end")
+        s += f'<line x1="{px}" y1="{Y(200):.1f}" x2="{px + pw}" y2="{Y(200):.1f}" stroke="{DIM}" stroke-dasharray="6,4"/>\n'
+        for sec in (0, 15, 30, 45, 53, 59):
+            s += text(X(sec), py + ph + 16, f"{sec}", 10, FG if sec == 53 else DIM, "middle")
+        s += (f'<line x1="{X(53):.1f}" y1="{py}" x2="{X(53):.1f}" y2="{py + ph}" stroke="{DIM}" '
+              f'stroke-dasharray="2,4"/>\n')
+        for t in sorted((t for t in io_trials if t["arm"] == arm and t["rate"] == rate), key=lambda t: t["dir"]):
+            v = mock_cpu(IO, t["dir"])[:60]
+            pts = " ".join(f"{X(i):.1f},{Y(x):.1f}" for i, x in enumerate(v))
+            s += (f'<polyline points="{pts}" fill="none" stroke="{COLOR[arm]}" stroke-width="1.3" '
+                  f'stroke-opacity="0.75"/>\n')
+        s += text(px + pw / 2, py + ph + 34, "second of the measurement window", 10, DIM, "middle")
+    s += text(90, 522, "D: in 9 of 10 trials the mock jumps to 165–200 % at second 53 and stays ~11 points higher; the one "
+              "trial without the jump is D's fastest (p99 39 ms).", 10, DIM)
+    s += text(90, 538, "A_iso and C_iso never leave 126–149 %. The server's carriers and reactors rise in the same second; "
+              "in the diagnostic trials no connection churn, GC pause or pinning accompanied it (§5.5).", 10, DIM)
+    s += "</svg>\n"
+    open(out, "w").write(s)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(REPO, "results", "reports", "assets"))
@@ -365,7 +422,8 @@ def main():
     chart_ladder(cpu, io, os.path.join(a.out, "chart-2026-10-14-p99-ladder.svg"))
     chart_wait(cpu, io, os.path.join(a.out, "chart-2026-10-14-wait-vs-p99.svg"))
     chart_spectrum(io, os.path.join(a.out, "chart-2026-10-14-d70-spectrum.svg"))
-    print(f"wrote 4 charts to {a.out}")
+    chart_mock(io, os.path.join(a.out, "chart-2026-10-14-mock-cpu-70.svg"))
+    print(f"wrote 5 charts to {a.out}")
 
 
 if __name__ == "__main__":

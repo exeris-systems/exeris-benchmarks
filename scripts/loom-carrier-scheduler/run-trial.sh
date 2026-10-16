@@ -48,6 +48,11 @@
 #                             profile as JFR (profile-mock-cpu.jfr)
 #   --mock-idle-timeout MS    the mock's HTTP and transport idle timeout (default: the kernel's,
 #                             30 s); a configuration change, recorded as one
+#   --app-src DIR             build and run the benchmark app from DIR instead of this checkout's
+#                             targets/exeris-loom-scheduler-app, e.g. an earlier commit's app
+#                             extracted with git archive; recorded in environment.txt
+#   --nofile SOFT:HARD        set the trial's descriptor limits instead of raising the soft limit
+#                             to the hard one; the JVMs and load generators inherit them
 #
 # Every diagnostic marks the trial as perturbed. When any is on, analyze_diag.py cuts the recorded
 # data to the probe's slow windows and writes diag.txt / diag.json beside trial.json.
@@ -76,7 +81,7 @@ CONNECTIONS=100 LOAD_THREADS=4 WARMUP=30 DURATION=30 THINK_MS=1 MOCK_THREADS=2 P
 SERVER_AUX_CPUS="0,6" CARRIER_CPUS="2,3" MOCK_CPUS="1,7" LOAD_CPUS="4,5,10,11" HEAP="1g" PROFILE="none"
 SERVER_PORT="" MOCK_PORT="" PERF_SCHED="no"
 PERF_SCHED_DELAY=0 PERF_SCHED_SECONDS="" WALL_INTERVAL="5ms" PROBE_RATE=0 GC_LOG="no" JFR="no"
-BACKEND_TRACE="no" MOCK_IDLE_TIMEOUT=""
+BACKEND_TRACE="no" MOCK_IDLE_TIMEOUT="" NOFILE_SET=""
 
 die() { echo "run-trial: $*" >&2; exit 2; }
 log() { echo "[$(date +%H:%M:%S)] $*" >&2; }
@@ -98,6 +103,7 @@ while [[ $# -gt 0 ]]; do
     --jfr) JFR="yes"; shift; continue ;;
     --backend-trace) BACKEND_TRACE="yes"; shift; continue ;;
     --mock-idle-timeout) MOCK_IDLE_TIMEOUT="$2" ;;
+    --app-src) APP_DIR="$2" ;;         --nofile) NOFILE_SET="$2" ;;
     *) die "unknown option $1" ;;
   esac
   shift 2
@@ -112,6 +118,9 @@ done
 [[ -n "$OUT" ]] || die "--out is required"
 [[ "$PROBE_RATE" =~ ^[0-9]+$ ]] || die "--latency-probe must be an integer req/s"
 [[ -z "$MOCK_IDLE_TIMEOUT" || "$MOCK_IDLE_TIMEOUT" =~ ^[0-9]+$ ]] || die "--mock-idle-timeout must be milliseconds"
+[[ -z "$NOFILE_SET" || "$NOFILE_SET" =~ ^[0-9]+:[0-9]+$ ]] || die "--nofile must be SOFT:HARD"
+[[ -f "$APP_DIR/build.sh" && -d "$APP_DIR/src" ]] || die "--app-src $APP_DIR holds no app (build.sh, src/)"
+APP_DIR="$(cd "$APP_DIR" && pwd)"
 [[ -z "$PERF_SCHED_SECONDS" ]] && PERF_SCHED_SECONDS=$((DURATION - PERF_SCHED_DELAY))
 (( PERF_SCHED_DELAY >= 0 && PERF_SCHED_SECONDS > 0 && PERF_SCHED_DELAY + PERF_SCHED_SECONDS <= DURATION )) \
   || die "--perf-sched-delay + --perf-sched-seconds must fit inside --duration"
@@ -126,7 +135,12 @@ CARRIER_COUNT=${#CARRIERS[@]}
 # wrk and wrk2 need one descriptor per connection and never raise their own limit; a soft limit
 # below that turns the excess connections into connect errors and caps throughput at what the
 # connected ones can carry.
-ulimit -n "$(ulimit -Hn)" 2>/dev/null || true
+if [[ -n "$NOFILE_SET" ]]; then
+  ulimit -Hn "${NOFILE_SET#*:}" || die "cannot set the hard descriptor limit to ${NOFILE_SET#*:}"
+  ulimit -Sn "${NOFILE_SET%%:*}" || die "cannot set the soft descriptor limit to ${NOFILE_SET%%:*}"
+else
+  ulimit -n "$(ulimit -Hn)" 2>/dev/null || true
+fi
 NOFILE="$(ulimit -n)"
 [[ "$NOFILE" == "unlimited" || "$NOFILE" -ge $((CONNECTIONS + 64)) ]] \
   || die "descriptor limit $NOFILE is below $CONNECTIONS connections; raise it (host-shield.sh run sets 1048576)"
@@ -452,6 +466,8 @@ sleep 2
   echo "isolated: $(cat /sys/devices/system/cpu/isolated 2>/dev/null)"
   echo "perf_event_paranoid: $PARANOID"
   echo "nofile: $NOFILE"
+  echo "nofile hard: $(ulimit -Hn)"
+  echo "app source: $APP_DIR"
   echo "--- lscpu -e"; lscpu -e
   echo "wrk: $("$WRK" -v 2>&1 | head -1)"
   echo "wrk2: $WRK2 at $(git -C "$(dirname "$WRK2")" rev-parse HEAD 2>/dev/null || echo unknown)"

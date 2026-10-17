@@ -67,7 +67,7 @@ if [[ "${1:-}" == "--inner" ]]; then
   } >"$OUT_ROOT/plan.txt"
   : >"$OUT_ROOT/order.txt"
   for r in $(seq 1 "$REPS"); do
-    for c in $CELLS; do echo "r$r $c"; done | shuf --random-source=<(yes "$seed$r") >>"$OUT_ROOT/order.txt"
+    for c in $CELLS; do echo "r$r $c"; done | python3 -c 'import random,sys; r=random.Random(sys.argv[1]); l=sys.stdin.read().splitlines(); r.shuffle(l); print("\n".join(l))' "$seed-$r" >>"$OUT_ROOT/order.txt"
   done
   n=0; total="$(wc -l <"$OUT_ROOT/order.txt")"
   while read -r rep cell; do

@@ -136,8 +136,9 @@ CARRIER_COUNT=${#CARRIERS[@]}
 # below that turns the excess connections into connect errors and caps throughput at what the
 # connected ones can carry.
 if [[ -n "$NOFILE_SET" ]]; then
-  ulimit -Hn "${NOFILE_SET#*:}" || die "cannot set the hard descriptor limit to ${NOFILE_SET#*:}"
+  # The soft limit goes first: the kernel refuses a hard limit below the current soft one.
   ulimit -Sn "${NOFILE_SET%%:*}" || die "cannot set the soft descriptor limit to ${NOFILE_SET%%:*}"
+  ulimit -Hn "${NOFILE_SET#*:}" || die "cannot set the hard descriptor limit to ${NOFILE_SET#*:}"
 else
   ulimit -n "$(ulimit -Hn)" 2>/dev/null || true
 fi

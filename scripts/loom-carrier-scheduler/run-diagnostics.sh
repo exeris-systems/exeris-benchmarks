@@ -107,7 +107,7 @@ if [[ "${1:-}" == "--inner" ]]; then
       for cell in $2; do
         IFS=: read -r arm rate pm <<<"$cell"
         for kind in $3; do echo "r$r $arm $rate ${pm:-3} $kind"; done
-      done | shuf --random-source=<(yes "$seed$r$2")
+      done | python3 -c 'import random,sys; r=random.Random(sys.argv[1]); l=sys.stdin.read().splitlines(); r.shuffle(l); print("\n".join(l))' "$seed-$r-$2"
     done
   }
   plan "$REPS" "$CELLS" "$KINDS" >>"$OUT_ROOT/order.txt"

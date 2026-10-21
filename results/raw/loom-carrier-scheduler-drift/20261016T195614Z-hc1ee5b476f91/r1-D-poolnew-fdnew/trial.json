@@ -1,0 +1,163 @@
+{
+  "schema": "loom-carrier-scheduler-trial/1",
+  "trial_dir": "r1-D-poolnew-fdnew",
+  "arm": "D",
+  "backend": "jdk",
+  "rate": "52200",
+  "connections": 100,
+  "load_threads": 4,
+  "warmup_s": 30,
+  "warmup_mode": "open",
+  "duration_s": 30,
+  "think_ms": 1.0,
+  "pool": 128,
+  "max_connections": "default",
+  "poller_mode": "3",
+  "layout": {
+    "carriers": "2,3",
+    "server_aux": "0,6",
+    "mock": "1,7",
+    "load": "4,5,10,11"
+  },
+  "kernel": {
+    "kernel_commit": "bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "kernel_requested_revision": "research/loom-carrier-scheduler",
+    "kernel_repo": "git@github.com:exeris-systems/exeris-kernel.git",
+    "built_from": "git archive bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "class_file_major": 72,
+    "class_file_minor": 0,
+    "jdk_build": "OpenJDK Runtime Environment (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)",
+    "built_at_utc": "2026-10-05T04:35:17Z"
+  },
+  "bench_commit": "c1ee5b476f91f68ba31cb55403469fc8f7290377",
+  "load": {
+    "requests_per_sec": 52090.3,
+    "percentiles_ms": {
+      "p50": 1.86,
+      "p75": 2.2,
+      "p90": 2.52,
+      "p99": 82.56,
+      "p99.9": 129.98,
+      "p99.99": 134.4,
+      "p99.999": 137.09,
+      "p100": 138.62
+    },
+    "socket_errors": null,
+    "non_2xx": 0,
+    "calibration_mean_ms": 3.984
+  },
+  "pidstat": {
+    "process": {
+      "tid": "-",
+      "%usr": 52.03,
+      "%system": 123.03,
+      "%wait": 0.0,
+      "%CPU": 175.07,
+      "cswch/s": 0.0,
+      "nvcswch/s": 0.0
+    },
+    "carriers": {
+      "count": 2,
+      "cpu_pct": 125.43,
+      "usr_pct": 36.27,
+      "sys_pct": 89.17,
+      "wait_pct_max": 0.03,
+      "wait_pct_each": {
+        "exeris-carrier-0": 0.0,
+        "exeris-carrier-1": 0.03
+      },
+      "nvcswch_per_s": 1.56
+    },
+    "reactors": {
+      "count": 2,
+      "cpu_pct": 37.67,
+      "usr_pct": 9.67,
+      "sys_pct": 28.0,
+      "wait_pct_max": 8.23,
+      "wait_pct_each": {
+        "carrier/native-tcp/reactor/0": 8.23,
+        "carrier/native-tcp/reactor/1": 6.83
+      },
+      "nvcswch_per_s": 519.8
+    }
+  },
+  "perf_stat": {
+    "task_clock_ms": 53503.46,
+    "elapsed_s": 30.008411278,
+    "cpus_utilized": 1.783,
+    "cycles": 171155438981.0,
+    "instructions": 132854014913.0,
+    "ipc": 0.776,
+    "context_switches_per_s": 42225.3,
+    "cpu_migrations": 30514.0
+  },
+  "perf_stat_status": "measured",
+  "profile": "none",
+  "perf_sched": null,
+  "diagnostics": [],
+  "gates": {
+    "load": {
+      "pass": true,
+      "achieved_ratio": 1.0,
+      "raw_ratio": 0.9979,
+      "connection_ramp_s": 0.125,
+      "reason": "achieved 52090.3 req/s of 52091 expected at target 52200"
+    },
+    "errors": {
+      "pass": true,
+      "socket_errors": {},
+      "non_2xx": 0
+    },
+    "isolation": {
+      "pass": true,
+      "problems": [],
+      "carriers": {
+        "exeris-carrier-0": [
+          2
+        ],
+        "exeris-carrier-1": [
+          3
+        ]
+      }
+    },
+    "transport": {
+      "pass": true,
+      "observed": "active=posix-hybrid, ffmArmed=true",
+      "expected": "active=posix-hybrid, ffmArmed=true"
+    },
+    "unperturbed": {
+      "pass": true,
+      "reason": "no tracer or profiler attached"
+    },
+    "host_shielded": {
+      "pass": true,
+      "problems": []
+    },
+    "harness_clean": {
+      "pass": true,
+      "reason": "harness files committed"
+    }
+  },
+  "host": {
+    "state": {
+      "graphical_target": "inactive",
+      "allowed_cpus.system.slice": "0 6",
+      "allowed_cpus.user.slice": "0 6",
+      "allowed_cpus.init.scope": "0 6",
+      "own_cgroup": "/bench.slice/run-p261637-i4473199.service",
+      "own_cpus_allowed": "0-11",
+      "isolated": "",
+      "boost": "0",
+      "governors": "12 performance"
+    },
+    "shielded": true,
+    "problems": [],
+    "interrupts_on_carrier_cpus_during_window": {
+      "cpu2": 121101,
+      "cpu3": 115135
+    }
+  },
+  "valid": true,
+  "sustained": true,
+  "evidence": true
+}

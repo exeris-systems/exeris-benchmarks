@@ -1,0 +1,240 @@
+2545956:
+2026-10-16 03:03:37
+Full thread dump OpenJDK 64-Bit Server VM (28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133 mixed mode, sharing)
+                 JDK version: OpenJDK Runtime Environment (28.0) (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)
+
+Threads class SMR info:
+_java_thread_list=0x000074031c002230, length=21, elements={
+0x000074035802e1a0, 0x00007403580850b0, 0x00007403580867b0, 0x00007403580880a0,
+0x0000740358089830, 0x000074035808afb0, 0x000074035808d0c0, 0x000074035808e9b0,
+0x00007403580eae70, 0x00007403580edff0, 0x00007403585013d0, 0x00007403586fa890,
+0x00007403586fb880, 0x00007403586fd2e0, 0x000074035871a0c0, 0x000074035871b030,
+0x000074035871c630, 0x00007402fc01b810, 0x00007402fc01cae0, 0x00007402fc01fae0,
+0x000074031c000f40
+}
+
+"main" #3 [2545959] prio=5 os_prio=0 cpu=876.40ms elapsed=31.73s tid=0x000074035802e1a0 nid=2545959 waiting on condition  [0x00007403607fd000]
+   java.lang.Thread.State: WAITING (parking)
+	at jdk.internal.misc.Unsafe.park(java.base@28-testing/Native Method)
+	- parking to wait for  <0x00000000c0a60448> (a java.util.concurrent.CountDownLatch$Sync)
+	at java.util.concurrent.locks.LockSupport.park(java.base@28-testing/LockSupport.java:223)
+	at java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(java.base@28-testing/AbstractQueuedSynchronizer.java:790)
+	at java.util.concurrent.locks.AbstractQueuedSynchronizer.acquireSharedInterruptibly(java.base@28-testing/AbstractQueuedSynchronizer.java:1140)
+	at java.util.concurrent.CountDownLatch.await(java.base@28-testing/CountDownLatch.java:230)
+	at eu.exeris.benchmarks.targets.loomscheduler.KernelHttp.lambda$serve$2(KernelHttp.java:91)
+	at eu.exeris.benchmarks.targets.loomscheduler.KernelHttp$$Lambda/0x000000002604e800.run(Unknown Source)
+	at eu.exeris.kernel.core.bootstrap.KernelBootstrap.lambda$runBootInsideScope$0(KernelBootstrap.java:283)
+	at eu.exeris.kernel.core.bootstrap.KernelBootstrap$$Lambda/0x0000000026238800.run(Unknown Source)
+	at jdk.internal.vm.ScopedValueContainer.runWithoutScope(java.base@28-testing/ScopedValueContainer.java:112)
+	at jdk.internal.vm.ScopedValueContainer.run(java.base@28-testing/ScopedValueContainer.java:98)
+	at java.lang.ScopedValue$Carrier.runWith(java.base@28-testing/ScopedValue.java:487)
+	at java.lang.ScopedValue$Carrier.run(java.base@28-testing/ScopedValue.java:471)
+	at eu.exeris.kernel.core.bootstrap.KernelBootstrap.runBootInsideScope(KernelBootstrap.java:280)
+	at eu.exeris.kernel.core.bootstrap.KernelBootstrap.lambda$runKernel$0(KernelBootstrap.java:194)
+	at eu.exeris.kernel.core.bootstrap.KernelBootstrap$$Lambda/0x00000000260c5c00.call(Unknown Source)
+	at jdk.internal.vm.ScopedValueContainer.callWithoutScope(java.base@28-testing/ScopedValueContainer.java:162)
+	at jdk.internal.vm.ScopedValueContainer.call(java.base@28-testing/ScopedValueContainer.java:147)
+	at java.lang.ScopedValue$Carrier.runWith(java.base@28-testing/ScopedValue.java:440)
+	at java.lang.ScopedValue$Carrier.call(java.base@28-testing/ScopedValue.java:424)
+	at eu.exeris.kernel.core.bootstrap.KernelBootstrap.runKernel(KernelBootstrap.java:190)
+	at eu.exeris.kernel.core.bootstrap.KernelBootstrap.boot(KernelBootstrap.java:134)
+	at eu.exeris.benchmarks.targets.loomscheduler.KernelHttp.lambda$serve$1(KernelHttp.java:86)
+	at eu.exeris.benchmarks.targets.loomscheduler.KernelHttp$$Lambda/0x0000000026047800.call(Unknown Source)
+	at jdk.internal.vm.ScopedValueContainer.callWithoutScope(java.base@28-testing/ScopedValueContainer.java:162)
+	at jdk.internal.vm.ScopedValueContainer.call(java.base@28-testing/ScopedValueContainer.java:147)
+	at java.lang.ScopedValue$Carrier.runWith(java.base@28-testing/ScopedValue.java:440)
+	at java.lang.ScopedValue$Carrier.call(java.base@28-testing/ScopedValue.java:424)
+	at eu.exeris.benchmarks.targets.loomscheduler.KernelHttp.serve(KernelHttp.java:82)
+	at eu.exeris.benchmarks.targets.loomscheduler.LoomSchedulerServer.main(LoomSchedulerServer.java:71)
+
+"Reference Handler" #8 [2545965] daemon prio=10 os_prio=0 cpu=0.34ms elapsed=31.71s tid=0x00007403580850b0 nid=2545965 waiting on condition  [0x000074035c3f6000]
+   java.lang.Thread.State: RUNNABLE
+	at java.lang.ref.Reference.waitForReferencePendingList(java.base@28-testing/Native Method)
+	at java.lang.ref.Reference.processPendingReferences(java.base@28-testing/Reference.java:250)
+	at java.lang.ref.Reference$ReferenceHandler.run(java.base@28-testing/Reference.java:212)
+
+"Finalizer" #9 [2545966] daemon prio=8 os_prio=0 cpu=0.12ms elapsed=31.71s tid=0x00007403580867b0 nid=2545966 in Object.wait()  [0x000074035c2f6000]
+   java.lang.Thread.State: WAITING (on object monitor)
+	at java.lang.Object.wait0(java.base@28-testing/Native Method)
+	- waiting on <0x00000000c00b8e70> (a java.lang.Object)
+	at java.lang.Object.wait(java.base@28-testing/Object.java:467)
+	at java.lang.Object.wait(java.base@28-testing/Object.java:420)
+	at java.lang.ref.ReferenceQueue.remove0(java.base@28-testing/ReferenceQueue.java:136)
+	at java.lang.ref.ReferenceQueue.remove(java.base@28-testing/ReferenceQueue.java:214)
+	- locked <0x00000000c00b8e70> (a java.lang.Object)
+	at java.lang.ref.Finalizer$FinalizerThread.run(java.base@28-testing/Finalizer.java:165)
+
+"Signal Dispatcher" #10 [2545967] daemon prio=9 os_prio=0 cpu=0.27ms elapsed=31.71s tid=0x00007403580880a0 nid=2545967 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Service Thread" #11 [2545968] daemon prio=9 os_prio=0 cpu=0.33ms elapsed=31.71s tid=0x0000740358089830 nid=2545968 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Monitor Deflation Thread" #12 [2545969] daemon prio=9 os_prio=0 cpu=1.41ms elapsed=31.71s tid=0x000074035808afb0 nid=2545969 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"C2 CompilerThread0" #13 [2545970] daemon prio=9 os_prio=0 cpu=2776.88ms elapsed=31.71s tid=0x000074035808d0c0 nid=2545970 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+   No compile task
+
+"C1 CompilerThread0" #14 [2545971] daemon prio=9 os_prio=0 cpu=834.05ms elapsed=31.71s tid=0x000074035808e9b0 nid=2545971 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+   No compile task
+
+"Notification Thread" #15 [2545972] daemon prio=9 os_prio=0 cpu=0.06ms elapsed=31.69s tid=0x00007403580eae70 nid=2545972 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Common-Cleaner" #16 [2545973] daemon prio=8 os_prio=0 cpu=0.17ms elapsed=31.68s tid=0x00007403580edff0 nid=2545973 in Object.wait()  [0x000074033f5fe000]
+   java.lang.Thread.State: TIMED_WAITING (on object monitor)
+	at java.lang.Object.wait0(java.base@28-testing/Native Method)
+	- waiting on <0x00000000c00fdfe0> (a java.lang.Object)
+	at java.lang.Object.wait(java.base@28-testing/Object.java:467)
+	at java.lang.ref.ReferenceQueue.remove0(java.base@28-testing/ReferenceQueue.java:122)
+	at java.lang.ref.ReferenceQueue.remove(java.base@28-testing/ReferenceQueue.java:200)
+	- locked <0x00000000c00fdfe0> (a java.lang.Object)
+	at jdk.internal.ref.CleanerImpl.run(java.base@28-testing/CleanerImpl.java:146)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+	at jdk.internal.misc.InnocuousThread.run(java.base@28-testing/InnocuousThread.java:148)
+
+"Cleaner-0" #19 [2545976] daemon prio=8 os_prio=0 cpu=0.15ms elapsed=31.32s tid=0x00007403585013d0 nid=2545976 in Object.wait()  [0x000074033f1fe000]
+   java.lang.Thread.State: TIMED_WAITING (on object monitor)
+	at java.lang.Object.wait0(java.base@28-testing/Native Method)
+	- waiting on <0x00000000c0af7fa0> (a java.lang.Object)
+	at java.lang.Object.wait(java.base@28-testing/Object.java:467)
+	at java.lang.ref.ReferenceQueue.remove0(java.base@28-testing/ReferenceQueue.java:122)
+	at java.lang.ref.ReferenceQueue.remove(java.base@28-testing/ReferenceQueue.java:200)
+	- locked <0x00000000c0af7fa0> (a java.lang.Object)
+	at jdk.internal.ref.CleanerImpl.run(java.base@28-testing/CleanerImpl.java:146)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+	at jdk.internal.misc.InnocuousThread.run(java.base@28-testing/InnocuousThread.java:148)
+
+"exeris-carrier-0" #20 [2545981] daemon prio=5 os_prio=0 cpu=20963.53ms elapsed=30.77s tid=0x00007403586fa890 nid=2545981 waiting on condition  [0x000074033e9fe000]
+   java.lang.Thread.State: WAITING (parking)
+	at jdk.internal.misc.Unsafe.park(java.base@28-testing/Native Method)
+	at java.util.concurrent.locks.LockSupport.park(java.base@28-testing/LockSupport.java:369)
+	at eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread.lambda$runLoop$0(ExerisCarrierThread.java:170)
+	at eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread$$Lambda/0x0000000026273c00.run(Unknown Source)
+	at jdk.internal.vm.ScopedValueContainer.runWithoutScope(java.base@28-testing/ScopedValueContainer.java:112)
+	at jdk.internal.vm.ScopedValueContainer.run(java.base@28-testing/ScopedValueContainer.java:98)
+	at java.lang.ScopedValue$Carrier.runWith(java.base@28-testing/ScopedValue.java:487)
+	at java.lang.ScopedValue$Carrier.run(java.base@28-testing/ScopedValue.java:471)
+	at eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread.runLoop(ExerisCarrierThread.java:163)
+	at eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread$$Lambda/0x0000000026273800.run(Unknown Source)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+
+"exeris-carrier-1" #21 [2545982] daemon prio=5 os_prio=0 cpu=21031.12ms elapsed=30.77s tid=0x00007403586fb880 nid=2545982 waiting on condition  [0x000074033e1fe000]
+   java.lang.Thread.State: WAITING (parking)
+	at jdk.internal.misc.Unsafe.park(java.base@28-testing/Native Method)
+	at java.util.concurrent.locks.LockSupport.park(java.base@28-testing/LockSupport.java:369)
+	at eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread.lambda$runLoop$0(ExerisCarrierThread.java:170)
+	at eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread$$Lambda/0x0000000026273c00.run(Unknown Source)
+	at jdk.internal.vm.ScopedValueContainer.runWithoutScope(java.base@28-testing/ScopedValueContainer.java:112)
+	at jdk.internal.vm.ScopedValueContainer.run(java.base@28-testing/ScopedValueContainer.java:98)
+	at java.lang.ScopedValue$Carrier.runWith(java.base@28-testing/ScopedValue.java:487)
+	at java.lang.ScopedValue$Carrier.run(java.base@28-testing/ScopedValue.java:471)
+	at eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread.runLoop(ExerisCarrierThread.java:163)
+	at eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierThread$$Lambda/0x0000000026273800.run(Unknown Source)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+
+"VirtualThread-unblocker" #22 [2545983] daemon prio=5 os_prio=0 cpu=0.18ms elapsed=30.77s tid=0x00007403586fd2e0 nid=2545983 runnable  [0x000074033ddfe000]
+   java.lang.Thread.State: RUNNABLE
+	at java.lang.VirtualThread.takeVirtualThreadListToUnblock(java.base@28-testing/Native Method)
+	at java.lang.VirtualThread.unblockVirtualThreads(java.base@28-testing/VirtualThread.java:1651)
+	at java.lang.VirtualThread$$Lambda/0x000000002615d400.run(java.base@28-testing/Unknown Source)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+	at jdk.internal.misc.InnocuousThread.run(java.base@28-testing/InnocuousThread.java:148)
+
+"carrier/native-tcp/reactor/0" #24 [2545984] prio=5 os_prio=0 cpu=5062.91ms elapsed=30.73s tid=0x000074035871a0c0 nid=2545984 runnable  [0x000074033d9fe000]
+   java.lang.Thread.State: RUNNABLE
+	at sun.nio.ch.EPoll.wait(java.base@28-testing/Native Method)
+	at sun.nio.ch.EPollSelectorImpl.doSelect(java.base@28-testing/EPollSelectorImpl.java:117)
+	at sun.nio.ch.SelectorImpl.lockAndDoSelect(java.base@28-testing/SelectorImpl.java:130)
+	- locked <0x00000000c0894920> (a sun.nio.ch.Util$2)
+	- locked <0x00000000c07f1a50> (a sun.nio.ch.EPollSelectorImpl)
+	at sun.nio.ch.SelectorImpl.select(java.base@28-testing/SelectorImpl.java:142)
+	at eu.exeris.kernel.community.transport.NativeTcpReactor.runLoop(NativeTcpReactor.java:184)
+	at eu.exeris.kernel.community.transport.NativeTcpReactor$$Lambda/0x0000000026287c00.run(Unknown Source)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+
+"carrier/native-tcp/reactor/1" #25 [2545985] prio=5 os_prio=0 cpu=4984.11ms elapsed=30.73s tid=0x000074035871b030 nid=2545985 runnable  [0x000074033d8fe000]
+   java.lang.Thread.State: RUNNABLE
+	at sun.nio.ch.EPoll.wait(java.base@28-testing/Native Method)
+	at sun.nio.ch.EPollSelectorImpl.doSelect(java.base@28-testing/EPollSelectorImpl.java:117)
+	at sun.nio.ch.SelectorImpl.lockAndDoSelect(java.base@28-testing/SelectorImpl.java:130)
+	- locked <0x00000000c0ab4a20> (a sun.nio.ch.Util$2)
+	- locked <0x00000000c00f4e20> (a sun.nio.ch.EPollSelectorImpl)
+	at sun.nio.ch.SelectorImpl.select(java.base@28-testing/SelectorImpl.java:142)
+	at eu.exeris.kernel.community.transport.NativeTcpReactor.runLoop(NativeTcpReactor.java:184)
+	at eu.exeris.kernel.community.transport.NativeTcpReactor$$Lambda/0x0000000026287c00.run(Unknown Source)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+
+"carrier/native-tcp/acceptor" #26 [2545986] prio=5 os_prio=0 cpu=23.54ms elapsed=30.73s tid=0x000074035871c630 nid=2545986 runnable  [0x000074033d7fe000]
+   java.lang.Thread.State: RUNNABLE
+	at sun.nio.ch.Net.accept(java.base@28-testing/Native Method)
+	at sun.nio.ch.ServerSocketChannelImpl.implAccept(java.base@28-testing/ServerSocketChannelImpl.java:422)
+	at sun.nio.ch.ServerSocketChannelImpl.accept(java.base@28-testing/ServerSocketChannelImpl.java:389)
+	at eu.exeris.kernel.community.transport.NativeTcpCarrier.acceptOne(NativeTcpCarrier.java:1068)
+	at eu.exeris.kernel.community.transport.NativeTcpCarrier.acceptPendingConnections(NativeTcpCarrier.java:1056)
+	at eu.exeris.kernel.community.transport.NativeTcpCarrier$$Lambda/0x000000002628c400.run(Unknown Source)
+	at eu.exeris.kernel.community.transport.NativeTcpCarrier.acceptorLoop(NativeTcpCarrier.java:866)
+	at eu.exeris.kernel.community.transport.NativeTcpCarrier.acceptorLoop(NativeTcpCarrier.java:848)
+	at eu.exeris.kernel.community.transport.NativeTcpCarrier.runAcceptorLoop(NativeTcpCarrier.java:808)
+	at eu.exeris.kernel.community.transport.NativeTcpCarrier$$Lambda/0x0000000026282000.run(Unknown Source)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+
+"Master-Poller" #28 [2545991] daemon prio=5 os_prio=0 cpu=1334.57ms elapsed=30.41s tid=0x00007402fc01b810 nid=2545991 runnable  [0x000074033d6fe000]
+   java.lang.Thread.State: RUNNABLE
+	at sun.nio.ch.EPoll.wait(java.base@28-testing/Native Method)
+	at sun.nio.ch.EPollPoller.poll(java.base@28-testing/EPollPoller.java:142)
+	at sun.nio.ch.Poller.pollerLoop(java.base@28-testing/Poller.java:298)
+	at sun.nio.ch.Poller$PollerPerCarrierPollerGroup$$Lambda/0x000000002617f800.run(java.base@28-testing/Unknown Source)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+	at jdk.internal.misc.InnocuousThread.run(java.base@28-testing/InnocuousThread.java:148)
+
+"Write-Poller" #29 [2545992] daemon prio=5 os_prio=0 cpu=0.13ms elapsed=30.41s tid=0x00007402fc01cae0 nid=2545992 runnable  [0x000074033d5fe000]
+   java.lang.Thread.State: RUNNABLE
+	at sun.nio.ch.EPoll.wait(java.base@28-testing/Native Method)
+	at sun.nio.ch.EPollPoller.poll(java.base@28-testing/EPollPoller.java:142)
+	at sun.nio.ch.Poller.pollerLoop(java.base@28-testing/Poller.java:298)
+	at sun.nio.ch.Poller$PollerPerCarrierPollerGroup$$Lambda/0x00000000262c0400.run(java.base@28-testing/Unknown Source)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+	at jdk.internal.misc.InnocuousThread.run(java.base@28-testing/InnocuousThread.java:148)
+
+"VirtualThread-unparker" #31 [2545993] daemon prio=5 os_prio=0 cpu=0.50ms elapsed=30.40s tid=0x00007402fc01fae0 nid=2545993 waiting on condition  [0x000074033d4fe000]
+   java.lang.Thread.State: TIMED_WAITING (parking)
+	at jdk.internal.misc.Unsafe.park(java.base@28-testing/Native Method)
+	- parking to wait for  <0x00000000c0a3f6f8> (a java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject)
+	at java.util.concurrent.locks.LockSupport.parkNanos(java.base@28-testing/LockSupport.java:271)
+	at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos(java.base@28-testing/AbstractQueuedSynchronizer.java:1804)
+	at java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take(java.base@28-testing/ScheduledThreadPoolExecutor.java:1166)
+	at java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take(java.base@28-testing/ScheduledThreadPoolExecutor.java:883)
+	at java.util.concurrent.ThreadPoolExecutor.getTask(java.base@28-testing/ThreadPoolExecutor.java:1016)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(java.base@28-testing/ThreadPoolExecutor.java:1076)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(java.base@28-testing/ThreadPoolExecutor.java:614)
+	at java.lang.Thread.runWith(java.base@28-testing/Thread.java:1756)
+	at java.lang.Thread.run(java.base@28-testing/Thread.java:1743)
+	at jdk.internal.misc.InnocuousThread.run(java.base@28-testing/InnocuousThread.java:148)
+
+"Attach Listener" #32 [2546019] daemon prio=9 os_prio=0 cpu=0.45ms elapsed=30.27s tid=0x000074031c000f40 nid=2546019 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"GC Thread#1" os_prio=0 cpu=48.62ms elapsed=28.03s tid=0x0000740334002210 nid=2546075 runnable  
+
+"VM Thread" os_prio=0 cpu=4.59ms elapsed=31.72s tid=0x0000740358074a70 nid=2545964 runnable  
+
+"VM Periodic Task Thread" os_prio=0 cpu=0.90ms elapsed=31.72s tid=0x000074035805f800 nid=2545963 waiting on condition  
+
+"GC Thread#0" os_prio=0 cpu=55.79ms elapsed=31.73s tid=0x000074035804bb90 nid=2545961 runnable  
+
+JNI global refs: 33, weak refs: 0
+

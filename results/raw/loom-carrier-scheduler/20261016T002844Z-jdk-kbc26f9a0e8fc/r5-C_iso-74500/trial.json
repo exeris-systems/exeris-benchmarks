@@ -1,0 +1,165 @@
+{
+  "schema": "loom-carrier-scheduler-trial/1",
+  "trial_dir": "r5-C_iso-74500",
+  "arm": "C_iso",
+  "backend": "jdk",
+  "rate": "74500",
+  "connections": 100,
+  "load_threads": 4,
+  "warmup_s": 30,
+  "warmup_mode": "open",
+  "duration_s": 30,
+  "think_ms": 1.0,
+  "pool": 128,
+  "max_connections": "default",
+  "poller_mode": "3",
+  "layout": {
+    "carriers": "2,3",
+    "server_aux": "0,6",
+    "mock": "1,7",
+    "load": "4,5,10,11"
+  },
+  "kernel": {
+    "kernel_commit": "bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "kernel_requested_revision": "research/loom-carrier-scheduler",
+    "kernel_repo": "git@github.com:exeris-systems/exeris-kernel.git",
+    "built_from": "git archive bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "class_file_major": 72,
+    "class_file_minor": 0,
+    "jdk_build": "OpenJDK Runtime Environment (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)",
+    "built_at_utc": "2026-10-05T04:35:17Z"
+  },
+  "bench_commit": "8b915264d87649aae418bb4101e7e857e2dbcc6d",
+  "load": {
+    "requests_per_sec": 69782.04,
+    "percentiles_ms": {
+      "p50": 910.85,
+      "p75": 1190.0,
+      "p90": 1590.0,
+      "p99": 1820.0,
+      "p99.9": 1880.0,
+      "p99.99": 1910.0,
+      "p99.999": 1920.0,
+      "p100": 1930.0
+    },
+    "socket_errors": null,
+    "non_2xx": 0,
+    "calibration_mean_ms": 397.735
+  },
+  "pidstat": {
+    "process": {
+      "tid": "-",
+      "%usr": 61.9,
+      "%system": 163.5,
+      "%wait": 0.0,
+      "%CPU": 225.4,
+      "cswch/s": 0.0,
+      "nvcswch/s": 0.0
+    },
+    "carriers": {
+      "count": 2,
+      "cpu_pct": 158.64,
+      "usr_pct": 44.5,
+      "sys_pct": 114.14,
+      "wait_pct_max": 9.9,
+      "wait_pct_each": {
+        "exeris-carrier-0": 9.87,
+        "exeris-carrier-1": 9.9
+      },
+      "nvcswch_per_s": 70.13
+    },
+    "reactors": {
+      "count": 2,
+      "cpu_pct": 56.17,
+      "usr_pct": 12.6,
+      "sys_pct": 43.56,
+      "wait_pct_max": 1.8,
+      "wait_pct_each": {
+        "carrier/native-tcp/reactor/0": 1.7,
+        "carrier/native-tcp/reactor/1": 1.8
+      },
+      "nvcswch_per_s": 265.9
+    }
+  },
+  "perf_stat": {
+    "task_clock_ms": 67993.68,
+    "elapsed_s": 30.003298219,
+    "cpus_utilized": 2.266,
+    "cycles": 214451651018.0,
+    "instructions": 169209342991.0,
+    "ipc": 0.789,
+    "context_switches_per_s": 64025.4,
+    "cpu_migrations": 55164.0
+  },
+  "perf_stat_status": "measured",
+  "profile": "none",
+  "perf_sched": null,
+  "diagnostics": [],
+  "gates": {
+    "load": {
+      "pass": false,
+      "achieved_ratio": 0.9386,
+      "raw_ratio": 0.9367,
+      "connection_ramp_s": 0.125,
+      "reason": "achieved 69782.0 req/s of 74345 expected at target 74500"
+    },
+    "errors": {
+      "pass": true,
+      "socket_errors": {},
+      "non_2xx": 0
+    },
+    "isolation": {
+      "pass": true,
+      "problems": [],
+      "carriers": {
+        "exeris-carrier-0": [
+          2,
+          3
+        ],
+        "exeris-carrier-1": [
+          2,
+          3
+        ]
+      }
+    },
+    "transport": {
+      "pass": true,
+      "observed": "active=posix-hybrid, ffmArmed=true",
+      "expected": "active=posix-hybrid, ffmArmed=true"
+    },
+    "unperturbed": {
+      "pass": true,
+      "reason": "no tracer or profiler attached"
+    },
+    "host_shielded": {
+      "pass": true,
+      "problems": []
+    },
+    "harness_clean": {
+      "pass": true,
+      "reason": "harness files committed"
+    }
+  },
+  "host": {
+    "state": {
+      "graphical_target": "inactive",
+      "allowed_cpus.system.slice": "0 6",
+      "allowed_cpus.user.slice": "0 6",
+      "allowed_cpus.init.scope": "0 6",
+      "own_cgroup": "/bench.slice/run-p2528261-i2521883.service",
+      "own_cpus_allowed": "0-11",
+      "isolated": "",
+      "boost": "0",
+      "governors": "12 performance"
+    },
+    "shielded": true,
+    "problems": [],
+    "interrupts_on_carrier_cpus_during_window": {
+      "cpu2": 72240,
+      "cpu3": 73841
+    }
+  },
+  "valid": true,
+  "sustained": false,
+  "evidence": true
+}

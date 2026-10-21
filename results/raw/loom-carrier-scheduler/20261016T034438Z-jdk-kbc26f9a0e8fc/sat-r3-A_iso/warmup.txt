@@ -1,0 +1,8 @@
+Running 30s test @ http://127.0.0.1:59815/backend
+  4 threads and 5000 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    91.06ms   49.82ms 872.07ms   93.56%
+    Req/Sec    14.09k     4.04k   17.37k    84.87%
+  1676331 requests in 30.07s, 145.48MB read
+Requests/sec:  55739.36
+Transfer/sec:      4.84MB

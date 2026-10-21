@@ -1,0 +1,568 @@
+{
+  "slo_p99_ms": 5,
+  "ladder_base_a_iso_rps": 74531,
+  "min_valid": 4,
+  "arms": {
+    "A_iso": {
+      "capacity_rps": 37300,
+      "highest_passing_rps": 37300,
+      "rates": [
+        {
+          "rate": 37300,
+          "fraction": 0.5,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.63,
+            2.64,
+            2.65,
+            2.66,
+            2.69
+          ],
+          "p99_median_ms": 2.65,
+          "verdict": "pass"
+        },
+        {
+          "rate": 52200,
+          "fraction": 0.7,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            4.23,
+            5.88,
+            9.81,
+            10.88,
+            13.63
+          ],
+          "p99_median_ms": 9.81,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 55900,
+          "fraction": 0.75,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            6.39,
+            8.59,
+            9.06,
+            10.7,
+            17.22
+          ],
+          "p99_median_ms": 9.06,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 59600,
+          "fraction": 0.8,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            11.18,
+            16.05,
+            17.9,
+            22.33,
+            50.08
+          ],
+          "p99_median_ms": 17.9,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 63400,
+          "fraction": 0.851,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            18.78,
+            23.71,
+            26.27,
+            46.37,
+            56.45
+          ],
+          "p99_median_ms": 26.27,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 67100,
+          "fraction": 0.9,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            28.06,
+            32.14,
+            42.53,
+            46.4,
+            52.19
+          ],
+          "p99_median_ms": 42.53,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 70800,
+          "fraction": 0.95,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            51.52,
+            52.1,
+            66.88,
+            95.23,
+            109.76
+          ],
+          "p99_median_ms": 66.88,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 74500,
+          "fraction": 1.0,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            48.86,
+            97.15,
+            201.85,
+            234.62,
+            247.04
+          ],
+          "p99_median_ms": 201.85,
+          "verdict": "fail (p99 above SLO)"
+        }
+      ]
+    },
+    "B_pin": {
+      "capacity_rps": 70800,
+      "highest_passing_rps": 70800,
+      "rates": [
+        {
+          "rate": 37300,
+          "fraction": 0.5,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.6,
+            2.62,
+            2.62,
+            2.63,
+            2.65
+          ],
+          "p99_median_ms": 2.62,
+          "verdict": "pass"
+        },
+        {
+          "rate": 52200,
+          "fraction": 0.7,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.52,
+            2.52,
+            2.52,
+            2.57,
+            2.57
+          ],
+          "p99_median_ms": 2.52,
+          "verdict": "pass"
+        },
+        {
+          "rate": 55900,
+          "fraction": 0.75,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.6,
+            2.61,
+            2.62,
+            2.63,
+            2.65
+          ],
+          "p99_median_ms": 2.62,
+          "verdict": "pass"
+        },
+        {
+          "rate": 59600,
+          "fraction": 0.8,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.65,
+            2.66,
+            2.67,
+            2.68,
+            2.72
+          ],
+          "p99_median_ms": 2.67,
+          "verdict": "pass"
+        },
+        {
+          "rate": 63400,
+          "fraction": 0.851,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.69,
+            2.74,
+            2.75,
+            2.76,
+            2.76
+          ],
+          "p99_median_ms": 2.75,
+          "verdict": "pass"
+        },
+        {
+          "rate": 67100,
+          "fraction": 0.9,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.74,
+            2.78,
+            3.12,
+            3.26,
+            15.65
+          ],
+          "p99_median_ms": 3.12,
+          "verdict": "pass"
+        },
+        {
+          "rate": 70800,
+          "fraction": 0.95,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.89,
+            2.9,
+            2.92,
+            3.24,
+            3.54
+          ],
+          "p99_median_ms": 2.92,
+          "verdict": "pass"
+        },
+        {
+          "rate": 74500,
+          "fraction": 1.0,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            3.23,
+            17.71,
+            38.21,
+            105.73,
+            128.57
+          ],
+          "p99_median_ms": 38.21,
+          "verdict": "fail (p99 above SLO)"
+        }
+      ]
+    },
+    "C_iso": {
+      "capacity_rps": 37300,
+      "highest_passing_rps": 37300,
+      "rates": [
+        {
+          "rate": 37300,
+          "fraction": 0.5,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.65,
+            2.67,
+            2.68,
+            2.69,
+            2.69
+          ],
+          "p99_median_ms": 2.68,
+          "verdict": "pass"
+        },
+        {
+          "rate": 52200,
+          "fraction": 0.7,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            8.34,
+            12.52,
+            14.16,
+            23.22,
+            24.62
+          ],
+          "p99_median_ms": 14.16,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 55900,
+          "fraction": 0.75,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            15.97,
+            19.28,
+            26.46,
+            40.93,
+            44.67
+          ],
+          "p99_median_ms": 26.46,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 59600,
+          "fraction": 0.8,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            18.74,
+            28.43,
+            41.31,
+            46.24,
+            61.34
+          ],
+          "p99_median_ms": 41.31,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 63400,
+          "fraction": 0.851,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            51.17,
+            61.34,
+            98.43,
+            107.78,
+            112.13
+          ],
+          "p99_median_ms": 98.43,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 67100,
+          "fraction": 0.9,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            54.33,
+            121.73,
+            162.69,
+            216.96,
+            243.07
+          ],
+          "p99_median_ms": 162.69,
+          "verdict": "fail (p99 above SLO)"
+        },
+        {
+          "rate": 70800,
+          "fraction": 0.95,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 1,
+          "p99_ms_sorted": [
+            491.01,
+            612.35,
+            796.67,
+            1050.0,
+            2270.0
+          ],
+          "p99_median_ms": 796.67,
+          "verdict": "fail (rate not sustained)"
+        },
+        {
+          "rate": 74500,
+          "fraction": 1.0,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 0,
+          "p99_ms_sorted": [
+            1420.0,
+            1670.0,
+            1740.0,
+            1820.0,
+            2120.0
+          ],
+          "p99_median_ms": 1740.0,
+          "verdict": "fail (rate not sustained)"
+        }
+      ]
+    },
+    "D": {
+      "capacity_rps": 70800,
+      "highest_passing_rps": 70800,
+      "rates": [
+        {
+          "rate": 37300,
+          "fraction": 0.5,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.66,
+            2.67,
+            2.68,
+            2.72,
+            2.72
+          ],
+          "p99_median_ms": 2.68,
+          "verdict": "pass"
+        },
+        {
+          "rate": 52200,
+          "fraction": 0.7,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.52,
+            2.53,
+            2.53,
+            2.56,
+            2.94
+          ],
+          "p99_median_ms": 2.53,
+          "verdict": "pass"
+        },
+        {
+          "rate": 55900,
+          "fraction": 0.75,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.54,
+            2.56,
+            2.56,
+            2.58,
+            2.82
+          ],
+          "p99_median_ms": 2.56,
+          "verdict": "pass"
+        },
+        {
+          "rate": 59600,
+          "fraction": 0.8,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.63,
+            2.63,
+            2.64,
+            2.67,
+            2.9
+          ],
+          "p99_median_ms": 2.64,
+          "verdict": "pass"
+        },
+        {
+          "rate": 63400,
+          "fraction": 0.851,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.59,
+            2.62,
+            2.63,
+            2.63,
+            2.71
+          ],
+          "p99_median_ms": 2.63,
+          "verdict": "pass"
+        },
+        {
+          "rate": 67100,
+          "fraction": 0.9,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.64,
+            2.67,
+            2.71,
+            2.72,
+            3.17
+          ],
+          "p99_median_ms": 2.71,
+          "verdict": "pass"
+        },
+        {
+          "rate": 70800,
+          "fraction": 0.95,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            2.72,
+            2.77,
+            2.78,
+            2.88,
+            3.09
+          ],
+          "p99_median_ms": 2.78,
+          "verdict": "pass"
+        },
+        {
+          "rate": 74500,
+          "fraction": 1.0,
+          "attempted": 5,
+          "valid": 5,
+          "sustained": 5,
+          "p99_ms_sorted": [
+            5.51,
+            59.07,
+            59.39,
+            88.45,
+            231.55
+          ],
+          "p99_median_ms": 59.39,
+          "verdict": "fail (p99 above SLO)"
+        }
+      ]
+    }
+  },
+  "reproduction_check": [
+    {
+      "rate": 63400,
+      "b_float_p99": [
+        23.01,
+        29.44,
+        38.94,
+        44.86,
+        102.33
+      ],
+      "a_iso_p99": [
+        18.78,
+        23.71,
+        26.27,
+        46.37,
+        56.45
+      ],
+      "b_float_sustained": 5,
+      "a_iso_sustained": 5,
+      "p": 0.6904761904761905,
+      "p_b_float_above": 0.6,
+      "median_inside_a_iso_range": true,
+      "verdict": "accepted"
+    }
+  ]
+}

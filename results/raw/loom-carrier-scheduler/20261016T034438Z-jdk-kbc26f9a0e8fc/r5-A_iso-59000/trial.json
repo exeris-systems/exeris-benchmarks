@@ -1,0 +1,165 @@
+{
+  "schema": "loom-carrier-scheduler-trial/1",
+  "trial_dir": "r5-A_iso-59000",
+  "arm": "A_iso",
+  "backend": "jdk",
+  "rate": "59000",
+  "connections": 5000,
+  "load_threads": 4,
+  "warmup_s": 30,
+  "warmup_mode": "open",
+  "duration_s": 60,
+  "think_ms": 30.0,
+  "pool": 2048,
+  "max_connections": "16384",
+  "poller_mode": "3",
+  "layout": {
+    "carriers": "2,3",
+    "server_aux": "0,6",
+    "mock": "1,7",
+    "load": "4,5,10,11"
+  },
+  "kernel": {
+    "kernel_commit": "bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "kernel_requested_revision": "research/loom-carrier-scheduler",
+    "kernel_repo": "git@github.com:exeris-systems/exeris-kernel.git",
+    "built_from": "git archive bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "class_file_major": 72,
+    "class_file_minor": 0,
+    "jdk_build": "OpenJDK Runtime Environment (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)",
+    "built_at_utc": "2026-10-05T04:35:17Z"
+  },
+  "bench_commit": "8b915264d87649aae418bb4101e7e857e2dbcc6d",
+  "load": {
+    "requests_per_sec": 55738.26,
+    "percentiles_ms": {
+      "p50": 94.08,
+      "p75": 242.69,
+      "p90": 428.03,
+      "p99": 590.85,
+      "p99.9": 655.87,
+      "p99.99": 681.47,
+      "p99.999": 694.27,
+      "p100": 699.9
+    },
+    "socket_errors": null,
+    "non_2xx": 0,
+    "calibration_mean_ms": 71.029
+  },
+  "pidstat": {
+    "process": {
+      "tid": "-",
+      "%usr": 77.2,
+      "%system": 144.97,
+      "%wait": 0.0,
+      "%CPU": 222.17,
+      "cswch/s": 0.0,
+      "nvcswch/s": 0.0
+    },
+    "carriers": {
+      "count": 2,
+      "cpu_pct": 147.95,
+      "usr_pct": 49.18,
+      "sys_pct": 98.77,
+      "wait_pct_max": 7.23,
+      "wait_pct_each": {
+        "ForkJoinPool-1-worker-1": 7.22,
+        "ForkJoinPool-1-worker-2": 7.23
+      },
+      "nvcswch_per_s": 52.84
+    },
+    "reactors": {
+      "count": 2,
+      "cpu_pct": 66.79,
+      "usr_pct": 23.54,
+      "sys_pct": 43.25,
+      "wait_pct_max": 1.12,
+      "wait_pct_each": {
+        "carrier/native-tcp/reactor/0": 1.12,
+        "carrier/native-tcp/reactor/1": 1.08
+      },
+      "nvcswch_per_s": 197.8
+    }
+  },
+  "perf_stat": {
+    "task_clock_ms": 133352.35,
+    "elapsed_s": 60.003410813,
+    "cpus_utilized": 2.222,
+    "cycles": 449008641539.0,
+    "instructions": 353680734477.0,
+    "ipc": 0.788,
+    "context_switches_per_s": 21069.3,
+    "cpu_migrations": 25579.0
+  },
+  "perf_stat_status": "measured",
+  "profile": "none",
+  "perf_sched": null,
+  "diagnostics": [],
+  "gates": {
+    "load": {
+      "pass": true,
+      "achieved_ratio": 0.9966,
+      "raw_ratio": 0.9447,
+      "connection_ramp_s": 6.25,
+      "reason": "achieved 55738.3 req/s of 55927 expected at target 59000"
+    },
+    "errors": {
+      "pass": true,
+      "socket_errors": {},
+      "non_2xx": 0
+    },
+    "isolation": {
+      "pass": true,
+      "problems": [],
+      "carriers": {
+        "ForkJoinPool-1-worker-1": [
+          2,
+          3
+        ],
+        "ForkJoinPool-1-worker-2": [
+          2,
+          3
+        ]
+      }
+    },
+    "transport": {
+      "pass": true,
+      "observed": "active=posix-hybrid, ffmArmed=true",
+      "expected": "active=posix-hybrid, ffmArmed=true"
+    },
+    "unperturbed": {
+      "pass": true,
+      "reason": "no tracer or profiler attached"
+    },
+    "host_shielded": {
+      "pass": true,
+      "problems": []
+    },
+    "harness_clean": {
+      "pass": true,
+      "reason": "harness files committed"
+    }
+  },
+  "host": {
+    "state": {
+      "graphical_target": "inactive",
+      "allowed_cpus.system.slice": "0 6",
+      "allowed_cpus.user.slice": "0 6",
+      "allowed_cpus.init.scope": "0 6",
+      "own_cgroup": "/bench.slice/run-p2627553-i2632585.service",
+      "own_cpus_allowed": "0-11",
+      "isolated": "",
+      "boost": "0",
+      "governors": "12 performance"
+    },
+    "shielded": true,
+    "problems": [],
+    "interrupts_on_carrier_cpus_during_window": {
+      "cpu2": 148242,
+      "cpu3": 151827
+    }
+  },
+  "valid": true,
+  "sustained": true,
+  "evidence": true
+}

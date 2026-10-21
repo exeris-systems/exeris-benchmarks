@@ -69,7 +69,8 @@ whose readiness detection and continuation execution run on different threads.*
    pinning in the server, the JDK read sub-poller, GC and connection churn (§5.3, §5.5). Why only
    `D` triggers the backend event — the request pattern a pinned server produces, or an artefact
    of the mock — is open. It is one of the two cells where the hypothesis's "at every rate" fails
-   (§4).
+   (§4). A later campaign ([2026-10-16](2026-10-16-loom-carrier-scheduler-capacity-at-a-fixed-tail.md), §5) shows the same event under the
+   stock scheduler with pinned workers, so it follows the pinning, not the custom scheduler.
 4. **The stock scheduler's tail coincides with carrier stacking; the unpinned custom scheduler's does not.**
    Floating carriers wait 1–10 % of the window for a CPU near capacity; pinned carriers wait
    0.0–0.2 %. In diagnostic scheduler traces at I/O-bound 85 %, during `A_iso`'s slow windows its
@@ -678,7 +679,8 @@ host shielded.
 The CPU-bound campaign ran on harness `84685a1c` and the I/O-bound one on `e33e9595`. The changes
 between them (busy carriers' thread ids, a fair backend pool, the app rebuilt when its source
 changes) do not touch a 100-connection run whose 128-slot pool never queues, so both campaigns can
-be repeated on the current harness.
+be repeated on the current harness. The [2026-10-16 report](2026-10-16-loom-carrier-scheduler-capacity-at-a-fixed-tail.md) (§6) tests both changes in
+the CPU-bound regime and finds that neither moves it.
 
 ### 9.3 On other hardware
 
@@ -712,6 +714,7 @@ Each run's `summary.md` is written by `summarize_diag.py` from the trials' `diag
 
 | date | change |
 |---|---|
+| 2026-10-16 | Forward references to the 2026-10-16 capacity report in TL;DR 3 and §9.2; no figure changed. |
 | 2026-10-15 | Third review pass. TL;DR 3 scopes the pinning exclusion to the server and names I/O-bound 70 % as one of the two cells where "at every rate" fails, not the only one. §5.1 no longer says a host-level disturbance fits `D`'s slow trials at 85 % better than the scheduler, which nothing there tested. The decisions and changes of mind are stated in the first person where they were made: the cpuset shield (§1.2), the read sub-poller as the leading candidate and its refutation (§5.3), the barging found when a campaign stalled (§7.1), the pilot's readings (§8.1). §8 states that the shield is the best case for pinning. |
 | 2026-10-15 | Second review pass. The summary, TL;DR 3, §4 and §8 no longer resolve what §5.3 leaves open: the 70 % stall is *observed* on the backend and occurs only under `D`, and whether it reflects `D`'s request pattern or the mock is open. TL;DR 4 and §4 scope the stacking result to what was traced (one cell, n = 3, tracer attached) and say "coincides with" rather than "is". §5.3 and §5.5 state which exclusions were measured in which JVM (pinning in the server only; GC in both, with no full collection in the mock) and add three tests that would separate the remaining candidates. |
 | 2026-10-15 | Diagnostic runs `20261015T041646Z` and `20261015T093021Z` added as §5.5 (exploratory). §5.3 is rewritten: `D`'s stall at I/O-bound 70 % is located on the mock backend's side, from the campaign's own per-second mock CPU (new figure), and five candidates are excluded, including the read sub-poller the review pass had named, which `pollerMode=1` does not remove. §4's mechanism clause is now assessed (stacking present for `A_iso`, absent for `C_iso`) and the 70 % exception attributed to the backend. §5.1 and §8 follow; the summary, TL;DR 3 and 4 and the *At a glance* row are restated to match. |
@@ -720,5 +723,5 @@ Each run's `summary.md` is written by `summarize_diag.py` from the trials' `diag
 | 2026-10-14 | Review pass, before publication. §1.1 and §1.2 now say where the JDK pollers run: with `pollerMode=3` the read sub-pollers are virtual threads bound to a carrier (and the scheduler does not consult `preferredCarrier`), only `Master-Poller` and `Write-Poller` are platform threads on core 0, and core 0 is shared with the confined system work. §5.1 gains the reactor and `Master-Poller` run-queue wait, and the `D`-at-85 % correlation between poller wait and tail. §5.3 names the read sub-poller as a candidate with its test. §3 states that 85 % is `C_iso`'s own saturation and ~94 % of `D`'s, and corrects "reaches into `D`'s range" (93.2 ms is above `D`'s 87.9 ms). §2 states the smallest attainable p. §4 records I/O-bound 50 % as "yes, by 1.3 ms" by the criterion's letter and names the 7 points evaluated. §1.4 states the `wrk2` connection ramp. TL;DR 1 and the summary: 90 % is "nearly" complete separation; TL;DR 5 scopes "no CPU cost" to 50 % load; TL;DR 7 and §8 describe the `kernel` backend correctly; §7.1 no longer asserts that work stealing hid the barging. |
 | 2026-10-14 | First publication. Campaigns `20261009T040618Z-jdk-kbc26f9a0e8fc` (CPU-bound, 129 trials) and `20261013T191957Z-jdk-kbc26f9a0e8fc` (I/O-bound, 99 trials), both evidence-eligible under the scenario's gates. Three earlier I/O-bound campaigns did not qualify and are not used: `20261009T062839Z` ran under a 1,024-descriptor limit and connected 1,017 of 5,000 clients; `20261013T062036Z` had carriers moved off their CPUs by the harness in 25 of 99 trials (rejected by the isolation gate) and a 5,000-slot backend pool (§7.2); `20261013T131136Z` was stopped at saturation by the pool's unfair hand-off (§7.1). |
 
-**Updated:** 2026-10-15
-*By Arkadiusz Przychocki (updated 2026-10-15)*
+**Updated:** 2026-10-16
+*By Arkadiusz Przychocki (updated 2026-10-16)*

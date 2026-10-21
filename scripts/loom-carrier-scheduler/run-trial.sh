@@ -33,6 +33,10 @@
 #                             derive each server thread's run time per CPU. Diagnostic only, for the same reason. Needs
 #                             perf_event_paranoid <= -1 and read access to /sys/kernel/tracing.
 #   --perf-sched-delay S      start that recording S seconds into the window (default 0)
+#   --perf-record             sample the carrier CPUs with call graphs (perf record -g, 999 Hz, user
+#                             and kernel) for the whole window, and write the samples' shares by
+#                             symbol to perf-record-report.txt. Diagnostic only. Kernel symbols need
+#                             kernel.kptr_restrict=0 as well as perf_event_paranoid <= -1.
 #   --perf-sched-seconds S    and record for S seconds (default: the rest of the window)
 #   --wall-interval 5ms       sampling interval of --profile wall, which is written as JFR so that
 #                             stacks can be cut to any time range
@@ -79,7 +83,7 @@ APP_DIR="$BENCH_ROOT/targets/exeris-loom-scheduler-app"
 KERNEL_DIR="" ARM="" BACKEND="" RATE="" OUT=""
 CONNECTIONS=100 LOAD_THREADS=4 WARMUP=30 DURATION=30 THINK_MS=1 MOCK_THREADS=2 POOL=128 POLLER_MODE="" WARMUP_MODE="closed" MAX_CONNECTIONS=""
 SERVER_AUX_CPUS="0,6" CARRIER_CPUS="2,3" MOCK_CPUS="1,7" LOAD_CPUS="4,5,10,11" HEAP="1g" PROFILE="none"
-SERVER_PORT="" MOCK_PORT="" PERF_SCHED="no"
+SERVER_PORT="" MOCK_PORT="" PERF_SCHED="no" PERF_RECORD="no"
 PERF_SCHED_DELAY=0 PERF_SCHED_SECONDS="" WALL_INTERVAL="5ms" PROBE_RATE=0 GC_LOG="no" JFR="no"
 BACKEND_TRACE="no" MOCK_IDLE_TIMEOUT="" NOFILE_SET=""
 
@@ -97,6 +101,7 @@ while [[ $# -gt 0 ]]; do
     --heap) HEAP="$2" ;;               --profile) PROFILE="$2" ;;
     --server-port) SERVER_PORT="$2" ;; --mock-port) MOCK_PORT="$2" ;;
     --perf-sched) PERF_SCHED="yes"; shift; continue ;;
+    --perf-record) PERF_RECORD="yes"; shift; continue ;;
     --perf-sched-delay) PERF_SCHED_DELAY="$2" ;; --perf-sched-seconds) PERF_SCHED_SECONDS="$2" ;;
     --wall-interval) WALL_INTERVAL="$2" ;; --latency-probe) PROBE_RATE="$2" ;;
     --gc-log) GC_LOG="yes"; shift; continue ;;
@@ -434,6 +439,15 @@ if [[ "$PERF_SCHED" == "yes" ]]; then
   PERF_SCHED_PID=$!; PIDS+=("$PERF_SCHED_PID"); PERF_SCHED_STATUS="recorded"; DIAG+=("perf sched record")
 fi
 
+PERF_RECORD_PID=""
+if [[ "$PERF_RECORD" == "yes" ]]; then
+  # Everything that runs on the carrier CPUs, kernel included: the question it answers is where
+  # the carriers' kernel time goes. The recorder runs on the load generator's CPUs.
+  taskset -c "$LOAD_CPUS" perf record -g -F 999 -C "$CARRIER_CPUS" -o "$OUT/perf-record.data" \
+    -- sleep "$DURATION" >/dev/null 2>"$OUT/perf-record-stderr.txt" &
+  PERF_RECORD_PID=$!; PIDS+=("$PERF_RECORD_PID"); DIAG+=("perf record")
+fi
+
 python3 -c 'import time; print(f"{time.time():.6f} {time.monotonic():.6f}")' >"$OUT/clock.txt"
 BACKEND_TRACE_PID=""
 if [[ "$BACKEND_TRACE" == "yes" ]]; then
@@ -474,6 +488,11 @@ host_counters "$OUT/host-counters-end.txt"
 wait "$PIDSTAT_PID" 2>/dev/null || true
 [[ -n "$PROBE_PID" ]] && { wait "$PROBE_PID" 2>/dev/null || true; }
 [[ -n "$PERF_SCHED_PID" ]] && { wait "$PERF_SCHED_PID" 2>/dev/null || true; }
+if [[ -n "$PERF_RECORD_PID" ]]; then
+  wait "$PERF_RECORD_PID" 2>/dev/null || true
+  perf report -i "$OUT/perf-record.data" --no-children --sort dso,sym -g none --percent-limit 0.05 \
+    --stdio >"$OUT/perf-record-report.txt" 2>"$OUT/perf-record-report-stderr.txt" || true
+fi
 [[ -n "$BACKEND_TRACE_PID" ]] && { wait "$BACKEND_TRACE_PID" 2>/dev/null || true; }
 if [[ "$JFR" == "yes" ]]; then
   "$LOOM_JDK/bin/jcmd" "$SERVER_PID" JFR.dump name=diag filename="$OUT/server.jfr" >"$OUT/jfr-dump.txt" 2>&1 || true

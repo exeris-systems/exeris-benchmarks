@@ -192,6 +192,24 @@ recorders on the load generator's CPUs. A JFR recording of the server needs the 
 events disabled, since they fire per request; `make_pinning_jfc.py` writes that settings file from
 the kernel build under test.
 
+## Host-state checks
+
+The floating arms' CPU-bound tail and the carriers' kernel time differ between a freshly booted
+host and one that has run for most of a day. Every trial records the boot it ran in and its uptime
+(`host.txt`), and at both ends of its window the tracked-connection count, dying memory cgroups,
+unreclaimable slab and TCP socket counts (`host-counters-{start,end}.txt`); the campaign scripts
+warn when the host has been up for an hour or more.
+
+- `run-drift-check.sh` runs `A_iso` at 52,200 req/s with the app's backend pool at `84685a1c` and
+  now, under systemd's default descriptor limits and the shield's, with `D` as a control; results
+  in `results/raw/loom-carrier-scheduler-drift/`, tabulated by `summarize_drift.py`.
+- `run-kernel-profile.sh` runs clean `A_iso` trials beside `A_iso` and `D` trials sampled with
+  `perf record -g` on the carrier CPUs (`run-trial.sh --perf-record`). Take it once minutes after
+  a boot and once on a host that has run for a day, then
+  `kernel_profile.py compare <fresh> <long-running>` lists the kernel symbols the extra time is
+  spent in. Results in `results/raw/loom-carrier-scheduler-kprof/`; the binary `perf-record.data`
+  files are not committed, the per-trial `perf-record-report.txt` is.
+
 ## Host prerequisites
 
 - Loom EA JDK at `<workspace>/tools/jdk-loom/current`; async-profiler at

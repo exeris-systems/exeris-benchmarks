@@ -119,3 +119,4 @@ __pycache__/
 work/
 # perf sched recordings are binary and large; the per-thread distribution is derived into a .txt
 results/raw/loom-carrier-scheduler*/**/perf-sched*.data
+results/raw/loom-carrier-scheduler*/**/perf-record.data

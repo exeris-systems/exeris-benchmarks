@@ -247,8 +247,13 @@ def parse_host(out, bench_cpus, carrier_cpus):
     if start and end:
         delta = [e - s for s, e in zip(start, end)]
         irq = {f"cpu{c}": delta[c] for c in sorted(carrier_cpus) if c < len(delta)}
+    counters = {}
+    for side in ("start", "end"):
+        f = out / f"host-counters-{side}.txt"
+        if f.exists():
+            counters[side] = dict(line.split("=", 1) for line in f.read_text().splitlines() if "=" in line)
     return {"state": state, "shielded": not problems, "problems": problems,
-            "interrupts_on_carrier_cpus_during_window": irq}
+            "interrupts_on_carrier_cpus_during_window": irq, "counters": counters or None}
 
 
 # Arms whose carriers bind themselves, one CPU each.

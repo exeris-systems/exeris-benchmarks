@@ -335,6 +335,21 @@ host_state() {  # <file>
   } >"$1"
 }
 
+# Kernel state that grows with what the host has done since boot and that the network path or
+# memory accounting walks: tracked connections, dying memory cgroups, unreclaimable slab, sockets.
+# Recorded at both ends of the window so that a trial's own contribution is visible beside the
+# level it started from.
+host_counters() {  # <file>
+  {
+    echo "conntrack_count=$(cat /proc/sys/net/netfilter/nf_conntrack_count 2>/dev/null || echo n/a)"
+    echo "cgroup_dying_root=$(awk '$1=="nr_dying_descendants"{print $2}' /sys/fs/cgroup/cgroup.stat 2>/dev/null)"
+    echo "cgroup_descendants_root=$(awk '$1=="nr_descendants"{print $2}' /sys/fs/cgroup/cgroup.stat 2>/dev/null)"
+    echo "cgroup_dying_bench_slice=$(awk '$1=="nr_dying_descendants"{print $2}' /sys/fs/cgroup/bench.slice/cgroup.stat 2>/dev/null)"
+    awk '/^Slab:/{print "slab_kb=" $2} /^SUnreclaim:/{print "sunreclaim_kb=" $2}' /proc/meminfo
+    ss -s 2>/dev/null | awk -F'[ :(),]+' '/^TCP:/{print "tcp_sockets=" $2; for (i = 3; i < NF; i += 2) print "tcp_" $i "=" $(i + 1)}'
+  } >"$1"
+}
+
 # --- run ----------------------------------------------------------------------------------------
 log "trial arm=$ARM backend=$BACKEND rate=$RATE out=$OUT"
 taskset -c "$MOCK_CPUS" "${MOCK_CMD[@]}" >"$OUT/mock-stdout.txt" 2>&1 &
@@ -367,6 +382,7 @@ affinity_dump "$SERVER_PID" "$OUT/threads.txt" "$OUT/affinity-start.txt"
 
 host_state "$OUT/host.txt"
 cp /proc/interrupts "$OUT/interrupts-start.txt"
+host_counters "$OUT/host-counters-start.txt"
 
 # Probes run for the measurement window only.
 pidstat -u -w -t -p "$SERVER_PID" 1 "$DURATION" >"$OUT/pidstat-server.txt" 2>&1 &
@@ -454,6 +470,7 @@ fi
 
 affinity_dump "$SERVER_PID" "$OUT/threads.txt" "$OUT/affinity-end.txt"
 cp /proc/interrupts "$OUT/interrupts-end.txt"
+host_counters "$OUT/host-counters-end.txt"
 wait "$PIDSTAT_PID" 2>/dev/null || true
 [[ -n "$PROBE_PID" ]] && { wait "$PROBE_PID" 2>/dev/null || true; }
 [[ -n "$PERF_SCHED_PID" ]] && { wait "$PERF_SCHED_PID" 2>/dev/null || true; }

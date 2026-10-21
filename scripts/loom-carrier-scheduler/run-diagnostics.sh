@@ -133,6 +133,10 @@ if systemctl is-active --quiet graphical.target; then
   die "graphical.target is active; run 'sudo systemctl isolate multi-user.target' and log in on a text console first"
 fi
 [[ -n "${TMUX:-}${STY:-}" ]] || log "warning: not inside tmux or screen; a dropped console ends the run"
+# The floating arms' CPU-bound tail differs between a freshly booted host and one that has run for
+# most of a day, for a reason not yet identified; runs meant to be compared start soon after boot.
+UPTIME_H="$(awk '{printf "%d", $1 / 3600}' /proc/uptime)"
+(( UPTIME_H < 1 )) || log "warning: host up ${UPTIME_H} h; runs compared with others should start soon after a boot"
 command -v perf >/dev/null || die "perf not found"
 
 PREV_PARANOID="$(cat /proc/sys/kernel/perf_event_paranoid)"

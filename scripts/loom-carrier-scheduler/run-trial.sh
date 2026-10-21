@@ -328,6 +328,10 @@ host_state() {  # <file>
     echo "isolated=$(cat /sys/devices/system/cpu/isolated 2>/dev/null)"
     echo "boost=$(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null || echo n/a)"
     echo "governors=$(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | sort | uniq -c | xargs)"
+    # The floating arms' tail depends on how long the host has run since boot, for a reason not
+    # yet identified; every trial records the boot it ran in and how far into it.
+    echo "boot_id=$(cat /proc/sys/kernel/random/boot_id)"
+    echo "uptime_s=$(awk '{printf "%d", $1}' /proc/uptime)"
   } >"$1"
 }
 

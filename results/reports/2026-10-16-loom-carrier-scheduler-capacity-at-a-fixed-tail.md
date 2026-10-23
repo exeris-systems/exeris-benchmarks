@@ -6,7 +6,7 @@ categories:
   - benchmarking
   - jvm
   - loom
-summary: "The second result of the loom-carrier-scheduler track: how much open-loop rate each virtual-thread scheduler arm carries while holding a p99 objective fixed before the run (5 ms with a 1 ms backend, 80 ms with a 30 ms backend), on a ladder of 50 % and 70-100 % of the stock scheduler's saturation, 5 fresh JVMs per cell, on a cpuset-shielded 6-core desktop. A new arm, the stock ForkJoinPool with each worker pinned to its own CPU (B_pin), fills the scheduling-algorithm x pinning table. With the 1 ms backend the pinned custom scheduler (D) and B_pin both hold the objective to 95 % and both floating arms only to 50 %: HYP-CAPACITY is not falsified there, and pinning carries the gain. With the 30 ms backend HYP-CAPACITY is falsified on its primary column: D and B_pin both fail the 70 % rung, where the mock backend's CPU jumps near the end of the window in 4 of 5 D and 5 of 5 B_pin trials and in none under the floating arms, so their capacity stops at 50 % against A_iso's 70 %. Above that rung B_pin passes to 95 % and D to 85 %; under pinning the custom scheduler costs tail and saturation throughput with the 30 ms backend and changes nothing with the 1 ms backend. The SPI reproduction of the stock pool, unpinned (B_float), matches the built-in at CPU-bound 85 % and misses the I/O-bound check by 1.5 ms on its range clause, so with the 30 ms backend B_pin is read against B_float: 40.7 against 199 ms p99 at 85 %. The floating arms' CPU-bound tails are worse than in the first campaign at the same rates while the pinned arms' are not; a 2x2 check rules out the two recorded changes between the campaigns, and the difference follows the host's state: runs started minutes after boot reproduce the first campaign, runs started 14-34 h after boot reproduce this one."
+summary: "The second result of the loom-carrier-scheduler track: how much open-loop rate each virtual-thread scheduler arm carries while holding a p99 objective fixed before the run (5 ms with a 1 ms backend, 80 ms with a 30 ms backend), on a ladder of 50 % and 70-100 % of the stock scheduler's saturation, 5 fresh JVMs per cell, on a cpuset-shielded 6-core desktop. A new arm, the stock ForkJoinPool with each worker pinned to its own CPU (B_pin), fills the scheduling-algorithm x pinning table. With the 1 ms backend the pinned custom scheduler (D) and B_pin both hold the objective to 95 % and both floating arms only to 50 %: HYP-CAPACITY is not falsified there, and pinning carries the gain. With the 30 ms backend HYP-CAPACITY is falsified on its primary column: D and B_pin both fail the 70 % rung, where the mock backend's CPU jumps near the end of the window in 4 of 5 D and 5 of 5 B_pin trials and in none under the floating arms, so their capacity stops at 50 % against A_iso's 70 %. Above that rung B_pin passes to 95 % and D to 85 %; under pinning the custom scheduler costs tail and saturation throughput with the 30 ms backend and changes nothing with the 1 ms backend. The SPI reproduction of the stock pool, unpinned (B_float), matches the built-in at CPU-bound 85 % and misses the I/O-bound check by 1.5 ms on its range clause, so with the 30 ms backend B_pin is read against B_float: 40.7 against 199 ms p99 at 85 %. The floating arms' CPU-bound tails are worse than in the first campaign at the same rates while the pinned arms' are not; a 2x2 check rules out the two recorded changes between the campaigns. The cause is the host's packet filtering: once the Docker daemon has run in a boot, its connection tracking and NAT rules stay loaded after it stops, and every loopback packet passes netfilter, which takes about 7 % of the carriers' samples in every arm, and exempting loopback from tracking in the same boot brings A_iso's p99 at 70 % from 8.59 to 2.70 ms while D's stays at 2.5 ms."
 authors:
   - Arkadiusz Przychocki
 track: Community
@@ -54,8 +54,8 @@ and the reading of each arm fixed before the campaigns ran.*
 1. **With a 1 ms backend both pinned arms hold p99 ≤ 5 ms to 95 % of the stock scheduler's
    saturation; both floating arms only to 50 %.** Capacity: `D` (custom scheduler, pinned) and
    `B_pin` (stock `ForkJoinPool`, pinned) **70,800 req/s**; `A_iso` and `C_iso` **37,300 req/s**.
-   On a freshly booted host the floating arms hold it to 70 % instead (§6); the pinned arms hold it
-   to 90–95 % in both states. HYP-CAPACITY is **not falsified** in this regime, and by the rule fixed for `B_pin` the gain is
+   Without connection tracking on loopback the floating arms hold it to 70 % instead (§6); the
+   pinned arms hold it to 90–95 % in both states. HYP-CAPACITY is **not falsified** in this regime, and by the rule fixed for `B_pin` the gain is
    the pinning's: the stock scheduler pinned matches the custom one pinned at every rung to 95 %
    (medians within 0.41 ms of each other).
 2. **With a 30 ms backend HYP-CAPACITY is falsified on its primary column.** Capacity at
@@ -81,14 +81,15 @@ and the reading of each arm fixed before the campaigns ran.*
    lies 1.54 ms below `A_iso`'s fastest trial (200.96 ms), so the range clause fails and, as
    registered, `B_pin` is read against `B_float` there: **40.7 against 199.4 ms**, every `B_pin`
    trial below every `B_float` trial.
-6. **The floating arms' CPU-bound tails moved between campaigns; the pinned arms' did not,
-   though in a run started ~34 h after boot `D`'s moved too.** At
-   70 % `A_iso`'s p99 is 9.81 ms (4.23–13.63) here against 2.46 ms (nine of ten trials at or below
-   2.52) in the first campaign, at a lower rate; carriers spend 8–10 more points of CPU in every
-   arm, pinned ones included. A check of the two recorded changes between the campaigns rules both
-   out; the difference follows the host's state, unidentified, which a fresh boot clears (§6). The
-   regime's verdict does not depend on which campaign is right: on the first campaign's
-   data `A_iso`'s capacity is 70 % and `D`'s at least 90 %, the top of that ladder.
+6. **The floating arms' CPU-bound tails moved between campaigns because of the host's packet
+   filtering; the pinned arms' did not.** At 70 % `A_iso`'s p99 is 9.81 ms (4.23–13.63) here
+   against 2.46 ms in the first campaign; carriers spend 8–10 more points of CPU in every arm.
+   This campaign ran in a boot in which the Docker daemon had run, leaving connection tracking and
+   NAT rules loaded, and the first one did not. Profiled, the extra time is netfilter's (0.2 → 6.8 % of the carriers'
+   samples, both schedulers). In one boot, exempting loopback from tracking takes `A_iso` from
+   8.59 to 2.70 ms (every trial apart) and leaves `D` at 2.56 against 2.52 ms (§6). The regime's
+   verdict holds in both states: on the first campaign's data `A_iso`'s capacity is 70 % and `D`'s
+   at least 90 %, the top of that ladder.
 7. **Five JVMs per cell is enough for a decision rule, not for a pairwise test.** The smallest
    exact two-sided p at 5 against 5 is 0.0079; this report's 140 tests set a Bonferroni threshold
    of 0.0004, which no pair can reach. Capacities are the registered rule applied to cell medians;
@@ -109,8 +110,8 @@ passing rate is supplementary. Rates as a fraction of `A_iso`'s saturation in th
 | I/O-bound, p99 ≤ 80 ms — capacity | 70 % | 50 % | **80 %** | 50 % |
 | — highest passing rate | 70 % | **95 %** | 80 % | 85 % |
 
-CPU-bound capacities are from a campaign started ~14 h after the host's boot; on a freshly booted
-host `A_iso`'s is 70 % (§6).
+CPU-bound capacities are from a campaign run with connection tracking on loopback; without it
+`A_iso`'s is 70 % (§6).
 
 The scheduling-algorithm × pinning table at 85 %, median p99 in ms (`B_float` beside `A_iso`):
 
@@ -200,8 +201,8 @@ does not favour `D` (its known 70 % median, 96.3 ms, failed both). research.md g
 The first report's CPU-bound campaign ran on harness `84685a1c`; between it and `8b915264` the
 benchmark app's backend pool changed from a `LinkedBlockingDeque` to a fair `Semaphore` over a
 `ConcurrentLinkedDeque` (`e33e9595`), and the harness began raising the trial's descriptor limit
-to 1,048,576 (`c6979e96`). The first I/O-bound campaign already ran with both. §6 tests both and
-finds neither matters.
+to 1,048,576 (`c6979e96`). The first I/O-bound campaign already ran with both. §6 tests both, finds
+neither matters, and finds what does.
 
 ---
 
@@ -377,10 +378,11 @@ What this adds to the first report:
 
 ---
 
-## 6. The CPU-bound floating arms moved between campaigns, with the host's state
+## 6. The CPU-bound floating arms moved between campaigns, with the host's packet filtering
 
-*Two campaigns, run a week apart, compared at neighbouring rates, and two drift-check runs that
-test the recorded differences between them. The cause the check leaves is not identified.*
+*Two campaigns, run a week apart, compared at neighbouring rates; two drift-check runs that test
+the recorded differences between them; a kernel profile of each host state; and a check that
+toggles the cause in one boot.*
 
 | | first campaign `20261009T040618Z` | this campaign `20261016T002844Z` |
 |:--|:--|:--|
@@ -420,54 +422,117 @@ cell, the current configuration included, reproduces the first campaign, not thi
 against 2.46 ms then and 9.81 ms here, carrier sys 79 % against 80.1 % then and 88.7 % here. The
 first report's §9.2 judgement holds: neither change touches the CPU-bound regime.
 
-**What does go with the difference is the host's state.** Every run here is behind the same
-shield, and the four runs at about 70 % split by when they started relative to the host's last
-boot:
+**What does go with the difference is the host's packet filtering.** Every run here is behind the
+same shield, from a text console. In none of these four runs was the Docker daemon running: it runs in
+the graphical session and stops when that session ends. The four split two against two by whether
+it had run earlier in the same boot, which each boot's kernel log shows as container interfaces
+created before the run started:
 
-| run | started after boot | `A_iso` p99 at ~70 %, ms | carrier sys %, `A_iso` |
-|:--|--:|:--|--:|
-| first campaign `20261009T040618Z` | 4 min | 2.46 | 80.1 |
-| drift check `20261021T040009Z` | 2 min | 2.46 | 79.4 |
-| this campaign `20261016T002844Z` | ~14 h | 9.81 | 88.7 |
-| first drift check `20261016T195614Z` (pool new, limits new only) | ~34 h | 7.23 | 89.7 |
+| run | started after boot | Docker daemon ran earlier in the boot | `A_iso` p99 at ~70 %, ms | carrier sys %, `A_iso` |
+|:--|--:|:--|:--|--:|
+| first campaign `20261009T040618Z` | 4 min | no | 2.46 | 80.1 |
+| drift check `20261021T040009Z` | 2 min | no | 2.46 | 79.4 |
+| this campaign `20261016T002844Z` | ~14 h | yes | 9.81 | 88.7 |
+| first drift check `20261016T195614Z` (pool new, limits new only) | ~34 h | yes | 7.23 | 89.7 |
 
-In the ~34 h run the control `D` was also off its usual tail (p99 median 5.34 ms, two trials at
-82.56 and 248.32 ms) with no carrier wait. Two runs per state is a correlation, not a cause, and
-what changes on a long-running host — and adds about 9 points of kernel time to the carriers — is
-not identified.
+A daemon that has run containers has loaded connection tracking and its NAT rules into the host's
+iptables. They stay when it stops, until the next boot. From then on every loopback packet between
+the load generator, the server and the backend passes the conntrack and NAT hooks, though none of
+it goes near a container.
 
 It does not build up over a campaign. Within this campaign `A_iso`'s carrier sys at 52,200 req/s
 is 88.3–89.3 % from its first trial (position 35 of 177) to its last (166), and its p99 falls
-rather than rises with position (13.63 ms first, 4.23 and 5.88 ms in the last two); within the
+rather than rises with position (13.63 ms first, 4.23 and 5.88 ms in the last two). Within the
 first campaign the same arm stays at 77.1–80.7 % over 2.5 h, and its one slow trial at 70 %
-(11.35 ms) ran early, at position 35 of 129. Three hours of benchmarking from a fresh boot did not
-produce the state; whatever does was in place before the long-uptime runs started. Since
-`27663996` and `072535e6` every trial records the boot it ran in, its uptime, and at both ends
-of its window the tracked-connection count, dying memory cgroups, unreclaimable slab and TCP
-socket counts, so the next run on a long-running host can be compared counter by counter.
+(11.35 ms) ran early, at position 35 of 129. The state is switched on, not accumulated.
 
-What the comparison shows besides is a pattern: carrier CPU per request rose by about 10 % in
-**every** arm, and only the floating arms' tails moved. That is what the first report's mechanism
-predicts — floating carriers stack on one CPU more often as their load rises, pinned carriers
-cannot — but it was not traced here. The I/O-bound regime, whose two campaigns both ran with the fair pool and the raised
-limit, reproduces within its spread (`A_iso` at 70 %: 65.81 then 70.78 ms; `D` at 85 %: 52.61 then
-45.63 ms; CPUs at 50 %: 1.32 then 1.34 for `A_iso`).
+### 6.1 Where the carriers' extra time goes
 
-It does not change the CPU-bound verdict: applied to the first campaign's data, the same rule gives
+`run-kernel-profile.sh` ran twice in one boot at 52,200 req/s: three clean `A_iso` trials, and
+three each of `A_iso` and `D` sampled with `perf record -g` on the carrier CPUs. The first run
+started 9 minutes after boot, before the Docker daemon had run in that boot. The second started
+15.2 h after boot. The daemon had run during the day and had stopped with the graphical session,
+and connection tracking was still loaded (582 tracked connections at the window's start).
+
+| | `20261022T044235Z`, 0.2 h | `20261022T194321Z`, 15.2 h |
+|:--|--:|--:|
+| `nf_conntrack` loaded | no | yes |
+| clean `A_iso` p99, ms | 2.45, 2.46, 2.47 | 10.06, 48.80, 84.54 |
+| carrier CPU / sys, `A_iso`, % | 119.9 / 79.8 | 127.8 / 89.3 |
+| netfilter symbols, % of `A_iso`'s carrier-CPU samples | 0.16 | 6.78 |
+| netfilter symbols, % of `D`'s carrier-CPU samples | 0.18 | 6.90 |
+
+The symbols that grow are netfilter's and nothing else's: `ipt_do_table` (0 → 1.41 %),
+`nf_hook_slow`, `nf_conntrack_in` and `nf_conntrack_tcp_packet`, `tcp_in_window`,
+`resolve_normal_ct`, and the `nf_nat_*` hooks on the local paths. Every other kernel symbol holds
+or falls slightly. About 6.8 % of the carriers' samples at 128 % carrier CPU is about 8.7 points,
+which is the 8 points the carriers' CPU rose by. Netfilter costs both schedulers the same. The
+profiled trials carry a recorder, so their latencies are not results. `D`'s three under the
+recorder, 6.56, 44.96 and 94.33 ms, are left for §6.2's unrecorded control.
+
+### 6.2 Exempting loopback from tracking removes the floating arm's tail
+
+`run-netfilter-check.sh` takes one boot and one state, with the Docker daemon running and its
+rules loaded (`iptables-at-start.txt` in the run). It runs each
+arm with and without two raw-table rules that exempt loopback traffic from connection tracking
+(`-i lo` and `-o lo -j CT --notrack`), set or removed before each trial, 5 fresh JVMs per cell in a
+shuffled order. Run `20261023T044314Z-h3e3496678846`, 25–46 min after boot, all 20 trials valid and
+sustained:
+
+| cell | p99 median [range], ms | carrier CPU % | carrier sys % | carrier wait max % | CPUs |
+|:--|:--|--:|--:|--:|--:|
+| `A_iso`, tracked | 8.59 [5.54–12.49] | 130.07 | 89.10 | 2.77 | 1.795 |
+| `A_iso`, notrack | 2.70 [2.52–3.31] | 126.90 | 85.60 | 1.07 | 1.767 |
+| `D`, tracked | 2.56 [2.52–2.62] | 126.10 | 89.70 | 0.03 | 1.772 |
+| `D`, notrack | 2.52 [2.50–2.72] | 123.02 | 86.94 | 0.03 | 1.764 |
+
+- **`A_iso`:** every tracked trial is above every notrack one (exact p = 0.0079, the smallest 5
+  against 5 can give). The tracked cell reproduces this campaign's 70 % rung (9.81 ms,
+  4.23–13.63), and the notrack cell comes within 0.24 ms of the runs without the daemon's rules.
+- **`D`:** the same rules take the same 3 points of sys from its carriers and leave its tail where
+  it was (p = 0.22).
+
+This is the first report's mechanism with a cause attached. The extra kernel time raises every
+arm's carrier load. Floating carriers then wait for a CPU more often (2.77 % against 1.07 % here)
+and their tail grows. Pinned carriers do not wait.
+
+The rules exempt loopback from tracking and NAT, not from iptables. `ipt_do_table` still runs for
+the raw and filter tables. The notrack cells' sys stays 6 points above that of the runs without the daemon's rules (85.6
+against 79.8 %), and their tail 0.24 ms above. That remainder was not profiled. Every trial of
+this run reports `harness_clean` failed. Its one uncommitted change is the executable bit of
+`summarize_netfilter.py`, set in the index and not on disk; that script runs only after the
+trials, and the content of every harness file is that of `3e349667`.
+
+One deviation stays unexplained. In the ~34 h run the control `D` was also off its usual tail (p99
+median 5.34 ms, two trials at 82.56 and 248.32 ms) with no carrier wait. The unrecorded control
+here shows no such movement under the same rules.
+
+### 6.3 What it changes
+
+The campaigns' comparison already showed the pattern. Carrier CPU per request rose by about 10 % in
+**every** arm, and only the floating arms' tails moved; §6.2 reproduces both halves under control.
+The I/O-bound regime's two campaigns both ran with containers started before them (~3 h and ~17 h
+after boot). They agree within their spread: `A_iso` at 70 % had 65.81 then 70.78 ms, `D` at 85 %
+had 52.61 then 45.63 ms, and CPUs at 50 % for `A_iso` were 1.32 then 1.34. Whether connection
+tracking moves that regime was not tested.
+
+It does not change the CPU-bound verdict. Applied to the first campaign's data, the same rule gives
 `A_iso` and `C_iso` a capacity of 70 % and `D` at least 90 %, the top of that ladder. It does change
-how far `A_iso`'s capacity can be quoted: 50 % of saturation on a host that has run for most of a
-day, 70 % on a freshly booted one. The pinned arms hold 5 ms to 90–95 % in both states. The
-I/O-bound regime shows no such split: its first campaign started ~3 h after boot and this one
-~17 h after, and they agree within their spread.
+how `A_iso`'s capacity is quoted: 50 % of saturation with connection tracking on loopback, 70 %
+without it. The pinned arms hold 5 ms to 90–95 % in both states. Runs meant to be compared with
+each other, here or on another host, need the same packet-filtering state. Since `3e349667` every
+trial records the netfilter modules loaded and whether loopback was exempted (`host.txt`).
 
 ---
 
 ## 7. What was measured, and what was not
 
 - **The cause of the 70 % stall** (§5): narrowed to pinned carriers, not explained.
-- **The cause of the CPU-bound drift** (§6): not the backend pool and not the descriptor limit;
-  it goes with the time since the host's boot in four runs out of four, and what accumulates is
-  not identified. The harness does not record the boot.
+- **What remains of the CPU-bound drift** (§6.2): with loopback exempted from tracking,
+  `A_iso`'s carriers keep 6 points of sys and 0.24 ms of p99 above a host without the Docker
+  daemon's rules; the iptables tables still traversed are the candidate, not profiled. Whether
+  connection tracking moves the I/O-bound regime, and the `D` deviation in the ~34 h run, are not
+  tested.
 - **Capacity between rungs.** A capacity of 95 % means the 95 % rung passed and 100 % did not;
   the true limit lies in between, and for the I/O-bound primary column between 50 % and 70 %.
 - **A second campaign per regime.** Each ladder ran once, 5 JVMs per cell.
@@ -513,12 +578,25 @@ report's CPU-bound campaign, `20261009T040618Z-jdk-kbc26f9a0e8fc`, and the drift
 ```bash
 (cd scripts/loom-carrier-scheduler && \
   ./summarize_drift.py ../../results/raw/loom-carrier-scheduler-drift/20261021T040009Z-h25571385d799)
+
+# §6.1: the two kernel profiles and their comparison
+K=results/raw/loom-carrier-scheduler-kprof
+scripts/loom-carrier-scheduler/kernel_profile.py compare \
+  $K/20261022T044235Z-h84b7f398c0dd $K/20261022T194321Z-h84b7f398c0dd
+
+# §6.2: the loopback tracking check
+(cd scripts/loom-carrier-scheduler && \
+  ./summarize_netfilter.py ../../results/raw/loom-carrier-scheduler-netfilter/20261023T044314Z-h3e3496678846)
 ```
 
 `20261016T195614Z-hc1ee5b476f91` is the first drift check, in which the limits-old cells did not
 start (the harness then set the hard limit before the soft one); its other 15 trials are valid.
-The time from boot in §6 is from the host's boot list (`journalctl --list-boots`) against each
-run's start, not from the run records.
+For the runs before `27663996`, the time from boot in §6 comes from the host's boot list
+(`journalctl --list-boots`) against each run's start. Whether the Docker daemon had run earlier in a
+run's boot comes from that boot's kernel log: a `veth` interface entering promiscuous mode before the
+run's start time. The profile runs record their uptime and tracked-connection count (`n/a` when
+`nf_conntrack` is not loaded), and the netfilter run records its netfilter modules. Neither profile run's `perf-record.data` is committed; each
+profiled trial's `perf-record-report.txt` is.
 
 ### 8.2 Re-run the campaigns
 
@@ -544,7 +622,8 @@ valid, the harness committed and the host shielded.
 
 | date | change |
 |---|---|
+| 2026-10-23 | §6 identifies the CPU-bound drift: kernel profiles at 0.2 h and 15.2 h after one boot (`results/raw/loom-carrier-scheduler-kprof/`, harness `84b7f398`) and the loopback connection-tracking check `20261023T044314Z-h3e3496678846` (harness `3e349667`); the run table gains whether the Docker daemon had run earlier in the boot; TL;DR 1 and 6, At a glance, §1.3, §7 and §8.1 follow. |
 | 2026-10-21 | First publication. Campaigns `20261016T002844Z-jdk-kbc26f9a0e8fc` (CPU-bound, 177 trials) and `20261016T034438Z-jdk-kbc26f9a0e8fc` (I/O-bound, 177 trials), harness `8b915264`, both evidence-eligible under the scenario's gates; drift checks `20261016T195614Z-hc1ee5b476f91` and `20261021T040009Z-h25571385d799` (§6); objectives, pass rule, `B_pin` reading and reproduction check as registered in kernel research.md at `b05d4a13`. |
 
-**Updated:** 2026-10-21
+**Updated:** 2026-10-23
 *By Arkadiusz Przychocki*

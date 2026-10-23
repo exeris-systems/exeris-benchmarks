@@ -1,0 +1,4 @@
+seed=1792750349 harness=641e25acfff30777ee7d36b91b41a865465640f7 reps=5
+rate_cpu=63400 rate_io=52800 cpu_args= io_args=--think-ms 30 --connections 5000 --pool 2048 --max-connections 16384 --duration 60
+boot_id=a3cad3ab-df96-40ee-a417-d3ae0113bb75 uptime_s=142
+lazy = -Dloom.bench.pinned.continue=lazy; execute = -Dloom.bench.pinned.continue=execute

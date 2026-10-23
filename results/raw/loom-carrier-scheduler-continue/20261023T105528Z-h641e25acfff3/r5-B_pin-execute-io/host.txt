@@ -1,0 +1,13 @@
+graphical_target=inactive
+allowed_cpus.system.slice=0 6
+allowed_cpus.user.slice=0 6
+allowed_cpus.init.scope=0 6
+own_cgroup=/bench.slice/run-p33332-i3529.service
+own_cpus_allowed=0-11
+isolated=
+boost=0
+governors=12 performance
+boot_id=a3cad3ab-df96-40ee-a417-d3ae0113bb75
+uptime_s=4157
+netfilter_modules=
+loopback_notrack=unset

@@ -536,7 +536,9 @@ It does not change the CPU-bound verdict. Applied to the first campaign's data, 
 how `A_iso`'s capacity is quoted: 50 % of saturation with connection tracking on loopback, at least
 70 % without it, where the first campaign's ladder has no rung between 70 and 85 %. The pinned arms hold 5 ms to 90–95 % in both states. Runs meant to be compared with
 each other, here or on another host, need the same packet-filtering state. Since `3e349667` every
-trial records the netfilter modules loaded and whether loopback was exempted (`host.txt`).
+trial records the netfilter modules loaded and whether loopback was exempted (`host.txt`), and
+since `0868577a` a trial that ran with `nf_conntrack` loaded fails the `host_untracked` evidence
+gate.
 
 ---
 
@@ -638,7 +640,7 @@ valid, the harness committed and the host shielded.
 
 | date | change |
 |---|---|
-| 2026-10-23 | Review pass: §5 records the stall in a run without connection tracking; §6.2 states how little kernel time moves the floating arm's tail; TL;DR 1, At a glance and §6.3 quote the capacity without tracking as at least 70 %; §7 follows. |
+| 2026-10-23 | Review pass: §5 records the stall in a run without connection tracking; §6.2 states how little kernel time moves the floating arm's tail; §6.3 names the `host_untracked` evidence gate; TL;DR 1, At a glance and §6.3 quote the capacity without tracking as at least 70 %; §7 follows. |
 | 2026-10-23 | §6 identifies the CPU-bound drift: kernel profiles at 0.2 h and 15.2 h after one boot (`results/raw/loom-carrier-scheduler-kprof/`, harness `84b7f398`) and the loopback connection-tracking check `20261023T044314Z-h3e3496678846` (harness `3e349667`); the run table gains whether the Docker daemon had run earlier in the boot; TL;DR 1 and 6, At a glance, §1.3, §7 and §8.1 follow. |
 | 2026-10-21 | First publication. Campaigns `20261016T002844Z-jdk-kbc26f9a0e8fc` (CPU-bound, 177 trials) and `20261016T034438Z-jdk-kbc26f9a0e8fc` (I/O-bound, 177 trials), harness `8b915264`, both evidence-eligible under the scenario's gates; drift checks `20261016T195614Z-hc1ee5b476f91` and `20261021T040009Z-h25571385d799` (§6); objectives, pass rule, `B_pin` reading and reproduction check as registered in kernel research.md at `b05d4a13`. |
 

@@ -126,7 +126,9 @@ paragraph). The harness steps, in order:
    Cells: `D`, `B_pin` and the cumulative property sets `P0`, `P01`, `P013`, `P0132`, `P0132-prio`,
    `P0132-lifo` (arm `Dv`) at 50 %, 85 % (and 70 % in the I/O-bound regime) and at saturation, 3
    repetitions; then the rig's headroom for `B_pin` and `P0132`: rungs of 100-130 % and a sweep of
-   connection count (and pool size in the I/O-bound regime) at saturation and at 115 %. Trials
+   connection count (and pool size in the I/O-bound regime) at saturation and at 115 %, and in the
+   CPU-bound regime the mock backend on four CPUs (1,7,5,11, the load generator narrowed to 4,10) at the
+   regime's connection count and the largest swept one; the mock's limit is 95 % of 100 x its CPUs. Trials
    carry the scheduler's counters (`--stats`, read from the app's `/__sched-stats`) and per-thread
    context-switch and futex counts (`--perf-threads`). `summarize_v2_pilot.py` tabulates them and says
    which resource is at its limit first. The sweep values and the cell lists are variables of the script.
@@ -150,7 +152,7 @@ check, which covers both regimes, runs in the first boot.
 **The rig has a ceiling.** The mock backend's CPU, the backend pool and the connection count can bound the
 rate before the scheduler does (the 1 ms backend's mock used 178-187 % of its two CPUs at the previous
 saturation). `throughput_v2.py` labels each rung and cell with the rig limits it meets (mock CPU of at least
-190 %, requests in flight reaching the pool, a rate above connections / p50); the label is
+95 % of the CPUs it may use, requests in flight reaching the pool, a rate above connections / p50); the label is
 informational and never changes a verdict. The regimes' options are parameters
 (`CPU_LOAD_ARGS`, `IO_LOAD_ARGS` in `v2-regimes.sh`), so the configuration registered after the pilot
 is passed to the campaign, not edited into it.

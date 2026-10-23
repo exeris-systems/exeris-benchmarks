@@ -39,6 +39,8 @@ def argv_for(t, trial_dir):
         "--perf-sched", "recorded" if t.get("perf_sched") else "none",
         "--pool", str(t.get("pool", 128)), "--max-connections", str(t.get("max_connections", "default")),
         "--bench-commit", t["bench_commit"], "--bench-dirty", dirty,
+        # A trial that ran with a recorder or marker stays perturbed when its record is rebuilt.
+        "--diag", ",".join(t.get("diagnostics", [])) or "none",
     ]
 
 

@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # run-kernel-profile.sh — where the carriers' kernel time goes, on this host in its current state.
 #
-# The floating arms' CPU-bound tail and the carriers' kernel time are higher on a host that has run
-# for most of a day than on a freshly booted one, with the app's backend pool and the descriptor
-# limit ruled out. This run is meant to be taken twice — within minutes of a boot, and again after
-# a day of the host's ordinary use — and the two compared with kernel_profile.py compare:
+# Where the carriers' CPU time goes in the host's current state. Taken in two states — for example
+# before and after the Docker daemon has loaded connection tracking — the two runs are compared
+# with kernel_profile.py compare:
 #
 #   clean    A_iso at RATE, no recorder: the tail and carrier CPU of the state, comparable with the
 #            campaigns' cells (52,200 req/s is the CPU-bound campaigns' 70 % rung)
@@ -24,7 +23,7 @@
 #   sudo systemctl isolate graphical.target
 #
 # Then, with two runs:
-#   scripts/loom-carrier-scheduler/kernel_profile.py compare <fresh-run-dir> <long-uptime-run-dir>
+#   scripts/loom-carrier-scheduler/kernel_profile.py compare <run-dir-a> <run-dir-b>
 #
 # Environment (defaults in brackets):
 #   KERNEL_COMMIT [bc26f9a0e8fc]   RATE [52200]   REPS [3]   SYS_CPUS [0,6]   BOOST [off]

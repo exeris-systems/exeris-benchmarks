@@ -590,7 +590,12 @@ python3 "$SCRIPT_DIR/parse_trial.py" "$OUT" \
   --variant "$VARIANT" --stats "$STATS" --perf-threads "$PERF_THREADS_STATUS" \
   --diag "$(IFS=,; echo "${DIAG[*]:-none}")"
 
-if (( ${#DIAG[@]} > 0 )); then
+# The pilot markers and the counters leave nothing for analyze_diag.py to cut; the recorders do.
+RECORDERS=()
+for d in "${DIAG[@]:-}"; do
+  [[ -n "$d" && "$d" != "v2 pilot" && "$d" != "scheduler stats" && "$d" != "perf per thread" ]] && RECORDERS+=("$d")
+done
+if (( ${#RECORDERS[@]} > 0 )); then
   python3 "$SCRIPT_DIR/analyze_diag.py" "$OUT" >"$OUT/analyze-diag-stdout.txt" 2>&1 \
     || log "analyze_diag.py failed, see $OUT/analyze-diag-stdout.txt"
 fi

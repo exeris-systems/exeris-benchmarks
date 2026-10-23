@@ -36,7 +36,9 @@ import jdk.internal.misc.CarrierThread;
  *       taken here under the same condition;</li>
  *   <li>one path differs: an unpark issued from a virtual thread on one of these workers is
  *       lazy-submitted to that worker's queue without a signal, where the built-in scheduler's
- *       {@code onContinue} calls {@code execute()}, which may signal an idle worker;</li>
+ *       {@code onContinue} calls {@code execute()}, which may signal an idle worker. With
+ *       {@code -Dloom.bench.pinned.continue=execute} every continuation is executed as the
+ *       built-in does, so the difference can be measured on its own;</li>
  *   <li>timed waits are scheduled on the pool's own delay scheduler, as the built-in's are.</li>
  * </ul>
  *
@@ -61,12 +63,18 @@ public final class PinnedForkJoinScheduler implements Thread.VirtualThreadSchedu
 
     private final ForkJoinPool pool;
     private final boolean bind;
+    private final boolean lazyContinue;
     private final int[] cpus;
     private final boolean[] held;
     private final AtomicInteger workerSeq = new AtomicInteger();
 
     public PinnedForkJoinScheduler(Thread.VirtualThreadScheduler builtin) {
         this.bind = Boolean.parseBoolean(System.getProperty("loom.bench.pinned.bind", "true"));
+        String continueMode = System.getProperty("loom.bench.pinned.continue", "lazy");
+        if (!continueMode.equals("lazy") && !continueMode.equals("execute")) {
+            throw new IllegalArgumentException("loom.bench.pinned.continue must be lazy or execute, was " + continueMode);
+        }
+        this.lazyContinue = continueMode.equals("lazy");
         this.cpus = bind ? parseCpus(System.getProperty("exeris.carrier.affinity")) : new int[0];
         this.held = new boolean[cpus.length];
         String parallelismValue = System.getProperty("jdk.virtualThreadScheduler.parallelism");
@@ -92,7 +100,8 @@ public final class PinnedForkJoinScheduler implements Thread.VirtualThreadSchedu
         this.pool = new ForkJoinPool(parallelism, PinnedCarrier::new, (t, e) -> { }, true,
                 0, maxPoolSize, minRunnable, p -> true, 30, TimeUnit.SECONDS);
         System.out.println("[PinnedForkJoinScheduler] parallelism=" + parallelism + " maxPoolSize=" + maxPoolSize
-                + " minRunnable=" + minRunnable + (bind ? " cpus=" + Arrays.toString(cpus) : " binding off"));
+                + " minRunnable=" + minRunnable + (bind ? " cpus=" + Arrays.toString(cpus) : " binding off")
+                + " continue=" + continueMode);
     }
 
     @Override
@@ -109,8 +118,8 @@ public final class PinnedForkJoinScheduler implements Thread.VirtualThreadSchedu
     public void onContinue(Thread.VirtualThreadTask task) {
         // On a virtual thread this is an unpark: every other continuation is submitted from the
         // carrier itself, after the continuation has unmounted.
-        if (Thread.currentThread().isVirtual() && JLA.currentCarrierThread() instanceof PinnedCarrier carrier
-                && carrier.getPool() == pool) {
+        if (lazyContinue && Thread.currentThread().isVirtual()
+                && JLA.currentCarrierThread() instanceof PinnedCarrier carrier && carrier.getPool() == pool) {
             pool.lazySubmit(ForkJoinTask.adapt(task));
         } else {
             pool.execute(ForkJoinTask.adapt(task));

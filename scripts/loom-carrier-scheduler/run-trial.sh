@@ -71,6 +71,10 @@
 #   --perf-threads            context switches and futex calls per server thread over the window
 #                             (perf stat --per-thread); diagnostic.
 #   --pilot                   mark the trial as a pilot trial: never evidence. Implies --perf-threads.
+#   --pinned-continue MODE    lazy or execute: how B_pin / B_float submit a continuation unparked
+#                             from a virtual thread on one of their workers (lazy, the default, is
+#                             the measured arm; execute is the built-in scheduler's path); recorded
+#                             in pinned-continue.txt and checked against the scheduler's echo
 #
 # Every diagnostic marks the trial as perturbed. When any is on, analyze_diag.py cuts the recorded
 # data to the probe's slow windows and writes diag.txt / diag.json beside trial.json.
@@ -100,6 +104,7 @@ SERVER_AUX_CPUS="0,6" CARRIER_CPUS="2,3" MOCK_CPUS="1,7" LOAD_CPUS="4,5,10,11" H
 SERVER_PORT="" MOCK_PORT="" PERF_SCHED="no" PERF_RECORD="no"
 PERF_SCHED_DELAY=0 PERF_SCHED_SECONDS="" WALL_INTERVAL="5ms" PROBE_RATE=0 GC_LOG="no" JFR="no"
 BACKEND_TRACE="no" MOCK_IDLE_TIMEOUT="" NOFILE_SET="" VARIANT="" STATS="no" PERF_THREADS="no" PILOT="no"
+PINNED_CONTINUE=""
 
 die() { echo "run-trial: $*" >&2; exit 2; }
 log() { echo "[$(date +%H:%M:%S)] $*" >&2; }
@@ -124,6 +129,7 @@ while [[ $# -gt 0 ]]; do
     --mock-idle-timeout) MOCK_IDLE_TIMEOUT="$2" ;;
     --app-src) APP_DIR="$2" ;;         --nofile) NOFILE_SET="$2" ;;
     --variant) VARIANT="$2" ;;
+    --pinned-continue) PINNED_CONTINUE="$2" ;;
     --stats) STATS="yes"; shift; continue ;;
     --perf-threads) PERF_THREADS="yes"; shift; continue ;;
     --pilot) PILOT="yes"; PERF_THREADS="yes"; shift; continue ;;
@@ -239,6 +245,13 @@ case "$ARM" in
               -Dexeris.carrier.affinity="$CARRIER_CPUS" "${PROP_OPTS[@]}")
     CARRIER_NAME_RE='^exeris-carrier-[0-9]+$' ;;
 esac
+CONTINUE_OPTS=()
+if [[ -n "$PINNED_CONTINUE" ]]; then
+  [[ "$ARM" == "B_pin" || "$ARM" == "B_float" ]] || die "--pinned-continue applies to B_pin and B_float only"
+  [[ "$PINNED_CONTINUE" == "lazy" || "$PINNED_CONTINUE" == "execute" ]] || die "--pinned-continue must be lazy or execute"
+  CONTINUE_OPTS=(-Dloom.bench.pinned.continue="$PINNED_CONTINUE")
+  printf '%s\n' "$PINNED_CONTINUE" >"$OUT/pinned-continue.txt"
+fi
 STATS_OPTS=()
 [[ "$STATS" == "yes" ]] && STATS_OPTS=(-Dexeris.locality.stats=true)
 POLLER_OPTS=()
@@ -278,7 +291,7 @@ if [[ "$JFR" == "yes" ]]; then
   DIAG+=("jfr")
 fi
 SERVER_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${ACCESS_OPTS[@]}" "${SERVER_DIAG_OPTS[@]}"
-  "${ARM_OPTS[@]}" "${STATS_OPTS[@]}" "${POLLER_OPTS[@]}" "${LIMIT_OPTS[@]}"
+  "${ARM_OPTS[@]}" "${CONTINUE_OPTS[@]}" "${STATS_OPTS[@]}" "${POLLER_OPTS[@]}" "${LIMIT_OPTS[@]}"
   -Dexeris.transport.reactorCount="$REACTOR_COUNT" -Dexeris.reactor.affinity="$SERVER_AUX_CPUS"
   -Dexeris.http.port="$SERVER_PORT" -Dexeris.http.bindHost=127.0.0.1
   -Dloom.bench.backend="$BACKEND" -Dloom.bench.backend.host=127.0.0.1 -Dloom.bench.backend.port="$MOCK_PORT"

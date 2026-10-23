@@ -504,6 +504,14 @@ def main():
     arm_config = arm_config_gate(server_log, a.arm, file_props or {}, a.stats == "yes", a.poller_mode)
     if arm_config is not None:
         gates["arm_config"] = arm_config
+    continue_file = out / "pinned-continue.txt"
+    pinned_continue = continue_file.read_text().strip() if continue_file.exists() else None
+    if pinned_continue is not None:
+        # The scheduler echoes the mode it parsed; a trial is valid only if it ran the one it was given.
+        echoed = re.search(r"\[PinnedForkJoinScheduler\] parallelism=.* continue=(\w+)", server_log)
+        gates["pinned_continue"] = {"pass": bool(echoed) and echoed.group(1) == pinned_continue,
+                                    "expected": pinned_continue,
+                                    "observed": echoed.group(1) if echoed else "no echo"}
     gates["transport"] = {"pass": bool(m) and m.group(1) == "posix-hybrid" and m.group(2) == "true",
                           "observed": transport, "expected": "active=posix-hybrid, ffmArmed=true"}
 
@@ -565,6 +573,8 @@ def main():
         trial["variant"] = a.variant or None
         trial["locality_properties"] = file_props
         trial["locality_properties_sha256"] = armcfg.digest(file_props)
+    if pinned_continue is not None:
+        trial["pinned_continue"] = pinned_continue
     if a.stats == "yes":
         trial["scheduler_stats"] = parse_scheduler_stats(out)
     if a.perf_threads == "measured":

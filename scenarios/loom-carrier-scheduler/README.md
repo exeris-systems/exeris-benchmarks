@@ -274,6 +274,12 @@ in which the daemon has not run. The campaign scripts warn when the module is lo
   removed before each trial. It needs `nf_conntrack` and `iptable_nat` loaded, as they are once
   the Docker daemon has started. Results in `results/raw/loom-carrier-scheduler-netfilter/`,
   tabulated by `summarize_netfilter.py`.
+- `run-continue-check.sh` runs `B_pin` at 85 % in both regimes, on the capacity ladders' kernel,
+  with its `onContinue` lazy-submitting unparks from virtual threads (`--pinned-continue lazy`, the
+  measured arm) and calling `execute()` as the built-in scheduler does (`--pinned-continue
+  execute`). The `pinned_continue` gate checks the mode the scheduler echoed. It refuses to start
+  with `nf_conntrack` loaded. Results in `results/raw/loom-carrier-scheduler-continue/`, tabulated
+  by `summarize_continue.py` under `B_float`'s reproduction rule.
 
 ## Host prerequisites
 

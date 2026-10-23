@@ -81,7 +81,8 @@ and the reading of each arm fixed before the campaigns ran.*
    1 ms backend (p = 0.69); with the 30 ms backend p = 0.42, but `B_float`'s median (199.42 ms)
    lies 1.54 ms below `A_iso`'s fastest trial (200.96 ms), so the range clause fails and, as
    registered, `B_pin` is read against `B_float` there: **40.7 against 199.4 ms**, every `B_pin`
-   trial below every `B_float` trial.
+   trial below every `B_float` trial. `B_pin` and `B_float` differ from the built-in scheduler in
+   one submit path (§1.1); comparisons between them, and with `D`, are unaffected.
 6. **The floating arms' CPU-bound tails moved between campaigns because of the host's packet
    filtering; the pinned arms' did not.** At 70 % `A_iso`'s p99 is 9.81 ms (4.23–13.63) here
    against 2.46 ms in the first campaign; carriers spend 8–10 more points of CPU in every arm.
@@ -153,18 +154,35 @@ approximating it:
   stock pool's;
 - its workers are `jdk.internal.misc.CarrierThread`s, so the JDK's carrier-only paths (lazy submit
   after a park, external submit on yield, compensation around blocking calls) apply to them;
-- the two submit paths the JDK reserves for its built-in scheduler by identity (a thread started
-  from a virtual thread goes to the submission queue; a thread unparked from a virtual thread is
-  pushed without a wakeup) are taken under the same conditions;
+- the submit path the JDK reserves for its built-in scheduler by identity in
+  [`start()`](https://github.com/openjdk/loom/blob/7aabe18f2fe48498dbc9e4b840a91b8c5441c1ed/src/java.base/share/classes/java/lang/VirtualThread.java#L803-L812) (a thread started from a virtual thread goes to the submission queue)
+  is taken under the same condition. The second identity check, in
+  [`unpark()`](https://github.com/openjdk/loom/blob/7aabe18f2fe48498dbc9e4b840a91b8c5441c1ed/src/java.base/share/classes/java/lang/VirtualThread.java#L979-L997), is not reached in this build: its lazy branch needs a virtual
+  caller, and its only caller with `lazySubmit=true`,
+  [`parkTimeoutExpired()`](https://github.com/openjdk/loom/blob/7aabe18f2fe48498dbc9e4b840a91b8c5441c1ed/src/java.base/share/classes/java/lang/VirtualThread.java#L1039-L1042), runs on a platform thread. An ordinary unpark goes through
+  [`submitRunContinuation`](https://github.com/openjdk/loom/blob/7aabe18f2fe48498dbc9e4b840a91b8c5441c1ed/src/java.base/share/classes/java/lang/VirtualThread.java#L439-L447) to the scheduler's `onContinue`, which in the built-in
+  scheduler [calls `execute()`](https://github.com/openjdk/loom/blob/7aabe18f2fe48498dbc9e4b840a91b8c5441c1ed/src/java.base/share/classes/java/lang/VirtualThread.java#L1523-L1526). `B_pin`'s `onContinue` instead lazy-submits every
+  unpark that comes from a virtual thread on one of its carriers (see below);
 - each worker binds itself to a free CPU of the carrier set when it starts and releases it when it
   terminates, so a worker the pool retires and later replaces is bound like the first.
 
 Building it showed that a scheduler implemented through the SPI reaches these paths only through
 internal access: `CarrierThread` is in `jdk.internal.misc`, the current carrier is read through
-`jdk.internal.access`, and the two submit paths are selected by the scheduler's identity, so a
-custom scheduler has to re-create them itself. `B_pin` needs `--add-exports` for both packages at
+`jdk.internal.access`, and the `start()` path is selected by the scheduler's identity, so a
+custom scheduler has to re-create it itself. `B_pin` needs `--add-exports` for both packages at
 compile and run time; a custom scheduler written against the public SPI alone runs without the
 carrier-only paths.
+
+**A difference from the built-in scheduler, found after the campaigns.** In the JDK build used
+(`7aabe18f2fe4`), an unpark from a virtual thread reaches the built-in scheduler's `onContinue`,
+which calls `execute()` and may signal an idle worker. `B_pin`'s `onContinue` lazy-submits it to
+the carrier's pool without a signal. In this workload most such unparks are the read sub-pollers,
+virtual threads under `pollerMode=3`, waking a handler on a backend reply. `B_float` carries the
+same difference, so `B_pin` against `B_float` isolates the binding. `D` also queues a task woken on
+its own carrier without waking another, so `D` against `B_pin` isolates the scheduling. What the
+difference affects is how closely `B_pin` and `B_float` stand for the built-in scheduler: the
+reproduction check (§4) compares them with `A_iso` with the difference in place. A run comparing
+`B_pin` with an `onContinue` that calls `execute()` against the version measured here is pending.
 
 `B_float` is the same class with `-Dloom.bench.pinned.bind=false`: what remains is the
 reproduction, and `B_float` against `A_iso` checks it. The isolation gate holds `B_pin` to `D`'s
@@ -270,7 +288,8 @@ trials only.)
   `Thread`s where `B_pin`'s are `CarrierThread`s, but in these runs that difference is not in
   play: with `maxPoolSize = parallelism = 2` the stock pool cannot compensate for a blocked worker,
   and no `B_pin` JVM started a third; and `D`'s carrier queues a task woken from itself without
-  waking anything, as the stock pool's lazy submit does. What separates them is the scheduling:
+  waking anything, as `B_pin`'s `onContinue` does (where the built-in scheduler's `execute()` may
+  signal; §1.1). What separates them is the scheduling:
   per-carrier queues without stealing, a started thread kept on the starting carrier, and an idle
   carrier that parks at once where the pool's idle workers rescan for work first.
 - **The custom scheduler unpinned passes the most rungs in a row, then stops sustaining its
@@ -322,7 +341,9 @@ With the 30 ms backend the reproduction misses on the range clause alone, on the
 binding is the only difference between the two. `B_float` ran at 85 % only, so it has no capacity
 of its own, and the I/O-bound comparisons of `B_pin` with `A_iso` in §3 carry the reproduction's
 uncertainty; with 5 trials a side the check was designed to catch a broken reproduction, not a
-subtle one, and it does not show a broken one.
+subtle one, and it does not show a broken one. Both `B_float` and `B_pin` lazy-submit unparks from
+virtual threads where the built-in scheduler calls `execute()` (§1.1), so the check measures the
+reproduction with that difference in place.
 
 **What the two campaigns support** is narrower than either column alone: **with a 1 ms backend,
 pinning two carriers raises the rate that holds a 5 ms p99 from the 50 % rung to the 95 % rung in
@@ -548,6 +569,7 @@ state is stated in §6 and in the first report's §1.2.
 
 - **The cause of the 70 % stall** (§5): narrowed to pinned carriers, not explained; it occurs
   without connection tracking too.
+- **Whether `B_pin`'s `onContinue` difference moves its results** (§1.1): pending.
 - **What remains of the CPU-bound drift** (§6.2): with loopback exempted from tracking,
   `A_iso`'s carriers keep 6 points of sys and 0.24 ms of p99 above a host without the Docker
   daemon's rules; the iptables tables still traversed are the candidate, not profiled. Whether
@@ -667,6 +689,7 @@ valid, the harness committed and the host shielded.
 
 | date | change |
 |---|---|
+| 2026-10-23 | §1.1 corrects the description of the JDK's identity-selected paths and states a difference found after the campaigns: `B_pin`'s `onContinue` lazy-submits unparks from virtual threads where the built-in scheduler calls `execute()`. §3, §4, TL;DR 5 and §7 follow. No figure changed. |
 | 2026-10-23 | §7 records the closed-loop saturation of every arm, with CPUs utilised, as a record rather than a claim; §5's heading on connection tracking states what the run can show; §6.3 states that the `host_untracked` gate applies from `0868577a` on. No figure changed. |
 | 2026-10-23 | Review pass: §5 records the stall in a run without connection tracking; §6.2 states how little kernel time moves the floating arm's tail; §6.3 names the `host_untracked` evidence gate; TL;DR 1, At a glance and §6.3 quote the capacity without tracking as at least 70 %; §7 follows. |
 | 2026-10-23 | §6 identifies the CPU-bound drift: kernel profiles at 0.2 h and 15.2 h after one boot (`results/raw/loom-carrier-scheduler-kprof/`, harness `84b7f398`) and the loopback connection-tracking check `20261023T044314Z-h3e3496678846` (harness `3e349667`); the run table gains whether the Docker daemon had run earlier in the boot; TL;DR 1 and 6, At a glance, §1.3, §7 and §8.1 follow. |

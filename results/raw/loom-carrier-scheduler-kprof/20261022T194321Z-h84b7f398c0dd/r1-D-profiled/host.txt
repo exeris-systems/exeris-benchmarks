@@ -1,0 +1,11 @@
+graphical_target=inactive
+allowed_cpus.system.slice=0 6
+allowed_cpus.user.slice=0 6
+allowed_cpus.init.scope=0 6
+own_cgroup=/bench.slice/run-p2966420-i2970942.service
+own_cpus_allowed=0-11
+isolated=
+boost=0
+governors=12 performance
+boot_id=2f8c9ae1-683c-4a61-9e99-21dfda106432
+uptime_s=54684

@@ -21,7 +21,7 @@ import jdk.internal.misc.CarrierThread;
  * pinning from the change of scheduling algorithm.
  *
  * <p>Loaded with {@code -Djdk.virtualThreadScheduler.implClass=} this class. Everything except the
- * binding is the JDK's built-in scheduler, reproduced rather than approximated:
+ * binding and one submit path is the JDK's built-in scheduler, reproduced rather than approximated:
  * <ul>
  *   <li>the pool is constructed with the built-in's arguments — async mode, no core pool,
  *       parallelism, maxPoolSize and minRunnable read from the same
@@ -31,9 +31,12 @@ import jdk.internal.misc.CarrierThread;
  *   <li>its workers are {@link CarrierThread}s, so the JDK's carrier-only paths (lazy submit
  *       after a park, external submit on yield, compensation around blocking calls) apply to them
  *       as they do to the built-in workers;</li>
- *   <li>the two submit paths the JDK reserves for the built-in scheduler by identity — a thread
- *       started from a virtual thread goes to the submission queue, a thread unparked from a
- *       virtual thread is pushed without a wakeup — are taken here under the same conditions;</li>
+ *   <li>the submit path the JDK reserves for the built-in scheduler by identity in
+ *       {@code start()} — a thread started from a virtual thread goes to the submission queue — is
+ *       taken here under the same condition;</li>
+ *   <li>one path differs: an unpark issued from a virtual thread on one of these workers is
+ *       lazy-submitted to that worker's queue without a signal, where the built-in scheduler's
+ *       {@code onContinue} calls {@code execute()}, which may signal an idle worker;</li>
  *   <li>timed waits are scheduled on the pool's own delay scheduler, as the built-in's are.</li>
  * </ul>
  *
@@ -45,9 +48,9 @@ import jdk.internal.misc.CarrierThread;
  * so a starting worker always finds one free.
  *
  * <p>With {@code -Dloom.bench.pinned.bind=false} the workers bind nothing and the class is the
- * built-in scheduler reproduced through the SPI, nothing more: the arm that checks the
- * reproduction against the built-in itself, so that a difference between the pinned arm and the
- * built-in can be attributed to the binding.
+ * built-in scheduler reproduced through the SPI, with the one submit path above: the arm that
+ * checks the reproduction against the built-in itself, so that a difference between the pinned
+ * arm and the built-in can be attributed to the binding.
  *
  * <p>Needs {@code --add-exports java.base/jdk.internal.misc=ALL-UNNAMED} and
  * {@code --add-exports java.base/jdk.internal.access=ALL-UNNAMED} at compile time and run time.

@@ -39,11 +39,20 @@ All arms run the same number of carriers (one per `--carrier-cpus` entry, defaul
 | `B_float` | `B_pin`'s class with the binding off | workers share the carrier CPUs |
 | `C_iso` | `ExerisCarrierScheduler`, per-carrier MPSC queue, no work stealing | carriers share the carrier CPUs |
 | `D` | `ExerisCarrierScheduler` | each carrier bound to one carrier CPU (`exeris.carrier.affinity`) |
+| `D2` | `D` plus the scheduler properties of `arms/D2.properties` (the second revision) | as `D` |
+| `Dv` | `D` plus the properties of `arms/pilot/<variant>.properties` (`--variant`); pilot only, never evidence | as `D` |
 
 The four arms are the scheduling algorithm × pinning table: `B_pin` against `A_iso` and `D` against
 `C_iso` isolate pinning; `C_iso` against `A_iso` and `D` against `B_pin` isolate the scheduler
 design. `B_pin` runs in the capacity ladders. `B_float` checks that the SPI reproduction of the stock
 pool behaves as the stock pool: if it does not, `B_pin` is read against `B_float`.
+
+`D2` and `Dv` take their scheduler properties from committed files (`armcfg.py`), not from the command
+line. `arms/D2.properties` is the set frozen after the pilot and does not exist until then; `run-trial.sh`
+and `run-campaign.sh` refuse arm `D2` without it. A trial records the set it ran with
+(`locality_properties`, `locality_properties_sha256` in `trial.json`, `arm-properties.txt` in its
+directory); the summarisers refuse to pool trials of one cell whose digests differ, or that differ from
+the digest in `campaign.json`.
 
 ## CPU layout (defaults, 6 cores / 12 threads, SMT siblings `n` and `n+6`)
 
@@ -107,6 +116,45 @@ valid trial sustained the rate, and their median p99 is inside the objective. Th
 (primary) is the highest rate up to which every rate passes; the highest passing rate is
 supplementary. It also reports the reproduction check of `B_float` against `A_iso`.
 
+## Scheduler v2 (arm D2)
+
+Registered in the kernel branch's `research.md` (HYP-THROUGHPUT, the tail guard, the equivalence
+paragraph). The harness steps, in order:
+
+1. **Pilot** (`run-v2-pilot.sh`, one regime per invocation, non-evidence). Every trial carries the
+   `v2 pilot` marker, so its `unperturbed` gate fails and `evidence` stays false through a re-parse.
+   Cells: `D`, `B_pin` and the cumulative property sets `P0`, `P01`, `P013`, `P0132`, `P0132-prio`,
+   `P0132-lifo` (arm `Dv`) at 50 %, 85 % (and 70 % in the I/O-bound regime) and at saturation, 3
+   repetitions; then the rig's headroom for `B_pin` and `P0132`: rungs of 100-130 % and a sweep of
+   connection count (and pool size in the I/O-bound regime) at saturation and at 115 %. Trials
+   carry the scheduler's counters (`--stats`, read from the app's `/__sched-stats`) and per-thread
+   context-switch and futex counts (`--perf-threads`). `summarize_v2_pilot.py` tabulates them and says
+   which resource is at its limit first. The sweep values and the cell lists are variables of the script.
+2. **Equivalence** (`run-v2-equivalence.sh`). `D` from the earlier kernel build and from the v2 build at 63,400
+   (CPU-bound) and 52,800 (I/O-bound) req/s, 5 fresh JVMs per cell, one boot. `summarize_equivalence.py`
+   applies `B_float`'s reproduction rule (`stats.reproduction_check`) and checks each trial's kernel
+   commit against the order file. If a regime is not accepted, the v2 build's `D` is the control.
+3. **Campaign** (`run-v2-sequence.sh`). Arms `A_iso`, `B_pin`, `D`, `D2` on a ladder of 50 % and 70-130 %
+   of `A_iso`'s saturation in steps of 5 %, 5 fresh JVMs per cell, plus closed-loop cells at the
+   regime's connection count and at four times it, 7 fresh JVMs per cell. `slo_ladder.py` applies the
+   p99 objective and the v2 rejection rule (`D2`'s capacity below `D`'s); `throughput_v2.py` reports
+   the highest sustained rate, closed-loop requests per second and per CPU-second (exact
+   Mann-Whitney under Holm's adjustment, 2 % floor) and the mechanism check (`D2`'s context
+   switches and cycles per request inside `B_pin`'s trial range).
+
+**Regimes run in separate boots.** The sequence script refuses to start while `nf_conntrack` is
+loaded, records every boot it served in `results/raw/loom-carrier-scheduler-v2/boots.txt`, and refuses a
+second regime (or a second equivalence check) in a boot that already served one. The equivalence
+check, which covers both regimes, runs in the first boot.
+
+**The rig has a ceiling.** The mock backend's CPU, the backend pool and the connection count can bound the
+rate before the scheduler does (the 1 ms backend's mock used 178-187 % of its two CPUs at the previous
+saturation). `throughput_v2.py` labels each rung and cell with the rig limits it meets (mock CPU of at least
+190 %, requests in flight reaching the pool, a rate above connections / p50); the label is
+informational and never changes a verdict. The regimes' options are parameters
+(`CPU_LOAD_ARGS`, `IO_LOAD_ARGS` in `v2-regimes.sh`), so the configuration registered after the pilot
+is passed to the campaign, not edited into it.
+
 ## Shielding the host
 
 Run campaigns from a text console with the graphical session stopped, and with everything else
@@ -142,6 +190,9 @@ during the measurement window, and the netfilter modules loaded. The `host_shiel
 | `pidstat-server.txt`, `pidstat-mock.txt` | per-thread `%usr %system %wait %CPU`, context switches |
 | `perf-stat.txt` | task-clock, cycles, instructions, context switches, migrations — or why it was not run |
 | `threads*.txt`, `affinity-*.txt` | TID → Java thread name, and each thread's allowed CPUs at start and end |
+| `arm-properties.txt` | the scheduler properties the arm took from its file (empty for other arms) |
+| `scheduler-stats-{start,end}.json` | the scheduler's counters at both ends of the window (`--stats`); deltas and per-request rates in `trial.json` |
+| `perf-threads.txt` | context switches and futex calls per server thread (`--perf-threads`) |
 | `environment.txt` | kernel, CPU, governor, `lscpu -e`, JDK build, full server and mock command lines |
 | `kernel-identity.json` | kernel commit, class-file version, JDK build |
 
@@ -169,6 +220,11 @@ which describe only runs that kept up.
   allow exactly the carrier CPUs; arms `B_pin` and `D` have each carrier on its own single CPU; no
   other server thread may run on a carrier CPU. `B_pin` also fails it when a worker started
   without a free CPU, and records how many workers started (the pool retires idle ones).
+- **arm_config** (measurement, only when the app echoed its properties) — the server echoed exactly the
+  `exeris.locality.*` properties the arm names, and the scheduler's `locality flags:` line shows each
+  of them with that value and every other flag at its default. A mistyped property name is echoed as
+  typed and absent from the scheduler's line, so it fails here instead of being ignored. A kernel build
+  without the line passes only for an arm that sets no property of its own.
 - **unperturbed** — no profiler or tracer attached. `--profile cpu|wall` (async-profiler) and
   `--perf-sched` (`perf sched record`, per-thread run time per CPU in
   `perf-sched-distribution.txt`) produce diagnostic trials only.

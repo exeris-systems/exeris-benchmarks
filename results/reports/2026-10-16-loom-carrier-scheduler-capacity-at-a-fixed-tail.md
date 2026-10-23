@@ -376,7 +376,7 @@ What this adds to the first report:
   deoptimisation and pinning record of the mock, and the arrival pattern at the mock. `B_pin`
   against `A_iso` is now the cleaner pair for all three: the same scheduling algorithm, and only
   the binding differs.
-- **It does not need connection tracking.** Both I/O-bound campaigns, the first report's and this
+- **It occurs without connection tracking, as far as that run can show.** Both I/O-bound campaigns, the first report's and this
   one, ran with connection tracking left loaded by the Docker daemon (§6.3). The first report's
   diagnostic run `20261015T041646Z` did not. It ran from 06:16 to 07:37 from a text console, and the
   graphical session and the Docker daemon first started in that boot at 07:38. In 7 of its 15 unprofiled `D` trials at 70 % the mock's
@@ -538,7 +538,9 @@ how `A_iso`'s capacity is quoted: 50 % of saturation with connection tracking on
 each other, here or on another host, need the same packet-filtering state. Since `3e349667` every
 trial records the netfilter modules loaded and whether loopback was exempted (`host.txt`), and
 since `0868577a` a trial that ran with `nf_conntrack` loaded fails the `host_untracked` evidence
-gate.
+gate. The gate applies from `0868577a` on; the campaigns in this report and the first report's
+I/O-bound one were eligible under the gates in force when they ran, and their connection-tracking
+state is stated in §6 and in the first report's §1.2.
 
 ---
 
@@ -560,6 +562,31 @@ gate.
 - **Anything about H2, H3, TLS, the Enterprise `io_uring` transport, or the stock JDK.** `B_pin`
   needs a `VirtualThreadScheduler` implementation, which exists only on the Loom `fibers` EA
   build.
+
+**Closed-loop saturation, recorded but not a claim.** Each campaign measured every arm's
+closed-loop saturation to set its ladder: `wrk` at 100 and 5,000 connections, three fresh JVMs per
+arm. Three trials against three cannot give an exact two-sided p below 0.1, and research.md keeps
+saturation out of the claims, so the table is a record, not a comparison.
+
+| regime | arm | req/s, median [range] | CPUs utilised, server JVM | req/s per CPU |
+|:--|:--|--:|--:|--:|
+| CPU-bound | `A_iso` | 74,531 [73,835–74,640] | 2.40 | 31,029 |
+| | `B_pin` | 76,131 [74,197–76,649] | 2.44 | 31,239 |
+| | `C_iso` | 69,070 [68,531–70,333] | 2.26 | 30,499 |
+| | `D` | 76,949 [76,326–77,151] | 2.56 | 30,105 |
+| I/O-bound | `A_iso` | 62,064 [61,988–62,377] | 2.45 | 25,322 |
+| | `B_pin` | 62,829 [60,948–63,196] | 2.48 | 25,431 |
+| | `C_iso` | 52,048 [51,802–52,464] | 2.42 | 21,441 |
+| | `D` | 55,382 [55,076–55,555] | 2.63 | 20,957 |
+
+Both campaigns ran with connection tracking loaded on loopback (§6), which adds carrier CPU per
+request in every arm.
+
+With the 1 ms backend `D`'s median is the highest, 818 req/s above `B_pin`'s with overlapping
+ranges, and its rate per CPU is the lowest of the four: the margin comes with more CPU, not with
+less work per request. With the 30 ms backend both custom-scheduler arms carry 11–17 % less than
+the stock ones. Maximum throughput is to be measured in its own campaign, with a registered
+hypothesis, against the scheduler's next revision, with the current `D` as its control.
 
 ---
 
@@ -640,6 +667,7 @@ valid, the harness committed and the host shielded.
 
 | date | change |
 |---|---|
+| 2026-10-23 | §7 records the closed-loop saturation of every arm, with CPUs utilised, as a record rather than a claim; §5's heading on connection tracking states what the run can show; §6.3 states that the `host_untracked` gate applies from `0868577a` on. No figure changed. |
 | 2026-10-23 | Review pass: §5 records the stall in a run without connection tracking; §6.2 states how little kernel time moves the floating arm's tail; §6.3 names the `host_untracked` evidence gate; TL;DR 1, At a glance and §6.3 quote the capacity without tracking as at least 70 %; §7 follows. |
 | 2026-10-23 | §6 identifies the CPU-bound drift: kernel profiles at 0.2 h and 15.2 h after one boot (`results/raw/loom-carrier-scheduler-kprof/`, harness `84b7f398`) and the loopback connection-tracking check `20261023T044314Z-h3e3496678846` (harness `3e349667`); the run table gains whether the Docker daemon had run earlier in the boot; TL;DR 1 and 6, At a glance, §1.3, §7 and §8.1 follow. |
 | 2026-10-21 | First publication. Campaigns `20261016T002844Z-jdk-kbc26f9a0e8fc` (CPU-bound, 177 trials) and `20261016T034438Z-jdk-kbc26f9a0e8fc` (I/O-bound, 177 trials), harness `8b915264`, both evidence-eligible under the scenario's gates; drift checks `20261016T195614Z-hc1ee5b476f91` and `20261021T040009Z-h25571385d799` (§6); objectives, pass rule, `B_pin` reading and reproduction check as registered in kernel research.md at `b05d4a13`. |

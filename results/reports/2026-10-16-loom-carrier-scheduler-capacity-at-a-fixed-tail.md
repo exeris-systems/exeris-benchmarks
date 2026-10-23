@@ -54,8 +54,9 @@ and the reading of each arm fixed before the campaigns ran.*
 1. **With a 1 ms backend both pinned arms hold p99 ≤ 5 ms to 95 % of the stock scheduler's
    saturation; both floating arms only to 50 %.** Capacity: `D` (custom scheduler, pinned) and
    `B_pin` (stock `ForkJoinPool`, pinned) **70,800 req/s**; `A_iso` and `C_iso` **37,300 req/s**.
-   Without connection tracking on loopback the floating arms hold it to 70 % instead (§6); the
-   pinned arms hold it to 90–95 % in both states. HYP-CAPACITY is **not falsified** in this regime, and by the rule fixed for `B_pin` the gain is
+   Without connection tracking on loopback the floating arms hold it to at least 70 % (the first
+   campaign's ladder had no rung between 70 and 85 %; §6); the pinned arms hold it to 90–95 % in
+   both states. HYP-CAPACITY is **not falsified** in this regime, and by the rule fixed for `B_pin` the gain is
    the pinning's: the stock scheduler pinned matches the custom one pinned at every rung to 95 %
    (medians within 0.41 ms of each other).
 2. **With a 30 ms backend HYP-CAPACITY is falsified on its primary column.** Capacity at
@@ -111,7 +112,7 @@ passing rate is supplementary. Rates as a fraction of `A_iso`'s saturation in th
 | — highest passing rate | 70 % | **95 %** | 80 % | 85 % |
 
 CPU-bound capacities are from a campaign run with connection tracking on loopback; without it
-`A_iso`'s is 70 % (§6).
+`A_iso`'s is at least 70 % (§6).
 
 The scheduling-algorithm × pinning table at 85 %, median p99 in ms (`B_float` beside `A_iso`):
 
@@ -375,6 +376,13 @@ What this adds to the first report:
   deoptimisation and pinning record of the mock, and the arrival pattern at the mock. `B_pin`
   against `A_iso` is now the cleaner pair for all three: the same scheduling algorithm, and only
   the binding differs.
+- **It does not need connection tracking.** Both I/O-bound campaigns, the first report's and this
+  one, ran with connection tracking left loaded by the Docker daemon (§6.3). The first report's
+  diagnostic run `20261015T041646Z` did not. It ran from 06:16 to 07:37 from a text console, and the
+  graphical session and the Docker daemon first started in that boot at 07:38. In 7 of its 15 unprofiled `D` trials at 70 % the mock's
+  CPU rose from ~120 % to 158–199 % between seconds 45 and 55. Its trials carry a latency probe,
+  and whether `nf_conntrack` was loaded was not recorded then; on this host it is not loaded at
+  boot (§6.1).
 
 ---
 
@@ -496,6 +504,13 @@ This is the first report's mechanism with a cause attached. The extra kernel tim
 arm's carrier load. Floating carriers then wait for a CPU more often (2.77 % against 1.07 % here)
 and their tail grows. Pinned carriers do not wait.
 
+The step from tracked to notrack removes 3.5 of the roughly 9 points of carrier sys the rules add
+(89.1 against 85.6 %, against 79.8 % without them). Yet `A_iso`'s p99 falls from 8.59 to 2.70 ms,
+close to a host without the rules. At this rate the floating arm sits on a threshold where a few
+points of per-request kernel time move its tail by a factor of three, and the pinned arm does not
+move at all. A floating arm's capacity is therefore a fragile number on any host whose
+per-packet cost can change.
+
 The rules exempt loopback from tracking and NAT, not from iptables. `ipt_do_table` still runs for
 the raw and filter tables. The notrack cells' sys stays 6 points above that of the runs without the daemon's rules (85.6
 against 79.8 %), and their tail 0.24 ms above. That remainder was not profiled. Every trial of
@@ -518,8 +533,8 @@ tracking moves that regime was not tested.
 
 It does not change the CPU-bound verdict. Applied to the first campaign's data, the same rule gives
 `A_iso` and `C_iso` a capacity of 70 % and `D` at least 90 %, the top of that ladder. It does change
-how `A_iso`'s capacity is quoted: 50 % of saturation with connection tracking on loopback, 70 %
-without it. The pinned arms hold 5 ms to 90–95 % in both states. Runs meant to be compared with
+how `A_iso`'s capacity is quoted: 50 % of saturation with connection tracking on loopback, at least
+70 % without it, where the first campaign's ladder has no rung between 70 and 85 %. The pinned arms hold 5 ms to 90–95 % in both states. Runs meant to be compared with
 each other, here or on another host, need the same packet-filtering state. Since `3e349667` every
 trial records the netfilter modules loaded and whether loopback was exempted (`host.txt`).
 
@@ -527,7 +542,8 @@ trial records the netfilter modules loaded and whether loopback was exempted (`h
 
 ## 7. What was measured, and what was not
 
-- **The cause of the 70 % stall** (§5): narrowed to pinned carriers, not explained.
+- **The cause of the 70 % stall** (§5): narrowed to pinned carriers, not explained; it occurs
+  without connection tracking too.
 - **What remains of the CPU-bound drift** (§6.2): with loopback exempted from tracking,
   `A_iso`'s carriers keep 6 points of sys and 0.24 ms of p99 above a host without the Docker
   daemon's rules; the iptables tables still traversed are the candidate, not profiled. Whether
@@ -622,6 +638,7 @@ valid, the harness committed and the host shielded.
 
 | date | change |
 |---|---|
+| 2026-10-23 | Review pass: §5 records the stall in a run without connection tracking; §6.2 states how little kernel time moves the floating arm's tail; TL;DR 1, At a glance and §6.3 quote the capacity without tracking as at least 70 %; §7 follows. |
 | 2026-10-23 | §6 identifies the CPU-bound drift: kernel profiles at 0.2 h and 15.2 h after one boot (`results/raw/loom-carrier-scheduler-kprof/`, harness `84b7f398`) and the loopback connection-tracking check `20261023T044314Z-h3e3496678846` (harness `3e349667`); the run table gains whether the Docker daemon had run earlier in the boot; TL;DR 1 and 6, At a glance, §1.3, §7 and §8.1 follow. |
 | 2026-10-21 | First publication. Campaigns `20261016T002844Z-jdk-kbc26f9a0e8fc` (CPU-bound, 177 trials) and `20261016T034438Z-jdk-kbc26f9a0e8fc` (I/O-bound, 177 trials), harness `8b915264`, both evidence-eligible under the scenario's gates; drift checks `20261016T195614Z-hc1ee5b476f91` and `20261021T040009Z-h25571385d799` (§6); objectives, pass rule, `B_pin` reading and reproduction check as registered in kernel research.md at `b05d4a13`. |
 

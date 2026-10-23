@@ -146,6 +146,11 @@ kernel balancing the floating arms' carriers, which is the behaviour those arms 
 IRQs share it with the server's auxiliary threads, reactors and `Master-Poller`. §5.1 gives their
 run-queue wait.
 
+The CPU-bound campaign ran without connection tracking loaded. The I/O-bound one ran with it, left
+loaded by the Docker daemon earlier in that boot, as did diagnostic run `20261015T093021Z`;
+`20261015T041646Z` ran before the daemon had started. The 2026-10-16 report (§6) shows that this
+state moves the floating arms' CPU-bound tail; its effect on the I/O-bound regime is untested.
+
 | role | CPUs | physical core |
 |:--|:--|:--|
 | server auxiliary threads (GC, JIT, VM), transport reactors, JDK `Master-Poller` and `Write-Poller` (platform threads); everything outside the benchmark | 0, 6 | 0 |
@@ -714,6 +719,7 @@ Each run's `summary.md` is written by `summarize_diag.py` from the trials' `diag
 
 | date | change |
 |---|---|
+| 2026-10-23 | §1.2 states each campaign's and diagnostic run's connection-tracking state, with a reference to the 2026-10-16 report's §6; no figure changed. |
 | 2026-10-16 | Forward references to the 2026-10-16 capacity report in TL;DR 3 and §9.2; no figure changed. |
 | 2026-10-15 | Third review pass. TL;DR 3 scopes the pinning exclusion to the server and names I/O-bound 70 % as one of the two cells where "at every rate" fails, not the only one. §5.1 no longer says a host-level disturbance fits `D`'s slow trials at 85 % better than the scheduler, which nothing there tested. The decisions and changes of mind are stated in the first person where they were made: the cpuset shield (§1.2), the read sub-poller as the leading candidate and its refutation (§5.3), the barging found when a campaign stalled (§7.1), the pilot's readings (§8.1). §8 states that the shield is the best case for pinning. |
 | 2026-10-15 | Second review pass. The summary, TL;DR 3, §4 and §8 no longer resolve what §5.3 leaves open: the 70 % stall is *observed* on the backend and occurs only under `D`, and whether it reflects `D`'s request pattern or the mock is open. TL;DR 4 and §4 scope the stacking result to what was traced (one cell, n = 3, tracer attached) and say "coincides with" rather than "is". §5.3 and §5.5 state which exclusions were measured in which JVM (pinning in the server only; GC in both, with no full collection in the mock) and add three tests that would separate the remaining candidates. |
@@ -723,5 +729,5 @@ Each run's `summary.md` is written by `summarize_diag.py` from the trials' `diag
 | 2026-10-14 | Review pass, before publication. §1.1 and §1.2 now say where the JDK pollers run: with `pollerMode=3` the read sub-pollers are virtual threads bound to a carrier (and the scheduler does not consult `preferredCarrier`), only `Master-Poller` and `Write-Poller` are platform threads on core 0, and core 0 is shared with the confined system work. §5.1 gains the reactor and `Master-Poller` run-queue wait, and the `D`-at-85 % correlation between poller wait and tail. §5.3 names the read sub-poller as a candidate with its test. §3 states that 85 % is `C_iso`'s own saturation and ~94 % of `D`'s, and corrects "reaches into `D`'s range" (93.2 ms is above `D`'s 87.9 ms). §2 states the smallest attainable p. §4 records I/O-bound 50 % as "yes, by 1.3 ms" by the criterion's letter and names the 7 points evaluated. §1.4 states the `wrk2` connection ramp. TL;DR 1 and the summary: 90 % is "nearly" complete separation; TL;DR 5 scopes "no CPU cost" to 50 % load; TL;DR 7 and §8 describe the `kernel` backend correctly; §7.1 no longer asserts that work stealing hid the barging. |
 | 2026-10-14 | First publication. Campaigns `20261009T040618Z-jdk-kbc26f9a0e8fc` (CPU-bound, 129 trials) and `20261013T191957Z-jdk-kbc26f9a0e8fc` (I/O-bound, 99 trials), both evidence-eligible under the scenario's gates. Three earlier I/O-bound campaigns did not qualify and are not used: `20261009T062839Z` ran under a 1,024-descriptor limit and connected 1,017 of 5,000 clients; `20261013T062036Z` had carriers moved off their CPUs by the harness in 25 of 99 trials (rejected by the isolation gate) and a 5,000-slot backend pool (§7.2); `20261013T131136Z` was stopped at saturation by the pool's unfair hand-off (§7.1). |
 
-**Updated:** 2026-10-16
-*By Arkadiusz Przychocki (updated 2026-10-16)*
+**Updated:** 2026-10-23
+*By Arkadiusz Przychocki (updated 2026-10-23)*

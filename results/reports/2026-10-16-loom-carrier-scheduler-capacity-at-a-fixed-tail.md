@@ -82,7 +82,9 @@ and the reading of each arm fixed before the campaigns ran.*
    lies 1.54 ms below `A_iso`'s fastest trial (200.96 ms), so the range clause fails and, as
    registered, `B_pin` is read against `B_float` there: **40.7 against 199.4 ms**, every `B_pin`
    trial below every `B_float` trial. `B_pin` and `B_float` differ from the built-in scheduler in
-   one submit path (§1.1); comparisons between them, and with `D`, are unaffected.
+   one submit path (§1.1); comparisons between them, and with `D`, are unaffected, and switching
+   `B_pin`'s `onContinue` to the built-in's `execute()` does not move its p99 at 85 % in either
+   regime.
 6. **The floating arms' CPU-bound tails moved between campaigns because of the host's packet
    filtering; the pinned arms' did not.** At 70 % `A_iso`'s p99 is 9.81 ms (4.23–13.63) here
    against 2.46 ms in the first campaign; carriers spend 8–10 more points of CPU in every arm.
@@ -181,8 +183,15 @@ virtual threads under `pollerMode=3`, waking a handler on a backend reply. `B_fl
 same difference, so `B_pin` against `B_float` isolates the binding. `D` also queues a task woken on
 its own carrier without waking another, so `D` against `B_pin` isolates the scheduling. What the
 difference affects is how closely `B_pin` and `B_float` stand for the built-in scheduler: the
-reproduction check (§4) compares them with `A_iso` with the difference in place. A run comparing
-`B_pin` with an `onContinue` that calls `execute()` against the version measured here is pending.
+reproduction check (§4) compares them with `A_iso` with the difference in place. `B_pin` with an
+`onContinue` that calls `execute()`, run against the version measured here at 85 % in both
+regimes, twice in one boot without connection tracking, unlike the campaigns (§6), 5 fresh JVMs
+per cell each time, does not separate from it: under `B_float`'s rule the measured version is
+accepted in all four comparisons, with p99 medians of 2.63 and 2.65 ms against 2.62 and 2.62 ms
+with the 1 ms backend (p = 0.84 and 0.056) and 38.65 and 39.74 ms against 40.03 and 39.23 ms with
+the 30 ms backend (p = 0.22 and 0.55), and carrier CPU within 2 points. The 0.056 is a 0.03 ms
+difference of medians; pooled over both runs (10 against 10) the CPU-bound p is 0.165. Other rates
+were not run.
 
 `B_float` is the same class with `-Dloom.bench.pinned.bind=false`: what remains is the
 reproduction, and `B_float` against `A_iso` checks it. The isolation gate holds `B_pin` to `D`'s
@@ -569,7 +578,8 @@ state is stated in §6 and in the first report's §1.2.
 
 - **The cause of the 70 % stall** (§5): narrowed to pinned carriers, not explained; it occurs
   without connection tracking too.
-- **Whether `B_pin`'s `onContinue` difference moves its results** (§1.1): pending.
+- **Whether `B_pin`'s `onContinue` difference moves its results** (§1.1): not at 85 % in either
+  regime; other rates were not run.
 - **What remains of the CPU-bound drift** (§6.2): with loopback exempted from tracking,
   `A_iso`'s carriers keep 6 points of sys and 0.24 ms of p99 above a host without the Docker
   daemon's rules; the iptables tables still traversed are the candidate, not profiled. Whether
@@ -689,7 +699,7 @@ valid, the harness committed and the host shielded.
 
 | date | change |
 |---|---|
-| 2026-10-23 | §1.1 corrects the description of the JDK's identity-selected paths and states a difference found after the campaigns: `B_pin`'s `onContinue` lazy-submits unparks from virtual threads where the built-in scheduler calls `execute()`. §3, §4, TL;DR 5 and §7 follow. No figure changed. |
+| 2026-10-23 | §1.1 corrects the description of the JDK's identity-selected paths and states a difference found after the campaigns: `B_pin`'s `onContinue` lazy-submits unparks from virtual threads where the built-in scheduler calls `execute()`, and the check that it does not move `B_pin`'s p99 at 85 % (`results/raw/loom-carrier-scheduler-continue/`, harness `641e25ac`). §3, §4, TL;DR 5 and §7 follow. No earlier figure changed. |
 | 2026-10-23 | §7 records the closed-loop saturation of every arm, with CPUs utilised, as a record rather than a claim; §5's heading on connection tracking states what the run can show; §6.3 states that the `host_untracked` gate applies from `0868577a` on. No figure changed. |
 | 2026-10-23 | Review pass: §5 records the stall in a run without connection tracking; §6.2 states how little kernel time moves the floating arm's tail; §6.3 names the `host_untracked` evidence gate; TL;DR 1, At a glance and §6.3 quote the capacity without tracking as at least 70 %; §7 follows. |
 | 2026-10-23 | §6 identifies the CPU-bound drift: kernel profiles at 0.2 h and 15.2 h after one boot (`results/raw/loom-carrier-scheduler-kprof/`, harness `84b7f398`) and the loopback connection-tracking check `20261023T044314Z-h3e3496678846` (harness `3e349667`); the run table gains whether the Docker daemon had run earlier in the boot; TL;DR 1 and 6, At a glance, §1.3, §7 and §8.1 follow. |

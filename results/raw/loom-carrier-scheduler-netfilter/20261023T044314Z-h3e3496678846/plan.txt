@@ -1,0 +1,3 @@
+seed=1792730594 harness=3e34966788465b4f4aa236e9029c1553c99d5235 rate=52200 reps=5
+boot_id=e9ac2233-132a-4528-8a23-d07c52986ad9 uptime_s=1470
+notrack = iptables -t raw -I {PREROUTING -i lo, OUTPUT -o lo} -j CT --notrack

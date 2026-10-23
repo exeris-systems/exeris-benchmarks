@@ -1,0 +1,4 @@
+-P PREROUTING ACCEPT
+-P OUTPUT ACCEPT
+-A PREROUTING -i lo -m comment --comment loom-carrier-scheduler-notrack -j CT --notrack
+-A OUTPUT -o lo -m comment --comment loom-carrier-scheduler-notrack -j CT --notrack

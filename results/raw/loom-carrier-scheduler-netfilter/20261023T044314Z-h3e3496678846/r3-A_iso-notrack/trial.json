@@ -1,0 +1,197 @@
+{
+  "schema": "loom-carrier-scheduler-trial/1",
+  "trial_dir": "r3-A_iso-notrack",
+  "arm": "A_iso",
+  "backend": "jdk",
+  "rate": "52200",
+  "connections": 100,
+  "load_threads": 4,
+  "warmup_s": 30,
+  "warmup_mode": "open",
+  "duration_s": 30,
+  "think_ms": 1.0,
+  "pool": 128,
+  "max_connections": "default",
+  "poller_mode": "3",
+  "layout": {
+    "carriers": "2,3",
+    "server_aux": "0,6",
+    "mock": "1,7",
+    "load": "4,5,10,11"
+  },
+  "kernel": {
+    "kernel_commit": "bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "kernel_requested_revision": "research/loom-carrier-scheduler",
+    "kernel_repo": "git@github.com:exeris-systems/exeris-kernel.git",
+    "built_from": "git archive bc26f9a0e8fc56bf922aa7515b8f29cc2aac869d",
+    "class_file_major": 72,
+    "class_file_minor": 0,
+    "jdk_build": "OpenJDK Runtime Environment (build 28-testing-builds.shipilev.net-openjdk-jdk-loom-b18-20260917-2133)",
+    "built_at_utc": "2026-10-05T04:35:17Z"
+  },
+  "bench_commit": "3e34966788465b4f4aa236e9029c1553c99d5235",
+  "load": {
+    "requests_per_sec": 52091.69,
+    "percentiles_ms": {
+      "p50": 1.8,
+      "p75": 2.1,
+      "p90": 2.31,
+      "p99": 2.79,
+      "p99.9": 5.93,
+      "p99.99": 8.1,
+      "p99.999": 9.41,
+      "p100": 10.64
+    },
+    "socket_errors": null,
+    "non_2xx": 0,
+    "calibration_mean_ms": 2.174
+  },
+  "pidstat": {
+    "process": {
+      "tid": "-",
+      "%usr": 54.97,
+      "%system": 121.23,
+      "%wait": 0.0,
+      "%CPU": 176.2,
+      "cswch/s": 0.0,
+      "nvcswch/s": 0.0
+    },
+    "carriers": {
+      "count": 2,
+      "cpu_pct": 127.1,
+      "usr_pct": 41.5,
+      "sys_pct": 85.6,
+      "wait_pct_max": 1.07,
+      "wait_pct_each": {
+        "ForkJoinPool-1-worker-1": 1.07,
+        "ForkJoinPool-1-worker-2": 1.03
+      },
+      "nvcswch_per_s": 13.26
+    },
+    "reactors": {
+      "count": 2,
+      "cpu_pct": 36.64,
+      "usr_pct": 8.66,
+      "sys_pct": 27.96,
+      "wait_pct_max": 1.53,
+      "wait_pct_each": {
+        "carrier/native-tcp/reactor/0": 1.53,
+        "carrier/native-tcp/reactor/1": 1.43
+      },
+      "nvcswch_per_s": 419.33
+    }
+  },
+  "perf_stat": {
+    "task_clock_ms": 52929.12,
+    "elapsed_s": 30.003398945,
+    "cpus_utilized": 1.764,
+    "cycles": 166893407958.0,
+    "instructions": 126078178633.0,
+    "ipc": 0.755,
+    "context_switches_per_s": 50449.3,
+    "cpu_migrations": 52824.0
+  },
+  "perf_stat_status": "measured",
+  "profile": "none",
+  "perf_sched": null,
+  "diagnostics": [],
+  "gates": {
+    "load": {
+      "pass": true,
+      "achieved_ratio": 1.0,
+      "raw_ratio": 0.9979,
+      "connection_ramp_s": 0.125,
+      "reason": "achieved 52091.7 req/s of 52091 expected at target 52200"
+    },
+    "errors": {
+      "pass": true,
+      "socket_errors": {},
+      "non_2xx": 0
+    },
+    "isolation": {
+      "pass": true,
+      "problems": [],
+      "carriers": {
+        "ForkJoinPool-1-worker-1": [
+          2,
+          3
+        ],
+        "ForkJoinPool-1-worker-2": [
+          2,
+          3
+        ]
+      }
+    },
+    "transport": {
+      "pass": true,
+      "observed": "active=posix-hybrid, ffmArmed=true",
+      "expected": "active=posix-hybrid, ffmArmed=true"
+    },
+    "unperturbed": {
+      "pass": true,
+      "reason": "no tracer or profiler attached"
+    },
+    "host_shielded": {
+      "pass": true,
+      "problems": []
+    },
+    "harness_clean": {
+      "pass": false,
+      "reason": "1 uncommitted harness file(s)"
+    }
+  },
+  "host": {
+    "state": {
+      "graphical_target": "inactive",
+      "allowed_cpus.system.slice": "0 6",
+      "allowed_cpus.user.slice": "0 6",
+      "allowed_cpus.init.scope": "0 6",
+      "own_cgroup": "/bench.slice/run-p48696-i7951.service",
+      "own_cpus_allowed": "0-11",
+      "isolated": "",
+      "boost": "0",
+      "governors": "12 performance",
+      "boot_id": "e9ac2233-132a-4528-8a23-d07c52986ad9",
+      "uptime_s": "2168",
+      "netfilter_modules": "ip_tables iptable_filter iptable_nat iptable_raw nf_conntrack nf_nat nf_tables",
+      "loopback_notrack": "notrack"
+    },
+    "shielded": true,
+    "problems": [],
+    "interrupts_on_carrier_cpus_during_window": {
+      "cpu2": 159690,
+      "cpu3": 159026
+    },
+    "counters": {
+      "start": {
+        "conntrack_count": "186",
+        "cgroup_dying_root": "218",
+        "cgroup_descendants_root": "120",
+        "cgroup_dying_bench_slice": "11",
+        "slab_kb": "796340",
+        "sunreclaim_kb": "274748",
+        "tcp_sockets": "381",
+        "tcp_estab": "200",
+        "tcp_closed": "173",
+        "tcp_orphaned": "0",
+        "tcp_timewait": "173"
+      },
+      "end": {
+        "conntrack_count": "187",
+        "cgroup_dying_root": "218",
+        "cgroup_descendants_root": "120",
+        "cgroup_dying_bench_slice": "11",
+        "slab_kb": "796420",
+        "sunreclaim_kb": "274828",
+        "tcp_sockets": "270",
+        "tcp_estab": "200",
+        "tcp_closed": "62",
+        "tcp_orphaned": "0",
+        "tcp_timewait": "62"
+      }
+    }
+  },
+  "valid": true,
+  "sustained": true,
+  "evidence": false
+}

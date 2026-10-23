@@ -14,9 +14,9 @@
 #            50 % and 85 % of A_iso's saturation (and 70 % in the I/O-bound regime) and at
 #            saturation (closed loop).
 #  headroom  B_pin and P0132: rungs of 100-130 % in steps of 5 %, and a sweep of connection count
-#            (and, in the I/O-bound regime, backend pool size) at saturation and at 115 %, with the
-#            mock's CPU, the carriers' CPU and p50 recorded, so the summary can say which resource
-#            saturates first.
+#            (and, in the I/O-bound regime, backend pool size and mock CPU set) at saturation and at
+#            115 %, with the mock's CPU, the carriers' CPU and p50 recorded, so the summary can say
+#            which resource saturates first.
 #
 # Run one regime per boot, as root from a text console, inside tmux, with the graphical session
 # stopped:
@@ -34,6 +34,12 @@
 #   FRACTIONS [cpu "0.5 0.85", io "0.5 0.7 0.85"]   RUNGS ["1.00 1.05 ... 1.30"]
 #   HEADROOM_ARMS ["B_pin P0132"]
 #   CONN_SWEEP [cpu "100 200 400", io "5000 10000"]   POOL_SWEEP [cpu "", io "2048 4096"]
+#   MOCK_SWEEP [cpu "1,7,5,11", io ""]   mock-backend CPU sets other than the regime's own (1,7); each
+#       is run at saturation and at 115 %, at the regime's connection count and at the largest
+#       CONN_SWEEP value, with the load generator narrowed to NARROW_LOAD_CPUS ["4,10"] so the two
+#       roles do not share CPUs. On the 6-core / 12-thread host CPU n and n+6 are SMT siblings, so
+#       1,7,5,11 puts the mock on cores 1 and 5 and 4,10 puts the load generator on core 4. The
+#       trial's --mock-threads and --load-threads follow the CPU counts.
 #   CPU_LOAD_ARGS, IO_LOAD_ARGS (v2-regimes.sh)   SYS_CPUS [0,6]   BOOST [off]
 set -euo pipefail
 export LC_ALL=C
@@ -74,9 +80,12 @@ done
 
 if [[ "$REGIME" == cpu ]]; then
   FRACTIONS="${FRACTIONS:-0.5 0.85}"; CONN_SWEEP="${CONN_SWEEP:-100 200 400}"; POOL_SWEEP="${POOL_SWEEP-}"
+  MOCK_SWEEP="${MOCK_SWEEP-1,7,5,11}"
 else
   FRACTIONS="${FRACTIONS:-0.5 0.7 0.85}"; CONN_SWEEP="${CONN_SWEEP:-5000 10000}"; POOL_SWEEP="${POOL_SWEEP-2048 4096}"
+  MOCK_SWEEP="${MOCK_SWEEP-}"
 fi
+NARROW_LOAD_CPUS="${NARROW_LOAD_CPUS:-4,10}"
 BASE="${BASE:-$(regime_value "$REGIME" BASE_CPU BASE_IO)}"
 regime_load_args "$REGIME"
 # The regime's own connection count, pool and kernel connection limit; a sweep value equal to them
@@ -87,6 +96,9 @@ opt_of() {  # <option> <default>
   echo "$v"
 }
 DEF_CONN="$(opt_of --connections 100)"; DEF_POOL="$(opt_of --pool 128)"; DEF_MAXC="$(opt_of --max-connections 4096)"
+DEF_MOCK="$(opt_of --mock-cpus 1,7)"
+ncpus() { awk -F, '{print NF}' <<<"$1"; }
+LARGEST_CONN="$(printf '%s\n' $CONN_SWEEP $DEF_CONN | sort -n | tail -1)"
 
 PREV_PARANOID="$(cat /proc/sys/kernel/perf_event_paranoid)"
 restore() {
@@ -110,29 +122,37 @@ OUT_ROOT="$BENCH_ROOT/results/raw/loom-carrier-scheduler-v2-pilot/$(date -u +%Y%
 mkdir -p "$OUT_ROOT"
 seed="$(date +%s)"
 
-# One cell per line: <block>|<cell>|<rate or max>|<connections>|<pool>, then the repetition.
+# One cell per line: <block>|<cell>|<rate or max>|<connections>|<pool>|<mock CPUs>, then the repetition.
 cells=()
 for v in $VARIANT_ARMS; do
-  for f in $FRACTIONS; do cells+=("var|$v|$(rate_of "$f")|$DEF_CONN|$DEF_POOL"); done
-  cells+=("var|$v|max|$DEF_CONN|$DEF_POOL")
+  for f in $FRACTIONS; do cells+=("var|$v|$(rate_of "$f")|$DEF_CONN|$DEF_POOL|$DEF_MOCK"); done
+  cells+=("var|$v|max|$DEF_CONN|$DEF_POOL|$DEF_MOCK")
 done
 for v in $HEADROOM_ARMS; do
-  for f in $RUNGS; do cells+=("rung|$v|$(rate_of "$f")|$DEF_CONN|$DEF_POOL"); done
+  for f in $RUNGS; do cells+=("rung|$v|$(rate_of "$f")|$DEF_CONN|$DEF_POOL|$DEF_MOCK"); done
   for c in $CONN_SWEEP; do
     [[ "$c" == "$DEF_CONN" ]] && continue
-    cells+=("conn|$v|max|$c|$DEF_POOL" "conn|$v|$(rate_of 1.15)|$c|$DEF_POOL")
+    cells+=("conn|$v|max|$c|$DEF_POOL|$DEF_MOCK" "conn|$v|$(rate_of 1.15)|$c|$DEF_POOL|$DEF_MOCK")
   done
   for p in $POOL_SWEEP; do
     [[ "$p" == "$DEF_POOL" ]] && continue
-    cells+=("pool|$v|max|$DEF_CONN|$p" "pool|$v|$(rate_of 1.15)|$DEF_CONN|$p")
+    cells+=("pool|$v|max|$DEF_CONN|$p|$DEF_MOCK" "pool|$v|$(rate_of 1.15)|$DEF_CONN|$p|$DEF_MOCK")
+  done
+  # Both resources may bind at once, so each mock layout runs at the regime's connection count and
+  # at the largest connection count of the sweep.
+  for m in $MOCK_SWEEP; do
+    [[ "$m" == "$DEF_MOCK" ]] && continue
+    for c in $(printf '%s\n' "$DEF_CONN" "$LARGEST_CONN" | sort -nu); do
+      cells+=("mock|$v|max|$c|$DEF_POOL|$m" "mock|$v|$(rate_of 1.15)|$c|$DEF_POOL|$m")
+    done
   done
 done
 {
   echo "seed=$seed harness=$(git -C "$BENCH_ROOT" rev-parse HEAD) kernel=$SHA12 regime=$REGIME reps=$REPS"
   echo "base_rps=$BASE (A_iso saturation of the capacity ladders; not re-measured here)"
   echo "variant_arms=$VARIANT_ARMS headroom_arms=$HEADROOM_ARMS"
-  echo "fractions=$FRACTIONS rungs=$RUNGS conn_sweep=$CONN_SWEEP pool_sweep=$POOL_SWEEP"
-  echo "default_connections=$DEF_CONN default_pool=$DEF_POOL regime_args=${REGIME_ARGS[*]}"
+  echo "fractions=$FRACTIONS rungs=$RUNGS conn_sweep=$CONN_SWEEP pool_sweep=$POOL_SWEEP mock_sweep=$MOCK_SWEEP narrow_load_cpus=$NARROW_LOAD_CPUS"
+  echo "default_connections=$DEF_CONN default_pool=$DEF_POOL default_mock=$DEF_MOCK regime_args=${REGIME_ARGS[*]}"
   echo "boot_id=$(cat /proc/sys/kernel/random/boot_id) uptime_s=$(awk '{printf "%d", $1}' /proc/uptime)"
 } >"$OUT_ROOT/plan.txt"
 : >"$OUT_ROOT/order.txt"
@@ -149,7 +169,7 @@ n=0; total="${#ORDER[@]}"
 for line in "${ORDER[@]}"; do
   n=$((n + 1))
   read -r rep spec <<<"$line"
-  IFS='|' read -r block cell rate conn pool <<<"$spec"
+  IFS='|' read -r block cell rate conn pool mock <<<"$spec"
   arm_args=(--arm "$cell")
   stats=()
   case "$cell" in
@@ -162,8 +182,13 @@ for line in "${ORDER[@]}"; do
     over+=(--connections "$conn"); m="$DEF_MAXC"; (( conn + 1024 > m )) && m=$(( conn + 1024 )); over+=(--max-connections "$m")
   fi
   [[ "$pool" != "$DEF_POOL" ]] && over+=(--pool "$pool")
-  dir="$OUT_ROOT/$block-$rep-$cell-$rate-c$conn-p$pool"
-  log "[$n/$total] $block $cell rate=$rate connections=$conn pool=$pool"
+  if [[ "$mock" != "$DEF_MOCK" ]]; then
+    # A narrower load generator, and thread counts that follow the CPU counts of the two roles.
+    over+=(--mock-cpus "$mock" --mock-threads "$(ncpus "$mock")"
+           --load-cpus "$NARROW_LOAD_CPUS" --load-threads "$(ncpus "$NARROW_LOAD_CPUS")")
+  fi
+  dir="$OUT_ROOT/$block-$rep-$cell-$rate-c$conn-p$pool-m${mock//,/+}"
+  log "[$n/$total] $block $cell rate=$rate connections=$conn pool=$pool mock=$mock"
   "$SHIELD" run -- "$SCRIPT_DIR/run-trial.sh" --kernel-dir "$KDIR" "${arm_args[@]}" "${stats[@]}" --pilot \
     --backend jdk --rate "$rate" "${COMMON_TRIAL_ARGS[@]}" "${REGIME_ARGS[@]}" "${over[@]}" --out "$dir" >"$dir.log" 2>&1 \
     || log "  trial failed, see $dir.log"

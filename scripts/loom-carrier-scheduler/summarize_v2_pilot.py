@@ -23,7 +23,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import armcfg
-from throughput_v2 import MOCK_CPU_LIMIT, mock_cpu_pct, rig_bound
+from throughput_v2 import mock_cpu_limit, mock_cpu_pct, rig_bound
 
 CARRIER_CPU_LIMIT = 190.0   # of 200 % for two carriers
 PLACEMENT = ("start.factory", "start.poller.preferred", "start.poller.name", "start.current.mounted",
@@ -95,6 +95,8 @@ def metrics(t, d):
         "carrier_cpu": carriers["cpu_pct"], "mock_cpu": mock_cpu_pct(d),
         "rig": rig_bound(t, d), "delta": stats.get("delta") or {}, "per_request": stats.get("per_request") or {},
         "connections": t["connections"], "pool": t["pool"],
+        # Recorded layout, not the directory name.
+        "mock_cpus": t["layout"]["mock"], "mock_limit": mock_cpu_limit(t),
     }
 
 
@@ -224,36 +226,36 @@ def main(root):
 
     # --- rig headroom ------------------------------------------------------------------------------------------------
     out += ["", "## Rig headroom", "",
-            f"Per cell: which resource is at its limit — the mock backend (≥ {MOCK_CPU_LIMIT:.0f} % of its two CPUs), the "
-            f"carriers (≥ {CARRIER_CPU_LIMIT:.0f} % of two), the backend pool or the connections (the labels of "
+            "Per cell: which resource is at its limit — the mock backend (≥ 95 % of the CPUs it may use: 190 % for "
+            f"two, 380 % for four), the carriers (≥ {CARRIER_CPU_LIMIT:.0f} % of two), the backend pool or the connections (the labels of "
             "throughput_v2.py). `none` means no listed resource is at its limit.", "",
-            "| cell | rate | connections | pool | valid / sustained of n | req/s | p50 ms | mock CPU % | carrier CPU % | at its limit |",
-            "|:--|:--|--:|--:|:--|--:|--:|--:|--:|:--|"]
-    head = [x for x in trials if x["block"] in ("rung", "conn", "pool")]
+            "| cell | rate | connections | pool | mock CPUs | valid / sustained of n | req/s | p50 ms | mock CPU % | carrier CPU % | at its limit |",
+            "|:--|:--|--:|--:|:--|:--|--:|--:|--:|--:|:--|"]
+    head = [x for x in trials if x["block"] in ("rung", "conn", "pool", "mock")]
     # The default-configuration cells at saturation belong to the variants block; include them.
     head += [x for x in var if x["rate"] == "max" and x["cell"] in {y["cell"] for y in trials if y["block"] != "var"}]
     groups = defaultdict(list)
     for x in head:
-        groups[(x["cell"], x["m"]["connections"], x["m"]["pool"], x["rate"])].append(x)
+        groups[(x["cell"], x["m"]["connections"], x["m"]["pool"], x["m"]["mock_cpus"], x["rate"])].append(x)
     limits = {}
-    for key in sorted(groups, key=lambda k: (k[0], k[1], k[2], rate_key(k[3]))):
-        cell, conn, pool, rate = key
+    for key in sorted(groups, key=lambda k: (k[0], k[1], k[2], k[3], rate_key(k[4]))):
+        cell, conn, pool, mock_cpus, rate = key
         xs = groups[key]
         ok = [x["m"] for x in xs if x["m"]["valid"]]
         sus = [m for m in ok if m["sustained"]]
         mock, car = med([m["mock_cpu"] for m in ok]), med([m["carrier_cpu"] for m in ok])
         at = []
-        if mock is not None and mock >= MOCK_CPU_LIMIT:
+        if mock is not None and ok and mock >= ok[0]["mock_limit"]:
             at.append("mock")
         if car is not None and car >= CARRIER_CPU_LIMIT:
             at.append("carriers")
         reasons = {r for m in ok for r in m["rig"] if sum(1 for q in ok if r in q["rig"]) * 2 >= len(ok)}
         at += sorted(r for r in reasons if r != "mock CPU")
         limits[key] = at
-        out.append(f"| {cell} | {frac(rate)} | {conn} | {pool} | {len(ok)} / {len(sus)} of {len(xs)} | "
+        out.append(f"| {cell} | {frac(rate)} | {conn} | {pool} | {mock_cpus} | {len(ok)} / {len(sus)} of {len(xs)} | "
                    f"{fmt(med([m['rps'] for m in ok]), 0)} | {fmt(med([m['p50'] for m in ok]))} | {fmt(mock, 0)} | "
                    f"{fmt(car, 0)} | {', '.join(at) or 'none'} |")
-    result["headroom"] = [{"cell": k[0], "connections": k[1], "pool": k[2], "rate": k[3], "at_limit": v}
+    result["headroom"] = [{"cell": k[0], "connections": k[1], "pool": k[2], "mock_cpus": k[3], "rate": k[4], "at_limit": v}
                           for k, v in limits.items()]
 
     errors = [x for x in trials if not x["t"]["gates"]["errors"]["pass"]]

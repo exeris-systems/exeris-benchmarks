@@ -14,13 +14,13 @@ server JVM (perf's CPUs utilised, else pidstat's process %CPU, one source for th
 Per connection level and metric, every pair of the arms present is tested with the exact two-sided
 Mann-Whitney test; the family of Holm's step-down adjustment is those pairs (six when A_iso, B_pin, D
 and D2 all ran). A pair differs when its Holm-adjusted p is below 0.05 and the medians differ by at
-least 2 % of the second arm's median.
+least 2 % of the larger of the two medians.
 
 Mechanism: in the cells at the regime's connection count, D2's context switches and cycles per request
 lie inside the range of B_pin's trials (D2's median is compared with B_pin's minimum and maximum).
 
 Rig bound (informational, never changes a verdict): a trial is labelled when the mock backend used at
-least 190 % of its two CPUs, when requests in flight (rate x p50) reached the backend pool, or when
+least 95 % of the CPUs it may use (190 % for two, 380 for four), when requests in flight (rate x p50) reached the backend pool, or when
 the rate is above connections / p50, i.e. the connections cannot carry it. A cell carries a label
 that at least half of its valid trials carry.
 
@@ -34,10 +34,11 @@ from collections import defaultdict
 from pathlib import Path
 
 import armcfg
+from parse_trial import cpu_set
 from slo_ladder import MIN_VALID, is_valid
 from stats import V2_ARMS, V2_PAIRS, holm, mann_whitney
 
-MOCK_CPU_LIMIT = 190.0
+MOCK_CPU_SHARE = 0.95   # of 100 % per CPU the mock is given
 FLOOR = 0.02
 ALPHA = 0.05
 
@@ -51,16 +52,22 @@ def mock_cpu_pct(trial_dir):
     value = None
     for line in path.read_text(errors="replace").splitlines():
         cols = line.split()
-        if not cols or cols[0] != "Average:":
+        if not cols:
             continue
+        # pidstat prints the header once, led by a time of day; the Average row is led by "Average:".
         if "%CPU" in cols:
             header = cols
-        elif header and len(cols) >= len(header):
+        elif cols[0] == "Average:" and header and len(cols) >= len(header):
             try:
                 value = float(cols[header.index("%CPU")])
             except ValueError:
                 pass
     return value
+
+
+def mock_cpu_limit(t):
+    """The mock's %CPU at which it counts as at its limit: 95 % of 100 x the CPUs it may use."""
+    return MOCK_CPU_SHARE * 100.0 * len(cpu_set(t["layout"]["mock"]))
 
 
 def p50_ms(t):
@@ -71,7 +78,7 @@ def rig_bound(t, trial_dir):
     """Reasons the rig, not the scheduler, may bound this trial."""
     reasons = []
     mock = mock_cpu_pct(trial_dir)
-    if mock is not None and mock >= MOCK_CPU_LIMIT:
+    if mock is not None and mock >= mock_cpu_limit(t):
         reasons.append("mock CPU")
     p50 = p50_ms(t)
     rate = float(t["rate"]) if t["rate"] != "max" else (t["load"]["requests_per_sec"] or 0.0)
@@ -135,7 +142,7 @@ def pair_tests(values_by_arm):
     rows = []
     for (a, b), (p, direction), adj, rej in zip(pairs, ps, adjusted, rejected):
         ma, mb = statistics.median(values_by_arm[a]), statistics.median(values_by_arm[b])
-        rel = (ma - mb) / mb if mb else None
+        rel = (ma - mb) / max(ma, mb) if max(ma, mb) else None
         rows.append({"pair": [a, b], "n": [len(values_by_arm[a]), len(values_by_arm[b])],
                      "median": [ma, mb], "relative_difference": rel, "p": p, "p_holm": adj,
                      "p_x_above": direction,
@@ -223,7 +230,7 @@ def render(result):
             "A rate is sustained by an arm when at least "
             f"{MIN_VALID} of its trials are valid and every valid trial carried it; the highest sustained rate is "
             "the highest rate up to which every rate is sustained. `rig` names what may bound the cell "
-            "(informational): the mock backend's CPU, the backend pool, the connections.", ""]
+            "(informational): the mock backend's CPU (95 % of the CPUs it may use), the backend pool, the connections.", ""]
     arms = result["arms"]
     rates = sorted({r["rate"] for a in result["open_loop"].values() for r in a["rates"]})
     if rates:
@@ -251,7 +258,7 @@ def render(result):
         out += ["", "## Closed loop", "",
                 f"Requests per CPU-second use the server JVM's CPUs from {cl['cpu_source']}. Pairs: exact two-sided "
                 f"Mann-Whitney, Holm-adjusted over the pairs of one level and metric; `differs` needs the adjusted p "
-                f"below {ALPHA} and medians at least {FLOOR:.0%} apart."]
+                f"below {ALPHA} and medians at least {FLOOR:.0%} apart, measured against the larger of the two medians."]
         for level, lv in cl["levels"].items():
             for metric, title in (("requests_per_s", "requests/s"), ("requests_per_cpu_s", "requests/CPU-s")):
                 m = lv[metric]

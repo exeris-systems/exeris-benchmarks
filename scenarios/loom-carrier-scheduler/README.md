@@ -195,7 +195,8 @@ the kernel build under test.
 ## Host-state checks
 
 The floating arms' CPU-bound tail and the carriers' kernel time differ between a freshly booted
-host and one that has run for most of a day. Every trial records the boot it ran in and its uptime
+host and one that has run for most of a day. Every trial records the boot it ran in, its uptime,
+the loaded netfilter modules and whether loopback was exempted from connection tracking
 (`host.txt`), and at both ends of its window the tracked-connection count, dying memory cgroups,
 unreclaimable slab and TCP socket counts (`host-counters-{start,end}.txt`); the campaign scripts
 warn when the host has been up for an hour or more.
@@ -209,6 +210,11 @@ warn when the host has been up for an hour or more.
   `kernel_profile.py compare <fresh> <long-running>` lists the kernel symbols the extra time is
   spent in. Results in `results/raw/loom-carrier-scheduler-kprof/`; the binary `perf-record.data`
   files are not committed, the per-trial `perf-record-report.txt` is.
+- `run-netfilter-check.sh` runs `A_iso` and `D` at 52,200 req/s in one boot, with and without
+  raw-table rules that exempt loopback from connection tracking (`-j CT --notrack`), set or
+  removed before each trial. It needs `nf_conntrack` and `iptable_nat` loaded, as they are once
+  the Docker daemon has started. Results in `results/raw/loom-carrier-scheduler-netfilter/`,
+  tabulated by `summarize_netfilter.py`.
 
 ## Host prerequisites
 

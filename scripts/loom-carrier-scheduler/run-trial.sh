@@ -333,10 +333,13 @@ host_state() {  # <file>
     echo "isolated=$(cat /sys/devices/system/cpu/isolated 2>/dev/null)"
     echo "boost=$(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null || echo n/a)"
     echo "governors=$(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | sort | uniq -c | xargs)"
-    # The floating arms' tail depends on how long the host has run since boot, for a reason not
-    # yet identified; every trial records the boot it ran in and how far into it.
+    # The CPU-bound tail depends on the host's state, which changes after boot; every trial records
+    # the boot it ran in, how far into it, and whether connection tracking and iptables are loaded,
+    # since every loopback packet then passes their hooks.
     echo "boot_id=$(cat /proc/sys/kernel/random/boot_id)"
     echo "uptime_s=$(awk '{printf "%d", $1}' /proc/uptime)"
+    echo "netfilter_modules=$(awk '$1 ~ /^(nf_conntrack|nf_nat|ip_tables|iptable_[a-z]+|nf_tables|br_netfilter)$/ {print $1}' /proc/modules | sort | xargs)"
+    echo "loopback_notrack=${LOOPBACK_NOTRACK:-unset}"
   } >"$1"
 }
 

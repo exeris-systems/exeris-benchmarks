@@ -14,6 +14,8 @@ import eu.exeris.kernel.spi.memory.MemoryAllocator;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -23,6 +25,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <ul>
  *   <li>{@code GET /plaintext} answers 200 with a fixed body, without leaving the handler.</li>
+ *   <li>{@code GET /__sched-stats} answers the scheduler's counters as a JSON object, or
+ *       {@code {"unsupported":true}} when the kernel build has none; see {@link #schedulerStatsJson()}.</li>
  *   <li>{@code GET /backend} makes one blocking {@code GET /mock} to the backend and answers 200
  *       with the backend's body length in decimal, or 502 when the call failed.</li>
  * </ul>
@@ -40,6 +44,11 @@ public final class LoomSchedulerServer {
     private static final byte[] PLAINTEXT = "Hello, World!".getBytes(StandardCharsets.US_ASCII);
     private static final List<HttpHeader> TEXT_HEADERS =
             List.of(new HttpHeader("content-type", "text/plain"));
+    private static final List<HttpHeader> JSON_HEADERS =
+            List.of(new HttpHeader("content-type", "application/json"));
+    private static final String SCHEDULER_CLASS =
+            "eu.exeris.kernel.core.transport.scheduler.locality.ExerisCarrierScheduler";
+    private static final String LOCALITY_PREFIX = "exeris.locality.";
 
     private LoomSchedulerServer() {
     }
@@ -66,6 +75,10 @@ public final class LoomSchedulerServer {
                 + " exeris.transport.locality=" + System.getProperty("exeris.transport.locality", "<unset>")
                 + " exeris.locality.allVthreads=" + System.getProperty("exeris.locality.allVthreads", "<unset>"));
 
+        // Every scheduler property this JVM was started with, as typed: the harness compares it with
+        // the property set the arm names, so a misspelled name shows up here instead of being ignored.
+        System.out.println("LOOM-BENCH locality.properties " + localityProperties());
+
         AtomicReference<Backend> backend = new AtomicReference<>();
         HttpMode mode = kind == BackendKind.KERNEL ? HttpMode.DUAL : HttpMode.SERVER;
         KernelHttp.serve(mode, allocator -> {
@@ -82,6 +95,43 @@ public final class LoomSchedulerServer {
                 b.close();
             }
         });
+    }
+
+    /** The {@code exeris.locality.*} system properties, sorted, as {@code name=value} separated by spaces. */
+    static String localityProperties() {
+        Map<String, String> found = new TreeMap<>();
+        for (String name : System.getProperties().stringPropertyNames()) {
+            if (name.startsWith(LOCALITY_PREFIX)) {
+                found.put(name, System.getProperty(name));
+            }
+        }
+        if (found.isEmpty()) {
+            return "<none>";
+        }
+        StringBuilder sb = new StringBuilder();
+        found.forEach((k, v) -> sb.append(sb.isEmpty() ? "" : " ").append(k).append('=').append(v));
+        return sb.toString();
+    }
+
+    /**
+     * The scheduler's counters as a JSON object of integers, read through reflection so that the
+     * app builds and runs against a kernel that predates {@code statsSnapshot()}; the object is
+     * {@code {"unsupported":true}} for such a kernel. An empty object means the counters are off.
+     */
+    @SuppressWarnings({"PMD.AvoidCatchingGenericException", "unchecked"})
+    static String schedulerStatsJson() {
+        try {
+            var method = Class.forName(SCHEDULER_CLASS).getMethod("statsSnapshot");
+            Map<String, Long> snapshot = (Map<String, Long>) method.invoke(null);
+            StringBuilder sb = new StringBuilder("{");
+            new TreeMap<>(snapshot).forEach((k, v) -> sb.append(sb.length() > 1 ? "," : "")
+                    .append('"').append(k.replace("\"", "\\\"")).append("\":").append(v));
+            return sb.append('}').toString();
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            return "{\"unsupported\":true}";
+        } catch (Exception e) {
+            return "{\"unavailable\":true}";
+        }
     }
 
     static BackendKind backendKind(String value) {
@@ -109,6 +159,8 @@ public final class LoomSchedulerServer {
             String path = exchange.request().path();
             switch (path) {
                 case "/plaintext" -> KernelHttp.respondBytes(exchange, allocator, TEXT_HEADERS, PLAINTEXT);
+                case "/__sched-stats" -> KernelHttp.respondBytes(exchange, allocator, JSON_HEADERS,
+                        schedulerStatsJson().getBytes(StandardCharsets.US_ASCII));
                 case "/backend" -> callBackend(exchange, allocator, backend, failureReported);
                 default -> exchange.respond(HttpStatus.NOT_FOUND);
             }

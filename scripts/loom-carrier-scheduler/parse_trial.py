@@ -13,6 +13,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+import armcfg
+
 UNIT_MS = {"us": 0.001, "ms": 1.0, "s": 1000.0, "m": 60000.0}
 
 
@@ -94,8 +96,12 @@ def load_thread_map(path):
     return names
 
 
-def parse_pidstat(path, names, carrier_re):
-    """Average rows per thread, from both the -u and the -w report."""
+def parse_pidstat(path, names, carrier_re, keep_cswch=False):
+    """Average rows per thread, from both the -u and the -w report.
+
+    keep_cswch adds the carriers' voluntary context switches per second, which pilot trials compare;
+    the key is absent otherwise so that a record parsed before it existed re-parses unchanged.
+    """
     rows = {}
     header = None
     for line in path.read_text(errors="replace").splitlines() if path.exists() else []:
@@ -148,6 +154,8 @@ def parse_pidstat(path, names, carrier_re):
             "wait_pct_each": {e["name"]: e.get("%wait") for e in items},
             "nvcswch_per_s": total(items, "nvcswch/s"),
         }
+    if keep_cswch:
+        out["carriers"]["cswch_per_s"] = total(groups["carriers"], "cswch/s")
     return out
 
 
@@ -257,7 +265,7 @@ def parse_host(out, bench_cpus, carrier_cpus):
 
 
 # Arms whose carriers bind themselves, one CPU each.
-PINNED_ARMS = ("B_pin", "D")
+PINNED_ARMS = ("B_pin", "D", "D2", "Dv")
 
 
 def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
@@ -289,6 +297,141 @@ def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
     return not problems, problems, carriers
 
 
+ECHO_RE = re.compile(r"^LOOM-BENCH locality\.properties (.*)$", re.M)
+FLAGS_RE = re.compile(r"\[ExerisCarrierScheduler\] locality flags: (.*)$", re.M)
+
+
+def parse_pairs(text):
+    """`name=value name=value` -> dict; the app prints <none> for an empty set."""
+    return {k: v for k, _, v in (tok.partition("=") for tok in text.split()) if _}
+
+
+def fmt_pairs(pairs):
+    return " ".join(f"{k}={v}" for k, v in sorted(pairs.items())) or "<none>"
+
+
+def arm_config_gate(server_log, arm, file_props, stats, poller_mode):
+    """Did the server run with the property set the arm names, and did the scheduler take it?
+
+    Two readings must agree with the expectation. The app echoes every exeris.locality.* system
+    property it was started with (a property the harness mistyped is echoed as typed). The
+    scheduler prints the effective value of every flag it knows; a mistyped name is absent from
+    that line, and a flag nobody set must read as its default. A kernel build older than the line
+    prints none, which is acceptable only when the arm sets no property of its own. A trial whose
+    server did not echo (an app older than the echo) has no such gate.
+    """
+    m = ECHO_RE.search(server_log)
+    if not m:
+        return None
+    expected = armcfg.expected_echo(arm, file_props, stats)
+    echo = parse_pairs(m.group(1))
+    problems = []
+    if echo != expected:
+        problems.append(f"the server was started with {fmt_pairs(echo)}, expected {fmt_pairs(expected)}")
+    runs_scheduler = arm in armcfg.SCHEDULER_ARMS
+    f = FLAGS_RE.search(server_log) if runs_scheduler else None
+    kernel = parse_pairs(f.group(1)) if f else None
+    unchecked = []
+    if runs_scheduler:
+        if kernel is None:
+            if file_props or stats:
+                problems.append("the kernel printed no effective-flags line, so it cannot show it took "
+                                + fmt_pairs({**file_props, **({armcfg.PREFIX + 'stats': 'true'} if stats else {})}))
+        else:
+            for name, want in sorted(expected.items()):
+                got = kernel.get(name)
+                if got is None:
+                    problems.append(f"{name} is not among the kernel's effective flags")
+                elif got.lower() != want.lower():
+                    problems.append(f"{name}: kernel reports {got}, expected {want}")
+            for name, accepted in sorted(armcfg.DEFAULTS.items()):
+                if name in expected or name not in kernel:
+                    continue
+                accepted = (accepted,) if isinstance(accepted, str) else accepted
+                if kernel[name].lower() not in accepted:
+                    problems.append(f"{name}: kernel reports {kernel[name]}, expected the default {accepted[0]}")
+            if poller_mode not in ("default", "") and kernel.get("jdk.pollerMode", poller_mode) != poller_mode:
+                problems.append(f"jdk.pollerMode: kernel reports {kernel['jdk.pollerMode']}, expected {poller_mode}")
+            unchecked = sorted(k for k in kernel if k not in armcfg.DEFAULTS and k not in expected
+                               and k != "jdk.pollerMode")
+    return {"pass": not problems, "problems": problems, "expected": expected, "echo": echo,
+            "kernel_flags": kernel, "unchecked_flags": unchecked}
+
+
+def parse_scheduler_stats(out):
+    """The window's share of the scheduler's counters: end reading minus start reading."""
+    start, end = out / "scheduler-stats-start.json", out / "scheduler-stats-end.json"
+    if not (start.exists() and end.exists()):
+        return {"supported": None, "reason": "no reading at one end of the window"}
+    try:
+        a, b = json.loads(start.read_text()), json.loads(end.read_text())
+    except ValueError:
+        return {"supported": None, "reason": "a reading is not JSON"}
+    if a.get("unsupported") or b.get("unsupported"):
+        return {"supported": False, "reason": "the kernel build has no statsSnapshot()"}
+    if a.get("unavailable") or b.get("unavailable"):
+        return {"supported": None, "reason": "the endpoint did not answer"}
+    text = (out / "load.txt").read_text(errors="replace") if (out / "load.txt").exists() else ""
+    m = re.search(r"^\s*(\d+) requests in", text, re.M)
+    requests = int(m.group(1)) if m else None
+    delta = {k: b[k] - a.get(k, 0) for k in sorted(b) if isinstance(b[k], (int, float))}
+    if not delta:
+        return {"supported": True, "requests": requests, "delta": {}, "per_request": {},
+                "reason": "the counters are off (empty snapshot)"}
+    return {"supported": True, "requests": requests, "delta": delta,
+            "per_request": {k: round(v / requests, 6) for k, v in delta.items()} if requests else {}}
+
+
+PERF_THREAD_RE = re.compile(r"^\s*(.+?)-(\d+)\s+(<not counted>|<not supported>|[0-9][0-9,.]*)\s+(\S+)")
+
+
+def parse_perf_threads(path, names, carrier_re):
+    """Context switches and futex calls of each server thread over the window, grouped as pidstat is.
+
+    `perf stat --per-thread` prints one row per thread and event as `comm-tid  count  event`; the
+    comma-separated form (`comm-tid,count,,event,...`) is read too. Threads that ended before the
+    window did are not listed by perf and are absent here.
+    """
+    if not path.exists() or "not run" in path.read_text(errors="replace"):
+        return None
+    events = {"context-switches": "context_switches", "syscalls:sys_enter_futex": "futex_calls"}
+    threads = {}
+    for line in path.read_text(errors="replace").splitlines():
+        m = PERF_THREAD_RE.match(line)
+        if m:
+            comm, tid, count, event = m.groups()
+        else:
+            cols = line.split(",")
+            m = re.match(r"^\s*(.+)-(\d+)$", cols[0]) if len(cols) >= 4 else None
+            if not m:
+                continue
+            comm, tid, count, event = m.group(1), m.group(2), cols[1], cols[3]
+        if event not in events:
+            continue
+        try:
+            value = int(float(count.replace(",", "")))
+        except ValueError:
+            value = None
+        threads.setdefault(tid, {"name": names.get(tid, comm)})[events[event]] = value
+    groups = {"carriers": [], "reactors": [], "other": []}
+    for tid, rec in threads.items():
+        name = rec["name"]
+        if is_carrier(name, carrier_re):
+            groups["carriers"].append(rec)
+        elif name.startswith("carrier/native-tcp/reactor/"):
+            groups["reactors"].append(rec)
+        else:
+            groups["other"].append(rec)
+    res = {}
+    for g, items in groups.items():
+        res[g] = {"count": len(items)}
+        for key in events.values():
+            vals = [r.get(key) for r in items if r.get(key) is not None]
+            res[g][key] = sum(vals) if vals else None
+    res["carriers"]["each"] = {r["name"]: {k: r.get(k) for k in events.values()} for r in groups["carriers"]}
+    return res
+
+
 # Gates that decide whether a valid trial may be cited, not whether its measurement is sound.
 EVIDENCE_ONLY_GATES = ("harness_clean", "host_shielded", "host_untracked")
 # Gates whose failure is a result about the arm, not a fault in the measurement: an arm that cannot
@@ -306,6 +449,11 @@ def main():
         ap.add_argument("--" + opt, required=True)
     # Diagnostics the trial ran with, comma-separated; absent in trials recorded before it existed.
     ap.add_argument("--diag", default="none")
+    # The pilot cell of arm Dv, whether the scheduler's counters were on, and whether the per-thread
+    # perf stat ran; absent in trials recorded before they existed.
+    ap.add_argument("--variant", default="")
+    ap.add_argument("--stats", default="no")
+    ap.add_argument("--perf-threads", default="not_measured")
     a = ap.parse_args()
     out = Path(a.out)
 
@@ -351,6 +499,11 @@ def main():
         if gates["isolation"]["unbound_starts"]:
             gates["isolation"]["pass"] = False
             gates["isolation"]["problems"].append("a worker started without a free CPU")
+    props_file = out / "arm-properties.txt"
+    file_props = armcfg.parse(props_file.read_text(), str(props_file)) if props_file.exists() else None
+    arm_config = arm_config_gate(server_log, a.arm, file_props or {}, a.stats == "yes", a.poller_mode)
+    if arm_config is not None:
+        gates["arm_config"] = arm_config
     gates["transport"] = {"pass": bool(m) and m.group(1) == "posix-hybrid" and m.group(2) == "true",
                           "observed": transport, "expected": "active=posix-hybrid, ffmArmed=true"}
 
@@ -375,6 +528,7 @@ def main():
                               "reason": "harness files committed" if a.bench_dirty == "0"
                               else f"{a.bench_dirty} uncommitted harness file(s)"}
 
+    pilot = "v2 pilot" in a.diag.split(",")
     identity = json.loads((out / "kernel-identity.json").read_text())
     trial = {
         "schema": "loom-carrier-scheduler-trial/1",
@@ -395,7 +549,7 @@ def main():
         "kernel": identity,
         "bench_commit": a.bench_commit,
         "load": load,
-        "pidstat": parse_pidstat(out / "pidstat-server.txt", names, a.carrier_name_re),
+        "pidstat": parse_pidstat(out / "pidstat-server.txt", names, a.carrier_name_re, keep_cswch=pilot),
         "perf_stat": parse_perf(out / "perf-stat.txt") if a.perf == "measured" else None,
         "perf_stat_status": a.perf,
         "profile": a.profile,
@@ -407,6 +561,14 @@ def main():
         "sustained": gates["load"]["pass"],
         "evidence": all(g["pass"] for k, g in gates.items() if k not in OUTCOME_GATES),
     }
+    if file_props is not None:
+        trial["variant"] = a.variant or None
+        trial["locality_properties"] = file_props
+        trial["locality_properties_sha256"] = armcfg.digest(file_props)
+    if a.stats == "yes":
+        trial["scheduler_stats"] = parse_scheduler_stats(out)
+    if a.perf_threads == "measured":
+        trial["perf_threads"] = parse_perf_threads(out / "perf-threads.txt", names, a.carrier_name_re)
     (out / "trial.json").write_text(json.dumps(trial, indent=2) + "\n")
     print(json.dumps({"trial": out.name, "valid": trial["valid"], "sustained": trial["sustained"],
                       "evidence": trial["evidence"],

@@ -8,7 +8,11 @@
 #
 # Usage:
 #   scripts/loom-carrier-scheduler/run-trial.sh --kernel-dir <dir from build-kernel.sh> \
-#       --arm A_iso|B_pin|B_float|C_iso|D --backend jdk|kernel --rate <req/s>|max --out <dir> [options]
+#       --arm A_iso|B_pin|B_float|C_iso|D|D2|Dv --backend jdk|kernel --rate <req/s>|max --out <dir> [options]
+#
+# Arms D2 and Dv are arm D plus the scheduler properties of a committed file (armcfg.py): D2 takes
+# arms/D2.properties, Dv takes arms/pilot/<stem>.properties and needs --variant <stem>. The set the
+# trial ran with is copied into the trial directory and recorded in trial.json with its digest.
 #
 # Options (defaults are the CPU-bound regime on a 6-core / 12-thread host):
 #   --connections 100   --load-threads 4      --warmup 30   --duration 30   (seconds)
@@ -21,7 +25,7 @@
 #                        transport.paqs.maxActiveStreams; defaults 4096 / 4096 / 5000), for
 #                        connection counts or in-flight requests above those defaults
 #   --server-aux-cpus 0,6     JVM auxiliary threads and transport reactors
-#   --carrier-cpus 2,3        scheduler carriers (one per CPU for arms B_pin and D)
+#   --carrier-cpus 2,3        scheduler carriers (one per CPU for arms B_pin, D, D2 and Dv)
 #   --mock-cpus 1,7           mock backend JVM
 #   --load-cpus 4,5,10,11     load generator
 #   --heap 1g
@@ -58,6 +62,16 @@
 #   --nofile SOFT:HARD        set the trial's descriptor limits instead of raising the soft limit
 #                             to the hard one; the JVMs and load generators inherit them
 #
+#   --variant STEM            the pilot cell of arm Dv (arms/pilot/STEM.properties)
+#   --stats                   enable the scheduler's counters (exeris.locality.stats) and read them
+#                             at the start and the end of the window from the server's
+#                             /__sched-stats endpoint into scheduler-stats-{start,end}.json; arms
+#                             that run ExerisCarrierScheduler only. The counters cost cycles, so
+#                             the trial is diagnostic.
+#   --perf-threads            context switches and futex calls per server thread over the window
+#                             (perf stat --per-thread); diagnostic.
+#   --pilot                   mark the trial as a pilot trial: never evidence. Implies --perf-threads.
+#
 # Every diagnostic marks the trial as perturbed. When any is on, analyze_diag.py cuts the recorded
 # data to the probe's slow windows and writes diag.txt / diag.json beside trial.json.
 #
@@ -85,7 +99,7 @@ CONNECTIONS=100 LOAD_THREADS=4 WARMUP=30 DURATION=30 THINK_MS=1 MOCK_THREADS=2 P
 SERVER_AUX_CPUS="0,6" CARRIER_CPUS="2,3" MOCK_CPUS="1,7" LOAD_CPUS="4,5,10,11" HEAP="1g" PROFILE="none"
 SERVER_PORT="" MOCK_PORT="" PERF_SCHED="no" PERF_RECORD="no"
 PERF_SCHED_DELAY=0 PERF_SCHED_SECONDS="" WALL_INTERVAL="5ms" PROBE_RATE=0 GC_LOG="no" JFR="no"
-BACKEND_TRACE="no" MOCK_IDLE_TIMEOUT="" NOFILE_SET=""
+BACKEND_TRACE="no" MOCK_IDLE_TIMEOUT="" NOFILE_SET="" VARIANT="" STATS="no" PERF_THREADS="no" PILOT="no"
 
 die() { echo "run-trial: $*" >&2; exit 2; }
 log() { echo "[$(date +%H:%M:%S)] $*" >&2; }
@@ -109,13 +123,26 @@ while [[ $# -gt 0 ]]; do
     --backend-trace) BACKEND_TRACE="yes"; shift; continue ;;
     --mock-idle-timeout) MOCK_IDLE_TIMEOUT="$2" ;;
     --app-src) APP_DIR="$2" ;;         --nofile) NOFILE_SET="$2" ;;
+    --variant) VARIANT="$2" ;;
+    --stats) STATS="yes"; shift; continue ;;
+    --perf-threads) PERF_THREADS="yes"; shift; continue ;;
+    --pilot) PILOT="yes"; PERF_THREADS="yes"; shift; continue ;;
     *) die "unknown option $1" ;;
   esac
   shift 2
 done
 
 [[ -n "$KERNEL_DIR" && -f "$KERNEL_DIR/kernel-cp.txt" ]] || die "--kernel-dir must point at a build-kernel.sh output"
-[[ "$ARM" =~ ^(A_iso|B_pin|B_float|C_iso|D)$ ]] || die "--arm must be A_iso, B_pin, B_float, C_iso or D"
+[[ "$ARM" =~ ^(A_iso|B_pin|B_float|C_iso|D|D2|Dv)$ ]] || die "--arm must be A_iso, B_pin, B_float, C_iso, D, D2 or Dv"
+[[ "$ARM" == "Dv" ]] && { [[ "$VARIANT" =~ ^[A-Za-z0-9_-]+$ ]] || die "arm Dv needs --variant <stem of arms/pilot/<stem>.properties>"; }
+[[ "$ARM" == "Dv" || -z "$VARIANT" ]] || die "--variant applies to arm Dv only"
+[[ "$STATS" == "no" || "$ARM" =~ ^(C_iso|D|D2|Dv)$ ]] || die "--stats needs an arm that runs ExerisCarrierScheduler (C_iso, D, D2, Dv)"
+# The arm's property file is read before anything is started or written: a missing or malformed
+# file refuses the trial.
+ARM_PROPS="$(python3 "$SCRIPT_DIR/armcfg.py" jvm-args "$ARM" ${VARIANT:+"$VARIANT"})" || exit 2
+ARM_PROPS_RECORD="$(python3 "$SCRIPT_DIR/armcfg.py" normalise "$ARM" ${VARIANT:+"$VARIANT"})" || exit 2
+PROP_OPTS=()
+[[ -n "$ARM_PROPS" ]] && mapfile -t PROP_OPTS <<<"$ARM_PROPS"
 [[ "$BACKEND" =~ ^(jdk|kernel)$ ]] || die "--backend must be jdk or kernel"
 [[ "$RATE" == "max" || "$RATE" =~ ^[0-9]+$ ]] || die "--rate must be max or an integer"
 [[ "$PROFILE" =~ ^(none|cpu|wall)$ ]] || die "--profile must be none, cpu or wall"
@@ -153,6 +180,8 @@ NOFILE="$(ulimit -n)"
 
 mkdir -p "$OUT"
 [[ -e "$OUT/trial.json" ]] && die "$OUT already holds a trial"
+# The set this trial ran with, in the form the parser compares against what the server echoes.
+printf '%s' "$ARM_PROPS_RECORD" >"$OUT/arm-properties.txt"
 
 free_port() { python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()'; }
 SERVER_PORT="${SERVER_PORT:-$(free_port)}"
@@ -203,12 +232,15 @@ case "$ARM" in
     ARM_OPTS=(-Djdk.virtualThreadScheduler.implClass="$SCHED_IMPL" -Dexeris.locality.allVthreads=true
               -Dexeris.transport.locality=true -Dexeris.carrier.count="$CARRIER_COUNT")
     CARRIER_NAME_RE='^exeris-carrier-[0-9]+$' ;;
-  D)
+  D|D2|Dv)
+    # D2 and Dv are D plus the properties of their file.
     ARM_OPTS=(-Djdk.virtualThreadScheduler.implClass="$SCHED_IMPL" -Dexeris.locality.allVthreads=true
               -Dexeris.transport.locality=true -Dexeris.carrier.count="$CARRIER_COUNT"
-              -Dexeris.carrier.affinity="$CARRIER_CPUS")
+              -Dexeris.carrier.affinity="$CARRIER_CPUS" "${PROP_OPTS[@]}")
     CARRIER_NAME_RE='^exeris-carrier-[0-9]+$' ;;
 esac
+STATS_OPTS=()
+[[ "$STATS" == "yes" ]] && STATS_OPTS=(-Dexeris.locality.stats=true)
 POLLER_OPTS=()
 [[ -n "$POLLER_MODE" ]] && POLLER_OPTS=(-Djdk.pollerMode="$POLLER_MODE")
 # Without these the Community transport cannot reach the socket descriptors and falls back to NIO,
@@ -222,6 +254,9 @@ LIMIT_OPTS=()
 
 DIAG=()
 SERVER_DIAG_OPTS=() MOCK_DIAG_OPTS=()
+[[ "$PILOT" == "yes" ]] && DIAG+=("v2 pilot")
+[[ "$STATS" == "yes" ]] && DIAG+=("scheduler stats")
+[[ "$PERF_THREADS" == "yes" ]] && DIAG+=("perf per thread")
 if [[ "$GC_LOG" == "yes" ]]; then
   SERVER_DIAG_OPTS+=("-Xlog:gc,safepoint:file=$OUT/gc-server.log:time,uptimemillis,level,tags")
   MOCK_DIAG_OPTS+=("-Xlog:gc,safepoint:file=$OUT/gc-mock.log:time,uptimemillis,level,tags")
@@ -243,7 +278,7 @@ if [[ "$JFR" == "yes" ]]; then
   DIAG+=("jfr")
 fi
 SERVER_CMD=("$LOOM_JDK/bin/java" -Xms"$HEAP" -Xmx"$HEAP" -XX:+UseParallelGC "${ACCESS_OPTS[@]}" "${SERVER_DIAG_OPTS[@]}"
-  "${ARM_OPTS[@]}" "${POLLER_OPTS[@]}" "${LIMIT_OPTS[@]}"
+  "${ARM_OPTS[@]}" "${STATS_OPTS[@]}" "${POLLER_OPTS[@]}" "${LIMIT_OPTS[@]}"
   -Dexeris.transport.reactorCount="$REACTOR_COUNT" -Dexeris.reactor.affinity="$SERVER_AUX_CPUS"
   -Dexeris.http.port="$SERVER_PORT" -Dexeris.http.bindHost=127.0.0.1
   -Dloom.bench.backend="$BACKEND" -Dloom.bench.backend.host=127.0.0.1 -Dloom.bench.backend.port="$MOCK_PORT"
@@ -297,7 +332,7 @@ affinity_dump() {  # <pid> <map> <file>: "tid<TAB>java-name<TAB>cpus_allowed_lis
     printf '%s\t%s\t%s\n' "$tid" "$name" "$(awk '/Cpus_allowed_list/{print $2}' "$d/status" 2>/dev/null)" >>"$3"
   done
 }
-# Arms A_iso and C_iso share the carrier CPUs between carriers; arms B_pin and D bind each carrier
+# Arms A_iso and C_iso share the carrier CPUs between carriers; arms B_pin, D, D2 and Dv bind each carrier
 # itself to one CPU of exeris.carrier.affinity, and the harness only verifies that binding. Workers the JVM
 # creates later inherit the creating thread's mask, so placement is re-applied after warmup and
 # checked again at the end of the measurement window.
@@ -311,7 +346,7 @@ pin_threads() {  # <pid> <map>
     tid="${d##*/}"
     name="$(awk -F'\t' -v t="$tid" '$1==t{print $2}' "$2")"
     if [[ "$name" =~ $CARRIER_NAME_RE ]]; then
-      [[ "$ARM" == "D" || "$ARM" == "B_pin" ]] || taskset -p -c "$CARRIER_CPUS" "$tid" >/dev/null 2>&1 || true
+      [[ "$ARM" =~ ^(D|D2|Dv|B_pin)$ ]] || taskset -p -c "$CARRIER_CPUS" "$tid" >/dev/null 2>&1 || true
     elif [[ "$name" != carrier/native-tcp/reactor/* ]]; then
       taskset -p -c "$SERVER_AUX_CPUS" "$tid" >/dev/null 2>&1 || true
     fi
@@ -392,6 +427,13 @@ host_state "$OUT/host.txt"
 cp /proc/interrupts "$OUT/interrupts-start.txt"
 host_counters "$OUT/host-counters-start.txt"
 
+# The scheduler's counters are cumulative from JVM start; the window's share is the difference
+# between the two readings, taken from the server's own endpoint.
+fetch_stats() {  # <file>
+  curl -s --max-time 5 "http://127.0.0.1:$SERVER_PORT/__sched-stats" >"$1" || echo '{"unavailable":true}' >"$1"
+}
+[[ "$STATS" == "yes" ]] && fetch_stats "$OUT/scheduler-stats-start.json"
+
 # Probes run for the measurement window only.
 pidstat -u -w -t -p "$SERVER_PID" 1 "$DURATION" >"$OUT/pidstat-server.txt" 2>&1 &
 PIDSTAT_PID=$!; PIDS+=("$PIDSTAT_PID")
@@ -406,6 +448,19 @@ if command -v perf >/dev/null && [[ "$PARANOID" -le 1 ]]; then
   PIDS+=("$!"); PERF_STATUS="measured"
 else
   echo "perf stat not run: perf_event_paranoid=$PARANOID (needs <= 1)" >"$OUT/perf-stat.txt"
+fi
+
+PERF_THREADS_STATUS="not_measured"
+if [[ "$PERF_THREADS" == "yes" ]]; then
+  # Per server thread, so the carriers' switches and futex calls can be told from the reactors' and
+  # the JDK's helper threads'; threads.txt maps the thread ids to Java names.
+  if command -v perf >/dev/null && [[ "$PARANOID" -le -1 ]]; then
+    perf stat --per-thread -e context-switches,syscalls:sys_enter_futex -p "$SERVER_PID" \
+      -o "$OUT/perf-threads.txt" -- sleep "$DURATION" &
+    PIDS+=("$!"); PERF_THREADS_STATUS="measured"
+  else
+    echo "perf per-thread stat not run: perf_event_paranoid=$PARANOID (needs -1 for the futex tracepoint)" >"$OUT/perf-threads.txt"
+  fi
 fi
 
 PROFILE_STATUS="none"
@@ -485,6 +540,7 @@ else
     >"$OUT/load.txt" 2>&1
 fi
 
+[[ "$STATS" == "yes" ]] && fetch_stats "$OUT/scheduler-stats-end.json"
 affinity_dump "$SERVER_PID" "$OUT/threads.txt" "$OUT/affinity-end.txt"
 cp /proc/interrupts "$OUT/interrupts-end.txt"
 host_counters "$OUT/host-counters-end.txt"
@@ -531,6 +587,7 @@ python3 "$SCRIPT_DIR/parse_trial.py" "$OUT" \
   --carrier-name-re "$CARRIER_NAME_RE" --perf "$PERF_STATUS" --profile "$PROFILE_STATUS" \
   --perf-sched "$PERF_SCHED_STATUS" --pool "$POOL" --max-connections "${MAX_CONNECTIONS:-default}" \
   --bench-commit "$BENCH_SHA" --bench-dirty "$BENCH_DIRTY" \
+  --variant "$VARIANT" --stats "$STATS" --perf-threads "$PERF_THREADS_STATUS" \
   --diag "$(IFS=,; echo "${DIAG[*]:-none}")"
 
 if (( ${#DIAG[@]} > 0 )); then

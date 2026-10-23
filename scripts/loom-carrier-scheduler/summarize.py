@@ -29,6 +29,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+import armcfg
+
 
 def med(values):
     values = [v for v in values if v is not None]
@@ -47,8 +49,14 @@ def main(campaign_dir):
     attempted = defaultdict(list)
     invalid = []
     unsustained = []
+    by_cell = defaultdict(list)
     for t in trials:
-        key = (t["backend"], t["rate"], t["arm"])
+        # Pilot cells of arm Dv are told apart by the property file they ran.
+        by_cell[(t["backend"], t["rate"], t["arm"] + (":" + t["variant"] if t.get("variant") else ""))].append(t)
+    for key, ts in by_cell.items():
+        armcfg.check_hashes(ts, f"{root.name} {key[2]} at {key[1]}", campaign)
+    for t in trials:
+        key = (t["backend"], t["rate"], t["arm"] + (":" + t["variant"] if t.get("variant") else ""))
         if not is_valid(t):
             failed = [k for k, g in t["gates"].items() if not g["pass"] and k not in MEASUREMENT_EXCLUDED]
             invalid.append({"trial": t["trial_dir"], "failed": failed,

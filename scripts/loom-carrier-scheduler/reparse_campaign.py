@@ -18,6 +18,8 @@ CARRIER_RE = {
     "B_float": r"^spi-fjp-worker-[0-9]+$",
     "C_iso": r"^exeris-carrier-[0-9]+$",
     "D": r"^exeris-carrier-[0-9]+$",
+    "D2": r"^exeris-carrier-[0-9]+$",
+    "Dv": r"^exeris-carrier-[0-9]+$",
 }
 
 
@@ -41,6 +43,9 @@ def argv_for(t, trial_dir):
         "--bench-commit", t["bench_commit"], "--bench-dirty", dirty,
         # A trial that ran with a recorder or marker stays perturbed when its record is rebuilt.
         "--diag", ",".join(t.get("diagnostics", [])) or "none",
+        "--variant", t.get("variant") or "",
+        "--stats", "yes" if "scheduler_stats" in t else "no",
+        "--perf-threads", "measured" if "perf_threads" in t else "not_measured",
     ]
 
 

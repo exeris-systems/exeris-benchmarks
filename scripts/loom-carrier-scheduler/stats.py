@@ -17,12 +17,19 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-ARMS = ("A_iso", "B_float", "B_pin", "C_iso", "D")
+import armcfg
+
+ARMS = ("A_iso", "B_float", "B_pin", "C_iso", "D", "D2")
 # B_pin's pairs separate the two halves of the 2x2: pinning under the stock algorithm (B_pin vs
 # A_iso) and the algorithm under pinning (D vs B_pin). A pair is tested only where both arms ran.
 # B_float against A_iso checks that the SPI reproduction of the built-in scheduler is the built-in.
+# D2, the scheduler's second revision, is read against the arm it changes (D), the pinned stock pool
+# it has to beat (B_pin) and the isolated stock pool.
 PAIRS = (("D", "A_iso"), ("D", "C_iso"), ("C_iso", "A_iso"), ("B_pin", "A_iso"), ("D", "B_pin"),
-         ("B_float", "A_iso"))
+         ("B_float", "A_iso"), ("D2", "D"), ("D2", "B_pin"), ("D2", "A_iso"))
+# The throughput comparison runs four arms; its multiple-comparison family is their six pairs.
+V2_ARMS = ("A_iso", "B_pin", "D", "D2")
+V2_PAIRS = (("D2", "B_pin"), ("D2", "D"), ("D2", "A_iso"), ("D", "B_pin"), ("D", "A_iso"), ("B_pin", "A_iso"))
 
 
 @lru_cache(maxsize=None)
@@ -43,6 +50,37 @@ def mann_whitney(x, y):
     tail = min(u, m * n - u)
     p = 2 * sum(_count(m, n, k) for k in range(int(tail) + 1)) / total
     return min(1.0, p), u / (m * n)
+
+
+def holm(p_values, alpha=0.05):
+    """Holm's step-down adjustment: (adjusted p-values, rejected at alpha), aligned with the input.
+
+    The i-th smallest of m p-values is multiplied by m - i + 1 (counting from 1) and the adjusted
+    values are made non-decreasing, so a hypothesis is rejected exactly when its adjusted p is
+    below alpha.
+    """
+    m = len(p_values)
+    adjusted = [0.0] * m
+    running = 0.0
+    for rank, i in enumerate(sorted(range(m), key=lambda k: p_values[k])):
+        running = max(running, (m - rank) * p_values[i])
+        adjusted[i] = min(1.0, running)
+    return adjusted, [a < alpha for a in adjusted]
+
+
+def reproduction_check(x, y, min_valid=4):
+    """Whether the trials x reproduce the reference trials y (the rule arm B_float is held to).
+
+    Accepted when the exact two-sided Mann-Whitney p of x against y is at least 0.05 and the median
+    of x lies inside the range of y; undecided when either side has fewer than min_valid trials.
+    `direction` is P(x > y).
+    """
+    if len(x) < min_valid or len(y) < min_valid:
+        return {"verdict": "undecided"}
+    p, direction = mann_whitney(x, y)
+    inside = min(y) <= statistics.median(x) <= max(y)
+    return {"p": p, "direction": direction, "median_inside_range": inside,
+            "verdict": "accepted" if p >= 0.05 and inside else "not accepted"}
 
 
 def spearman(x, y):
@@ -69,13 +107,22 @@ def spearman(x, y):
 
 def load(campaign):
     cells = {}
+    trials = {}
     for f in sorted(Path(campaign).glob("r*/trial.json")):
         t = json.loads(f.read_text())
+        if t["rate"] == "max":
+            continue
         if not t["valid"] or not t.get("sustained", t["gates"]["load"]["pass"]):
             continue
-        cells.setdefault((int(t["rate"]), t["arm"]), []).append(
+        key = (int(t["rate"]), t["arm"])
+        trials.setdefault(key, []).append(t)
+        cells.setdefault(key, []).append(
             (t["load"]["percentiles_ms"]["p99"], t["load"]["percentiles_ms"]["p99.9"],
              t["pidstat"]["carriers"]["wait_pct_max"]))
+    meta = Path(campaign) / "campaign.json"
+    info = json.loads(meta.read_text()) if meta.exists() else None
+    for (rate, arm), ts in trials.items():
+        armcfg.check_hashes(ts, f"{Path(campaign).name} {arm} at {rate}", info)
     return cells
 
 

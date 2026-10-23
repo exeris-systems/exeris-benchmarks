@@ -290,7 +290,7 @@ def isolation_gate(path, arm, carrier_cpus, carrier_re, expected_carriers):
 
 
 # Gates that decide whether a valid trial may be cited, not whether its measurement is sound.
-EVIDENCE_ONLY_GATES = ("harness_clean", "host_shielded")
+EVIDENCE_ONLY_GATES = ("harness_clean", "host_shielded", "host_untracked")
 # Gates whose failure is a result about the arm, not a fault in the measurement: an arm that cannot
 # carry the target rate has been measured, and that is reported. Its latency is not comparable with
 # a run that kept up, so it stays out of the percentiles.
@@ -362,6 +362,15 @@ def main():
     bench_cpus = carrier_cpus | cpu_set(a.mock_cpus) | cpu_set(a.load_cpus)
     host = parse_host(out, bench_cpus, carrier_cpus)
     gates["host_shielded"] = {"pass": host["shielded"], "problems": host["problems"]}
+    # With connection tracking loaded every loopback packet passes netfilter, which raises the
+    # carriers' kernel time and moves the floating arms' tail; citable trials share the state of a
+    # host on which nothing has loaded it since boot. A trial that did not record its modules
+    # predates the record and is not judged by it.
+    modules = host["state"].get("netfilter_modules")
+    gates["host_untracked"] = {
+        "pass": modules is None or "nf_conntrack" not in modules.split(),
+        "reason": "netfilter modules not recorded" if modules is None
+        else "nf_conntrack loaded" if "nf_conntrack" in modules.split() else "nf_conntrack not loaded"}
     gates["harness_clean"] = {"pass": a.bench_dirty == "0",
                               "reason": "harness files committed" if a.bench_dirty == "0"
                               else f"{a.bench_dirty} uncommitted harness file(s)"}

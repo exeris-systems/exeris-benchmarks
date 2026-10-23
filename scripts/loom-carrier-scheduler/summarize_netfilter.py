@@ -15,7 +15,7 @@ from pathlib import Path
 
 from stats import mann_whitney
 
-MEASUREMENT_EXCLUDED = ("load", "harness_clean", "host_shielded")
+MEASUREMENT_EXCLUDED = ("load", "harness_clean", "host_shielded", "host_untracked")
 TAG = "loom-carrier-scheduler-notrack"
 
 

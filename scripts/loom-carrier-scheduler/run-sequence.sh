@@ -57,7 +57,7 @@ fi
 # every arm's carriers and moves the floating arms' CPU-bound tail; runs meant to be compared share
 # the host's packet-filtering state.
 grep -q '^nf_conntrack ' /proc/modules \
-  && log "warning: nf_conntrack is loaded (the Docker daemon loads it); runs compared with others need the same packet-filtering state"
+  && log "warning: nf_conntrack is loaded (the Docker daemon loads it and it stays until reboot); every trial will fail the host_untracked evidence gate"
 
 # Common to both regimes: same arms, same CPU layout, same kernel build, open-loop warmup.
 COMMON=(--kernel-commit "$KERNEL_COMMIT" --backend jdk --poller-mode 3

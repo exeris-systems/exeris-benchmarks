@@ -12,7 +12,7 @@ the same way.
 import json
 import statistics
 
-MEASUREMENT_EXCLUDED = ("load", "harness_clean", "host_shielded")
+MEASUREMENT_EXCLUDED = ("load", "harness_clean", "host_shielded", "host_untracked")
 
 
 def is_valid(t):
@@ -97,6 +97,7 @@ def main(campaign_dir):
                   f"- seed: `{campaign.get('seed')}`; extra trial args: `{campaign.get('trial_args', '').strip()}`"]
     ident = trials[0]["kernel"] if trials else {}
     shielded = sum(1 for t in trials if t["gates"].get("host_shielded", {}).get("pass"))
+    untracked = sum(1 for t in trials if t["gates"].get("host_untracked", {}).get("pass", True))
     states = [t.get("host", {}).get("state", {}) for t in trials]
     boots = {s["boot_id"] for s in states if s.get("boot_id")}
     uptimes = [int(s["uptime_s"]) for s in states if s.get("uptime_s")]
@@ -105,8 +106,10 @@ def main(campaign_dir):
                    if uptimes else "- host boot and uptime: not recorded")
     lines += [f"- kernel: `{ident.get('kernel_commit')}`; JDK: {ident.get('jdk_build')}",
               f"- host shielded (host-shield.sh, no graphical session): {shielded} of {len(trials)} trials",
+              f"- no connection tracking loaded (or not recorded): {untracked} of {len(trials)} trials",
               uptime_line,
-              f"- evidence-eligible (every trial's measurement valid, harness committed, host shielded): "
+              f"- evidence-eligible (every trial's measurement valid, harness committed, host shielded, "
+              f"no connection tracking): "
               f"**{summary['evidence_eligible']}**", ""]
     lines += ["| backend | rate | arm | sustained | req/s (median) | p50 | p90 | p99 (median) | p99 all trials | worst p99 | p99.9 "
               "| carrier CPU % | carrier %wait max | CPUs (perf) | IPC | cs/s |",

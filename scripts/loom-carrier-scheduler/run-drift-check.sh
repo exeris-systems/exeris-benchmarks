@@ -96,7 +96,7 @@ fi
 # every arm's carriers and moves the floating arms' CPU-bound tail; runs meant to be compared share
 # the host's packet-filtering state.
 grep -q '^nf_conntrack ' /proc/modules \
-  && log "warning: nf_conntrack is loaded (the Docker daemon loads it); runs compared with others need the same packet-filtering state"
+  && log "warning: nf_conntrack is loaded (the Docker daemon loads it and it stays until reboot); every trial will fail the host_untracked evidence gate"
 git -C "$BENCH_ROOT" cat-file -e "$OLD_APP_COMMIT^{commit}" || die "commit $OLD_APP_COMMIT not found"
 
 PREV_PARANOID="$(cat /proc/sys/kernel/perf_event_paranoid)"

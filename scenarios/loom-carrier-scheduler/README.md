@@ -130,8 +130,8 @@ arms' carriers between their CPUs — the behaviour those arms measure.
 
 Every trial records the host state it ran under (`host.txt`, `host` in `trial.json`): graphical
 session, slice masks, its own CPU mask, boost, governors, and the interrupts each carrier CPU took
-during the measurement window. The `host_shielded` gate does not invalidate a trial; it decides
-whether the campaign is evidence.
+during the measurement window, and the netfilter modules loaded. The `host_shielded` and
+`host_untracked` gates do not invalidate a trial; they decide whether the campaign is evidence.
 
 ## What each trial records
 
@@ -199,8 +199,10 @@ filtering: with connection tracking loaded, as the Docker daemon loads it, every
 passes netfilter. Every trial records the boot it ran in, its uptime,
 the loaded netfilter modules and whether loopback was exempted from connection tracking
 (`host.txt`), and at both ends of its window the tracked-connection count, dying memory cgroups,
-unreclaimable slab and TCP socket counts (`host-counters-{start,end}.txt`); the campaign scripts
-warn when `nf_conntrack` is loaded.
+unreclaimable slab and TCP socket counts (`host-counters-{start,end}.txt`). A trial that ran with `nf_conntrack` loaded fails
+the `host_untracked` evidence gate: it stays valid, and is not citable. The module stays loaded
+from the Docker daemon's first start until the next boot, so a citable campaign starts from a boot
+in which the daemon has not run. The campaign scripts warn when the module is loaded.
 
 - `run-drift-check.sh` runs `A_iso` at 52,200 req/s with the app's backend pool at `84685a1c` and
   now, under systemd's default descriptor limits and the shield's, with `D` as a control; results

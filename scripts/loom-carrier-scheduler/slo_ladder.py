@@ -32,7 +32,7 @@ from pathlib import Path
 from stats import mann_whitney
 
 ARMS = ("A_iso", "B_pin", "C_iso", "D")
-MEASUREMENT_EXCLUDED = ("load", "harness_clean", "host_shielded")
+MEASUREMENT_EXCLUDED = ("load", "harness_clean", "host_shielded", "host_untracked")
 MIN_VALID = 4
 
 

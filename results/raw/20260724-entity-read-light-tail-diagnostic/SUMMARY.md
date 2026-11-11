@@ -3,6 +3,8 @@
 **Track:** Community / cross-runtime · **Protocol:** H1 · **Family:** Runtime · **Mode:** pure · **Scope:** `exploratory`
 **Date:** 2026-07-24 · **Host:** Hetzner perf-box (AMD, 16L/8P; target = 2 physical cores 0,1 SMT)
 
+> **Erratum 2026-11-11.** The "light closed-loop run" with a 147–163 ms max below is not the gated triad's fixed-contract run: its Exeris leaves read 49.8–64.2 ms. The 147–178 ms readings come from the constrained profile this diagnostic itself uses (Parallel GC, 256 MB, 4-vCPU quota shared with `wrk`). "Coordinated-omission amplification" applies to `wrk`'s percentiles, which `wrk` 4.1.0 backfills via `stats_correct`, not to the max, which stays a real and untraced wait. See the 2026-07-21 report's revision history, 2026-11-11 entry. The text below is left as written.
+
 ## Why this exists
 
 The light closed-loop run showed exeris with a **147–163 ms max** at a 125-byte single-row read — a 5× outlier
